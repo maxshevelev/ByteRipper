@@ -21,16 +21,37 @@ public actor MEFirmwareAnalyzer {
     /// the ME partition extracted from a dump). `baseOffset` is the region's
     /// position inside the caller's larger file; reported partition offsets are
     /// shifted by it.
-    public func analyze(region: Data, baseOffset: Int = 0) async throws -> FirmwareAnalysis {
+    ///
+    /// `descriptorBytes` is the whole-flash image's descriptor page, when the
+    /// caller has one: the End of Manufacturing row needs the flash
+    /// descriptor's BIOS master masks to tell a locked descriptor from one the
+    /// host may still rewrite, and an extracted ME region carries no
+    /// descriptor of its own. Passing nothing leaves that one check out
+    /// (`ManufacturingBasis.descriptorOpen` stays nil); every other fact is
+    /// read from the region alone.
+    public func analyze(region: Data, baseOffset: Int = 0,
+                        descriptorBytes: Data? = nil) async throws -> FirmwareAnalysis {
         try await analyze(region: region, baseOffset: baseOffset,
+                          descriptorBytes: descriptorBytes,
                           findsIndependentFirmware: true)
     }
 
     /// The analysis proper. `findsIndependentFirmware` is false for the nested
     /// runs over the IUP partitions this one finds, so an image cannot send the
     /// analyzer looking inside its own sub-firmware forever.
-    private func analyze(region: Data, baseOffset: Int,
+    private func analyze(region: Data, baseOffset: Int, descriptorBytes: Data?,
                          findsIndependentFirmware: Bool) async throws -> FirmwareAnalysis {
+        // Which half of the generation the board is — mobile or desktop — is
+        // the descriptor's answer: the PCH strap section is laid out over
+        // different lengths by the two halves, and nothing else in a dump says
+        // which it is. No descriptor (an extracted region) and an unknown
+        // length both leave the question open, and the configuration is then
+        // read with the mobile map, which is what every map was before the
+        // choice existed. It is a fact about the board rather than about the
+        // firmware, so it is answered even by the analysis with no manifest.
+        let platformFamily = descriptorBytes
+            .flatMap(FlashDescriptor.pchStrapWords(in:))
+            .flatMap(MEConfigurationMap.MEPlatformFamily.init(strapWords:))
         // ——— Stage 1: container decode that needs no database. ———
         // FPT and the $MN2/$MAN manifest are the ported links of the spine
         // (upstream-map "Flash & IFWI layout", "CSE manifest & partitions").
@@ -540,6 +561,7 @@ public actor MEFirmwareAnalyzer {
                 cseLayoutTable: cseLayoutTable, bootPartitions: bootPartitions,
                 mmeDirectory: nil, gscInfo: gscInfo,
                 efsVolume: efsVolume, oemConfiguration: oemConfiguration,
+                platformFamily: platformFamily,
                 issues: issues)
         }
 
@@ -735,13 +757,16 @@ public actor MEFirmwareAnalyzer {
         // (CSME 11–14 + SPS/TXE analogues), mirroring upstream `mfs_home_anl` and
         // the reserved walk (get_sec_hdr_size / get_vfs_start_0). Both selectors
         // need variant/major/minor, so this decode is deferred past identity; a
-        // no-manifest region (guard above) or a volume whose files start at 0 /
-        // that uses the FTBL naming keeps nil. The decode is best-effort and adds
-        // no Issues — a dirty file-8 simply yields no Home Directory.
+        // no-manifest region (guard above) or a volume whose files start at 0
+        // keeps nil. The gate is the identity selector alone: upstream runs this
+        // walk whatever the FTBL triple says, and then hands the files it did
+        // not take to the FTBL naming below (`if mfs_file[0] not in
+        // mfs_parsed_idx`, MEA.py 8134) — a CSME 14 volume with an FTBL triple
+        // gets both. The decode is best-effort and adds no Issues — a dirty
+        // file-8 simply yields no Home Directory.
         if !MFSHomeDecoder.vfsStartsAtZero(variant: identity.variant,
                                            major: identity.major,
                                            minor: identity.minor),
-           mfsVolume?.usesFTBL == false,
            let info = mfsInfo {
             mfsVolume?.homeDirectory = MFSHomeDecoder.homeDirectory(
                 files: info.files, variant: identity.variant,
@@ -920,6 +945,13 @@ public actor MEFirmwareAnalyzer {
             } else if let records = MFSParser.decodeConfigRecords(payload) {
                 oem.records = records.map(Self.configRecord)
             }
+            // Where the records' own bytes are: the partition's address plus
+            // its header, which is 0x10 on the revision-1 layout and 0x04 on
+            // the alpha one whose first u32 is the length. A record's `offset`
+            // is relative to this, so the two together are its bytes in the
+            // dump — the read the Manufacturing row and the panel's Full Info
+            // both do.
+            oem.payloadOffset = fitcRegion.offset + (oem.headerRevision == 1 ? 0x10 : 0x04)
             oemConfiguration = oem
         }
 
@@ -1015,13 +1047,401 @@ public actor MEFirmwareAnalyzer {
             }
             return .noPartition
         }()
+        // Step 1 of row 17 asks the *identity* selector, not the volume
+        // header's FTBL triple: upstream reads the reserved files by index
+        // whenever the volume's files do not start at 0 (`get_vfs_start_0`,
+        // MEA.py 7465/7888), and names them through FTBL separately. The two
+        // disagree on a CSME 14 volume whose triple says FTBL — `usesFTBL`
+        // there would claim nothing from indices and report Unconfigured.
         let fileSystemState = MFSStateDecoder.decide(
-            usesFTBL: mfsInfo?.usesFTBL ?? false,
+            vfsStartsAtZero: MFSHomeDecoder.vfsStartsAtZero(variant: identity.variant,
+                                                            major: identity.major,
+                                                            minor: identity.minor),
             presentFileIndices: mfsInfo?.files
                 .filter { !$0.content.isEmpty }
                 .map(\.index) ?? [],
             efs: efsEvidence,
             configuration: configurationFound)
+
+        // ——— The three facts a repair bench asks that MEAnalyzer does not
+        // print: whether this image closes Manufacturing on its first boot,
+        // which Boot Guard profile it is built for, and which OEM public key
+        // hash it carries. Ours; the addresses, the values and the ground truth
+        // behind each are in Skills/me-eom-structures/reference/structures.md.
+        //
+        // The Manufacturing switch is one setting written in two places. The
+        // OEM Configuration (FITC) partition holds the record the build wrote —
+        // the setting the platform applies when it enters End of Manufacturing
+        // — and the MFS volume's own files hold the record as the file system
+        // carries it, which is the only copy in a region handed over without
+        // its OEM Configuration partition. Both are found by the FTBL File IDs
+        // `FileTable.dat` gives those files, which is why the live page needs
+        // the database: without it a built image's files carry no IDs, and the
+        // page is left unread rather than guessed at.
+        //
+        // What the *board* has already done — `/home/mca/eom` in the live file
+        // system — is read for nothing but the sake of knowing the file system
+        // was read: the row answers for the next first boot, not for the
+        // machine the dump came from (`ManufacturingState`).
+        var liveFileIDs: [Int: Int] = [:]
+        var liveFilesResolved = false
+        if let info = mfsInfo, let table = fileTable, !info.files.isEmpty,
+           info.usesFTBL {
+            // Only an FTBL volume's files carry File IDs: an older volume names
+            // its records the other way (`MFSConfigurationByID`'s doc comment),
+            // and the switch does not exist there at all.
+            let resolution = table.resolve(platform: info.ftblPlatform,
+                                           dictionary: info.ftblDictionary)
+            let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
+                                       platform: resolution.platform,
+                                       dictionary: resolution.dictionary)
+            liveFilesResolved = !naming.isEmpty
+            let wanted = [ManufacturingDecoder.FileID.eomConfig,
+                          ManufacturingDecoder.FileID.eom,
+                          ManufacturingDecoder.FileID.manufLock]
+            for file in info.files {
+                guard let entry = naming[file.index],
+                      let fileID = Int(entry.fileID, radix: 16),
+                      wanted.contains(fileID),
+                      let first = file.content.first else { continue }
+                // The record is 2 bytes and little-endian: the flag is byte 0's
+                // bit 0, `FlexibleEomSettings` its bits 1–2, so the first byte
+                // is the whole of what the verdict needs.
+                liveFileIDs[fileID] = Int(first)
+            }
+        }
+        var imageEOMConfig: Int? = nil
+        if let fitc = oemConfiguration, let payload = fitc.payloadOffset,
+           let records = fitc.recordsByID {
+            for record in records
+            where record.fileID == ManufacturingDecoder.FileID.eomConfig {
+                let at = payload - baseOffset + record.offset
+                if at >= 0, at < region.count {
+                    imageEOMConfig = Int(region[region.startIndex + at])
+                }
+            }
+        }
+        // The board's own record of having been through End of Manufacturing:
+        // read only where the file system's File IDs are, and nil where the
+        // volume is an image that never booted.
+        let manufacturingLock = liveFileIDs[ManufacturingDecoder.FileID.manufLock]
+            .map(ManufacturingDecoder.lock)
+        let manufacturing = ManufacturingDecoder.decide(ManufacturingDecoder.Inputs(
+            imageEOMConfig: imageEOMConfig,
+            liveEOMConfig: liveFileIDs[ManufacturingDecoder.FileID.eomConfig],
+            // The descriptor's BIOS master: all ones in both masks is a
+            // descriptor the host may still rewrite, which is the state the
+            // factory ships and the one MFIT's own rule about the flag is
+            // about. No descriptor (an extracted region) leaves the check out.
+            descriptorOpen: descriptorBytes
+                .flatMap { FlashDescriptor.biosMaster(in: $0) }
+                .map { $0.read == 0xFFF && $0.write == 0xFFF },
+            // CSME 11 and later decide this: their descriptors carry the v2
+            // access rights the verdict is read from, and from CSME 15 a flag
+            // may order it as well. An older family has neither, and answers
+            // `noSwitch`.
+            hasSwitch: identity.family == .csme && identity.major >= 11,
+            liveFilesResolved: liveFilesResolved))
+
+        // The ME configuration, file by file: the map's paths, and for each
+        // one both copies an image carries of it — the OEM Configuration
+        // (FITC) partition's record of the file, which is what the build
+        // wrote, and the MFS volume's own file, which is what the platform
+        // holds now. Neither is dropped in favour of the other: the panel
+        // shows them side by side, because a setting the platform rewrote and
+        // one the build chose answer different questions. A setting the map
+        // knows and the file does not carry is left out
+        // (`ConfigurationDecoder`); the paths are the ones `FileTable.dat`
+        // gives, so this reads on any generation whose files carry File IDs.
+        //
+        // The map is the one this generation and this half of it have: a
+        // generation nobody has mapped yet reads no configuration at all rather
+        // than another generation's offsets, and a half a dump cannot name is
+        // read as the mobile one (`MEConfigurationMap.forME(major:family:)`).
+        let configurationMap = MEConfigurationMap.forME(major: identity.major,
+                                                        family: platformFamily)
+        var imageConfigurationBytes: [String: Data] = [:]
+        var liveConfigurationBytes: [String: Data] = [:]
+        // The feature pins the tool built into `/home/gpio/csme_pins`, if any:
+        // read below with the value classes of this generation.
+        var gpioReadings: GPIOPinReadings? = nil
+        let gpioPath = "/home/gpio/csme_pins"
+        if let map = configurationMap, let info = mfsInfo, !info.files.isEmpty {
+            // How long each file's content is, where the Integrity split said:
+            // the raw chain carries the trailer and the table after it, and a
+            // setting is never read out of those.
+            var contentSizes: [Int: Int] = [:]
+            for recorded in mfsVolume?.files ?? [] {
+                if let size = recorded.contentSize { contentSizes[recorded.index] = size }
+            }
+            // The tool's path for each file: the image's file table where it
+            // has one, and otherwise the volume's own home directory. A CSME 12
+            // volume keeps its names there and carries no `FileTable.dat`, so
+            // without this the configuration would read nothing on that
+            // generation however good its map is. Only an FTBL volume's files
+            // are named through the table, as for the EOM files above: a table
+            // can be loaded for a volume whose files are not FTBL's — an
+            // ID-keyed Intel Configuration asks for one — and its low-level
+            // indices are no FTBL file's.
+            var pathByIndex: [Int: String] = [:]
+            if info.usesFTBL, let table = fileTable {
+                let resolution = table.resolve(platform: info.ftblPlatform,
+                                               dictionary: info.ftblDictionary)
+                let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
+                                           platform: resolution.platform,
+                                           dictionary: resolution.dictionary)
+                for file in info.files {
+                    guard let entry = naming[file.index],
+                          let fileID = Int(entry.fileID, radix: 16),
+                          let path = table.record(withFileID: fileID,
+                                                  platform: resolution.platform,
+                                                  dictionary: resolution.dictionary)?.path
+                    else { continue }
+                    pathByIndex[file.index] = path
+                }
+            } else if let home = mfsVolume?.homeDirectory {
+                func walk(_ records: [MFSHomeRecord], prefix: String) {
+                    for record in records {
+                        let path = prefix + "/" + record.name
+                        if record.isFolder {
+                            walk(record.children, prefix: path)
+                        } else {
+                            pathByIndex[record.fileIndex] = path
+                        }
+                    }
+                }
+                walk(home.entries, prefix: "/home")
+            }
+            for file in info.files {
+                guard let path = pathByIndex[file.index], map.file(at: path) != nil
+                else { continue }
+                if let size = contentSizes[file.index] {
+                    liveConfigurationBytes[path] = Data(file.content.prefix(size))
+                } else {
+                    liveConfigurationBytes[path] = file.content
+                }
+            }
+
+            // `/home/gpio/csme_pins` is not a setting of the configuration map:
+            // it is the file the tool's `MeFeaturePins` settings are built into,
+            // and its records are read on their own. On CSME 11 and 12 it is a
+            // record of the MFS's Intel Configuration stream, whose content
+            // lives inside the owning low-level file at the record's offset;
+            // where the volume names its files by ID, it is a file of its own.
+            var gpioBytes: Data?
+            // The OEM Configuration stream (owning file 7) overrides the
+            // Intel one (6) where both name the file, as it does for every
+            // configuration record; an image that carries only the Intel copy
+            // is read from that.
+            let pinStreams = (mfsVolume?.configurations ?? []).filter {
+                $0.records.contains { $0.name == "csme_pins" && !$0.isFolder }
+            }
+            let pinConfiguration = pinStreams.first { $0.owningFile == 7 }
+                ?? pinStreams.first
+            if let pinConfiguration,
+               let pin = pinConfiguration.records.first(where: {
+                    $0.name == "csme_pins" && !$0.isFolder
+               }),
+               let owning = info.files.first(where: {
+                    $0.index == pinConfiguration.owningFile
+               }),
+               pin.size > 0, pin.offset >= 0,
+               pin.offset + pin.size <= owning.content.count {
+                let start = owning.content.startIndex + pin.offset
+                gpioBytes = owning.content.subdata(in: start..<(start + pin.size))
+            } else if let pinIndex = pathByIndex.first(where: { $0.value == gpioPath })?.key,
+                      let file = info.files.first(where: { $0.index == pinIndex }),
+                      !file.content.isEmpty {
+                let size = contentSizes[pinIndex] ?? file.content.count
+                gpioBytes = Data(file.content.prefix(size))
+            }
+            if let bytes = gpioBytes, !bytes.isEmpty,
+               let pinMap = GPIOPinMap.forME(major: identity.major),
+               let pins = GPIOPinReader.pins(in: bytes, map: pinMap,
+                                             major: identity.major),
+               !pins.isEmpty {
+                gpioReadings = GPIOPinReadings(path: gpioPath, fromImage: false,
+                                               pins: pins)
+            }
+        }
+        if let map = configurationMap, let fitc = oemConfiguration,
+           let payload = fitc.payloadOffset,
+           let records = fitc.recordsByID, let table = fileTable {
+            let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                           dictionary: mfsInfo?.ftblDictionary ?? -1)
+            for record in records {
+                guard let path = table.record(withFileID: record.fileID,
+                                              platform: resolution.platform,
+                                              dictionary: resolution.dictionary)?.path,
+                      map.file(at: path) != nil else { continue }
+                let at = payload - baseOffset + record.offset
+                guard at >= 0, record.size > 0, at + record.size <= region.count else { continue }
+                let start = region.startIndex + at
+                imageConfigurationBytes[path] = region.subdata(in: start..<(start + record.size))
+            }
+        }
+        // Where the live file system does not carry the pin file — an empty
+        // copy, or an image never through its first boot — the build's own copy
+        // in the OEM Configuration partition is read, as the configuration
+        // files are.
+        if gpioReadings == nil, let pinMap = GPIOPinMap.forME(major: identity.major),
+           let fitc = oemConfiguration, let payload = fitc.payloadOffset,
+           let records = fitc.recordsByID, let table = fileTable {
+            let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                           dictionary: mfsInfo?.ftblDictionary ?? -1)
+            for record in records {
+                guard let path = table.record(withFileID: record.fileID,
+                                              platform: resolution.platform,
+                                              dictionary: resolution.dictionary)?.path,
+                      path == gpioPath else { continue }
+                let at = payload - baseOffset + record.offset
+                guard at >= 0, record.size > 0, at + record.size <= region.count else { break }
+                let start = region.startIndex + at
+                let bytes = region.subdata(in: start..<(start + record.size))
+                if let pins = GPIOPinReader.pins(in: bytes, map: pinMap,
+                                                 major: identity.major), !pins.isEmpty {
+                    gpioReadings = GPIOPinReadings(path: gpioPath, fromImage: true,
+                                                   pins: pins)
+                }
+                break
+            }
+        }
+        let configuration = configurationMap.map { map -> [ConfigurationFile] in
+            // Which branch of each conditionally placed setting the image
+            // holds — read once, from the same two pages the files below are,
+            // so a setting's value and the place it was read from agree.
+            let conditions = ConfigurationDecoder.conditions(of: map,
+                imageBytes: imageConfigurationBytes, liveBytes: liveConfigurationBytes)
+            return map.files.compactMap { layout -> ConfigurationFile? in
+                // A conditional place the image does not hold is not a row of
+                // this file: the other branch's copy is the same setting, and
+                // the file's own page carries it there.
+                let settings = layout.settings.filter { conditions.holds($0, in: layout.path) }
+                guard !settings.isEmpty else { return nil }
+                let kept = MEConfigurationMap.File(path: layout.path, alias: layout.alias,
+                                                   settings: settings)
+                func marked(_ page: ConfigurationFile.Page?) -> ConfigurationFile.Page? {
+                    guard let page else { return nil }
+                    return ConfigurationFile.Page(size: page.size, settings: page.settings.map { setting in
+                        var setting = setting
+                        setting.condition = conditions.placed[setting.name]
+                        setting.disabled = conditions.disabled[setting.name]
+                        return setting
+                    })
+                }
+                let fitc = imageConfigurationBytes[layout.path]
+                    .flatMap { ConfigurationDecoder.page(of: kept, bytes: $0) }
+                let mfs = liveConfigurationBytes[layout.path]
+                    .flatMap { ConfigurationDecoder.page(of: kept, bytes: $0) }
+                guard fitc != nil || mfs != nil else { return nil }
+                return ConfigurationFile(path: layout.path, alias: layout.alias,
+                                         fitc: marked(fitc), mfs: marked(mfs))
+            }
+        } ?? []
+
+        // Boot Guard: the profile is one fact with two keepings — the JSON
+        // record of the CDMD configuration partition where the image has one,
+        // and the UEP area's bit array where it does not (every CSME 15 image)
+        // — and the key hash a value the UEP area repeats. None is in any
+        // specification, all are read by shape — see `BootGuardReader`.
+        let uepArea = Self.regionBytes("UEP", regions: regions,
+                                       region: region, baseOffset: baseOffset)
+        // Where an image has no CDMD record, the profile is the UEP area's Boot
+        // Guard bits — and which shape of container they sit in is the
+        // generation's, as the key record's offsets are: the first bit array of
+        // CSME 15 and 16 (0x6E), the area's own record on CSME 12, 13 and 14
+        // (its flags byte at 0x4C, or at 0x64 on Ice Lake's layout). Each shape
+        // was settled by builds of one image whose `.xml` readings differ in this
+        // field and nothing else — three FIT 15 builds of a CSME 15 image, four
+        // FIT 14.0 builds of a CSME 14 one, four FIT 13.0 builds of a CSME 13 one
+        // — and each layout's guards reject the others, so a container whose
+        // layout is not the expected one answers nothing rather than a profile.
+        // CSME 18 is read through the tool's own UEP layout (`UEPMap`): its
+        // `BTG_PROFILE` setting is the profile's own number (0, 3, 4 or 5), and
+        // the CSME 18 dump at hand reads 5 — beside `KM_ID` 1 and `OEM_ID`
+        // 0x103C, the vendor's PCI ID, which is what says the placement is
+        // aligned. CSME 11 has no area at all; no later generation has a map.
+        func profileFromUEP(_ area: Data) -> BootGuardProfile? {
+            guard identity.family == .csme else { return nil }
+            if (12...14).contains(identity.major) {
+                return BootGuardReader.profile(inRecordUEPArea: area, major: identity.major)
+            }
+            if (15...16).contains(identity.major) {
+                return BootGuardReader.profile(inUEPArea: area)
+            }
+            if identity.major >= 18,
+               let map = UEPMap.forME(major: identity.major),
+               let readings = UEPReader.readings(in: area, map: map),
+               let value = readings.first(where: { $0.name == "BTG_PROFILE" })?.value {
+                return BootGuardProfile(rawValue: "\(value)")
+            }
+            return nil
+        }
+        // The FPF settings the area's first bit array records, through the
+        // tool's own layout for this generation (`UEPMap`). Most of them read
+        // zero on a vendor dump; that is the state the build wrote.
+        let uepReadings = uepArea.flatMap { area in
+            UEPMap.forME(major: identity.major).flatMap { UEPReader.readings(in: area, map: $0) }
+        }
+        // The CPU strap message and the MIP table's other containers (CSME,
+        // PMC IOE, IOE): on CSME 18 they are not in the descriptor's MIP area
+        // but in the FITC partition's MIP table (`smip` nvar), which the FITC
+        // payload's record table carries. Only the generations with a map are
+        // read (`CPUStrapMap.forME`, `MIPStrapMap.forME`).
+        let fitcPayload = regions.first(where: { $0.name == "FITC" })
+            .flatMap { (fitcRegion: FPTRegion) -> Data? in
+                FITCParser.configPayload(in: region,
+                                         offset: fitcRegion.offset - baseOffset,
+                                         size: fitcRegion.size)
+            }
+        let cpuStraps = fitcPayload.flatMap { payload in
+            CPUStrapMap.forME(major: identity.major).flatMap {
+                MIPTableReader.cpuStraps(in: payload, map: $0)
+            }
+        }
+        let mipStraps = fitcPayload.flatMap { payload in
+            MIPStrapMap.forME(major: identity.major).flatMap {
+                MIPTableReader.containers(in: payload, map: $0)
+            }
+        }
+        let sphyNvar = fitcPayload.flatMap { payload in
+            SphyNvarMap.forME(major: identity.major).flatMap {
+                SphyNvarReader.readings(in: payload, map: $0)
+            }
+        }
+        let uepProfile = uepArea.flatMap(profileFromUEP)
+        let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
+                                                region: region, baseOffset: baseOffset)
+            .flatMap(BootGuardReader.profile(in:))
+            ?? uepProfile
+        // An image with no UEP area at all is not a missing reading: it is the
+        // finding that this layout has none where the key would be
+        // (`OEMKeyHash.unrecognized`), which is what CSME 11 answers.
+        // Which record holds the key depends on the generation — a 32-byte
+        // SHA-256 on CSME 12 to 14, a 48-byte SHA-384 on 15 and later — so the
+        // reading needs the identity the engine already worked out.
+        let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(in: uepArea ?? Data(),
+                                                                major: identity.major)
+        // The hardware binding — Flash Image Tool's "Hardware Binding Enabled",
+        // which its help calls the FPF hardware and RPMC / RPMB binding. It is
+        // not a setting of any map the panel reads: the tool keeps it in a file
+        // of its own, one byte of `DisabledEnabledValues`. The file system's
+        // copy is the state in force, the build's the fallback; a volume and a
+        // partition with neither leaves it `notInImage`, which is a finding and
+        // not a nil.
+        let bindingPath = "/home/bup/bup_sku/hw_binding"
+        let bindingBytes = Self.fileBytes(path: bindingPath, volume: mfsInfo, table: fileTable)
+            ?? Self.recordBytes(path: bindingPath, fitc: oemConfiguration, table: fileTable,
+                                mfsInfo: mfsInfo, region: region, baseOffset: baseOffset)
+        let hardwareBinding: HardwareBinding = bindingBytes.flatMap { bytes in
+            bytes.first.map { byte in
+                switch byte {
+                case 0x00: return .disabled
+                case 0x01: return .enabled
+                default: return .other(byte)
+                }
+            }
+        } ?? .notInImage
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)
@@ -1082,6 +1502,7 @@ public actor MEFirmwareAnalyzer {
                 // for what its own analysis could read.
                 guard var analysis = try? await analyze(
                     region: slice, baseOffset: baseOffset + slot.lowerBound,
+                    descriptorBytes: descriptorBytes,
                     findsIndependentFirmware: false),
                     analysis.manifest != nil
                 else { continue }
@@ -1153,6 +1574,23 @@ public actor MEFirmwareAnalyzer {
             // upstream's own variable is; the row's family gate is the panel's.
             mfsState: fileSystemState.state,
             mfsStateBasis: fileSystemState.basis,
+            // Ours: the three facts a bench asks of a dump it is about to
+            // flash. The model's own doc comments say what each means and where
+            // it lives; `ManufacturingDecoder` and `BootGuardReader` decide
+            // them.
+            manufacturingState: manufacturing.state,
+            manufacturingBasis: manufacturing.basis,
+            manufacturingLock: manufacturingLock,
+            platformFamily: platformFamily,
+            configuration: configuration.isEmpty ? nil : configuration,
+            gpioPins: gpioReadings,
+            bootGuardProfile: bootGuardProfile,
+            uepSettings: uepReadings,
+            cpuStraps: cpuStraps,
+            mipStraps: mipStraps,
+            sphyNvar: sphyNvar,
+            hardwareBinding: hardwareBinding,
+            oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
             // token is read only there — a later family's row cell 4 means
             // something else.
@@ -1290,6 +1728,21 @@ public actor MEFirmwareAnalyzer {
         MFSConfigIDRecord(fileID: r.fileID, offset: r.offset, size: r.size,
                           oemConfigurable: r.oemConfigurable,
                           unknownFlags: r.unknownFlags)
+    }
+
+    /// The bytes of one FPT region, by its name — what the Boot Guard facts are
+    /// read out of (the profile from the CDMD partition, the OEM public key
+    /// hash from the UEP area). nil when the image has no such region, or its
+    /// declared range runs past the bytes the analyser was handed.
+    private static func regionBytes(_ name: String, regions: [FPTRegion],
+                                    region: Data, baseOffset: Int) -> Data? {
+        guard let part = regions.first(where: { $0.name == name && $0.size > 0 }) else {
+            return nil
+        }
+        let start = part.offset - baseOffset
+        guard start >= 0, start + part.size <= region.count else { return nil }
+        let from = region.startIndex + start
+        return region.subdata(in: from..<(from + part.size))
     }
 
     private static func downgradeBlacklist(
@@ -1847,5 +2300,52 @@ public actor MEFirmwareAnalyzer {
             skuPlatform: clientSystemInfo?.skuPlatform,
             fwSku: fwSku,
             databaseRow: identity.databaseName)) ?? ""
+    }
+
+    /// The bytes of one file the ME file system carries, by its path — the
+    /// file itself, not a setting of a map. Nil where the volume has none, or
+    /// the file table cannot name it.
+    private static func fileBytes(path: String, volume: MFSVolumeInfo?,
+                                  table: FileTable?) -> Data? {
+        // Only an FTBL volume's file indices are FTBL's (the configuration
+        // read above says why).
+        guard let volume, let table, volume.usesFTBL, !volume.files.isEmpty else { return nil }
+        let resolution = table.resolve(platform: volume.ftblPlatform,
+                                       dictionary: volume.ftblDictionary)
+        let naming = table.records(namingFileIndices: Set(volume.files.map(\.index)),
+                                   platform: resolution.platform,
+                                   dictionary: resolution.dictionary)
+        for file in volume.files {
+            guard let entry = naming[file.index],
+                  let id = Int(entry.fileID, radix: 16),
+                  table.record(withFileID: id, platform: resolution.platform,
+                               dictionary: resolution.dictionary)?.path == path
+            else { continue }
+            // The file's own bytes; any integrity trailer follows them, and the
+            // byte this is read for is the first one.
+            return file.content
+        }
+        return nil
+    }
+
+    /// The bytes the OEM Configuration partition keeps of one file, by its
+    /// path — the build's copy of the same file `fileBytes` reads from the
+    /// volume.
+    private static func recordBytes(path: String, fitc: OEMConfiguration?,
+                                    table: FileTable?, mfsInfo: MFSVolumeInfo?,
+                                    region: Data, baseOffset: Int) -> Data? {
+        guard let fitc, let payload = fitc.payloadOffset,
+              let records = fitc.recordsByID, let table else { return nil }
+        let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                       dictionary: mfsInfo?.ftblDictionary ?? -1)
+        for record in records {
+            guard table.record(withFileID: record.fileID, platform: resolution.platform,
+                               dictionary: resolution.dictionary)?.path == path else { continue }
+            let at = payload - baseOffset + record.offset
+            guard at >= 0, record.size > 0, at + record.size <= region.count else { continue }
+            let start = region.startIndex + at
+            return region.subdata(in: start..<(start + record.size))
+        }
+        return nil
     }
 }

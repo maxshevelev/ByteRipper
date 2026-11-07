@@ -1,0 +1,177 @@
+{
+ "kind": "configuration",
+ "schema": "byteripper.map/1",
+ "tool": "11.0",
+ "maps": [
+  {"id": "csme11", "name": "CSME 11 (Flash Image Tool 11.0, spt_fit_layout)", "files": [
+   {"alias": "EOM", "path": "/home/mca/eom", "settings": [
+    {"length": 1, "name": "EOM", "offset": 0}
+   ]},
+   {"alias": "ME_CONF_WRK", "path": "/home/policy/cfgmgr/cfg_rules", "settings": [
+    {"bits": [0, 0], "help": "This setting allows customers to disable Intel(R) AMT on the platform and force the platform into Standard Manageability mode.  Note: This setting is only applies to Desktop and Workstation platforms.", "label": "Intel(R) AMT Supported", "length": 1, "name": "AmtSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [0, 0], "disabledBy": {"name": "HideMEBxFwUpdCtrl", "value": 1}, "label": "Hide MEBx Firmware Update Control", "length": 1, "name": "FwUpdEnable", "offset": 92, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [1, 1], "help": "This setting allows customers to hide the Firmware Update option in the MEBx interface.", "label": "Hide MEBx Firmware Update Control", "length": 1, "name": "HideMEBxFwUpdCtrl", "offset": 88, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [10, 10], "disabledBy": {"name": "IshSupported", "value": 0}, "help": "This setting allows customers to determine the power up state for ISH.", "label": "Integrated Sensor Hub Initial Power Up State", "length": 2, "name": "IshPowerUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [10, 10], "help": "This setting allows customers to disable ISH on the platform.", "label": "Integrated Sensor Hub Supported", "length": 2, "name": "IshSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [18, 18], "help": "This setting allows customers to enable / disable the KVM Redirection capabilities of the firmware.  Note: If this setting have been set to disabled it cannot be re-enabled once the descriptor has been locked.", "label": "KVM Redirection Supported", "length": 3, "name": "KvmSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [25, 25], "help": "Select whether Lake Houston is enabled on platform power-up.", "label": "Lake Houston Initial Power-up State", "length": 4, "name": "LkHstnPwrUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [25, 25], "help": "Select whether Lake Houston is supported.", "label": "Lake Houston Supported", "length": 4, "name": "LkHstnSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [20, 20], "help": "This setting enables the Dynamic Application Loader capability of the Intel(R) ME Firmware.", "label": "Firmware Dynamic Application Loader", "length": 3, "name": "MEDynAppLoad", "offset": 344, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [0, 2], "help": "This setting allows the customer to configure the powerwell that will be used by Intel(R) Integrated LAN.  Note: Recommended setting is SLP_LAN#.", "label": "LAN Power Well", "length": 1, "name": "MELanPowerWell", "offset": 188, "options": [[0, "Core Well"], [1, "SUS Well"], [2, "ME Well"], [3, "SLP_LAN#"]]},
+    {"bits": [0, 7], "help": "This setting allows the customer to configure the powerwell that will be used by Intel(R) Wireless LAN.  Note: Recommended setting is SLP_WLAN#.", "label": "WLAN Power Well", "length": 1, "name": "MEWlanPowerWell", "offset": 200, "options": [[128, "Disabled"], [129, "Core Well || SLP_S3#"], [130, "Primary Well || SLP_SUS#"], [131, "ME Well || SLP_A#"], [134, "SLP_WLAN#"]]},
+    {"bits": [0, 0], "help": "This setting allows customers to enable / disable the Wireless LAN CLINK signal through Intel (R) ME firmware.  Note: For using Intel(R) vPro Wireless solutions this should be set to 'Yes'.", "label": "Intel (R) ME CLINK Signal Enabled", "length": 1, "name": "MeClinkEnable", "offset": 464, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [2, 2], "help": "This setting allows customers to determine the power up state for Intel(R) AMT or Standard Manageability.  Note: If this setting is disabled Intel(R) AMT or Standard Manageability can still be re-enabled through the MEBx interface.", "label": "Manageability Application initial power-up state", "length": 1, "name": "MngAppPowerUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [2, 2], "help": "This setting allows customers to permenantly disable Intel(R) AMT and Standard Manageability mode on the platform.", "label": "Manageability Application Supported", "length": 1, "name": "MngAppSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [16, 16], "help": "This setting allows customers to enable / disable Intel(R) ME Network Services on the platform.  Note: If this setting is disabled Intel(R) AMT will also be disabled.", "label": "Intel(R) ME Network Services Supported", "length": 3, "name": "NetServicesSupported", "offset": 344, "options": [[0, "Yes"], [1, "No"]]},
+    {"bits": [31, 31], "label": "Enable Near Field Communication", "length": 4, "name": "NfcEnable", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"help": "This is a free form 32bit field that allows the OEM to configure their own unique identifier in the firmware image.", "hex": true, "label": "OEM Tag", "length": 12, "name": "OemTag", "offset": 524},
+    {"bits": [12, 12], "help": "This setting determines if the Protected Audio Video Path (PAVP) feature will be permanently disabled in the firmware image.", "label": "PAVP Supported", "length": 2, "name": "PavpSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [0, 3], "help": "This setting determines processor type to be emulated on pre-production silicon.", "label": "Processor Emulation", "length": 1, "name": "ProcEmulation", "offset": 488, "options": [[0, "No Emulation"], [1, "EMULATE Intel (R) vPro (TM) capable Processor"], [2, "EMULATE Intel (R) Core (TM) branded Processor"], [3, "EMULATE Intel (R) Celeron (R) branded Processor"], [4, "EMULATE Intel (R) Pentium (R) branded Processor"], [5, "EMULATE Intel (R) Xeon (R) branded Processor"], [6, "EMULATE Intel (R) Xeon (R) Manageability capable Processor"]]},
+    {"bits": [0, 7], "help": "This setting determines if missing processor detection is enabled on Desktop / Workstation platforms.  Note: This feature will only work if the platform has the appropriate glue logic present.", "label": "Missing Processor Detection Alert", "length": 1, "name": "ProcMissingDetect", "offset": 212, "options": [[0, "Yes"], [255, "No"]]},
+    {"bits": [29, 29], "help": "This setting determines if Intel(R) PTT is enabled on platform power-up.", "label": "Intel(R) PTT initial power-up state", "length": 4, "name": "PttPwrUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [21, 21], "help": "This setting allows customers to enable / disable firmware Transport Layer Security support.  Note: If this is disabled TLS will be permanently disabled in the firmware image.", "label": "Transport Layer Security Supported", "length": 3, "name": "TlsSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [4, 4], "help": "This setting determines whether Intel(R) Precise Touch Technology is enabled.", "label": "Intel(R) Precise Touch Technology Enabled", "length": 1, "name": "TouchEnabled", "offset": 344, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "amt.wol", "path": "/home/amt/rtfd/amt.wol", "settings": [
+    {"help": "This setting configures the idle timeout value before Intel(R) AMT enters into an off state.", "hex": true, "label": "Intel(R) AMT Idle Timeout", "length": 2, "name": "AmtIdleTimeout", "offset": 0}
+   ]},
+   {"alias": "AmtWdTimer", "path": "/home/amt/rtfd/WDResetState", "settings": [
+    {"help": "This setting allows customers to enable the Intel (R) ME firmware to trigger an automatic platform reset if either the MEI or Agent Presence are in a hung state.  Note: This feature only allows one reset at a time when the watchdog expires.  After this feature has triggered a reset it must be re-armed for re-use via management console.", "label": "Intel(R) AMT Watchdog Automatic Reset Enabled", "length": 1, "name": "AmtWdAutoReset", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "BootGuardPolicyRestrictions", "path": "/home/secureboot/bootpolres", "settings": [
+    {"bits": [2, 2], "help": "This setting determines BSP behavior when it receives an INIT signal.  When set to 'Enabled', when BSP receives an INIT, BSP will signal an error to the BSS register and enter unrecoverable shutdown.", "label": "BSP Initialization", "length": 1, "name": "BtGuardBspInitEnable", "offset": 0, "options": [[0, "Enabled"], [1, "Disabled"]]},
+    {"bits": [1, 1], "help": "When set to Enabled the CPU debugging capability probe mode is enabled.  When this field is set to Disabled it indicates CPU debugging capability probe mode is disabled and locked.", "label": "CPU Debugging", "length": 1, "name": "BtGuardCpuDebugEnable", "offset": 0, "options": [[0, "Enabled"], [1, "Disabled"]]},
+    {"bits": [0, 0], "label": "Force Boot Guard ACM Enabled", "length": 1, "name": "FBGAcmEn", "offset": 0, "options": [[0, "false"], [1, "true"]]},
+    {"bits": [3, 3], "label": "Protect BIOS Environment Enabled", "length": 1, "name": "ProtectBiosEnvironment", "offset": 0, "options": [[0, "false"], [1, "true"]]}
+   ]},
+   {"alias": "BootGuardKeyManifestId", "path": "/home/secureboot/kmid", "settings": [
+    {"bits": [2, 5], "help": "This option is for entering the hash of another public key, used by the ACM to verify the Boot Policy Manifest.", "hex": true, "label": "Key Manifest ID", "length": 1, "name": "BtGuardKeyManifestId", "offset": 0}
+   ]},
+   {"alias": "FPFOemRegionCommit", "path": "/home/mca/fpf_commit", "settings": [
+    {"bits": [0, 0], "help": "This setting will cause FPFs to automatically be committed on first boot of the firmware on the platform after flashing.", "label": "Auto commit OEM Region FPFs", "length": 1, "name": "BtGuardRegionCommit", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "BootGuardS3OptimizationDisable", "path": "/home/secureboot/s3optdis", "settings": [
+    {"bits": [0, 0], "help": "This setting overrides Boot Guard S3 optimization.  Note: Used for testing only.", "label": "S3 Optimization", "length": 1, "name": "BtGuardS3Optimize", "offset": 0, "options": [[0, "Enabled"], [1, "Disabled"]]}
+   ]},
+   {"alias": "KernFixedData", "path": "/home/bup/si_features", "settings": [
+    {"help": "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details.", "hex": true, "label": "Debug Override Pre-Production Silicon", "length": 4, "name": "DbgOverridePreProdSi", "offset": 12},
+    {"help": "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details.", "hex": true, "label": "Debug Override Production Silicon", "length": 4, "name": "DbgOverrideProdSi", "offset": 16}
+   ]},
+   {"alias": "Dam", "path": "/home/hotham/dbg_dam_req", "settings": [
+    {"help": "This setting enables Delayed Authentication Mode on the platform.", "label": "Delayed Authentication Mode Enabled", "length": 1, "name": "DelayedAuthMode", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "DownSkuBup", "path": "/home/bup/bup_sku/down_sku", "settings": [
+    {"label": "Down SKU Configuration", "length": 1, "name": "DownSkuConfiguration", "offset": 0, "options": [[0, "No Downgrade"], [1, "Downgrade to 1G"], [2, "Downgrade to 2G"]]}
+   ]},
+   {"alias": "EhcbState", "path": "/home/amt/skip_rtfd/ehbc.state", "settings": [
+    {"help": "This setting allows customers to enable / disable Embedded Host Based Configuration.  Important: EHBC is primarily intended for use in embedded systems as it offers less user privacy/security protection than may be appropriate for business client systems.", "label": "Embedded Host Based Configuration Enabled", "length": 1, "name": "EhbcEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "BootGuardErrorHandlingPolicy", "path": "/home/secureboot/enfpolicy", "settings": [
+    {"hex": true, "label": "Error Enforcement Policy", "length": 1, "name": "ErrorEnforcement", "offset": 0}
+   ]},
+   {"alias": "BistMeAutoBistConfAndStatus", "path": "/home/policy/Bist/auto_config", "settings": [
+    {"bits": [0, 0], "help": "This setting enables the firmware Automatic Built in Self Test which is executed during first platform boot after initial image flashing.", "label": "Automatic Built in Self Test", "length": 1, "name": "FwAutoBist", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "OEM_ID_STRING", "path": "/home/fwupdate/fwuoemid", "settings": [
+    {"help": "This setting allows configuration of an OEM unique ID to ensure that customers can only update their platform with images from the OEM of the platform.", "label": "Firmware Update OEM ID", "length": 16, "name": "FwUpdateOemId", "offset": 0}
+   ]},
+   {"alias": "GpioGroupVoltage", "path": "/home/gpio/grp_volt_cfg", "settings": [
+    {"bits": [1, 1], "help": "Configures voltage for all PCH GPIO pins in Group B.", "label": "GPIO Group B Voltage", "length": 1, "name": "GppBgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [2, 2], "help": "Configures voltage for all PCH GPIO pins in Group C.", "label": "GPIO Group C Voltage", "length": 1, "name": "GppCgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [3, 3], "help": "Configures voltage for all PCH GPIO pins in Group D.", "label": "GPIO Group D Voltage", "length": 1, "name": "GppDgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [4, 4], "help": "Configures voltage for all PCH GPIO pins in Group E.", "label": "GPIO Group E Voltage", "length": 1, "name": "GppEgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [5, 5], "help": "Configures voltage for all PCH GPIO pins in Group F.", "label": "GPIO Group F Voltage", "length": 1, "name": "GppFgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [6, 6], "help": "Configures voltage for all PCH GPIO pins in Group G.", "label": "GPIO Group G Voltage", "length": 1, "name": "GppGgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [7, 7], "help": "Configures voltage for all PCH GPIO pins in Group H.", "label": "GPIO Group H Voltage", "length": 1, "name": "GppHgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [9, 9], "help": "Configures voltage for all PCH GPIO pins in Group J.", "label": "GPIO Group J Voltage", "length": 2, "name": "GppJgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]},
+    {"bits": [10, 10], "help": "Configures voltage for all PCH GPIO pins in Group K.", "label": "GPIO Group K Voltage", "length": 2, "name": "GppKgroupVoltSelect", "offset": 0, "options": [[0, "3.3Volts"], [1, "1.8Volts"]]}
+   ]},
+   {"alias": "GucHash", "path": "/home/pavp/guc_hash", "settings": [
+    {"length": 32, "name": "GucHash", "offset": 0}
+   ]},
+   {"alias": "HMRFPO_OEM_Enabled", "path": "/home/fwupdate/fwuhmrfpo", "settings": [
+    {"help": "This setting enables descriptor unlock of the ME Region when the HMRFPO message is sent to firmware prior to BIOS End of POST.", "label": "Intel(R) ME Region Flash Protection Override", "length": 1, "name": "HmrfpoEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "IshSigningPol", "path": "/home/mca/ish_policy", "settings": [
+    {"help": "This setting determines ISH signing will be checked against the Intel provisioned hash included in the base image or OEM public key hash provisioned on the platform.", "label": "Integrated Sensor Hub Signing Policy", "length": 1, "name": "IshSigningPolicy", "offset": 0, "options": [[0, "Intel"], [1, "OEM"]]}
+   ]},
+   {"alias": "KvmScreenBlnk", "path": "/home/amt/rtfd/rsb.state", "settings": [
+    {"help": "This setting enables KVM Screen blanking capabilities in the firmware image.  Note: This feature is dependent on processor level support.", "label": "Firmware KVM Screen Blanking", "length": 1, "name": "KvmScreenBlnkEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "PavpLspcon", "path": "/home/pavp/lspcon_port", "settings": [
+    {"help": "This setting determines which port for LSPCON will be connected to the HDCP 2.2 bridge adapter Display 1.", "label": "LSPCON Internal Display Port 1 - LSPCON / 4K", "length": 1, "name": "Lspcon4kdisp", "offset": 0, "options": [[0, "None"], [2, "PortB"], [4, "PortC"], [8, "PortD"]]}
+   ]},
+   {"alias": "MctpDevicePorts", "path": "/home/mctp/device_ports", "settings": [
+    {"hex": true, "length": 1, "name": "MctpDevicePortBmc", "offset": 3},
+    {"hex": true, "length": 1, "name": "MctpDevicePortEc", "offset": 0},
+    {"hex": true, "length": 1, "name": "MctpDevicePortIsh", "offset": 2},
+    {"hex": true, "length": 1, "name": "MctpDevicePortSio", "offset": 1}
+   ]},
+   {"alias": "Smt3Devices", "path": "/home/mctp/smt3_devices", "settings": [
+    {"help": "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink1 bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", "hex": true, "label": "MCTP EC Address", "length": 2, "name": "MctpEcAddress", "offset": 0}
+   ]},
+   {"alias": "MctpOverEspiEnableVar", "path": "/home/mctp/mctp_espi_en", "settings": [
+    {"length": 1, "name": "MctpEspiEnabled", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "MctpOverPcieEnableVar", "path": "/home/pmt/pmt_en", "settings": [
+    {"label": "MCTP PCIe Enabled", "length": 1, "name": "MctpPCIeEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "MctpStackConfig", "path": "/home/mctp/eid_db", "settings": [
+    {"hex": true, "label": "MCTP PCIe Address", "length": 1, "name": "MctpPcieAddress", "offset": 5},
+    {"length": 3, "name": "MctpStackConfig", "offset": 2}
+   ]},
+   {"alias": "BootGuardPolicyType", "path": "/home/secureboot/bootpoltype", "settings": [
+    {"bits": [0, 0], "label": "Measured Boot Enabled", "length": 1, "name": "MeasuredBoot", "offset": 0, "options": [[0, "false"], [1, "true"]]},
+    {"bits": [1, 1], "label": "Verified Boot Enabled", "length": 1, "name": "VerifiedBoot", "offset": 0, "options": [[0, "false"], [1, "true"]]}
+   ]},
+   {"alias": "NfcSlaveAddress", "path": "/home/nfc/SlaveAddress", "settings": [
+    {"label": "NFC SMBus Address", "length": 1, "name": "NfcSmbusAddress", "offset": 0, "options": [[40, "0x28-NXP"], [41, "0x29-NXP"], [42, "0x2A-NXP"], [43, "0x2B-NXP"]]}
+   ]},
+   {"alias": "EOMManufLock", "path": "/home/mca/manuf_lock", "settings": [
+    {"help": "This setting determines if modifications to Customer configuable NVARs is to be allowed after close of manufacturing.", "label": "Post Manufacturing NVAR Configuration Enabled", "length": 1, "name": "NvarPostManUnLckd", "offset": 0, "options": [[0, "Yes"], [1, "No"]]}
+   ]},
+   {"alias": "sysintid1", "path": "/home/policy/hci/sysintid1", "settings": [
+    {"help": "This setting is for entering the ODM ID for Intel(R) Services to identify the ODM Board builder.  Note: This ID is either generated by or registered with Intel(R) Services Web servers.", "hex": true, "label": "ODM ID used by Intel(R) Services", "length": 4, "name": "OdmIDIntelServices", "offset": 0}
+   ]},
+   {"alias": "BootGuardPublicKeyHash", "path": "/home/secureboot/pubkeyhash", "settings": [
+    {"help": "This option is for entering the raw hash string for Boot Guard or ISH.  This 256-bit field represents the SHA-256 hash of the OEM public key corresponding to the private key used to sign the BIOS-SM for Bootguard or ISH firmware.", "label": "OEM Public Key Hash", "length": 32, "name": "OemPublicKeyHash", "offset": 0}
+   ]},
+   {"alias": "PkiSuffix", "path": "/home/amt/skip_rtfd/pki.suffix", "settings": [
+    {"help": "This setting allows OEMs to pre-configure the Domain Name Suffix used for PKI provisioning in their firmware image.  Note: For normal out-of- box provisioning functionality this setting should be left empty.", "label": "PKI Domain Name Suffix", "length": 256, "name": "PkiDomainSuffix", "offset": 0, "text": true}
+   ]},
+   {"alias": "PkiSecSfx", "path": "/home/amt/skip_rtfd/pki.sec.sfx", "settings": [
+    {"help": "This setting allows OEMs to pre-configure the Domain Name Suffix used for PKI provisioning in their firmware image.  Note: For normal out-of- box provisioning functionality this setting should be left empty.", "label": "PKI Domain Name Suffix", "length": 256, "name": "PkiDomainSuffix", "offset": 0, "text": true}
+   ]},
+   {"alias": "PttOwr", "path": "/home/policy/skumgr/ptt_owr", "settings": [
+    {"help": "This allows Intel(R) PTT on the Intel(R) C422 PCH.  This is only applicable to the Intel(R) C422 PCH.  Additional parameters must be configured for Intel(R) PTT to be enabled.", "label": "C422 Intel(R) PTT Override Enforcement", "length": 1, "name": "PttOvrEnforcedC422", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "DisRtcCheck", "path": "/home/mca/drtcc", "settings": [
+    {"help": "This setting determines how the Intel(R) PTT will behave when RTC (CMOS) clear is triggered on the platform.  When Disabled Intel(R) PTT will bypass normal RTC clear behavior. Note: For designs where there is no Physical Coin Cell Battery, for backing up data stored in the RTC well, this setting should be set to 'Disabled'.", "label": "Intel(R) PTT RTC Clear Detection", "length": 1, "name": "PttRtcClearDetect", "offset": 0, "options": [[0, "Enabled"], [1, "Disabled"]]}
+   ]},
+   {"alias": "fTPMEnable", "path": "/home/policy/skumgr/ftpm_enable", "settings": [
+    {"help": "This setting will permanently disable Intel(R) PTT through platform FPFs.  Caution: Using this option will permanently disable Intel(R) PTT on the platform hardware.", "label": "Intel(R) PTT Supported [FPF]", "length": 1, "name": "PttSupportedHw", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "PrivacyLevel", "path": "/home/amt/rtfd/PrivacyLvl", "settings": [
+    {"help": "This setting allows customers to configure the Privacy and Security level for redirection operations.  Default enables all redirection ports (User consent is configurable).  Enhanced enables all redirection ports (User consent is required and cannot be disabled).  Extreme disables all redirection capabilities.", "label": "Redirection Privacy / Security Level", "length": 1, "name": "RedirectionPrivSecLevel", "offset": 0, "options": [[1, "Default"], [2, "Enhanced"], [3, "Extreme"]]}
+   ]},
+   {"alias": "sysintid3", "path": "/home/policy/hci/sysintid3", "settings": [
+    {"help": "This setting is for entering the Reserved ID for Intel(R) Services currently not used.", "hex": true, "label": "Reserved ID used by Intel(R) Services", "length": 4, "name": "ReservedIdIntelServices", "offset": 0}
+   ]},
+   {"alias": "BootGuardSelfTestReset", "path": "/home/secureboot/selftestres", "settings": [
+    {"bits": [0, 0], "length": 1, "name": "SelfTestReset", "offset": 0, "options": [[0, "false"], [1, "true"]]}
+   ]},
+   {"alias": "SfxIsSecure", "path": "/home/amt/skip_rtfd/sfx.isSecure", "settings": [
+    {"length": 1, "name": "SuffixIsSecure", "offset": 0, "options": [[0, "false"], [1, "true"]]}
+   ]},
+   {"alias": "sysintid2", "path": "/home/policy/hci/sysintid2", "settings": [
+    {"help": "This setting is for entering the System Integrator ID for Intel(R) Services to identify the System Integrator.  Note: This ID is either generated by or registered with Intel(R) Services Web servers.", "hex": true, "label": "System Integrator ID used by Intel(R) Services", "length": 4, "name": "SysIntIdIntelServices", "offset": 0}
+   ]},
+   {"alias": "TxtEnabled", "path": "/home/secureboot/txten", "settings": [
+    {"help": "This setting determines if Intel(R) TXT is enabled on the platform.", "label": "TXT Supported", "length": 1, "name": "TxtSupported", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "OemUtokKeyHash", "path": "/home/hotham/utok_keyhash", "settings": [
+    {"help": "This allows the OEM to input the hash of the public key needed to verify an OEM Unlock Token. The hash is SHA256 (32-bytes) but will be truncated to the lower 8-bytes.", "label": "Unlock Token Key Hash", "length": 8, "name": "UnlockTokenKeyHash", "offset": 0}
+   ]}
+  ]}
+ ]
+}

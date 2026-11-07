@@ -1,4 +1,4 @@
-@source-sha e708a734f1387cb2c245ef7eb3501845e41e83fe31cd2dcb4e45ab868a33fe01
+@source-sha 3dac633a5aa72dc95aa415ad599018e74ab71bc2bd33c6f31073fee2b207fedb
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -11,7 +11,7 @@ Die oberste Ebene ist die Aufteilung des Chips selbst. Auf einer Intel-Plattform
 
 Die Spalten **Typ** und **Subtyp** benennen jeden Knoten so, wie der Referenz-Parser ihn benennt. Die Spalte **Name** zeigt bei einer Datei den Namen, den ihre eigene Name-Section enthält. Ein Knoten ohne eine solche Section wird nach dem Gemeinschaftskatalog für seine [[term:guid|GUID]] benannt, sofern der Katalog einen Namen kennt, und sonst nach der GUID selbst. Der Name aus dem Katalog und der eigene Name einer Datei können voneinander abweichen — ein Hersteller kann eine dem Katalog bekannte GUID einem anderen Modul geben —; die Details zeigen den Namen aus dem Katalog dann unter **Name im Katalog**.
 
-Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:tool-me|ME Analyzer]] liefert — so lässt sich ein Image in einem Baum von vorn bis hinten lesen. Sie öffnet sich, sobald die Region gelesen ist; Werte, die auf eine Datenbank warten, zeigen dort wie im ME Analyzer **Wird geladen…**.
+Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:tool-me|ME Analyzer]] liefert — so lässt sich ein Image in einem Baum von vorn bis hinten lesen. Sie öffnet sich, sobald die Region gelesen ist; Werte, die auf eine Datenbank warten, zeigen dort wie im ME Analyzer **Wird geladen…**. Ein Doppelklick auf eine Zeile dieses Teilbaums öffnet sie in einem Fragmentbereich, wie im ME Analyzer.
 
 **Die Schaltfläche in Form einer Zielscheibe im rechten Teil der Titelzeile** zeigt im Baum den Knoten unter der Einfügemarke im Dump — den Anfang einer Auswahl, wo es eine gibt. Sie öffnet die Zweige auf dem Weg; ein Zweig, der noch nicht decodiert ist, wird für die Anzeige decodiert, und die Anzeige kann so lange dauern wie das Lesen. Ausgewählt wird der innerste Knoten, dessen Bereich das Byte enthält. Ein Byte des ME-Regions wird in einer Zeile seines Unterbaums gezeigt; die Region wird für die Anzeige geöffnet, wenn sie noch nicht gelesen ist. Der Dump bewegt sich nicht: die Anzeige führt den Baum zum Byte, nicht das Byte zum Baum. Dieselbe Anzeige bietet das Kontextmenü des Dumps: Ein Rechtsklick auf ein Byte und **UEFI-Struktur ▸ Im Baum zeigen** zeigen den Knoten, der das angeklickte Byte enthält, unabhängig von der Einfügemarke.
 

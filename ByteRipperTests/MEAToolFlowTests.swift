@@ -2,7 +2,7 @@ import AppKit
 import AppPalette
 import XCTest
 import MEFirmware
-import MEAToolUI
+@testable import MEAToolUI
 import ToolModuleKit
 @testable import ByteRipper
 
@@ -204,17 +204,40 @@ final class MEAToolFlowTests: XCTestCase {
     }
 
     /// The tab switch — the same control a person clicks. The tree lives on the
-    /// second segment, so a test that wants the outline asks for it here.
+    /// last segment, so a test that wants the outline asks for it here.
     private func showFullTree() throws {
         let panel = try panel()
         let tabs = try XCTUnwrap(
             descendants(of: panel, NSSegmentedControl.self).first {
-                $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Info"
+                $0.label(forSegment: 2) == "Full Info"
             },
-            "the panel's own Summary / Full Tree switch")
-        tabs.selectedSegment = 1
+            "the panel's own Summary / Configuration / Full Info switch")
+        tabs.selectedSegment = 2
         tabs.sendAction(tabs.action, to: tabs.target)
         window?.layoutIfNeeded()
+    }
+
+    // MARK: - The tab a workspace keeps
+
+    /// The tab is kept by name: a number would point at another tab as soon
+    /// as one was added before it — which the Configuration tab was.
+    func testTheTabIsKeptByName() throws {
+        let kept = try XCTUnwrap(MEAParkedState(tabIndex: 1, focusPath: [0, 2]).encoded)
+        XCTAssertTrue(String(decoding: kept, as: UTF8.self).contains("\"configuration\""))
+        let back = try XCTUnwrap(MEAToolModule.restoredState(from: kept) as? MEAParkedState)
+        XCTAssertEqual(back.tabIndex, 1)
+        XCTAssertEqual(back.focusPath, [0, 2])
+    }
+
+    /// A workspace written before the Configuration tab numbered Full Info 1;
+    /// it still opens on Full Info, not on the tab that now sits there.
+    func testAWorkspaceFromBeforeTheConfigurationTabKeepsItsTab() throws {
+        let fullInfo = Data(#"{"tabIndex":1,"focusPath":[0,2]}"#.utf8)
+        let state = try XCTUnwrap(MEAToolModule.restoredState(from: fullInfo) as? MEAParkedState)
+        XCTAssertEqual(MEAParkedState.tabNames[state.tabIndex], "fullInfo")
+        XCTAssertEqual(state.focusPath, [0, 2])
+        let summary = Data(#"{"tabIndex":0}"#.utf8)
+        XCTAssertEqual(try XCTUnwrap(MEAToolModule.restoredState(from: summary) as? MEAParkedState).tabIndex, 0)
     }
 
     // MARK: - The app ships it
@@ -237,10 +260,11 @@ final class MEAToolFlowTests: XCTestCase {
         let panel = try panel()
         let tabs = try XCTUnwrap(
             descendants(of: panel, NSSegmentedControl.self).first {
-                $0.segmentCount == 2
+                $0.segmentCount == 3
             })
         XCTAssertEqual(tabs.label(forSegment: 0), "Summary")
-        XCTAssertEqual(tabs.label(forSegment: 1), "Full Info")
+        XCTAssertEqual(tabs.label(forSegment: 1), "Configuration")
+        XCTAssertEqual(tabs.label(forSegment: 2), "Full Info")
         XCTAssertEqual(tabs.selectedSegment, 0)
 
         let rows = try shownRows(of: panel)
@@ -303,7 +327,7 @@ final class MEAToolFlowTests: XCTestCase {
         let copy = try button(named: "Copy Summary", in: panel)
         let picture = try button(named: "Copy Screenshot", in: panel)
         let tabs = try XCTUnwrap(
-            descendants(of: panel, NSSegmentedControl.self).first { $0.segmentCount == 2 })
+            descendants(of: panel, NSSegmentedControl.self).first { $0.segmentCount == 3 })
         XCTAssertTrue(isOnScreen(copy, under: panel), "both are up on the Summary tab")
         XCTAssertTrue(isOnScreen(picture, under: panel))
         let inPanel = { (view: NSView) in view.convert(view.bounds, to: panel) }
@@ -521,6 +545,30 @@ final class MEAToolFlowTests: XCTestCase {
         let landed = descendants(of: panel, NSTextField.self).map(\.stringValue)
         XCTAssertFalse(landed.contains("Analyzing the ME firmware…"),
                        "a finished analysis is not still analyzing: \(landed)")
+    }
+
+    /// A file that was read as ME firmware but gave no configuration — here an
+    /// unidentified $FPT image, which no generation's map covers — says so on
+    /// the Configuration tab, not "No ME firmware" beside a Summary full of it.
+    func testTheConfigurationTabOfFirmwareWithoutAMapSaysNoConfiguration() throws {
+        _ = try open(METestImage.fptFile())
+        let panel = try panel()
+        let tabs = try XCTUnwrap(
+            descendants(of: panel, NSSegmentedControl.self).first { $0.segmentCount == 3 })
+        tabs.selectedSegment = 1
+        tabs.sendAction(tabs.action, to: tabs.target)
+        window?.layoutIfNeeded()
+
+        let shown = descendants(of: panel, NSTextField.self)
+            .filter { isOnScreen($0, under: panel) }.map(\.stringValue)
+        XCTAssertTrue(shown.contains("No configuration read"), "\(shown)")
+        XCTAssertFalse(shown.contains("No ME firmware"), "\(shown)")
+
+        // Back on the Summary the firmware is there, and nothing says otherwise.
+        tabs.selectedSegment = 0
+        tabs.sendAction(tabs.action, to: tabs.target)
+        window?.layoutIfNeeded()
+        XCTAssertFalse(try shownRows(of: panel).isEmpty)
     }
 
     /// An FPT table in a file is a reason the analysis has something to say on
@@ -867,9 +915,9 @@ final class MEAToolFlowTests: XCTestCase {
         // and its ancestors opened.
         let panel = try panel()
         let tabs = try XCTUnwrap(descendants(of: panel, NSSegmentedControl.self).first {
-            $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Info"
+            $0.label(forSegment: 2) == "Full Info"
         })
-        XCTAssertEqual(tabs.selectedSegment, 1, "the parked tab comes back")
+        XCTAssertEqual(tabs.selectedSegment, 2, "the parked tab comes back")
         let outlineAfter = try outline()
         let row = outlineAfter.selectedRow
         XCTAssertGreaterThanOrEqual(row, 0, "the parked row comes back selected")

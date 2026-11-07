@@ -172,6 +172,43 @@ final class HelpBodyViewTests: XCTestCase {
         text.copy(nil)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "Partition")
     }
+
+    /// A view that fits its words asks for their height: a line for a line,
+    /// more for more, and the insets on top of it.
+    func testTheContentHeightFollowsTheText() {
+        let font = NSFont.systemFont(ofSize: 13)
+        let body = HelpBodyView()
+        body.textInset = NSSize(width: 14, height: 0)
+        XCTAssertEqual(body.textInset.width, 14, accuracy: 0.01, "the inset is to the glyphs")
+
+        body.show(NSAttributedString(string: "One line.", attributes: [.font: font]))
+        let one = body.contentHeight(width: 340)
+        XCTAssertGreaterThan(one, 10)
+        XCTAssertLessThan(one, 25, "one line asks for one line")
+
+        let long = String(repeating: "A setting that takes several lines to explain. ", count: 10)
+        body.show(NSAttributedString(string: long, attributes: [.font: font]))
+        XCTAssertGreaterThan(body.contentHeight(width: 340), one * 4)
+
+        body.textInset = NSSize(width: 14, height: 10)
+        body.show(NSAttributedString(string: "One line.", attributes: [.font: font]))
+        XCTAssertEqual(body.contentHeight(width: 340), one + 20, accuracy: 0.5)
+    }
+
+    /// In a popover, words that fit do not scroll; words that do not, do.
+    func testAPopoverScrollsOnlyWhatDoesNotFit() {
+        let short = HelpBodyView()
+        short.show(HelpPopoverLayout.prose("One line."))
+        _ = HelpPopoverLayout.build(title: HelpPopoverLayout.title("Short"), body: short)
+        XCTAssertFalse(short.hasVerticalScroller)
+        XCTAssertEqual(short.verticalScrollElasticity, .none)
+
+        let long = HelpBodyView()
+        long.show(HelpPopoverLayout.prose(String(repeating: "A line of the tool's words.\n", count: 80)))
+        let built = HelpPopoverLayout.build(title: HelpPopoverLayout.title("Long"), body: long)
+        XCTAssertTrue(long.hasVerticalScroller)
+        XCTAssertEqual(built.bodyHeight, HelpPopoverLayout.maxBodyHeight)
+    }
 }
 
 /// The popover a panel shows for one row's term.
@@ -189,6 +226,127 @@ final class HelpTermPopoverTests: XCTestCase {
         let term = try XCTUnwrap(Help.shared.term(HelpTermID("mfs")))
         let popover = HelpTermPopover(term: term)
         XCTAssertEqual(popover.shownTerm, term.id)
-        XCTAssertTrue(popover.view.subviews.contains { ($0 as? NSTextField)?.stringValue == term.name })
+        XCTAssertTrue(popover.content.subviews.contains { ($0 as? NSTextField)?.stringValue == term.name })
     }
+
+    /// The popover's type is the panels': their body size for the words, a
+    /// point over it for the title — and it moves with the zoom, the popover
+    /// on screen laying itself out again. On screen: a new view handed to an
+    /// open popover's controller is one the popover never draws, so what is
+    /// checked is the view the popover holds.
+    func testItFollowsTheZoom() throws {
+        var size: CGFloat = 13
+        let zoomed = Notification.Name("HelpPopoverTestZoom")
+        HelpPopoverLayout.textSize = { size }
+        HelpPopoverLayout.textSizeDidChange = zoomed
+        defer {
+            HelpPopoverLayout.textSize = { 13 }
+            HelpPopoverLayout.textSizeDidChange = nil
+        }
+        let (window, anchor) = makeAnchor()
+        defer { window.close() }
+        let popover = try XCTUnwrap(HelpTermPopover.show(HelpTermID("mfs"), from: anchor))
+        defer { popover.close() }
+        XCTAssertTrue(popover.isShown, "the premise: the popover is on screen")
+        let shown = try XCTUnwrap(popover.view.superview, "the popover holds the controller's view")
+
+        func fonts() throws -> (title: CGFloat, body: CGFloat, width: CGFloat) {
+            let content = popover.content
+            let title = try XCTUnwrap(content.subviews.compactMap { $0 as? NSTextField }.first)
+            let body = try XCTUnwrap(content.subviews.compactMap { $0 as? HelpBodyView }.first)
+            let text = try XCTUnwrap(body.documentView as? NSTextView)
+            let last = try XCTUnwrap(text.textStorage?.attribute(
+                .font, at: text.textStorage!.length - 1, effectiveRange: nil) as? NSFont)
+            return (title.font?.pointSize ?? 0, last.pointSize, popover.view.fittingSize.width)
+        }
+        let before = try fonts()
+        XCTAssertEqual(before.title, 14)
+        XCTAssertEqual(before.body, 13, accuracy: 0.01)
+
+        size = 18
+        NotificationCenter.default.post(name: zoomed, object: nil)
+        let after = try fonts()
+        XCTAssertEqual(after.title, 19)
+        XCTAssertEqual(after.body, 18, accuracy: 0.01)
+        XCTAssertGreaterThan(after.width, before.width, "the box grows with the type")
+        XCTAssertTrue(popover.view.superview === shown, "the words changed inside the view on screen")
+    }
+
+    /// Closed, a popover stops following the zoom and lets go of itself:
+    /// left joined to its controller, every popover ever opened stayed in
+    /// memory and rebuilt its words at every zoom step.
+    func testAClosedPopoverGoes() throws {
+        HelpPopoverLayout.textSizeDidChange = Notification.Name("HelpPopoverTestZoom")
+        defer { HelpPopoverLayout.textSizeDidChange = nil }
+        let (window, anchor) = makeAnchor()
+        defer { window.close() }
+        weak var gone: HelpTermPopover?
+        // The close is animated: the popover says it has closed a moment later.
+        let closed = expectation(forNotification: NSPopover.didCloseNotification, object: nil)
+        try autoreleasepool {
+            let popover = try XCTUnwrap(HelpTermPopover.show(HelpTermID("mfs"), from: anchor))
+            XCTAssertTrue(popover.followsZoom)
+            gone = popover
+            popover.close()
+        }
+        wait(for: [closed], timeout: 2)
+        let deadline = Date().addingTimeInterval(2)
+        while gone != nil, Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertNil(gone, "the closed popover's controller was released, its zoom observer with it")
+    }
+
+    private func makeAnchor() -> (NSWindow, NSView) {
+        let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 300, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let anchor = NSView(frame: NSRect(x: 100, y: 80, width: 20, height: 20))
+        window.contentView?.addSubview(anchor)
+        window.orderFront(nil)
+        return (window, anchor)
+    }
+
+    /// A note sits under the title, in the quiet colour and the popover's own
+    /// size: the caller's line about what the title alone does not say — a
+    /// setting's condition, in the panel that has one.
+    func testANoteSitsUnderTheTitle() throws {
+        let body = HelpBodyView()
+        body.show(HelpPopoverLayout.prose("The tool's words."))
+        let built = HelpPopoverLayout.build(
+            title: HelpPopoverLayout.title("MELanPowerWell"),
+            body: body,
+            note: HelpPopoverLayout.note("eSpiEnabled = No, assumed"))
+
+        let labels = built.view.subviews.compactMap { $0 as? NSTextField }
+        let note = try XCTUnwrap(labels.first { $0.stringValue == "eSpiEnabled = No, assumed" })
+        XCTAssertEqual(note.textColor, NSColor.secondaryLabelColor)
+        XCTAssertEqual(note.font?.pointSize, HelpPopoverLayout.bodySize)
+        XCTAssertTrue(note.isSelectable, "the panel's line is copied like the rest")
+        XCTAssertNotNil(built.view.subviews.compactMap { $0 as? HelpBodyView }.first,
+                        "the words stay under it")
+    }
+
+    /// A note longer than a line wraps, and the popover is as tall as all of
+    /// it: the popover's size comes from `fittingSize`, asked before any
+    /// layout pass has told the label how wide it is.
+    func testALongNoteIsNotCutToOneLine() throws {
+        let words = String(repeating: "eSpiEnabled = No, assumed when the strap is absent. ", count: 4)
+        func popoverHeight(note: String) -> CGFloat {
+            let body = HelpBodyView()
+            body.show(HelpPopoverLayout.prose("The tool's words."))
+            return HelpPopoverLayout.build(title: HelpPopoverLayout.title("MELanPowerWell"), body: body,
+                                           note: HelpPopoverLayout.note(note)).view.fittingSize.height
+        }
+        let oneLine = popoverHeight(note: "eSpiEnabled = No")
+        let lineHeight = NSLayoutManager().defaultLineHeight(
+            for: .systemFont(ofSize: HelpPopoverLayout.bodySize))
+        XCTAssertGreaterThan(popoverHeight(note: words) - oneLine, 2 * lineHeight,
+                             "the popover grows by the lines the note wraps onto")
+    }
+}
+
+extension HelpPopoverController {
+    /// What the popover shows: the one view inside the controller's own.
+    var content: NSView { view.subviews.first ?? view }
 }

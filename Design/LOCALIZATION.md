@@ -85,6 +85,12 @@ to **correct English** rather than to `settings.language.caption`.
   upstream's. Translating them would fight that skill on every sync. They are
   engine output, and they stay in upstream's English.
 - **Format and structure names**, per the rule above.
+- **What another tool wrote about a setting** — the identifiers, labels, option
+  names and help texts the configuration maps copy out of Flash Image Tool and
+  MFIT (`MEConfigurationMap.Setting`). They are that tool's words, and a reader
+  who wants them is reading the tool's own documentation at the row: a
+  translation would be a second, unverifiable text where the bench has the
+  first one open.
 - **What the agent service says to a model** (`Design/AGENT_PLAN.md`): a
   tool's name, its description, its argument schema and the answers it gives.
   A model reads them, not the person at the bench, and they are an interface

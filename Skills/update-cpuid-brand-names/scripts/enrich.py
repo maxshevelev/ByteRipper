@@ -1,0 +1,337 @@
+"""S-SPECs the article does not give, from Intel ARK and from Wikipedia.
+
+An S-SPEC belongs to one stepping, and a stepping to one CPUID — so a code is
+only worth adding where it can be put under the right CPUID. Two sources:
+
+- Intel ARK, the manufacturer's own list: each code with its stepping. ARK
+  cannot be fetched by a script (it answers 403), so what was read from it is
+  kept beside this file in `ark-sspec.json`, with the page each code came from.
+- Wikipedia's "List of Intel … processors" pages, fetched here at a fixed
+  revision. Most of their rows give a code but no stepping.
+
+A stepping is turned into a CPUID by Intel's own table — the release notes of
+`github.com/intel/Intel-Linux-Processor-Microcode-Data-Files`, which list
+F-M-S and stepping side by side — together with the steppings the article
+writes for its rows.
+
+The rules, in order:
+
+1. The article's own codes stay as they are.
+2. A code with a stepping (ARK, or a Wikipedia row that has one) goes under the
+   one entry of that model whose CPUID has that stepping. None, or more than
+   one: it is left out.
+3. A Wikipedia code without a stepping goes in only where the article lists
+   the model under one CPUID — there is then nowhere else for it to go. A
+   model listed under several CPUIDs gets nothing from such a row. And a page
+   about one microarchitecture ("… (Broadwell-based)") gives codes only to an
+   entry whose code names are of it: the article repeats Broadwell-DE Xeon D
+   parts under Ice Lake D, and their codes do not belong there.
+
+A code belongs to one model: one that is already some other model's, or that
+Wikipedia writes for two models (a copy-paste slip there, as SR3B8 for both
+the 8160F and the 8160M), is left out. A code never goes in twice for the
+same model, and every added code says where it came from (`sSpecSource`), so the article's data and ours stay apart.
+"""
+
+import collections
+import html
+import json
+import os
+import re
+import urllib.parse
+import urllib.request
+from html.parser import HTMLParser
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ARK_FILE = os.path.join(HERE, "ark-sspec.json")
+
+INTEL_NOTES_COMMIT = "bdc92abe5c499c3fd7988b76a128d05c9120a520"
+INTEL_NOTES_URL = ("https://raw.githubusercontent.com/intel/"
+                   "Intel-Linux-Processor-Microcode-Data-Files/"
+                   f"{INTEL_NOTES_COMMIT}/releasenote.md")
+
+# The pages that list sSpec numbers for the processors the article names, at
+# the revision this file was built from.
+WIKIPEDIA_PAGES = {
+    "List of Intel Atom processors": 1371423471,
+    "List of Intel Celeron processors": 1379493616,
+    "List of Intel Core desktop processors": 1379967425,
+    "List of Intel Pentium processors": 1359301244,
+    "List of Intel Xeon processors (Broadwell-based)": 1362915879,
+    "List of Intel Xeon processors (Cascade Lake–based)": 1362298362,
+    "List of Intel Xeon processors (Coffee Lake-based)": 1339738082,
+    "List of Intel Xeon processors (Comet Lake-based)": 1334627889,
+    "List of Intel Xeon processors (Haswell-based)": 1344872412,
+    "List of Intel Xeon processors (Ice Lake-based)": 1362298361,
+    "List of Intel Xeon processors (Kaby Lake-based)": 1362915881,
+    "List of Intel Xeon processors (Rocket Lake-based)": 1334626524,
+    "List of Intel Xeon processors (Skylake-based)": 1377207682,
+}
+
+CODE = re.compile(r"\b(?:SR[0-9A-Z]{3}|Q[0-9A-Z]{3})\b")
+USER_AGENT = "ByteRipper update-cpuid-brand-names (https://github.com/maxshevelev/ByteRipper)"
+
+
+def fetch(url, cache):
+    """The body of `url`, from `cache` when it is there."""
+    name = os.path.join(cache, re.sub(r"[^\w.-]", "_", url)[-180:]) if cache else None
+    if name and os.path.exists(name):
+        with open(name, "rb") as f:
+            return f.read()
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    body = urllib.request.urlopen(request, timeout=60).read()
+    if name:
+        os.makedirs(cache, exist_ok=True)
+        with open(name, "wb") as f:
+            f.write(body)
+    return body
+
+
+# --- Intel: stepping per CPUID ------------------------------------------------
+
+def intel_steppings(cache):
+    """{CPUID: {stepping}} from the rows `| HSX-E/EP | Cx/M1 | 06-3f-02/6f | …`."""
+    text = fetch(INTEL_NOTES_URL, cache).decode("utf-8")
+    table = collections.defaultdict(set)
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        m = re.fullmatch(r"([0-9a-fA-F]{2})-([0-9a-fA-F]{2})-([0-9a-fA-F]{2})/[0-9a-fA-F]{2}", cells[2])
+        if not m:
+            continue
+        family, model, stepping = (int(g, 16) for g in m.groups())
+        # CPUID leaf 1 EAX: ext. family | ext. model | family | model | stepping.
+        ext_family = max(family - 0xF, 0) if family >= 0xF else 0
+        base_family = min(family, 0xF)
+        cpuid = (ext_family << 20) | ((model >> 4) << 16) | (base_family << 8) | ((model & 0xF) << 4) | stepping
+        for s in re.split(r"[/,]", cells[1]):
+            s = s.strip()
+            if re.fullmatch(r"[A-Z]\d", s):
+                table[f"{cpuid:X}"].add(s)
+    return table
+
+
+# --- Wikipedia: tables with an sSpec column -----------------------------------
+
+class _Tables(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tables, self.stack = [], []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "table":
+            self.stack.append({"rows": [], "row": None, "cell": None})
+        elif not self.stack:
+            return
+        elif tag == "tr":
+            self.stack[-1]["row"] = []
+        elif tag in ("td", "th") and self.stack[-1]["row"] is not None:
+            span = lambda k: int(re.sub(r"\D", "", attrs.get(k) or "1") or 1)
+            self.stack[-1]["cell"] = {"text": "", "rows": span("rowspan"), "cols": span("colspan")}
+        elif tag == "br" and self.stack[-1]["cell"] is not None:
+            self.stack[-1]["cell"]["text"] += " "
+
+    def handle_endtag(self, tag):
+        if not self.stack:
+            return
+        t = self.stack[-1]
+        if tag in ("td", "th") and t["cell"] is not None:
+            t["row"].append(t["cell"])
+            t["cell"] = None
+        elif tag == "tr" and t["row"] is not None:
+            t["rows"].append(t["row"])
+            t["row"] = None
+        elif tag == "table":
+            self.tables.append(self.stack.pop()["rows"])
+
+    def handle_data(self, data):
+        if self.stack and self.stack[-1]["cell"] is not None:
+            self.stack[-1]["cell"]["text"] += data
+
+
+def _grid(rows):
+    """Rows with every rowspan and colspan written out."""
+    out, pending = [], {}
+    for row in rows:
+        line, column, cells = [], 0, list(row)
+        while cells or any(k >= column for k in pending):
+            if column in pending:
+                text, left = pending[column]
+                line.append(text)
+                if left > 1:
+                    pending[column] = (text, left - 1)
+                else:
+                    del pending[column]
+                column += 1
+                continue
+            if not cells:
+                break
+            cell = cells.pop(0)
+            text = re.sub(r"\[[^\]]*\]", "", re.sub(r"\s+", " ", html.unescape(cell["text"]))).strip()
+            for _ in range(cell["cols"]):
+                line.append(text)
+                if cell["rows"] > 1:
+                    pending[column] = (text, cell["rows"] - 1)
+                column += 1
+        out.append(line)
+    return out
+
+
+def _model_tokens(text):
+    """`Xeon E5-2695 v3` → {"E5-2695V3", "XEON"}; compared without spaces."""
+    text = re.sub(r"\s+(v\d)\b", r"\1", text)
+    return {t.upper() for t in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", text)}
+
+
+def wikipedia_rows(cache):
+    """[(page, revid, model cell, [codes], [steppings])]."""
+    rows = []
+    for title, revid in WIKIPEDIA_PAGES.items():
+        url = ("https://en.wikipedia.org/w/api.php?action=parse&prop=text&format=json&oldid="
+               + str(revid))
+        page = json.loads(fetch(url, cache))["parse"]
+        parser = _Tables()
+        parser.feed(page["text"]["*"])
+        for table in parser.tables:
+            grid = _grid(table)
+            header = next((k for k, r in enumerate(grid[:4])
+                           if any(re.search(r"sSpec", c, re.I) for c in r)), None)
+            if header is None:
+                continue
+            heads = grid[header]
+            model = next((j for j, c in enumerate(heads) if re.fullmatch(r"Model( number)?", c)), None)
+            spec = [j for j, c in enumerate(heads) if re.search(r"sSpec", c, re.I)]
+            step = [j for j, c in enumerate(heads) if re.search(r"stepping", c, re.I)]
+            if model is None:
+                continue
+            for r in grid[header + 1:]:
+                if model >= len(r):
+                    continue
+                codes = [c for j in spec if j < len(r) for c in CODE.findall(r[j])]
+                if codes:
+                    steppings = [s for j in step if j < len(r) for s in re.findall(r"\b[A-Z]\d\b", r[j])]
+                    rows.append((title, revid, r[model], codes, steppings))
+    return rows
+
+
+# --- Putting a code under its entry -------------------------------------------
+
+def _token(name):
+    """The part of our name a list writes in its model column."""
+    n = re.sub(r"^Intel (Core |Xeon |Celeron |Pentium |Atom |Processor )?"
+               r"((Gold|Silver|Platinum|Bronze|Ultra) )?", "", name)
+    return re.sub(r"\s+(v\d)$", r"\1", n).upper()
+
+
+def enrich(entries, cache=None, log=print):
+    steppings = intel_steppings(cache)
+
+    def entry_steppings(entry):
+        found = set(entry["steppings"])
+        for c in entry["cpuids"]:
+            found |= steppings.get(c, set())
+        return found
+
+    places = collections.defaultdict(list)          # model → [(entry, processor)]
+    for e in entries:
+        for p in e["processors"]:
+            if not p.get("series"):
+                places[p["name"]].append((e, p))
+
+    def known(name):
+        return {c for _, p in places[name] for c in p["sSpec"]}
+
+    def owner(code):
+        return {p["name"] for e in entries for p in e["processors"] if code in p["sSpec"]}
+
+    def add(processor, code, source):
+        processor["sSpec"].append(code)
+        processor.setdefault("sSpecSource", {})[code] = source
+
+    def by_stepping(name, code, stepping, source):
+        """Rule 2. True when the code was added."""
+        if code in known(name):
+            return False
+        if owner(code):
+            log(f"  {source}: {name} {code} is already {sorted(owner(code))}'s — left out")
+            return False
+        fits = [(e, p) for e, p in places[name] if stepping in entry_steppings(e)]
+        if len(fits) == 1:
+            add(fits[0][1], code, source)
+            return True
+        log(f"  {source}: {name} {code} ({stepping}) fits {len(fits)} entries — left out")
+        return False
+
+    counts = collections.Counter()
+
+    # ARK.
+    with open(ARK_FILE, encoding="utf-8") as f:
+        ark = json.load(f)
+    for item in ark["models"]:
+        if item["model"] not in places:
+            log(f"  ark: {item['model']} is not in the table")
+            continue
+        for s in item["specs"]:
+            if s.get("stepping") and by_stepping(item["model"], s["sSpec"], s["stepping"], "ark"):
+                counts["ark"] += 1
+
+    # Wikipedia.
+    by_token = collections.defaultdict(list)
+    models_of = collections.defaultdict(set)
+    rows = wikipedia_rows(cache)
+    for row in rows:
+        for code in row[3]:
+            # The model number alone: one page writes "Celeron G5900" or
+            # "Xeon W-1250", another "G5900" or "1250" under a brand heading.
+            last = re.sub(r"\s+(v\d)\b", r"\1", row[2]).split()[-1].upper()
+            models_of[code].add(re.sub(r"^[A-Z]-", "", last))
+    ambiguous = {c for c, m in models_of.items() if len(m) > 1}
+    for c in sorted(ambiguous):
+        log(f"  wikipedia: {c} is written for {sorted(models_of[c])} — left out")
+    for row in rows:
+        for t in _model_tokens(row[2]):
+            by_token[t].append(row)
+    for name, where in places.items():
+        rows = by_token.get(_token(name), [])
+        if not rows:
+            continue
+        cpuid_sets = {tuple(e["cpuids"]) for e, _ in where}
+        for title, revid, _, codes, steps in rows:
+            arch = re.search(r"\((.+?)[-–]based\)", title)
+            if arch and not all(any(arch.group(1).lower() in c.lower() for c in e["codeNames"])
+                                for e, _ in where):
+                if len(cpuid_sets) == 1:
+                    log(f"  wikipedia: {name} {codes} is from {title}, the entry is "
+                        f"{where[0][0]['codeNames']} — left out")
+                continue
+            for code in codes:
+                if code in known(name) or code in ambiguous:
+                    continue
+                if owner(code):
+                    log(f"  wikipedia: {name} {code} is already {sorted(owner(code))}'s — left out")
+                    continue
+                if len(steps) == 1:
+                    if by_stepping(name, code, steps[0], "wikipedia"):
+                        counts["wikipedia"] += 1
+                elif len(cpuid_sets) == 1:
+                    # Rule 3: one CPUID, so one place. Each of its entries
+                    # that has no code of its own gets it.
+                    for _, p in where:
+                        if not [c for c in p["sSpec"] if c not in p.get("sSpecSource", {})]:
+                            add(p, code, "wikipedia")
+                    counts["wikipedia"] += 1
+    return {
+        "counts": dict(counts),
+        "sources": {
+            "ark": {"about": "Intel ARK, the Ordering & Compliance tab of each model's page; "
+                             "the URL per model is in Skills/update-cpuid-brand-names/scripts/ark-sspec.json",
+                    "retrieved": ark["retrieved"]},
+            "wikipedia": {"pages": [{"title": t, "revid": r,
+                                     "url": "https://en.wikipedia.org/w/index.php?oldid=" + str(r)}
+                                    for t, r in WIKIPEDIA_PAGES.items()]},
+            "steppings": {"about": "stepping per CPUID, from Intel's microcode release notes",
+                          "url": INTEL_NOTES_URL},
+        },
+    }

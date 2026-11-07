@@ -661,20 +661,39 @@ final class MinimapView: NSView {
     /// forbid — fails the containment test, closes the open range and lands in
     /// the same lane, which is the honest drawing of two zones that are not
     /// nested.
+    ///
+    /// A scattered zone is a bracket per stretch (#31), all under its id: the
+    /// gutter marks where the zone's bytes are, never the span between them.
+    /// Its stretches are put back in address order among the others for the
+    /// one pass to see each nesting.
     static func brackets(for map: ZoneMap) -> [ZoneBracket] {
+        var stretches: [(zone: Zone, range: Range<UInt64>)] = []
+        stretches.reserveCapacity(map.zones.count)
+        for zone in map.zones {
+            for range in zone.ranges { stretches.append((zone, range)) }
+        }
+        if map.zones.contains(where: \.isScattered) {
+            // Stable, so zones of one stretch keep the normalized order.
+            stretches = stretches.enumerated().sorted {
+                let (a, b) = ($0.element.range, $1.element.range)
+                if a.lowerBound != b.lowerBound { return a.lowerBound < b.lowerBound }
+                if a.upperBound != b.upperBound { return a.upperBound > b.upperBound }
+                return $0.offset < $1.offset
+            }.map(\.element)
+        }
         var open: [Range<UInt64>] = []
         var brackets: [ZoneBracket] = []
-        brackets.reserveCapacity(map.zones.count)
-        for zone in map.zones {
+        brackets.reserveCapacity(stretches.count)
+        for (zone, range) in stretches {
             while let last = open.last,
-                  !(last.lowerBound <= zone.range.lowerBound
-                    && zone.range.upperBound <= last.upperBound) {
+                  !(last.lowerBound <= range.lowerBound
+                    && range.upperBound <= last.upperBound) {
                 open.removeLast()
             }
-            brackets.append(ZoneBracket(id: zone.id, name: zone.name, range: zone.range,
+            brackets.append(ZoneBracket(id: zone.id, name: zone.name, range: range,
                                         lane: min(zoneMaxLanes - 1, open.count),
                                         isFocused: zone.id == map.focus))
-            open.append(zone.range)
+            open.append(range)
         }
         return brackets
     }

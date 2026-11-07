@@ -29,6 +29,10 @@ public struct FITDisplayRow: Equatable, Sendable {
     /// those its extended signature table adds. Empty for a row that does not
     /// lead to microcode.
     public var cpuids: [UInt32] = []
+    /// What the row opens into: the processors its microcode is for, one group
+    /// per CPUID it serves, as the table of brand names lists them
+    /// (`ProcessorNames`). Empty for a row that does not lead to microcode.
+    public var processorGroups: [FITProcessorGroup] = []
     /// Something is wrong with this row, and the panel says so by colour as
     /// well as in the list below.
     public var hasProblem: Bool
@@ -126,7 +130,8 @@ public enum FITRowCommand: Equatable, Sendable {
     public var title: LocalizedText {
         switch self {
         case .copyCPUID: return L("Copy CPUID")
-        case .goToOffset: return L("Go to Offset")
+        // What the double-click does, said in the menu: where the entry leads.
+        case .goToOffset: return L("Show Target")
         case .replaceMicrocode: return L("Replace Microcode")
         case .removeMicrocode: return L("Remove Microcode")
         case .fixChecksum: return L("Fix Checksum")
@@ -153,6 +158,11 @@ public struct FITDisplay: Equatable, Sendable {
     /// heading the panel puts above it; nil for an image that keeps none.
     public var backupStart: Int? = nil
     public var backupHeading: String? = nil
+    /// Every zone the panel can put in focus — the tables, the pointers, each
+    /// row and what each row points at. Not what the dump draws: that is
+    /// `zones`, the tables and the one in focus (`FITPresenter.published`).
+    /// Kept so a focus can move to any of them without a re-read.
+    public var allZones: [Zone] = []
 
     /// Nothing read yet, or nothing to show.
     public static let empty = FITDisplay(
@@ -176,7 +186,7 @@ public struct FITDisplay: Equatable, Sendable {
 
     public func focusing(zoneID: String?, in language: AppLanguage) -> FITDisplay {
         var copy = self
-        copy.zones.focus = zoneID
+        copy.zones = FITPresenter.published(allZones, focus: zoneID)
         // The detail follows the selection: the row the outline is on, whether
         // the outline sits on the row itself or on what it points at. The table
         // and the pointer stand for no row, so they leave the detail empty.
@@ -327,16 +337,19 @@ public enum FITPresenter {
             .flatMap { key in rows.first { $0.key == key } }
             .map { self.detail(for: $0, problems: report.problems, in: language) }
             ?? .empty
-        return FITDisplay(
+        let candidates = zones(of: table, backup: report.backup?.table, rows: rows, in: language)
+        var shown = FITDisplay(
             summary: summary(of: report, in: language),
             rows: rows,
             problems: report.problems,
             checksumFix: checksumFix,
-            zones: zones(of: table, backup: report.backup?.table, rows: rows, focus: focus, in: language),
+            zones: published(candidates, focus: focus.map(rowZoneID)),
             detail: detail,
             backupStart: backupStart,
             backupHeading: backupHeading
         )
+        shown.allZones = candidates
+        return shown
     }
 
     /// One copy of the table's rows. `problems` are that copy's own.
@@ -356,6 +369,7 @@ public enum FITPresenter {
                 targetText: targetText(of: row, in: language),
                 cpuidText: cpuidText(of: row),
                 cpuids: cpuids(of: row),
+                processorGroups: FITProcessorGroup.groups(for: cpuids(of: row), language: language),
                 hasProblem: problemRows.contains(row.entry.index),
                 // No catalogue yet: the "latest" verdict for the microcode rows
                 // starts `.notRated`, and the session's `ratingLatest(against:)`
@@ -509,15 +523,18 @@ public enum FITPresenter {
         case .outsideTheImage:
             return L("outside this image", in: language)
         case .microcode(let header):
-            // The CPUID is what a bench hunts for, so it leads; the offset and
-            // the size have their own columns, and the date closes the line.
-            // An update for several processors names them all: the ones its
-            // extended table adds are as much its own as the header's.
+            // The revision, the date and the platforms. The CPUIDs are not
+            // repeated here: the row opens into one row per CPUID the update
+            // serves — the header's own and those its extended table adds —
+            // and that is where the panel says them (`processorGroups`).
+            // Two digits at least for the platforms, as the catalogue's file
+            // names write it.
+            let platform = String(header.platformIDs, radix: 16, uppercase: true)
             parts = [
-                L("CPUID %1$@", in: language, cpuidsText(header.processorSignatures)),
-                L("r.%1$@", in: language, String(header.updateRevision, radix: 16, uppercase: true))
+                L("r.%1$@", in: language, String(header.updateRevision, radix: 16, uppercase: true)),
+                header.date,
+                L("platform %1$@", in: language, platform.count < 2 ? "0" + platform : platform)
             ]
-            parts.append(header.date)
             return parts.joined(separator: " · ")
         case .emptyMicrocodeSlot:
             parts = [L("empty slot", in: language)]
@@ -552,16 +569,25 @@ public enum FITPresenter {
 
     // MARK: - Zones
 
-    /// What the dump draws: the table, the pointer that leads to it, each row,
-    /// and what each row points at — the last being the useful one, since the
-    /// components are scattered across the image and the table is not. The
-    /// Top Swap backup's copy is drawn the same way, under names that say so.
+    /// What the dump draws: the table — the Top Swap backup's copy too — with
+    /// every row in it, as one zone each, and the one zone in focus. Nothing
+    /// else: the components the rows point at are scattered across the image,
+    /// and a map that outlined every one of them at once drew the whole dump
+    /// over. A component is outlined when the reader goes to it, as the focus.
+    public static func published(_ zones: [Zone], focus: Zone.ID?) -> ZoneMap {
+        let always: Set<Zone.ID> = [tableZoneID, backupTableZoneID]
+        return ZoneMap(zones: zones.filter { always.contains($0.id) || $0.id == focus }, focus: focus)
+    }
+
+    /// Every zone the panel can focus: the table, the pointer that leads to
+    /// it, each row, and what each row points at. The Top Swap backup's copy
+    /// has the same, under names that say so.
     private static func zones(
         of table: FITTable,
         backup: FITTable?,
         rows: [FITDisplayRow],
-        focus: Int?, in language: AppLanguage
-    ) -> ZoneMap {
+        in language: AppLanguage
+    ) -> [Zone] {
         var zones = [
             Zone(id: tableZoneID, name: L("FIT table", in: language), range: table.range),
             Zone(
@@ -599,7 +625,7 @@ public enum FITPresenter {
                 ))
             }
         }
-        return ZoneMap(zones: zones, focus: focus.map(rowZoneID))
+        return zones
     }
 
     private static func hex(_ value: UInt64, digits: Int = 0) -> String {

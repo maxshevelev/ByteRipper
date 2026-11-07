@@ -32,10 +32,68 @@ public enum MEATones {
         return own == .bad ? .bad : .caution
     }
 
-    /// The State basis row's tone: a caution when the basis is incomplete,
-    /// so the row that says why the state cannot be relied on is not passed
-    /// over; plain otherwise.
-    public static func stateBasis(_ basis: MFSStateBasis) -> ToolValueTone {
-        basis.isIncomplete ? .caution : .standard
+    // The State basis row has no tone of its own any more: it is drawn in
+    // brackets on the state's row, in the ordinary font and colour, and the
+    // caution for a step that could not be taken sits on the state itself
+    // (`fileSystemState(_:basis:)`).
+
+    /// The Manufacturing row's tone. A machine that will **not** close
+    /// Manufacturing boots on and can still be worked on, which is the state a
+    /// bench wants to see: green. One that **will** close on its next boot is
+    /// committing itself — the same tone the File System State draws for
+    /// `Initialized`, since both say "this has run, or is about to, and what is
+    /// written after that is final". The flag set with an open descriptor is
+    /// the combination MFIT refuses to build and reads the same way: it will
+    /// close, and the descriptor it locks is not the one a build would leave.
+    public static func manufacturingState(_ state: ManufacturingState) -> ToolValueTone {
+        switch state {
+        case .willNotClose: return .good
+        case .willClose, .unexpectedCombination: return .caution
+        case .unknown, .noSwitch: return .standard
+        }
+    }
+
+    // The Manufacturing basis row has no tone of its own: it states the flag,
+    // where it was read and what the descriptor says, and none of that is a
+    // verdict — so it is drawn as an ordinary value, exactly as the File System
+    // State's basis is. The verdict's own colour sits on the row above it.
+
+    /// The Manufacturing Lock row's tone: **Locked** is the machine's End of
+    /// Manufacturing having run, the committed state the File System State
+    /// draws for `Initialized`; **Not locked** is a board that has not been
+    /// through it, green. A byte the reading does not know is an ordinary
+    /// value.
+    public static func manufacturingLock(_ lock: ManufacturingLock) -> ToolValueTone {
+        switch lock {
+        case .locked: return .caution
+        case .open: return .good
+        case .other: return .standard
+        }
+    }
+
+    /// The RPMC Hardware Binding row's tone. The tool's two values are both
+    /// settled states, and they read as the bench needs them: **Disabled** —
+    /// the SPI part is not bound to the chipset, which is the state a part can
+    /// be replaced in — is green; **Enabled** is the caution the File System
+    /// State draws for `Initialized`, a state that has been committed to and
+    /// that the board now enforces. A byte the tool's class does not name, and
+    /// an image that does not record one, are ordinary values: neither says
+    /// which state the board is in.
+    public static func hardwareBinding(_ binding: HardwareBinding) -> ToolValueTone {
+        switch binding {
+        case .disabled: return .good
+        case .enabled: return .caution
+        case .other, .notInImage: return .standard
+        }
+    }
+
+    /// The Boot Guard row's tone. Profile 0 — `No_FVME`, the boot chain is not
+    /// verifying or measuring anything — is green. Every other profile is a
+    /// state the board has been committed to, and reads as the caution the
+    /// File System State draws for `Initialized`; the number itself still says
+    /// which, and what a level means for an edit is the help's to explain, not
+    /// the colour's. An image with no profile record keeps the ordinary tone.
+    public static func bootGuardProfile(_ profile: BootGuardProfile) -> ToolValueTone {
+        profile == .noFVME ? .good : .caution
     }
 }

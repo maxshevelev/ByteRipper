@@ -44,7 +44,7 @@ Packages:
 - Every package: `swift-tools-version: 5.9`, `platforms: [.macOS(.v14)]`, and a
   header comment saying what it is and why it is a package of its own.
 - After adding a package or a source file: `xcodegen generate`. The test script
-  finds a new package by itself.
+  finds a new package by itself and regenerates the project on every run.
 
 Localization (`Design/LOCALIZATION.md`):
 - English, Russian and German. **Every user-visible string goes through

@@ -1,0 +1,111 @@
+{
+ "kind": "configuration",
+ "schema": "byteripper.map/1",
+ "tool": "12.0",
+ "maps": [
+  {"id": "csme12", "name": "CSME 12 (Flash Image Tool 12.0, cnp_lp_rvp)", "files": [
+   {"alias": "EOM_Config", "path": "/home/mca/eom_config", "settings": [
+    {"bits": [0, 0], "help": "This setting detremines if End of Manufacturing will be triggered on first boot of the platform after flashing.\nNote: When this setting is enabled Intel(R) CSME will enter End of Manufacturing regardless of the descriptor settings.", "label": "EOM on First Boot Enabled", "length": 1, "name": "EomFirstBootEnabled", "offset": 0, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [1, 2], "help": "This setting deteremines which settings will be automatically commited during End of Manufacturing flows.\nNote: The FPFs, RPMB / RPMC and set manufacturing mode settings are mandatory and cannot be overridden revenue parts. Simulation can be done on non-revenue part with the Hardware binding set to disabled.", "label": "Flexible EOM setting options", "length": 1, "name": "FlexibleEomSettings", "offset": 0, "options": [[0, "Lock Descriptor and OEM Configs"], [1, "Lock OEM Configs Only"], [2, "Lock Descriptor Only"], [3, "Do not lock Descriptor and OEM Configs"]]}
+   ]},
+   {"alias": "EOM", "path": "/home/mca/eom", "settings": [
+    {"help": "This setting detremines if End of Manufacturing will be triggered on first boot of the platform after flashing.\nNote: When this setting is enabled Intel(R) CSME will enter End of Manufacturing regardless of the descriptor settings.", "label": "EOM on First Boot Enabled", "length": 1, "name": "EomFirstBootEnabled", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "ME_CONF_WRK", "path": "/home/policy/cfgmgr/cfg_rules", "settings": [
+    {"bits": [4, 4], "length": 1, "name": "FID_INT_TOUCH", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [10, 10], "length": 2, "name": "FID_ISH", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [20, 20], "length": 3, "name": "FID_MEDAL", "offset": 344, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [12, 12], "length": 2, "name": "FID_PAV", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [0, 0], "disabledBy": {"name": "HideMEBxFwUpdCtrl", "value": 1}, "label": "Hide MEBx Firmware Update Control", "length": 1, "name": "FwUpdEnable", "offset": 92, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [1, 1], "help": "This setting allows customers to hide the Firmware Update option in the MEBx interface.", "label": "Hide MEBx Firmware Update Control", "length": 1, "name": "HideMEBxFwUpdCtrl", "offset": 88, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [10, 10], "disabledBy": {"name": "IshSupported", "value": 1}, "help": "This setting allows customers to determine the power up state for ISH.", "label": "Integrated Sensor Hub Initial Power State", "length": 2, "name": "IshPowerUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [18, 18], "help": "This setting allows customers to enable / disable the KVM Redirection capabilities of the firmware.  Note: If this setting have been set to disabled it cannot be re-enabled once the descriptor has been locked.", "label": "KVM Redirection Supported", "length": 3, "name": "KvmSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [20, 20], "help": "This setting enables the Dynamic Application Loader capability of the Intel(R) ME Firmware.", "label": "Firmware Dynamic Application Loader", "length": 3, "name": "MEDynAppLoad", "offset": 344, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [0, 2], "help": "This setting allows the customer to configure the powerwell that will be used by Intel(R) Integrated LAN.  Note: Recommended setting is SLP_LAN#.", "label": "LAN Power Well", "length": 1, "name": "MELanPowerWell", "offset": 188, "options": [[0, "Core Well"], [1, "SUS Well"], [2, "ME Well"], [3, "SLP_LAN#"]]},
+    {"bits": [0, 7], "label": "WLAN Power Well", "length": 1, "name": "MEWlanPowerWell", "offset": 200, "options": [[128, "Disabled"], [129, "Core Well || SLP_S3#"], [130, "Primary Well || SLP_SUS#"], [131, "ME Well || SLP_A#"], [134, "SLP_WLAN#"]]},
+    {"bits": [0, 0], "help": "This setting allows customers to enable / disable the Wireless LAN CLINK signal through Intel(R) ME firmware.  Note: For using Intel(R) vPro Wireless solutions this should be set to Yes.", "label": "Intel(R) ME CLINK Signal Enabled", "length": 1, "name": "MeClinkEnable", "offset": 464, "options": [[0, "No"], [1, "Yes"]]},
+    {"hex": true, "label": "OEM Tag", "length": 12, "name": "OemTag", "offset": 524},
+    {"bits": [0, 3], "label": "Processor Emulation", "length": 1, "name": "ProcEmulation", "offset": 488, "options": [[0, "No Emulation"], [1, "EMULATE Intel (R) vPro (TM) capable Processor"], [2, "EMULATE Intel (R) Core (TM) branded Processor"], [3, "EMULATE Intel (R) Celeron (R) branded Processor"], [4, "EMULATE Intel (R) Pentium (R) branded Processor"], [5, "EMULATE Intel (R) Xeon (R) branded Processor"], [6, "EMULATE Intel (R) Xeon (R) Manageability capable Processor"]]},
+    {"bits": [29, 29], "disabledBy": {"name": "PttSupported", "value": 0}, "label": "Intel(R) PTT initial power-up state", "length": 4, "name": "PttPwrUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [29, 29], "help": "This setting permanently disables Intel(R) PTT in the firmware image.", "label": "Intel(R) PTT Supported", "length": 4, "name": "PttSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [21, 21], "help": "This setting allows customers to enable / disable firmware Transport Layer Security support.  Note: If this is disabled TLS will be permanently disabled in the firmware image.", "label": "Transport Layer Security Supported", "length": 3, "name": "TlsSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [4, 4], "label": "Intel(R) Precise Touch and Stylus Enabled", "length": 1, "name": "TouchEnabled", "offset": 344, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "IccProfileSelect", "path": "/home/icc/profsel", "settings": [
+    {"help": "Profile applied during each boot.", "label": "Boot Profile", "length": 1, "name": "BootProfile", "offset": 0}
+   ]},
+   {"alias": "KernFixedData", "path": "/home/bup/si_features", "settings": [
+    {"help": "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", "hex": true, "label": "Debug Override Pre-Production Silicon", "length": 4, "name": "DbgOverridePreProdSi", "offset": 12},
+    {"help": "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", "hex": true, "label": "Debug Override Production Silicon", "length": 4, "name": "DbgOverrideProdSi", "offset": 16}
+   ]},
+   {"alias": "Dam", "path": "/home/hotham/dbg_dam_req", "settings": [
+    {"help": "This setting enables Delayed Authentication Mode on the platform.", "label": "Delayed Authentication Mode Enabled", "length": 1, "name": "DelayedAuthMode", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "EhcbState", "path": "/home/amt/skip_rtfd/ehbc.state", "settings": [
+    {"help": "This setting allows customers to enable / disable Embedded Host Based Configuration. EHBC is primarily intended for use in embedded systems, please leave this setting disabled for business client systems.", "label": "Embedded Host Based Configuration Enabled", "length": 1, "name": "EhbcEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "IUnitSecCtl", "path": "/home/iunit/sec_ctl", "settings": [
+    {"help": "If enabled, access blockers in IS and PS are enabled, and FW is read from IMR. Must be enabled for FW authentication flow and execution of authenticated FW.", "label": "FW Secure Mode", "length": 1, "name": "FWSecureMode", "offset": 1, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"help": "If enabled, IPU Debugging is enabled, otherwise internal setup is checked to see if the IPU Debugging feature should be enabled or not.", "label": "IPU Debugging Enabled", "length": 1, "name": "RomTraceEnable", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "IccProfileCount", "path": "/home/icc/header", "settings": [
+    {"help": "Boot profile used when system instability is detected.", "label": "Failsafe Boot Profile", "length": 1, "name": "FailsafeBootProfile", "offset": 1},
+    {"help": "True = Allows user to change boot profile via BIOS menu or 3rd party application False = Prevents user from changing boot profile via BIOS or 3rd party application.  Note: When false, Failsafe Boot Profile must be the same as Boot Profile.", "label": "Profile Changeable", "length": 1, "name": "ProfileChangeable", "offset": 3, "options": [[0, "false"], [1, "true"]]}
+   ]},
+   {"alias": "BistMeAutoBistConfAndStatus", "path": "/home/policy/Bist/auto_config", "settings": [
+    {"bits": [0, 0], "help": "This setting enables the firmware Automatic Built in Self Test which is executed during first platform boot after initial image flashing.", "label": "Automatic Built in Self Test", "length": 1, "name": "FwAutoBist", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "OEM_ID_STRING", "path": "/home/fwupdate/fwuoemid", "settings": [
+    {"help": "This setting allows configuration of an OEM unique ID to ensure that customers can only update their platform with images from the OEM of the platform.", "label": "Firmware Update OEM ID", "length": 16, "name": "FwUpdateOemId", "offset": 0}
+   ]},
+   {"alias": "GucHash", "path": "/home/pavp/guc_hash", "settings": [
+    {"help": "This option is for entering the raw hash 256 bit string for the Graphics uController.", "label": "GuC Encryption Key", "length": 32, "name": "GucHash", "offset": 0}
+   ]},
+   {"alias": "HMRFPO_OEM_Enabled", "path": "/home/policy/hmrfpo_state", "settings": [
+    {"help": "This setting enables descriptor unlock of the ME Region when the HMRFPO message is sent to firmware prior to BIOS End of POST.", "label": "Intel(R) ME Region Flash Protection Override", "length": 1, "name": "HmrfpoEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "KvmScreenBlnk", "path": "/home/amt/rtfd/rsb.state", "settings": [
+    {"help": "This setting enables KVM Screen blanking capabilities in the firmware image.  Note: This feature is dependent on processor level support.", "label": "Firmware KVM Screen Blanking", "length": 1, "name": "KvmScreenBlnkEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "PavpLspcon", "path": "/home/pavp/lspcon_port", "settings": [
+    {"help": "This setting determines which port for LSPCON will be connected to the HDCP 2.2 bridge adapter Display 1.", "label": "LSPCON Internal Display Port 1 - LSPCON / 4K", "length": 1, "name": "Lspcon4kdisp", "offset": 0, "options": [[0, "None"], [2, "PortB"], [4, "PortC"], [8, "PortD"]]}
+   ]},
+   {"alias": "MctpDevicePorts", "path": "/home/mctp/device_ports", "settings": [
+    {"hex": true, "length": 1, "name": "MctpDevicePortBmc", "offset": 3},
+    {"hex": true, "length": 1, "name": "MctpDevicePortEc", "offset": 0},
+    {"hex": true, "length": 1, "name": "MctpDevicePortIsh", "offset": 2},
+    {"hex": true, "length": 1, "name": "MctpDevicePortSio", "offset": 1}
+   ]},
+   {"alias": "MctpStackConfig", "path": "/home/mctp/eid_db", "settings": [
+    {"hex": true, "label": "MCTP PCIe Address", "length": 1, "name": "MctpPcieAddress", "offset": 5},
+    {"help": "Defines the ME's 8-bits MCTP Endpoint IDs for each SMBus physical interface (SMBus, SMLink0 and SMLink1). These values are needed for FW to communicate with MCTP end points. For each of these 3 bytes, a value of 0x00 means not used, and values 0xFF or 0x01 - 0x07 or 0x20 - 0x2F are not allowed.", "label": "MCTP Stack Configuration", "length": 3, "name": "MctpStackConfig", "offset": 2}
+   ]},
+   {"alias": "PostManuf", "path": "/home/mca/manuf_lock", "settings": [
+    {"help": "This setting determines if modifications to Customer configuable NVARs is to be allowed after close of manufacturing.", "label": "Post Manufacturing NVAR Configuration Enabled", "length": 1, "name": "NvarPostManUnLckd", "offset": 0, "options": [[0, "Yes"], [1, "No"]]}
+   ]},
+   {"alias": "PkiSuffix", "path": "/home/amt/skip_rtfd/pki.suffix", "settings": [
+    {"help": "This setting allows OEMs to pre-configure the Domain Name Suffix used for PKI provisioning in their firmware image.  Note: For normal out-of- box provisioning functionality this setting should be left empty.", "label": "PKI Domain Name Suffix", "length": 256, "name": "PkiDomainSuffix", "offset": 0, "text": true}
+   ]},
+   {"alias": "PkiSecSfx", "path": "/home/amt/skip_rtfd/pki.sec.sfx", "settings": [
+    {"help": "This setting allows OEMs to pre-configure the Domain Name Suffix used for PKI provisioning in their firmware image.  Note: For normal out-of- box provisioning functionality this setting should be left empty.", "label": "PKI Domain Name Suffix", "length": 256, "name": "PkiDomainSuffix", "offset": 0, "text": true}
+   ]},
+   {"alias": "IUnitPortCfg", "path": "/home/iunit/port_cfg", "settings": [
+    {"help": "When CSI2_CNL.CR_OVRD  is cleared this determines the port configuration mapping between the lower 8 MIPI lanes and the CSI receiver ports the lanes can connect to:\n\n        Bits[3:0] determine the configuration of Port A:\n\n         0x0: port is disabled \n\n         0x4: X1 (ICL only)\n\n         0x5: X2 (ICL only)\n\n         Others: reserved \n\n         Bits[8:4] determine the configuration of Port B: \n\n         0x0: port is disabled \n\n         Others: reserved \n\n        Bits[10:9] determine the configuration of Port C: \n\n         0x0: port is disabled \n\n         0x2: X1 \n\n         Others: reserved \n\n        Bits[13:11] determine the configuration of Port D: \n\n         0x0: port is disabled \n\n         0x5: X2 \n\n         0x7: X4 \n\n         Others: reserved", "hex": true, "label": "Port Configuration For 8 LSB Lanes", "length": 2, "name": "PortConfigurationFor8LSBLanes", "offset": 0},
+    {"help": "When CSI2_CNL.CR_OVRD  is cleared this determines the port configuration mapping between the upper 8 MIPI lanes and the CSI receiver ports the lanes can connect to: \n\n        Bits[3:0] determine the configuration of Port A: \n\n         0x0: port is disabled \n\n         0x4: X1 \n\n         0x5: X2 \n\n         Others: reserved \n\n        Bits[8:4] determine the configuration of Port B: \n\n         0x0: port is disabled \n\n         0x9: X2 \n\n         Others: reserved \n\n        Bits[10:9] determine the configuration of Port C: \n\n         0x0: port is disabled \n\n         0x2: X1 \n\n         Others: reserved \n\n        Bits[13:11] determine the configuration of Port D: \n\n         0x0: port is disabled \n\n         0x5: X2 \n\n         0x7: X4 \n\n         Others: reserved", "hex": true, "label": "Port Configuration For 8 MSB Lanes", "length": 2, "name": "PortConfigurationFor8MSBLanes", "offset": 4},
+    {"help": "When set, port config is taken from the value IPU driver configures in IPU. When cleared, port config is taken from: CSI2_PORT_CONFIG_MSB.PORT_ID and CSI2_PORT_CONFIG_LSB.PORT_ID", "label": "SW Driver Controls Port Configuration ", "length": 1, "name": "SWDriverControlsPortConfiguration", "offset": 8, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "PrivacyLevel", "path": "/home/amt/rtfd/PrivacyLvl", "settings": [
+    {"help": "This setting allows customers to configure the Privacy and Security level for redirection operations.  Default enables all redirection ports (User consent is configurable).  Enhanced enables all redirection ports (User consent is required and cannot be disabled).  Extreme disables all redirection capabilities.", "label": "Redirection Privacy / Security Level", "length": 1, "name": "RedirectionPrivSecLevel", "offset": 0, "options": [[1, "Default"], [2, "Enhanced"], [3, "Extreme"]]}
+   ]},
+   {"alias": "IUnitSecTouch", "path": "/home/iunit/sec_touch", "settings": [
+    {"help": "When set, CAMERA_MASK register bits per CSI port are used to mask the data of cameras. When cleared, camera data is not masked. ", "label": "Secure Touch", "length": 1, "name": "SecureTouch", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "IUnitCameraMask", "path": "/home/iunit/camera_mask", "settings": [
+    {"help": "Camera mask bits per CSI port. When SECURE_TOUCH is set each set bit masks a CSI port for secure touch. When SECURE_TOUCH is cleared this register has no impact on the CSI ports.", "hex": true, "label": "Secure Touch Camera Mask", "length": 1, "name": "SecureTouchCameraMask", "offset": 0}
+   ]},
+   {"alias": "SfxIsSecure", "path": "/home/amt/skip_rtfd/sfx.isSecure", "settings": [
+    {"length": 1, "name": "SuffixIsSecure", "offset": 0, "options": [[0, "false"], [1, "true"]]}
+   ]}
+  ]}
+ ]
+}

@@ -14,7 +14,8 @@ public extension ToolRowMark {
         // The verdicts: outline shapes, so none of them is ever a problem's —
         // no exclamation mark, which is the problems' (ROW_MARKS.md §4).
         case .newest: return "checkmark.seal.fill"
-        case .newerListed: return "arrow.up.circle"
+        // Down: a newer revision is there to be brought down into the image.
+        case .newerListed: return "arrow.down.circle"
         case .newerMaybe: return "questionmark.circle"
         case .error: return "exclamationmark.octagon.fill"
         case .caution: return "exclamationmark.circle.fill"

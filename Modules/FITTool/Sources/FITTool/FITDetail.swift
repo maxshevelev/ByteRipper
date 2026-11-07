@@ -120,7 +120,8 @@ public enum FITDetail {
     private static func sizeText(_ entry: FITEntry, in language: AppLanguage) -> String {
         // The header's `Size` counts entries, not bytes — the field everyone
         // reads wrong (§4). For the rows that use it, the field is in 16-byte
-        // units; what a reader wants is the byte count.
+        // units — in bytes for a Boot Guard manifest (§7.4); what a reader
+        // wants is the byte count.
         if entry.isHeader {
             return L("%1$@ rows", in: language, entry.size)
         }

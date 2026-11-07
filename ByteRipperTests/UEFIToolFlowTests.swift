@@ -184,6 +184,51 @@ final class UEFIToolFlowTests: XCTestCase {
     /// checksum pass behind it produce — used to scroll the tree back to the
     /// selected row, taking the reader away from whatever they had scrolled to
     /// look at.
+    /// A reveal the reader asked for that finds nowhere to land does not leave
+    /// its "scroll there anyway" behind for a later show. Left over, it made
+    /// the next show that only redrew — a checksum pass, an edit's re-read —
+    /// bring the table back to the selection the reader had scrolled away
+    /// from.
+    func testAnUnansweredRevealLeavesNoScrollBehind() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        guard tree.numberOfRows >= 4 else {
+            return XCTFail("the premise: rows to scroll past — \(tree.numberOfRows) rows")
+        }
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        splitter.setDividerPosition(56, at: 0)
+        window?.layoutIfNeeded()
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        let selected = try node(atRow: 0).id
+        // The shows the selection started have had their turn.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        clip.contentView.scroll(to: NSPoint(x: 0, y: 40))
+        clip.reflectScrolledClipView(clip.contentView)
+        let away = clip.contentView.bounds.origin.y
+        XCTAssertGreaterThan(away, 0, "the premise: scrolled away from the row")
+
+        // Asked to show a row, and nowhere to land: the test image has no ME
+        // region, so opening a node onto its ME sub-tree settles on nothing.
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        vc.scrollToFocusOnNextShow()
+        vc.openMERegion(selected)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        // A show that only redraws, with the focus where it was.
+        let lazyTree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
+        vc.show(image: nil, tree: lazyTree, focus: selected, detail: .empty, catalogue: .empty,
+                badChecksums: [:], canWrite: false, isBuilding: false, rowsChanged: false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+        XCTAssertEqual(clip.contentView.bounds.origin.y, away, accuracy: 0.5,
+                       "the table stays where the reader scrolled it")
+        XCTAssertEqual(tree.selectedRow, 0, "and the selection is where it was")
+    }
+
     func testOpeningARowDoesNotScrollBackToTheSelection() throws {
         _ = try open(UEFITestImage.make())
         let tree = try expandRow(0)
@@ -1106,6 +1151,44 @@ final class UEFIToolFlowTests: XCTestCase {
                        "the file under the caret is the row shown")
     }
 
+    /// A reveal of the row that is the selection already still brings it on
+    /// screen: the reader scrolled the table away from it and pressed the
+    /// button to be shown it. Only the panel's own shows of its focus — after
+    /// a branch opens, a checksum pass — leave the table where it is.
+    func testRevealingTheSelectedRowScrollsItBackIntoView() throws {
+        let controller = try open(UEFITestImage.make())
+        let tree = try outline()
+        controller.windowModel.pane1.moveCaret(to: 0x4A)
+        try session().revealNodeAtCaret()
+        XCTAssertTrue(pumpUntil(5) { tree.selectedRow >= 0 }, "the reveal selected a row")
+        let selected = tree.selectedRow
+        XCTAssertGreaterThan(tree.numberOfRows, 2, "the premise: rows to scroll past")
+
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        let rowHeight = tree.rect(ofRow: 0).height
+        let header = try XCTUnwrap(tree.headerView).frame.height
+        // Room for one row under the column header.
+        splitter.setDividerPosition(splitter.dividerPosition(at: 0)
+                                    - clip.contentView.bounds.height + header + rowHeight + 2, at: 0)
+        window?.layoutIfNeeded()
+        func seen() -> NSRange {
+            var rect = clip.documentVisibleRect
+            rect.origin.y += header
+            rect.size.height -= header
+            return tree.rows(in: rect)
+        }
+        let away = selected == 0 ? tree.numberOfRows - 1 : 0
+        tree.scrollRowToVisible(away)
+        XCTAssertFalse(NSLocationInRange(selected, seen()), "the premise: scrolled away: \(seen())")
+
+        try session().revealNodeAtCaret()
+        XCTAssertTrue(pumpUntil(5) { NSLocationInRange(selected, seen()) },
+                      "the selected row is on screen again: \(seen())")
+        XCTAssertEqual(tree.selectedRow, selected)
+    }
+
     /// The same reveal into a branch that has already been read.
     ///
     /// Nothing is left to read there, so nothing else will redraw the table
@@ -1786,6 +1869,88 @@ final class UEFIToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
         XCTAssertEqual(try disclosure().state, .on)
         XCTAssertTrue(strapsShown(), "and they stay open on the way back")
+    }
+
+    /// Where the chipset's layout of the section is known, its fields fall
+    /// into a folded section per strap word, under a line that names the word
+    /// and what its fields share; a click opens one, and it stays open on the
+    /// next node and back.
+    func testTheStrapFieldsFoldUnderTheirWord() throws {
+        var image = UEFITestImage.intelImage()
+        image[0x1A] = 0x20                  // FPSBA: the strap words at 0x200
+        image[0x1B] = 70                    // seventy of them: a layout the tool has
+        let controller = try open(image)
+        let outline = try outline()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        _ = try expandRow(0)
+        let row = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor })
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        try XCTUnwrap(descendants(of: panel, NSButton.self)
+            .first { $0.bezelStyle == .disclosure && $0.accessibilityLabel() == "PCH straps" })
+            .performClick(nil)
+        window?.layoutIfNeeded()
+
+        func shown(_ first: String) -> DetailTableRow? {
+            descendants(of: panel, DetailTableRow.self)
+                .first { $0.texts.first == first && !$0.isHiddenOrHasHiddenAncestor }
+        }
+        let line = try XCTUnwrap(shown("PCHSTRP22"), "a line per word")
+        XCTAssertEqual(line.texts.prefix(3), ["PCHSTRP22", "SPI", "0x258"])
+        XCTAssertEqual(line.disclosure, false)
+        XCTAssertNil(shown("SPI_ec_max_freq"), "its fields folded under it")
+        let table = try XCTUnwrap(descendants(of: panel, DetailTableView.self)
+            .first { $0.rows.contains { $0 === line } })
+        let columns = ["Field", "Bits", "Value", "Default"]
+        XCTAssertEqual(table.rows[0].texts.first, "PCHSTRP0",
+                       "no header line over the sections: each carries its own")
+        XCTAssertFalse(table.rows.contains { $0.texts == columns && !$0.isHidden },
+                       "and a folded section's is folded with it")
+
+        XCTAssertTrue(line.accessibilityPerformPress())
+        window?.layoutIfNeeded()
+        XCTAssertEqual(line.disclosure, true)
+        let lineAt = try XCTUnwrap(table.rows.firstIndex { $0 === line })
+        XCTAssertEqual(table.rows[lineAt + 1].texts, columns, "the column names open with the section")
+        XCTAssertFalse(table.rows[lineAt + 1].isHidden)
+        XCTAssertFalse(table.rows[lineAt + 1].texts.contains("PCHSTRP22"),
+                       "the word is the section's, not a column")
+        XCTAssertEqual(shown("SPI_ec_max_freq")?.texts.prefix(2), ["SPI_ec_max_freq", "3–5"])
+        XCTAssertNil(shown("SPI_DMI_REQID"), "another word stays folded")
+        // The open section ends with a gap before the next word's line.
+        let next = try XCTUnwrap(shown("PCHSTRP23"))
+        let lastOfOpen = try XCTUnwrap(table.rows.filter { !$0.isHidden }
+            .last { $0.frame.maxY <= next.frame.minY + 0.5 })
+        let middle = try XCTUnwrap(shown("SPI_ec_max_freq"))
+        XCTAssertFalse(lastOfOpen === middle)
+        XCTAssertGreaterThan(lastOfOpen.frame.height, middle.frame.height + 2,
+                             "the open section's last row keeps a gap under it")
+
+        // The first column is held to what nineteen names in twenty need; a longer
+        // name wraps under itself, and is still one name to select and copy.
+        // The width is a constant chosen from the tables' names, so this also
+        // says it still fits them.
+        let csme = try XCTUnwrap(table.rows.first { $0.disclosure != nil && $0.texts[1] == "CSME_CSE" })
+        XCTAssertTrue(csme.accessibilityPerformPress())
+        window?.layoutIfNeeded()
+        let long = "CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED"
+        let wrapped = try XCTUnwrap(shown(long))
+        let plain = try XCTUnwrap(shown("CSME_CSE_SSS_EMUL_EN"))
+        XCTAssertGreaterThan(wrapped.frame.height, plain.frame.height * 1.5, "the long name takes two lines")
+        XCTAssertEqual(wrapped.text(in: wrapped.startMark..<ToolTextMark(part: 0, index: long.utf16.count)), long,
+                       "and copies as the name it is")
+        let fields = table.rows.filter { $0.disclosure == nil && $0.texts.count == 4 && $0.texts[0] != "Field" }
+        let fitting = fields.filter { $0.naturalWidth(of: 0) <= DetailTableView.firstColumnLimit }
+        XCTAssertGreaterThanOrEqual(Double(fitting.count) / Double(fields.count), 0.95)
+
+        outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)
+        followUEFISelection(controller)
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        XCTAssertNotNil(shown("SPI_ec_max_freq"), "and it stays open on the way back")
     }
 
     /// A store lists one row per variable: the copy that stands. The others
@@ -2690,6 +2855,50 @@ final class UEFIToolFlowTests: XCTestCase {
         async let after = ask()
         _ = await (before, after)
         XCTAssertEqual(reads.count, 2, "the ask after the edit read the region again")
+    }
+
+    /// A table with a line under it — the BIOS access masks' verdict — builds
+    /// that line before the list holds it. A constraint from it to the list
+    /// then throws, and AppKit swallowing the throw inside a main-actor task
+    /// leaves the concurrency runtime pointing at a task that is gone: the
+    /// next `MainActor.assumeIsolated` anywhere crashes.
+    /// A double click on a section's line opens it, and leaves it open: the
+    /// second press of a double click is not a second toggle.
+    func testADoubleClickOnASectionOpensIt() throws {
+        let table = UEFIDetailTable(title: "Straps", symbol: "switch.2", columns: ["Field", "Value"],
+                                    rows: [[.init("A_FIELD"), .init("1")]],
+                                    sections: [.init(title: "PCHSTRP0", rows: 0..<1)])
+        let view = DetailTableView(table: table, onFollow: { _ in })
+        let window = makeTestWindow(width: 400, height: 200)
+        window.contentView?.addSubview(view)
+        view.frame = NSRect(origin: .zero, size: view.intrinsicContentSize)
+        view.layoutSubtreeIfNeeded()
+        let line = try XCTUnwrap(view.sectionRows.first)
+        let point = line.convert(NSPoint(x: 4, y: 4), to: nil)
+
+        line.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 1))
+        XCTAssertEqual(view.openSections, ["PCHSTRP0"], "the first press opens the section")
+        line.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 2))
+        XCTAssertEqual(view.openSections, ["PCHSTRP0"], "the second press of a double click leaves it open")
+        line.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 1))
+        XCTAssertEqual(view.openSections, [], "a click after that folds it")
+    }
+
+    func testATableWithANoteShowsTheNoteUnderIt() throws {
+        let controller = UEFIToolViewController()
+        _ = controller.view
+        let table = UEFIDetailTable(title: "BIOS access", symbol: "lock",
+                                    columns: ["Region", "Read"], rows: [[.init("BIOS"), .init("yes", tone: .yes)]],
+                                    note: "The host may read and write every region.")
+        controller.show(image: nil, tree: nil, focus: nil,
+                        detail: UEFINodeDetail(title: "Descriptor", fields: [UEFIDetailField("Size", "0x1000")],
+                                               tables: [table]),
+                        catalogue: .empty, badChecksums: [:], canWrite: false, isBuilding: false,
+                        rowsChanged: false)
+
+        let labels = descendants(of: controller.view, ToolWrappingLabel.self)
+        let note = try XCTUnwrap(labels.first { $0.stringValue == table.note }, "the note is drawn under its table")
+        XCTAssertEqual(note.textColor, .labelColor, "in the ordinary colour, as the rows above it")
     }
 }
 

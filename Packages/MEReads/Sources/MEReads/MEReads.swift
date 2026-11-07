@@ -70,6 +70,23 @@ public enum MEReads {
         return Int(meRegion.lowerBound)
     }
 
+    /// The flash descriptor's own page — the first 4 KiB of the open file, which
+    /// is where a descriptor sits when the file is a whole-flash image. The
+    /// engine's facts about End of Manufacturing need one thing out of it (the
+    /// BIOS master's masks) that the ME region slice cannot carry; a bare ME
+    /// dump has no descriptor there, and the reader answers nil rather than a
+    /// page of whatever the file starts with.
+    public static func descriptorBytes(_ snapshot: any ToolContentReader) -> Data? {
+        guard snapshot.size >= 0x1000 else { return nil }
+        let page = try? readRange(snapshot, 0..<0x1000)
+        guard let page, page.count >= 0x1000,
+              page[page.startIndex + 0x10] == 0x5A,
+              page[page.startIndex + 0x11] == 0xA5,
+              page[page.startIndex + 0x12] == 0xF0,
+              page[page.startIndex + 0x13] == 0x0F else { return nil }
+        return page
+    }
+
     // MARK: - The engine
 
     /// Off the main actor: materialise just the ME region (when the shared tree
@@ -88,7 +105,9 @@ public enum MEReads {
             do {
                 let data = try regionBytes(snapshot, meRegion)
                 let baseOffset = regionBase(meRegion)
-                let analysis = try await analyzer.analyze(region: data, baseOffset: baseOffset)
+                let analysis = try await analyzer.analyze(
+                    region: data, baseOffset: baseOffset,
+                    descriptorBytes: descriptorBytes(snapshot))
                 return .success(analysis)
             } catch {
                 return .failure(error)

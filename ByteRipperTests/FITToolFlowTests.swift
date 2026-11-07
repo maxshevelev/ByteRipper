@@ -120,7 +120,7 @@ final class FITToolFlowTests: XCTestCase {
     /// "latest" marker and the warning both wear.
     private func typeCell(row: Int) throws -> NSTableCellView {
         try XCTUnwrap(
-            entriesTable().view(atColumn: 1, row: row, makeIfNecessary: true)
+            entriesTable().view(atColumn: 0, row: row, makeIfNecessary: true)
                 as? NSTableCellView
         )
     }
@@ -138,26 +138,32 @@ final class FITToolFlowTests: XCTestCase {
                       "the registry ships the FIT tool")
     }
 
-    /// The table, the pointer that leads to it, every row, and the microcode a
-    /// row points at — all of it outlined in the dump.
-    func testTheTableAndWhatItPointsAtAreMarkedInTheDump() throws {
+    /// The dump outlines the table with all its rows, and nothing the rows
+    /// point at until the reader goes there — then that, named by the CPUID a
+    /// bench is hunting for, and in focus.
+    func testTheTableIsMarkedInTheDumpAndATargetWhenGoneTo() throws {
         let controller = try open(FITTestImage.make())
-        let zones = controller.windowModel.pane1.zones
+        let pane = controller.windowModel.pane1
 
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.table" }?.range, 0x1000..<0x1020)
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.pointer" }?.range, 0xFFC0..<0xFFC4)
-        XCTAssertEqual(
-            zones.zones.first { $0.id == "fit.target.1" }?.range,
-            0x2000..<0x2100
-        )
-        XCTAssertEqual(try entriesTable().numberOfRows, 2)
+        XCTAssertEqual(pane.zones.zones.map(\.id), ["fit.table"])
+        XCTAssertEqual(pane.zones.zones.first?.range, 0x1000..<0x1020)
+
+        try session().goToOffset(of: 1)
+        XCTAssertEqual(pane.zones.zones.map(\.id).sorted(), ["fit.table", "fit.target.1"])
+        XCTAssertEqual(pane.zones.focus, "fit.target.1")
+        let target = try XCTUnwrap(pane.zones.zones.first { $0.id == "fit.target.1" })
+        XCTAssertEqual(target.name, "CPUID 806EA")
+        XCTAssertEqual(target.range, 0x2000..<0x2100)
+        // The header, the microcode, its CPUID open a level, and Add under it.
+        XCTAssertEqual(try entriesTable().numberOfRows, 4)
     }
 
     /// Another file opened into the pane is another table to read, and until
     /// it is read the panel shows none — not the last file's rows.
     func testAnotherFileShowsNoTableUntilItsOwnIsRead() throws {
         let controller = try open(FITTestImage.make())
-        XCTAssertEqual(try entriesTable().numberOfRows, 2, "the premise: the first file's table is up")
+        // The header, the microcode, its CPUID open a level, and Add under it.
+        XCTAssertEqual(try entriesTable().numberOfRows, 4, "the premise: the first file's table is up")
 
         let other = try tempFile(FITTestImage.make())
         files.append(other)
@@ -170,7 +176,7 @@ final class FITToolFlowTests: XCTestCase {
         wait(for: [parsed], timeout: 5)
         try session().onDisplay = nil
         window?.layoutIfNeeded()
-        XCTAssertEqual(try entriesTable().numberOfRows, 2, "the new file's table takes its place")
+        XCTAssertEqual(try entriesTable().numberOfRows, 4, "the new file's table takes its place")
     }
 
     /// What the panel says about an image it understands.
@@ -187,7 +193,7 @@ final class FITToolFlowTests: XCTestCase {
         )
         XCTAssertEqual(display.rows.map(\.typeText), ["FIT Header", "Microcode"])
         XCTAssertEqual(display.rows[1].targetText,
-                       "CPUID 806EA · r.F0 · 2019-07-15")
+                       "r.F0 · 2019-07-15 · platform 01")
         XCTAssertTrue(display.problems.filter { $0.severity == .error }.isEmpty)
     }
 
@@ -507,32 +513,24 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertTrue(controller?.windowModel.pane1.zones.zones.isEmpty ?? false)
     }
 
-    /// Every microcode in the table is outlined in the dump from the moment it
-    /// is read, named by the CPUID a bench is hunting for.
-    func testEveryMicrocodeIsAZoneNamedByItsCpuid() throws {
-        let controller = try open(FITTestImage.make())
-        let zones = controller.windowModel.pane1.zones.zones
-
-        XCTAssertEqual(zones.first { $0.id == "fit.target.1" }?.name, "CPUID 806EA")
-        XCTAssertEqual(zones.first { $0.id == "fit.target.1" }?.range, 0x2000..<0x2100)
-    }
-
-    /// The trip back: picking a microcode's zone in the dump brings its row to
-    /// the front of the panel. The bytes are selected by the host; the row is
-    /// the half only the tool-module can do.
-    func testPickingAZoneInTheDumpSelectsItsRow() throws {
+    /// The trip back: picking the table's zone in the dump selects its bytes
+    /// and puts the whole table in focus — no row, since it stands for none.
+    /// A component is not a zone to pick until the reader has gone to it.
+    func testPickingTheTablesZoneInTheDumpFocusesTheTable() throws {
         let controller = try open(FITTestImage.make())
         let pane = controller.windowModel.pane1
-        let menu = controller.makeOffsetMenu(for: pane, offset: 0x2000)
+        XCTAssertNil(controller.makeOffsetMenu(for: pane, offset: 0x2000).items
+            .first { $0.title.hasPrefix("Select Zone") }, "the microcode is not outlined")
+        let menu = controller.makeOffsetMenu(for: pane, offset: 0x1010)
         let item = try XCTUnwrap(menu.items.first { $0.title.hasPrefix("Select Zone") })
 
-        XCTAssertEqual(item.title, "Select Zone “CPUID 806EA”")
+        XCTAssertEqual(item.title, "Select Zone “FIT table”")
         controller.selectZone(item)
 
-        XCTAssertEqual(pane.zones.focus, "fit.target.1")
-        XCTAssertEqual(try entriesTable().selectedRow, 1)
+        XCTAssertEqual(pane.zones.focus, "fit.table")
+        XCTAssertEqual(try entriesTable().selectedRow, -1)
         let selection = pane.hexSelection()
-        XCTAssertEqual(selection.start..<selection.end, 0x2000..<0x2100)
+        XCTAssertEqual(selection.start..<selection.end, 0x1000..<0x1020)
     }
 
     // MARK: - A parse's progress
@@ -625,8 +623,11 @@ final class FITToolFlowTests: XCTestCase {
         // The scan runs off the main actor and this thread has not yielded, so
         // it cannot have finished yet: the parse is busy and the button stands
         // down for it.
-        XCTAssertFalse(try button("Add Microcode…").isEnabled,
-                       "Add must stand down while a parse runs")
+        // Before the first reading there is no table, and so no row for Add
+        // to sit in; where there is one, it stands down.
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let early = descendants(of: panel, NSButton.self).first { $0.title == "Add Microcode…" }
+        XCTAssertFalse(early?.isEnabled ?? false, "Add must stand down while a parse runs")
 
         // The reading lands, the bar leaves, and the button comes back as it
         // says: enabled because the table has rows.
@@ -1252,7 +1253,7 @@ final class FITToolFlowTests: XCTestCase {
 
         func typeCell(row: Int) throws -> NSTableCellView {
             try XCTUnwrap(
-                table.view(atColumn: 1, row: row, makeIfNecessary: true) as? NSTableCellView
+                table.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView
             )
         }
 
@@ -1271,21 +1272,91 @@ final class FITToolFlowTests: XCTestCase {
     }
 
     /// The table keeps inside its scroll view, as the UEFI and ME trees do, with
-    /// "Points at" — the last column, the one that gives way first — taking
-    /// the width the other columns leave, and the address never cut short.
+    /// its one column taking the panel's width.
     func testTheTableKeepsInsideItsScrollView() throws {
         _ = try open(FITTestImage.make())
         let table = try entriesTable()
         let clip = try XCTUnwrap(table.enclosingScrollView?.contentView.bounds.width)
         XCTAssertLessThanOrEqual(table.frame.width, clip + 0.5, "table \(table.frame.width), clip \(clip)")
-        let target = try XCTUnwrap(table.tableColumns.last)
-        XCTAssertEqual(target.title, "Points at")
-        XCTAssertTrue(target.resizingMask.contains(.autoresizingMask), "the column that takes the slack")
-        let address = try XCTUnwrap(table.tableColumns.first { $0.title == "Address" })
-        XCTAssertGreaterThanOrEqual(address.width, address.minWidth)
-        // The floor moves with the zoom (`ToolPanelTable.scaleColumnWidths`),
-        // so it is at least the design's, never under it.
-        XCTAssertGreaterThanOrEqual(address.minWidth, 76, "eight hex digits are never cut short")
+        let column = try XCTUnwrap(table.tableColumns.last)
+        XCTAssertTrue(column.resizingMask.contains(.autoresizingMask), "the column that takes the slack")
+        // One column: the type and what the entry points at, on one line.
+        // The number, the address and the size are the detail's.
+        XCTAssertEqual(table.tableColumns.map(\.title), ["Type"])
+    }
+
+    /// A microcode row opens a level by itself: a row for its CPUID, which
+    /// opens into the processors behind it and stays open after the panel is
+    /// shown again. A line chosen puts its microcode in focus.
+    func testAMicrocodeRowOpensIntoItsCPUID() throws {
+        _ = try open(FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        let display = try session().display
+        let lines = display.rows[1].processorGroups.first?.lines ?? []
+        XCTAssertFalse(lines.isEmpty, "806EA is in the shipped table")
+        XCTAssertFalse(outline.isExpandable(try XCTUnwrap(outline.item(atRow: 0))), "the header opens into nothing")
+        XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 1)), "the microcode is open to begin with")
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2, "the rows, the one CPUID, and Add")
+        // Add sits under the last microcode, after what the microcode opened.
+        let add = try button("Add Microcode…")
+        XCTAssertEqual(outline.row(for: add), 3)
+        let cpuidRow = try text(of: outline, row: 2)
+        XCTAssertTrue(cpuidRow.hasPrefix("CPUID 806EA"), cpuidRow)
+        // The stepping and the segments are under the pointer, not on a row.
+        let cpuidCell = try XCTUnwrap(outline.view(atColumn: 0, row: 2, makeIfNecessary: true) as? NSTableCellView)
+        XCTAssertTrue(cpuidCell.textField?.toolTip?.contains("Mobile") == true, cpuidCell.textField?.toolTip ?? "no tip")
+        let microcodeRow = try text(of: outline, row: 1)
+        XCTAssertFalse(microcodeRow.contains("806EA"), "the row itself does not repeat it: \(microcodeRow)")
+
+        let cpuid = try XCTUnwrap(outline.item(atRow: 2))
+        XCTAssertFalse(outline.isItemExpanded(cpuid), "the CPUID is closed to begin with")
+        outline.expandItem(cpuid)
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2 + lines.count)
+        XCTAssertEqual(outline.row(for: add), 3 + lines.count, "still under the last microcode's rows")
+        let firstLine = try text(of: outline, row: 3)
+        XCTAssertTrue(firstLine.hasPrefix(lines[0].text), firstLine)
+
+        // Choosing a line puts its microcode in focus and shows the panel
+        // again, with new items: the line stays chosen and the rows open.
+        outline.selectRowIndexes([4], byExtendingSelection: false)
+        XCTAssertEqual(outline.selectedRow, 4)
+        XCTAssertEqual(try session().display.detail.title, "#2 Microcode")
+        XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 2)), "still open")
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2 + lines.count)
+
+        // Closed by the reader, it stays closed when the panel is shown again.
+        outline.collapseItem(outline.item(atRow: 1))
+        outline.selectRowIndexes([1], byExtendingSelection: false)
+        XCTAssertFalse(outline.isItemExpanded(outline.item(atRow: 1)))
+    }
+
+    /// An update for several processors opens into a row per CPUID, each of
+    /// which opens into the processors behind it — and one the shipped table
+    /// does not know says so.
+    func testEachCPUIDOfAnUpdateIsALevelOfItsOwn() throws {
+        _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
+            (0x000B_06A2, 1), (0x000B_06A3, 1), (0x000B_06A8, 1)
+        ]))
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        let row = try session().display.rows[1]
+        XCTAssertEqual(row.processorGroups.map(\.cpuid), ["B06A2", "B06A3", "B06A8"])
+
+        let cpuids = try (2...4).map { try text(of: outline, row: $0) }
+        XCTAssertTrue(cpuids[0].hasPrefix("CPUID B06A2"), cpuids[0])
+        XCTAssertTrue(cpuids[1].hasPrefix("CPUID B06A3"), cpuids[1])
+        XCTAssertTrue(cpuids[2].hasPrefix("CPUID B06A8"), cpuids[2])
+        XCTAssertEqual(outline.level(forRow: 2), 1)
+
+        outline.expandItem(outline.item(atRow: 4))
+        XCTAssertEqual(outline.level(forRow: 5), 2)
+        XCTAssertEqual(try text(of: outline, row: 5), "No processor names known for CPUID B06A8")
+        XCTAssertLessThanOrEqual(outline.frame.width, (outline.enclosingScrollView?.contentView.bounds.width ?? 0) + 0.5,
+                                 "an opened level is indented inside the column, not added to it")
+    }
+
+    private func text(of outline: NSOutlineView, row: Int) throws -> String {
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
+        return cell.textField?.stringValue ?? ""
     }
 
     /// An image that keeps its top block twice for Top Swap lists the backup's
@@ -1295,8 +1366,11 @@ final class FITToolFlowTests: XCTestCase {
         _ = try open(FITTestImage.make() + FITTestImage.make())
         let table = try entriesTable()
         let display = try session().display
-        let start = try XCTUnwrap(display.backupStart, "the backup is read")
-        XCTAssertEqual(table.numberOfRows, display.rows.count + 1, "the rows and the heading")
+        // Closed, so a row of the table is a row of the outline — and the
+        // table's Add row before the backup's, which has none: it is read-only.
+        (table as? NSOutlineView)?.collapseItem(nil, collapseChildren: true)
+        let start = try XCTUnwrap(display.backupStart, "the backup is read") + 1
+        XCTAssertEqual(table.numberOfRows, display.rows.count + 2, "the rows, Add, and the heading")
 
         let delegate = try XCTUnwrap(table.delegate)
         XCTAssertEqual(delegate.tableView?(table, isGroupRow: start), true)
@@ -1314,52 +1388,108 @@ final class FITToolFlowTests: XCTestCase {
         }, "the copy is read-only")
     }
 
-    /// A wider or narrower panel moves "Points at", and leaves the row number
-    /// and the address the width they were. Only below "Points at"'s floor do
-    /// Size and Type give way — and they come back when the panel does.
-    func testResizingThePanelMovesOnlyPointsAt() throws {
+    /// Choosing a row with processors open does not move the table: the rows
+    /// keep their items across the show the choice brings, so the tree is not
+    /// closed and opened again under the reader — which pulled the scroll up
+    /// and left the row just clicked at the bottom of the view.
+    func testChoosingARowDoesNotScrollTheTable() throws {
+        _ = try open(FITTestImage.make() + FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        // Every CPUID open: the table and its backup's processors, taller than
+        // the view.
+        for row in (0..<outline.numberOfRows).reversed() {
+            if let item = outline.item(atRow: row), outline.level(forItem: item) == 1 {
+                outline.expandItem(item)
+            }
+        }
+        window?.layoutIfNeeded()
+        let clip = try XCTUnwrap(outline.enclosingScrollView?.contentView)
+        try XCTSkipUnless(outline.frame.height > clip.bounds.height + 100, "the table fits the view")
+        clip.scroll(to: NSPoint(x: 0, y: outline.frame.height - clip.bounds.height))
+        let before = clip.bounds.origin
+        let row = try XCTUnwrap((0..<outline.numberOfRows).last { outline.level(forRow: $0) == 0
+            && NSIntersectsRect(outline.rect(ofRow: $0), clip.bounds) && outline.delegate?.outlineView?(
+                outline, shouldSelectItem: outline.item(atRow: $0) as Any) == true })
+        let item = outline.item(atRow: row) as AnyObject
+
+        outline.selectRowIndexes([row], byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        XCTAssertEqual(clip.bounds.origin, before, "the table stays where it was scrolled")
+        XCTAssertTrue(outline.item(atRow: row) as AnyObject === item, "the row keeps its item")
+        XCTAssertEqual(outline.selectedRow, row)
+    }
+
+    /// Another line under the microcode already in focus is not news: the
+    /// session is not asked, and the panel is not shown again — the detail
+    /// list stays the very one on screen.
+    func testAnotherLineOfTheFocusedMicrocodeShowsNothingAgain() throws {
+        let controller = try open(FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        outline.expandItem(outline.item(atRow: 2))           // 806EA's models
+        outline.selectRowIndexes([3], byExtendingSelection: false)
+        XCTAssertEqual(try session().display.detail.title, "#2 Microcode")
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let shown = try XCTUnwrap(descendants(of: panel, ToolFieldList.self).first)
+
+        outline.selectRowIndexes([4], byExtendingSelection: false)
+        XCTAssertEqual(outline.selectedRow, 4)
+        XCTAssertTrue(descendants(of: panel, ToolFieldList.self).first === shown, "not shown again")
+
+        // The header is another row: that one is shown.
+        outline.selectRowIndexes([0], byExtendingSelection: false)
+        XCTAssertFalse(descendants(of: panel, ToolFieldList.self).first === shown)
+    }
+
+    /// The backup's copy reads quieter all the way down: a CPUID row under its
+    /// microcode is grey like the row, where the table's own is not.
+    func testTheBackupsCPUIDRowsAreGreyLikeItsRows() throws {
+        _ = try open(FITTestImage.make() + FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        func colour(_ row: Int) throws -> NSColor? {
+            let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
+            let text = try XCTUnwrap(cell.textField?.attributedStringValue)
+            return text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        }
+        // The heading in front of the copy is a label, not a cell: skipped.
+        let cpuidRows = (0..<outline.numberOfRows).filter {
+            (outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? NSTableCellView)?
+                .textField?.stringValue.hasPrefix("CPUID 806EA") == true
+        }
+        XCTAssertEqual(cpuidRows.count, 2, "the table's microcode and the backup's, each open a level")
+        XCTAssertEqual(try colour(cpuidRows[0]), .labelColor)
+        XCTAssertEqual(try colour(cpuidRows[1]), .secondaryLabelColor)
+    }
+
+    /// The one column takes the panel's width, wider or narrower, down to its
+    /// floor; below that the table scrolls sideways.
+    func testTheColumnTakesThePanelsWidth() throws {
         let controller = try open(FITTestImage.make())
         let table = try entriesTable()
-        func widths() -> [String: CGFloat] {
-            Dictionary(uniqueKeysWithValues: table.tableColumns.map { ($0.title, $0.width) })
-        }
         func setPanel(_ width: CGFloat) {
             controller.setToolPanelWidth(width, animated: false)
             window?.layoutIfNeeded()
         }
-        let target = try XCTUnwrap(table.tableColumns.last)
+        let column = try XCTUnwrap(table.tableColumns.first)
 
         setPanel(700)
-        let wide = widths()
-        XCTAssertGreaterThan(target.width, target.minWidth + 20, "room to spare: \(wide)")
-
+        let wide = column.width
+        XCTAssertGreaterThan(wide, column.minWidth + 20)
         setPanel(600)
-        let narrower = widths()
-        XCTAssertLessThan(narrower["Points at"] ?? 0, wide["Points at"] ?? 0, "\(wide) → \(narrower)")
-        for title in ["#", "Type", "Address", "Size"] {
-            XCTAssertEqual(narrower[title], wide[title], "\(title): \(wide) → \(narrower)")
-        }
-
+        XCTAssertLessThan(column.width, wide)
         setPanel(700)
-        XCTAssertEqual(widths(), wide, "growing goes to Points at, not to the row number")
-
-        // Narrower than the columns' floors: "Points at" stops at its own,
-        // Size gives way, and the row number and the address still do not.
-        setPanel(230)
-        let narrow = widths()
-        XCTAssertEqual(target.width, target.minWidth, accuracy: 0.5, "\(narrow)")
-        XCTAssertLessThan(narrow["Size"] ?? 0, wide["Size"] ?? 0, "\(narrow)")
-        XCTAssertEqual(narrow["Address"], wide["Address"])
-        XCTAssertEqual(narrow["#"], wide["#"])
-
-        // Wide again, what gave way comes back.
-        setPanel(700)
-        XCTAssertEqual(widths(), wide, "\(narrow) → \(widths())")
+        XCTAssertEqual(column.width, wide, accuracy: 0.5)
+        setPanel(120)
+        let clip = try XCTUnwrap(table.enclosingScrollView?.contentView.bounds.width)
+        XCTAssertGreaterThanOrEqual(column.width, column.minWidth - 0.5)
+        XCTAssertLessThanOrEqual(table.frame.width, max(clip, column.minWidth + 40) + 0.5,
+                                 "inside the panel while it has room: clip \(clip), column \(column.width)")
     }
 
     /// A microcode whose own image checksum does not add up wears the red
     /// octagon the UEFI tree gives a wrong checksum — and a microcode that is
-    /// also behind the catalogue wears the verdict's up arrow beside it.
+    /// also behind the catalogue wears the verdict's down arrow too: the
+    /// octagon ahead of the name, the arrow right after "Microcode".
     func testABrokenMicrocodeWearsTheErrorBesideItsVerdict() throws {
         _ = try open(FITTestImage.make(microcodeRevision: 0xE0, microcodePlatform: 0x02,
                                        brokenMicrocodeChecksum: true))
@@ -1377,6 +1507,17 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertFalse(verdict.isHidden, "and still wears its verdict")
         XCTAssertEqual(verdict.contentTintColor, SemanticColors.caution)
         XCTAssertEqual(verdict.toolTip, "Catalogue lists a newer revision (r.F0)")
+
+        // In the line: the octagon, the type, the arrow, then the target.
+        let stack = try XCTUnwrap(verdict.superview as? NSStackView)
+        let order = stack.arrangedSubviews
+        let type = try XCTUnwrap(cell.textField)
+        XCTAssertEqual(type.stringValue, "Microcode")
+        XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: problem)), try XCTUnwrap(order.firstIndex(of: type)))
+        XCTAssertEqual(order.firstIndex(of: verdict), try XCTUnwrap(order.firstIndex(of: type)) + 1,
+                       "the verdict follows the type")
+        let target = try XCTUnwrap(order.last as? NSTextField)
+        XCTAssertTrue(target.stringValue.hasPrefix("r.E0"), target.stringValue)
     }
 
     /// The panel explains its marks: a legend under the table, listing the
@@ -1538,14 +1679,15 @@ enum FITTestImage {
         microcodeRevision: UInt32 = 0xF0,
         microcodePlatform: UInt32 = 1,
         acmInsideAVolume: Bool = false,
-        brokenMicrocodeChecksum: Bool = false
+        brokenMicrocodeChecksum: Bool = false,
+        microcodeExtended: [(signature: UInt32, platformIDs: UInt32)] = []
     ) -> [UInt8] {
         var image = [UInt8](repeating: 0xFF, count: 0x1_0000)
         let diff: UInt64 = 0x1_0000_0000 - 0x1_0000
         image.replaceSubrange(
             0x2000..<0x2100,
             with: microcode(signature: microcodeSignature, revision: microcodeRevision,
-                            platformIDs: microcodePlatform)
+                            platformIDs: microcodePlatform, extended: microcodeExtended)
         )
         // One byte of the update's data changed, and its dword checksum left as
         // it was.
@@ -1636,11 +1778,22 @@ enum FITTestImage {
 
     /// A microcode image with a correct dword checksum — the editor refuses one
     /// without it.
+    /// With `extended` signatures it carries an extended signature table
+    /// right behind its data, its total size ends with the table, and the
+    /// 0x100 bytes it is given are filled out with erased flash.
     static func microcode(
         signature: UInt32 = 0x0008_06EA,
         revision: UInt32 = 0xF0,
-        platformIDs: UInt32 = 1
+        platformIDs: UInt32 = 1,
+        extended: [(signature: UInt32, platformIDs: UInt32)] = []
     ) -> [UInt8] {
+        var table: [UInt32] = []
+        if !extended.isEmpty {
+            table = [UInt32(extended.count), 0, 0, 0, 0]
+            for entry in extended { table += [entry.signature, entry.platformIDs, 0] }
+            table[1] = 0 &- table.reduce(0, &+)
+        }
+        let totalSize: UInt32 = table.isEmpty ? 0x100 : 0x70 + UInt32(4 * table.count)
         var bytes: [UInt8] = []
         func u32(_ value: UInt32) {
             bytes += (0..<4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) }
@@ -1653,9 +1806,10 @@ enum FITTestImage {
         u32(1)                       // LoaderRevision
         u32(platformIDs)             // PlatformIds
         u32(0x40)                    // DataSize
-        u32(0x100)                   // TotalSize
+        u32(totalSize)
         u32(0); u32(0); u32(0)       // MetadataSize, UpdateRevisionMin, Reserved
-        bytes += [UInt8](repeating: 0x5A, count: 0x100 - bytes.count)
+        bytes += [UInt8](repeating: 0x5A, count: Int(totalSize) - bytes.count - 4 * table.count)
+        table.forEach(u32)
 
         var sum: UInt32 = 0
         for index in stride(from: 0, to: bytes.count, by: 4) {
@@ -1664,7 +1818,7 @@ enum FITTestImage {
         }
         let stored = 0 &- sum
         for index in 0..<4 { bytes[0x10 + index] = UInt8(truncatingIfNeeded: stored >> (8 * index)) }
-        return bytes
+        return bytes + [UInt8](repeating: 0xFF, count: max(0x100 - bytes.count, 0))
     }
 }
 

@@ -92,6 +92,23 @@ final class FPTParserTests: XCTestCase {
         _ = data  // the erased-window branch reads data; not exercised by these cases
     }
 
+    func testAMarkerOnA4KBoundaryIsItsOwnBase() throws {
+        // CSME 12–18 whole images: the `$FPT` sits on a 4 KB boundary and is the
+        // FPT partition's base, with no CSE Layout Table before it. The CSME 18
+        // HP dump (18.0.10.2288) is this shape — with the `− 0x10` default its
+        // MFS, EFS, FITC, CDMD and UEP all land 0x10 short of their content.
+        let region = FPTFixture.fptRegion(anchor: 0x2000,
+                                          entries: [("FTPR", 0x1000, 0x1000, 0)])
+        XCTAssertEqual(FPTParser.fptStart(anchor: 0x2000, version: 0x20, length: 0x20,
+                                          cseLayoutTablePresent: false, in: region), 0x2000)
+        XCTAssertEqual(FPTParser.fptStart(anchor: 0x2000, version: 0x21, length: 0x20,
+                                          cseLayoutTablePresent: false, in: region), 0x2000)
+
+        let result = try XCTUnwrap(FPTParser.decode(region, anchor: 0x2000))
+        XCTAssertEqual(result.fptStart, 0x2000)
+        XCTAssertEqual(result.partitions[0].offset, 0x3000)
+    }
+
     func testErasedWindowBranchKeepsMarkerBase() {
         // Upstream branch 2: 0x48 zeros + 0x10 FF in the 0x1000 before the marker
         // means the marker is the region base even with no CSE Layout Table.

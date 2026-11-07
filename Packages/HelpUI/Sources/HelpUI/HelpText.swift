@@ -105,6 +105,32 @@ public enum HelpText {
         return text
     }
 
+    /// `text` with every font and every paragraph spacing multiplied by
+    /// `factor`: the same text at another reading size.
+    public static func scaled(_ text: NSAttributedString, by factor: CGFloat) -> NSAttributedString {
+        let scaled = NSMutableAttributedString(attributedString: text)
+        let whole = NSRange(location: 0, length: scaled.length)
+        scaled.enumerateAttribute(.font, in: whole) { value, range, _ in
+            guard let font = value as? NSFont else { return }
+            let resized = NSFont(descriptor: font.fontDescriptor, size: font.pointSize * factor) ?? font
+            scaled.addAttribute(.font, value: resized, range: range)
+        }
+        scaled.enumerateAttribute(.paragraphStyle, in: whole) { value, range, _ in
+            guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle
+            else { return }
+            style.paragraphSpacing *= factor
+            style.paragraphSpacingBefore *= factor
+            style.lineSpacing *= factor
+            style.headIndent *= factor
+            style.firstLineHeadIndent *= factor
+            style.tabStops = style.tabStops.map {
+                NSTextTab(textAlignment: $0.alignment, location: $0.location * factor)
+            }
+            scaled.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        return scaled
+    }
+
     // MARK: - The pieces
 
     private static func title(_ words: String) -> NSAttributedString {

@@ -1,0 +1,22 @@
+{
+ "kind": "register",
+ "schema": "byteripper.map/1",
+ "tool": "11.0",
+ "maps": [
+  {"id": "sunrisePoint", "name": "sunrisePoint", "source": {"generation": "sunrisePoint", "platform": "spt", "tool": "11.0"}, "registers": [
+   {"name": "FLMAP1", "place": {"kind": "absolute", "offset": 24}, "words": 1, "fields": [
+    {"bitOffset": 0, "count": 8, "name": "DescFlashMasterBaseAddress"},
+    {"bitOffset": 8, "count": 3, "name": "DescNumberOfMasters"},
+    {"bitOffset": 11, "count": 5, "name": "reserved"},
+    {"bitOffset": 16, "count": 8, "name": "DescFlashPchStrapBaseAddress"},
+    {"bitOffset": 24, "count": 8, "name": "DescPchStrapLength"}
+   ]},
+   {"name": "FLMAP2", "place": {"kind": "absolute", "offset": 28}, "words": 1, "fields": [
+    {"bitOffset": 0, "count": 8, "name": "DescFlashProcessorStrapBaseAddress"},
+    {"bitOffset": 8, "count": 8, "name": "DescCpuStrapLength"},
+    {"bitOffset": 16, "count": 8, "name": "DescRegInitBaseAddress"},
+    {"bitOffset": 24, "count": 8, "name": "DescRegInitLength"}
+   ]}
+  ]}
+ ]
+}

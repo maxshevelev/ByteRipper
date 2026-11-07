@@ -14,14 +14,33 @@ import Localization
 final class AgentActivityBadge: NSView {
     static let side: CGFloat = 8
 
-    /// How far the dot reaches past the button's right edge. Before macOS 26
-    /// the toolbar's button is hardly wider than its symbol, and a dot inside
-    /// its corner sat on the symbol; from 26 the button is a capsule with room
-    /// round the symbol, and the dot stays inside it. The view does not clip
-    /// its subviews, so the part outside is still drawn.
-    static var overhang: CGFloat {
-        if #available(macOS 26, *) { return 0 }
-        return 4
+    /// How far the dot reaches past the button's right edge before macOS 26:
+    /// there the toolbar's button is hardly wider than its symbol, and a dot
+    /// inside its corner sat on the symbol. The view does not clip its
+    /// subviews, so the part outside is still drawn.
+    static let overhang: CGFloat = 4
+
+    /// How far inside the glass's edge the dot stays from macOS 26.
+    static let inset: CGFloat = 1
+
+    /// Where the dot sits on a button with `bounds`.
+    ///
+    /// From macOS 26 the button lies in a glass circle (a capsule when wider
+    /// than tall) that clips what is drawn outside it, and the corner of the
+    /// button's bounds is outside: the dot sits on the diagonal from the right
+    /// end cap's centre towards that corner, `inset` short of the edge.
+    /// Measured on macOS 27: a 36 × 36 button in a 36 × 36 glass.
+    static func frame(in bounds: NSRect, flipped: Bool) -> NSRect {
+        if #available(macOS 26, *) {
+            let radius = min(bounds.width, bounds.height) / 2
+            let reach = (radius - side / 2 - inset) / 2.squareRoot()
+            let centre = NSPoint(x: bounds.maxX - radius + reach,
+                                 y: bounds.midY + (flipped ? -reach : reach))
+            return NSRect(x: centre.x - side / 2, y: centre.y - side / 2, width: side, height: side)
+        }
+        return NSRect(x: bounds.maxX - side + overhang,
+                      y: flipped ? 0 : bounds.maxY - side,
+                      width: side, height: side)
     }
 
     override init(frame: NSRect) {
@@ -52,9 +71,7 @@ final class AgentActivityBadge: NSView {
             return
         }
         if superview !== button { button.addSubview(self) }
-        frame = NSRect(x: button.bounds.maxX - Self.side + Self.overhang,
-                       y: button.isFlipped ? 0 : button.bounds.maxY - Self.side,
-                       width: Self.side, height: Self.side)
+        frame = Self.frame(in: button.bounds, flipped: button.isFlipped)
         isHidden = false
         startBlinking()
     }

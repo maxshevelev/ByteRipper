@@ -95,4 +95,50 @@ final class ZoneMapTests: XCTestCase {
         XCTAssertEqual(map.zones(containing: 0x200).map(\.id), ["volume"])
         XCTAssertTrue(map.zones(containing: 0x450).isEmpty)
     }
+
+    // MARK: - Zones in fragments (#31)
+
+    /// A file the firmware scattered: three chunks, the second stored before
+    /// the first, a CRC between each.
+    private let file = Zone(id: "file", name: "file",
+                            ranges: [0x200..<0x240, 0x100..<0x140, 0x300..<0x340])
+
+    /// The stretches keep the owner's order; the span orders the zone among the
+    /// others, and the start is the first stretch's — not the lowest address.
+    func testAScatteredZoneKeepsItsOrderAndIsPlacedByItsSpan() {
+        let map = ZoneMap(zones: [zone("later", 0x180..<0x190), file])
+            .normalized(contentSize: 0x1000)
+
+        XCTAssertEqual(map.zones.map(\.id), ["file", "later"])
+        XCTAssertEqual(map.zones[0].ranges, file.ranges)
+        XCTAssertEqual(map.zones[0].range, 0x100..<0x340)
+        XCTAssertEqual(map.zones[0].start, 0x200)
+        XCTAssertTrue(map.zones[0].isScattered)
+        XCTAssertFalse(zone("one", 0..<4).isScattered)
+    }
+
+    /// The gap between two chunks is not the file.
+    func testAByteBetweenTwoStretchesIsNotInTheZone() {
+        let map = ZoneMap(zones: [file]).normalized(contentSize: 0x1000)
+
+        XCTAssertEqual(map.zones(containing: 0x120).map(\.id), ["file"])
+        XCTAssertEqual(map.zones(containing: 0x33F).map(\.id), ["file"])
+        XCTAssertTrue(map.zones(containing: 0x140).isEmpty, "the CRC after a chunk")
+        XCTAssertTrue(map.zones(containing: 0x280).isEmpty)
+        XCTAssertEqual(file.stretch(containing: 0x210), 0x200..<0x240)
+        XCTAssertNil(file.stretch(containing: 0x250))
+    }
+
+    /// Each stretch is repaired as a zone of one would be, and a zone with
+    /// nothing left is gone.
+    func testEachStretchIsClampedOrDropped() {
+        let map = ZoneMap(zones: [file], focus: "file").normalized(contentSize: 0x220)
+
+        XCTAssertEqual(map.zones.first?.ranges, [0x200..<0x220, 0x100..<0x140])
+        XCTAssertEqual(map.focus, "file")
+
+        let gone = ZoneMap(zones: [file], focus: "file").normalized(contentSize: 0x80)
+        XCTAssertTrue(gone.zones.isEmpty)
+        XCTAssertNil(gone.focus)
+    }
 }

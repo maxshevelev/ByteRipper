@@ -103,6 +103,57 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// Whether the descriptor's third map word (`FLMAP2`) still points at the
+    /// processor strap section in the flash. Up to Cannon Point it does — its
+    /// low byte is the base in 0x10 units and the next the word count. From
+    /// Tiger Point on that word names the section's place in the PMC's space
+    /// instead, and the section is no longer in the descriptor to read.
+    public var hasProcessorStrapSection: Bool {
+        switch self {
+        case .tigerPoint, .alderPoint, .elkhartLake, .jasperLake,
+             .meteorLake, .pantherLake, .wildcatLake, .novaLake:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// Whether the descriptor's MIP area carries the CPU strap message — from
+    /// Tiger Point to Alder Point and the embedded lines, where the third map
+    /// word names the message's place in that area (`offset = FLMAP2[2:11]`
+    /// from `0xC00`, its length `FLMAP2[16:23]` words) instead of a strap
+    /// section (§2.7).
+    ///
+    /// **Not on Meteor Lake and later.** There the CPU straps moved into the
+    /// ME side of the image — the FITC partition's MIP table, which
+    /// `MEFirmware`'s `MIPTableReader` reads — and the descriptor's MIP area is
+    /// erased; the same map-word bits mean something else (the SoC soft straps
+    /// of MFIT 18's `Flmap2StructureV2`). Reading them as a CPU message on the
+    /// CSME 18 dump at hand yields three erased words, which is a section the
+    /// panel must not show.
+    public var hasMIPProcessorStraps: Bool {
+        switch self {
+        case .tigerPoint, .alderPoint, .elkhartLake, .jasperLake:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Whether the descriptor's MIP area carries the block table Cannon Point
+    /// introduced (`MipDescNvar`): the PMC and CPU soft straps and the CSE DbC
+    /// configuration, with their places in the area's first bytes. Meteor Lake
+    /// and later erase the area, and the upper map's high byte means the SoC
+    /// soft straps there instead (`DescriptorInfo.MIPTable`).
+    var hasMIPDescriptorTable: Bool {
+        switch self {
+        case .cannonPoint, .tigerPoint, .alderPoint, .elkhartLake, .jasperLake:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// The PCH strap bit that soft-disables the ME, as ifdtool and me_cleaner
     /// set it: `ICH_MeDisable` in the first word up to ICH10, `AltMeDisable`
     /// in the eleventh from Ibex Peak to Wildcat Point, and HAP in the first
@@ -117,22 +168,9 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
-    /// Which strap words hold the eSPI clock and the GPR0 range, for a strap
-    /// section of `count` words. A layout is the generation's *and* the
-    /// length's: the mobile and desktop parts of one generation make the
-    /// section different lengths and put the same field in different words.
-    /// So only the layouts ifdtool's offsets were checked against are here —
-    /// Tiger and Alder Point mobile, 70 words — and on Tiger Point H (101) or
-    /// Alder Point S (115) the same words are other fields (§2.6).
-    func strapFields(count: Int) -> (espiClockWord: Int, gpr0Word: Int)? {
-        switch (self, count) {
-        case (.tigerPoint, 70), (.alderPoint, 70): return (22, 21)
-        default: return nil
-        }
-    }
-
     /// The eSPI clock a three-bit strap code stands for, in MHz, on the
-    /// generations `strapFields` knows: ifdtool's 500-series table.
+    /// generations whose strap section carries the field: ifdtool's
+    /// 500-series table.
     func espiClock(_ code: UInt8) -> [Int]? {
         [0: [20], 1: [24], 2: [25], 3: [48], 4: [60]][code]
     }

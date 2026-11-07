@@ -17,6 +17,12 @@ final class DescriptorDetailTests: XCTestCase {
         detail.tables.first { $0.title == title }
     }
 
+    /// The row of a table whose first cell reads `name` — a strap field is a
+    /// row among hundreds, and this is how one of them is picked out.
+    private func row(_ table: UEFIDetailTable, _ name: String) -> [UEFIDetailTable.Cell]? {
+        table.rows.first { $0.first?.text == name }
+    }
+
     /// The sixteen bytes the descriptor opens with, printed the way a dump
     /// prints them — this is a vector a bench compares against another board's.
     func testTheReservedVectorIsShownAsBytes() {
@@ -143,6 +149,21 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.rows.map { $0[2].tone }, [.yes, .yes, .yes, .yes, .yes])
     }
 
+    /// Under the BIOS access table, the masks are read as a verdict: the host
+    /// is let into every region, or it is not. The line is evidence — the End
+    /// of Manufacturing setting can disagree with it — so it says how such an
+    /// image is *usually* built and nothing stronger.
+    func testTheBiosAccessTableSaysWhatItsMasksAddUpTo() throws {
+        let narrowed = try XCTUnwrap(table(detail(TestUEFI.flashDescriptor()), "BIOS access table"))
+        XCTAssertEqual(narrowed.note,
+                       "Access is narrowed: the host may not read and write every region, as a production image is usually built.")
+
+        let open = try XCTUnwrap(table(detail(TestUEFI.flashDescriptor(
+            masters: [(0x1F, 0x1F), (0, 0), (0, 0)])), "BIOS access table"))
+        XCTAssertEqual(open.note,
+                       "The host may read and write every region, as a service image is usually built.")
+    }
+
     /// The chips the firmware was built to drive, named where the catalogue
     /// knows the id.
     func testTheVsccTableIsAGridOfChips() throws {
@@ -182,23 +203,102 @@ final class DescriptorDetailTests: XCTestCase {
                        "red where the chip (4 MB) is below the smallest declared (8 MB)")
     }
 
-    /// The strap words as a grid of numbers, each row outlining its four bytes
-    /// in the dump; only the ME-disable word says anything about its bits.
-    func testTheStrapsAreAGridOfWords() throws {
+    /// Where the section's length is one no table of the chipset's layout is at
+    /// hand for, the words stand as the numbers they are, each row outlining
+    /// its four bytes in the dump; only the ME-disable word says anything about
+    /// its bits.
+    func testTheStrapsAreAGridOfWordsWhereNoLayoutIsAtHand() throws {
         var words = [UInt32](repeating: 0, count: 11)
         words[1] = 0x1234_5678
-        let shown = detail(TestUEFI.flashDescriptor(straps: words))
+        // Eleven words is a length no table states, on a generation whose own
+        // section (16, 18 or 21 words) is another length.
+        let shown = detail(TestUEFI.flashDescriptor(straps: words, strapCount: 11))
         let table = try XCTUnwrap(table(shown, "PCH straps"))
 
         XCTAssertEqual(table.columns, ["Strap", "Offset", "Value", "Meaning"])
-        XCTAssertEqual(table.rows.count, 0x12, "every word the Cougar Point map counts")
+        XCTAssertEqual(table.rows.count, 11, "one row per word of the section")
         XCTAssertEqual(table.rows[1].map(\.text), ["PCHSTRP1", "0x204", "0x12345678", "Unknown"])
         XCTAssertEqual(table.rows[10][3].text, "AltMeDisable in bit 7; the other bits unknown")
         XCTAssertEqual(table.rowTargets[1], .range(0x204..<0x208, name: "PCHSTRP1"))
         XCTAssertEqual(table.linkColumn, 1)
-        XCTAssertTrue(table.startsFolded, "seventy words and more stay folded until asked for")
+        XCTAssertTrue(table.startsFolded, "the grid stays folded until asked for")
         XCTAssertFalse(try XCTUnwrap(self.table(shown, "Region table")).startsFolded,
                        "the short tables are open")
+    }
+
+    /// On Cougar Point the 18-word section reads as the fields Intel's SPI
+    /// Programming Guide names, with the words the guide calls reserved left
+    /// as raw rows; the values here are `ME 7`'s, and the defaults are the
+    /// tool template's.
+    func testTheCougarPointStrapsAreFields() throws {
+        var words = [UInt32](repeating: 0, count: 18)
+        words[0] = 0x0920_D682
+        words[10] = 0x0081_0044
+        let shown = detail(TestUEFI.flashDescriptor(straps: words))
+        let table = try XCTUnwrap(table(shown, "PCH straps"))
+
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP0_SMB_EN")).map(\.text),
+                       ["PCHSTRP0_SMB_EN", "7", "0x1", "0x1"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP0_BBBS")).map(\.text),
+                       ["PCHSTRP0_BBBS", "29–30", "0x0", "0x0"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP10_Deep_SX_EN")).map(\.text),
+                       ["PCHSTRP10_Deep_SX_EN", "23", "0x1", "0x1"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP3")).map(\.text),
+                       ["PCHSTRP3", "", "0x0", ""],
+                       "a reserved word keeps its raw row")
+        XCTAssertEqual(table.sections.count, 18, "a section per word")
+    }
+
+    /// The processor strap section is a grid of the fields its layout names,
+    /// under the word they take — the same shape as the PCH section's.
+    func testTheProcessorStrapsAreAGridOfFields() throws {
+        let shown = detail(TestUEFI.flashDescriptor(
+            processorStraps: [0x0000_1000, 0x0010_8002, 0x0800_0210]))
+        let table = try XCTUnwrap(table(shown, "CPU straps"))
+
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertTrue(table.startsFolded, "the CPU straps start folded, as the PCH ones do")
+        XCTAssertEqual(try XCTUnwrap(row(table, "Processor_max_frequency_boot")).map(\.text),
+                       ["Processor_max_frequency_boot", "12", "0x1", "0x1"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "SaPowerPlaneTopology")).map(\.text),
+                       ["SaPowerPlaneTopology", "0–3", "0x2", "0x2"])
+    }
+
+    /// The OEM section's bytes, in rows of sixteen, with the address that
+    /// outlines them — shown only where a board's maker wrote something.
+    func testTheOEMSectionIsAGridWhereSomethingIsWritten() throws {
+        var oem = [UInt8](repeating: 0xFF, count: 0x20)
+        oem[0] = 0x4E
+        oem[1] = 0x31
+        let shown = detail(TestUEFI.flashDescriptor(oemSection: oem))
+        let table = try XCTUnwrap(table(shown, "OEM section"))
+
+        XCTAssertEqual(table.columns, ["Offset", "Bytes"])
+        XCTAssertEqual(table.rows.count, 16)
+        XCTAssertEqual(table.rows[0].map(\.text),
+                       ["0xF00", "4E 31 FF FF FF FF FF FF FF FF FF FF FF FF FF FF"])
+        XCTAssertEqual(table.rowTargets[0], .range(0xF00..<0xF10, name: "0xF00"))
+        XCTAssertEqual(table.linkColumn, 0)
+
+        XCTAssertNil(self.table(detail(TestUEFI.flashDescriptor()), "OEM section"),
+                     "an erased section is not a table")
+    }
+
+    /// From Tiger Point on the straps are the message in the descriptor's MIP
+    /// area — the third map word states its offset from 0xC00 and its length.
+    func testATigerPointDescriptorReadsTheMIPMessage() throws {
+        let shown = detail(TestUEFI.flashDescriptor(version1: false, map2: 0x0011_01A0))
+        let table = try XCTUnwrap(self.table(shown, "CPU straps"))
+
+        XCTAssertEqual(table.sections.first?.title, "CPUSTRP0")
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertTrue(table.startsFolded, "the CPU straps start folded, as the PCH ones do")
+        // The message states no default, so the column says so with a dash
+        // rather than standing empty.
+        let fields = table.rows.filter { $0.first?.text != "Field" }
+        XCTAssertFalse(fields.isEmpty)
+        XCTAssertTrue(fields.allSatisfy { $0.count == 4 && $0[3].text == "—" })
     }
 
     /// The bit that soft-disables the ME is a row of its own, and set it reads
@@ -226,10 +326,59 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(gpr0.tone, .caution)
         XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
 
+        // Every field of the layout is a row of its own — 759 of them for this
+        // section — with the ME-disable bit among them.
         let table = try XCTUnwrap(table(shown, "PCH straps"))
-        XCTAssertEqual(table.rows.count, 70)
-        XCTAssertEqual(table.rows[21][3].text, "GPR0, the whole word")
-        XCTAssertEqual(table.rows[22][3].text, "eSPI clock in bits 3–5; the other bits unknown")
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertEqual(table.rows.count, 760)
+        XCTAssertEqual(try XCTUnwrap(row(table, "SPI_GLOBAL_PROTECTED_RNG_DEF")).map(\.text),
+                       ["SPI_GLOBAL_PROTECTED_RNG_DEF", "0–31", "0x829B0001", "0x0"])
+        let clockRow = try XCTUnwrap(row(table, "SPI_ec_max_freq"))
+        XCTAssertEqual(clockRow.map(\.text), ["SPI_ec_max_freq", "3–5", "0x4", "0x0"])
+
+        // A value the build set away from the default is drawn in bold; one
+        // left at it is not.
+        XCTAssertTrue(clockRow[2].isStrong)
+        XCTAssertFalse(clockRow[3].isStrong, "the default itself is not")
+        let plainRow = try XCTUnwrap(row(table, "SPI_ec_plch_dis"))
+        XCTAssertFalse(plainRow[2].isStrong)
+
+        // The rows fall into a section per word, which names the word, what
+        // its fields share, and where it is — its address outlines the word.
+        let clock = try XCTUnwrap(table.rows.firstIndex { $0[0].text == "SPI_ec_max_freq" })
+        let section = try XCTUnwrap(table.sections.first { $0.rows.contains(clock) })
+        XCTAssertEqual(section.title, "PCHSTRP22")
+        XCTAssertEqual(section.subtitle, "SPI")
+        XCTAssertEqual(section.address, "0x258")
+        XCTAssertEqual(section.target, .range(0x258..<0x25C, name: "PCHSTRP22"))
+        // The line says, folded, how many of its fields the build set.
+        let setHere = table.rows[section.rows].filter { $0[2].isStrong }.count
+        XCTAssertGreaterThan(setHere, 0)
+        XCTAssertEqual(section.note, "Non-default: \(setHere)")
+        let quiet = try XCTUnwrap(table.sections.first { section in
+            !table.rows[section.rows].contains { $0[2].isStrong }
+        })
+        XCTAssertNil(quiet.note, "a word left at its defaults says nothing")
+        XCTAssertEqual(table.sections.count, 70, "a section per word")
+        XCTAssertEqual(table.sections.map(\.rows.count).reduce(0, +), table.rows.count,
+                       "and every row in one")
+        XCTAssertTrue(zip(table.sections, table.sections.dropFirst())
+            .allSatisfy { $0.rows.upperBound == $1.rows.lowerBound }, "in order")
+    }
+
+    /// The bit that soft-disables the ME is a row among the fields — the chipset
+    /// layout does not name it, so it has no default of the tool's to stand
+    /// against — and its value is the bit.
+    func testTheMEDisableBitIsARowOfTheLayoutsTable() throws {
+        func hap(_ words: [UInt32]) throws -> [UEFIDetailTable.Cell] {
+            let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words,
+                                                        strapCount: 70))
+            return try XCTUnwrap(row(XCTUnwrap(self.table(shown, "PCH straps")), "HAP"))
+        }
+
+        XCTAssertEqual(try hap([0]).map(\.text), ["HAP", "16", "0x0", ""])
+        XCTAssertEqual(try hap([0x0001_0000]).map(\.text), ["HAP", "16", "0x1", ""])
+        XCTAssertEqual(try hap([0]).count, 4)
     }
 
     /// A zero GPRD is off, and a clock code nobody defines shows the code.
@@ -242,12 +391,19 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(field(shown, "eSPI clock"), "Unknown (code 6)")
     }
 
-    /// The desktop layout's words are other fields, so neither row is shown.
-    func testADesktopLayoutHasNeitherRow() {
-        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: [0x2222_2222]))
+    /// The desktop layout keeps the two fields in words of its own: word 29 is
+    /// the eSPI clock and word 28 GPR0, while what the mobile layout calls
+    /// GPR0 — word 21 — is neither.
+    func testTheDesktopLayoutReadsItsOwnWords() {
+        var words = [UInt32](repeating: 0, count: 115)
+        words[21] = 0x2222_2222
+        words[28] = 0x801F_8001
+        words[29] = 4 << 3
+        let shown = detail(TestUEFI.flashDescriptor(
+            version1: false, straps: words, strapCount: 115))
 
-        XCTAssertNil(field(shown, "GPR0"))
-        XCTAssertNil(field(shown, "eSPI clock"))
+        XCTAssertEqual(field(shown, "GPR0"), "0x1000 – 0x1FFFF: reads and writes refused")
+        XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
     }
 
     /// No strap section, no strap table and no bit row.

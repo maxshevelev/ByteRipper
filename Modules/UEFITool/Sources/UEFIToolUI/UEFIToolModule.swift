@@ -442,6 +442,7 @@ private struct ChecksumPass: Sendable {
         controller.onRevealMatch = { [weak self] range in self?.host.reveal(range, select: true) }
         controller.onOpenMatch = { [weak self] match in self?.openContentMatch(match) }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
+        controller.onOpenME = { [weak self] path in self?.openME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
         controller.onMERegionLoading = { [weak self] id, loading in
             self?.meRegionLoading(id, loading: loading)
@@ -1338,6 +1339,18 @@ private struct ChecksumPass: Sendable {
         followSelection { [weak self] in self?.loadChecksumsIfShown(path) }
     }
 
+    /// A double-click on an ME row opens it in a fragment panel, as the ME
+    /// Analyzer does (`MEAParts`): a copy of its bytes, or an MFS or EFS file
+    /// gathered from its chunks. The ME region is the file's own bytes, so
+    /// it opens as an image like any other part of the file.
+    ///
+    /// Public because a double-click cannot be simulated.
+    // help: panel.uefi.open-me
+    public func openME(_ path: [Int]) {
+        guard let node = MEATree.node(at: path, in: meRoots), let part = MEAParts.open(node) else { return }
+        openPart(named: part.name, linkedTo: part.source, layout: .image, codec: part.codec)
+    }
+
     /// The ME half of `showUEFIFocus`: a row the panel picked rather than the
     /// reader, so the table has not moved to it yet. `selectME` follows a
     /// reader who already put the selection there and only draws the detail;
@@ -1407,12 +1420,14 @@ private struct ChecksumPass: Sendable {
     private func openMERegionForReveal(_ id: NodeID, at offset: UInt64) {
         runMEAnalysis(id) { [weak self] in
             guard let self else { return }
+            self.controller.scrollToFocusOnNextShow()
             self.controller.openMERegion(id, settlingOn: self.mePath(covering: offset))
         } onFailure: { [weak self] in
             // The sub-tree is not coming, so the region node is the nearest
             // thing above the caret the panel can still show. It covers the
             // caret — that is how the reveal got here — so landing on it is the
             // same answer one level up. Why it failed has already been said.
+            self?.controller.scrollToFocusOnNextShow()
             self?.showUEFIFocus(id)
         }
     }
@@ -1806,6 +1821,7 @@ private struct ChecksumPass: Sendable {
         // two halves route by the same rule `zoneSelected` uses.
         if let path = mePath(covering: offset) {
             host.noteNavigationStep()
+            controller.scrollToFocusOnNextShow()
             showMEFocus(path)
             return
         }
@@ -1838,10 +1854,12 @@ private struct ChecksumPass: Sendable {
             // rows, rather than answer with nothing.
             if UEFITreeDisplay.isEmptyPadding(node), !self.controller.showsEmptyPadding {
                 self.controller.askToShowEmptyPadding { [weak self] in
+                    self?.controller.scrollToFocusOnNextShow()
                     self?.showUEFIFocus(node.id)
                 }
                 return
             }
+            self.controller.scrollToFocusOnNextShow()
             self.showUEFIFocus(node.id)
         }
     }
@@ -1975,6 +1993,7 @@ private struct ChecksumPass: Sendable {
             self.controller.endBusy()
             guard let node = chain.last(where: { $0.kind == store.kind && $0.range == store.range }) else { return }
             self.host.noteNavigationStep()
+            self.controller.scrollToFocusOnNextShow()
             // A whole show, not a selection's: the row may sit in branches
             // the outline has not opened, and the show is what opens them.
             // Published, so the dump comes to the store's bytes.

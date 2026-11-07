@@ -148,12 +148,21 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(service.desk.background.memoryLimit, 512 << 20)
     }
 
-    /// The relay the button hands out is the one inside the app's bundle.
-    func testTheRelayIsInsideTheAppBundle() {
-        XCTAssertTrue(AgentClientConfiguration.relayPath.hasSuffix(".app/Contents/Helpers/byteripper-mcp"),
-                      AgentClientConfiguration.relayPath)
+    /// The relay the button hands out is the **installed** copy, beside the
+    /// socket — one path for every copy of the app, which is what keeps a
+    /// configuration good across builds — and it is this build's helper: the
+    /// app installs it at every launch (`AgentRelayInstall`).
+    func testTheRelayHandedOutIsTheInstalledCopyOfThisBuildsHelper() throws {
+        let bundled = AgentRelayInstall.bundledHelper
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: bundled.path),
+                      "the build embeds the relay: \(bundled.path)")
+        XCTAssertEqual(AgentClientConfiguration.relayPath, AgentEndpoint.relayPath(),
+                       "the configuration names the installed copy, not a path inside a build folder")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: AgentClientConfiguration.relayPath),
-                      "the build embeds the relay")
+                      "and the app has installed it: \(AgentClientConfiguration.relayPath)")
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: AgentClientConfiguration.relayPath)),
+                       try Data(contentsOf: bundled),
+                       "the installed copy is this build's helper, byte for byte")
     }
 
     // MARK: - Window ▸ Agent
@@ -339,8 +348,20 @@ final class AgentUITests: XCTestCase {
         badge.sync(in: window, active: true)
         XCTAssertTrue(badge.superview === button)
         XCTAssertFalse(badge.isHidden)
-        XCTAssertEqual(badge.frame.maxX, button.bounds.maxX + AgentActivityBadge.overhang,
-                       "on the button's corner, past its edge where the button is no wider than its symbol")
+        if #available(macOS 26, *) {
+            // Inside the glass round the button, which clips what lies outside:
+            // the circle of the right end cap.
+            let radius = min(button.bounds.width, button.bounds.height) / 2
+            let cap = NSPoint(x: button.bounds.maxX - radius, y: button.bounds.midY)
+            let distance = hypot(badge.frame.midX - cap.x, badge.frame.midY - cap.y)
+            XCTAssertLessThanOrEqual(distance + AgentActivityBadge.side / 2, radius - AgentActivityBadge.inset + 0.001,
+                                     "the whole dot is inside the glass")
+            XCTAssertGreaterThan(badge.frame.midX, cap.x, "towards the right")
+            XCTAssertEqual(badge.frame.midY < cap.y, button.isFlipped, "towards the top")
+        } else {
+            XCTAssertEqual(badge.frame.maxX, button.bounds.maxX + AgentActivityBadge.overhang,
+                           "on the button's corner, past its edge where the button is no wider than its symbol")
+        }
         XCTAssertEqual(badge.isBlinking, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
 
         badge.sync(in: window, active: false)

@@ -284,6 +284,7 @@ enum JedecIDs {
         0x20BA22: c("Micron MT25QL02G", 262144, .linux),
         0x20BB21: c("Micron N25Q00A", 131072, .linux),
         0x20BB22: c("Micron MT25QU02G", 262144, .linux),
+        0x2C5B1A: c("Micron MICRON", nil, .linux),
         0x2C5B1C: c("Micron MT35XU02G", 262144, .linux),
         0x345A1A: c("Spansion S28HL512T", nil, .linux),
         0x345A1B: c("Spansion S28HL01GT", nil, .linux),

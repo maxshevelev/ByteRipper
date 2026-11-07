@@ -15,6 +15,13 @@ enum Descriptor {
     /// Every `*Base` field holds bits [11:4] of a real offset, so the real one
     /// is `base << 4` and anything above this is a broken descriptor.
     static let maxBase: UInt32 = 0xE0
+    /// Where the MIP area opens: the CPU strap message of Tiger Point and
+    /// later sits at `MIP + FLMAP2[2:11]` (§2.7).
+    static let mipOffset: UInt64 = 0xC00
+    /// The OEM section: `0x100` bytes at a fixed offset in the descriptor
+    /// region, which a board's maker fills with what it likes (§2.4).
+    static let oemSectionOffset: UInt64 = 0x0F00
+    static let oemSectionSize: UInt64 = 0x100
     /// A region entry of all ones is no region, the way UEFITool reads it:
     /// erased bytes, not an area at the top of a 128 MiB space.
     static let erasedRegionEntry: UInt16 = 0xFFFF

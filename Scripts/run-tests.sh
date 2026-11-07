@@ -51,16 +51,176 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
-report() {   # keeps the counts, the failures, and any death of the test host
+# `ByteRipper.xcodeproj` is generated and gitignored, so a branch switch leaves
+# behind the one the other branch made. A project that names a package this
+# branch has not got stops every `xcodebuild` at "Could not resolve package
+# dependencies", before a test runs, and a group then prints nothing at all.
+# Generating takes a fraction of a second, so it is done on every run rather
+# than guessed to be stale.
+if ! command -v xcodegen >/dev/null; then
+    echo "xcodegen is not installed: the project cannot be generated (brew install xcodegen)" >&2
+    exit 1
+fi
+if ! xcodegen generate --quiet; then
+    echo "xcodegen could not generate ByteRipper.xcodeproj from project.yml" >&2
+    exit 1
+fi
+
+# The binary maps, their JSON manifests and the code's version marks must
+# agree (`Design/MAP_DATA.md`). `--check` reads and rebuilds in memory; it
+# never writes. A stale pair fails the run before a test starts, because every
+# descriptor and configuration test would otherwise be testing the wrong
+# tables.
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
+    Packages/UEFIImage/MapSources/strap/pch.json \
+    Packages/UEFIImage/MapSources/strap/pch18.json \
+    Packages/UEFIImage/MapSources/strap/spt.json \
+    Packages/UEFIImage/MapSources/strap/cpu.json \
+    Packages/UEFIImage/MapSources/strap/sptcpu.json \
+    Packages/UEFIImage/MapSources/strap/pmc.json \
+    Packages/UEFIImage/MapSources/strap/mip.json \
+    Packages/UEFIImage/MapSources/strap/legacy-ibx.json \
+    Packages/UEFIImage/MapSources/strap/legacy-cpt.json \
+    Packages/UEFIImage/MapSources/strap/legacy-lpt.json; then
+    echo "the strap map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/register/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift \
+    --swift-enum-name DescriptorRegisterMapDataVersion \
+    Packages/UEFIImage/MapSources/register/sunrisePoint.json \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json \
+    Packages/UEFIImage/MapSources/register/elkhartLake.json \
+    Packages/UEFIImage/MapSources/register/jasperLake.json \
+    Packages/UEFIImage/MapSources/register/csme18.json; then
+    echo "the register map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/LayoutMaps/LayoutMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/layout/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapDataVersion.swift \
+    --swift-enum-name LayoutMapDataVersion \
+    Packages/MEFirmware/MapSources/layout/mip.json \
+    Packages/MEFirmware/MapSources/layout/cpu.json \
+    Packages/MEFirmware/MapSources/layout/sphy.json; then
+    echo "the CSME 18 layout binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \
+    --swift-enum-name MEConfigurationDataVersion \
+    Packages/MEFirmware/MapSources/configuration/csme11.json \
+    Packages/MEFirmware/MapSources/configuration/csme12.json \
+    Packages/MEFirmware/MapSources/configuration/csme12Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme13.json \
+    Packages/MEFirmware/MapSources/configuration/csme13Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme14.json \
+    Packages/MEFirmware/MapSources/configuration/csme14Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme15.json \
+    Packages/MEFirmware/MapSources/configuration/csme15Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme16.json \
+    Packages/MEFirmware/MapSources/configuration/csme18.json; then
+    echo "the configuration map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/uep/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift \
+    --swift-enum-name UEPMapDataVersion \
+    Packages/MEFirmware/MapSources/uep/csme12.json \
+    Packages/MEFirmware/MapSources/uep/csme13.json \
+    Packages/MEFirmware/MapSources/uep/csme14.json \
+    Packages/MEFirmware/MapSources/uep/csme15.json \
+    Packages/MEFirmware/MapSources/uep/csme16.json \
+    Packages/MEFirmware/MapSources/uep/csme18.json; then
+    echo "the UEP map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/gpio/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift \
+    --swift-enum-name GPIOPinMapDataVersion \
+    Packages/MEFirmware/MapSources/gpio/csme11.json \
+    Packages/MEFirmware/MapSources/gpio/csme12.json \
+    Packages/MEFirmware/MapSources/gpio/csme13.json \
+    Packages/MEFirmware/MapSources/gpio/csme14.json \
+    Packages/MEFirmware/MapSources/gpio/csme15.json; then
+    echo "the GPIO map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+
+# Every package's and every group's whole output is kept here, one file each,
+# and replaced on the next run. A failure names its file.
+logs="$PWD/.build/test-logs"
+rm -rf "$logs" && mkdir -p "$logs" || exit 1
+
+# What a failure looks like in the output. `error:` must open the line or
+# follow a blank: that takes the compiler's `file:12:5: error:`, xcodebuild's
+# `xcodebuild: error:`, SwiftPM's `error:`, XCTest's `file:42: error: -[…]` and
+# Swift's `Fatal error:`, and leaves the `…ofType:error:]` frames Xcode prints
+# when it trips over a leftover `.swiftpm`, which are noise.
+error_pattern='(^|[[:space:]])error:([[:space:]]|$)|Restarting after unexpected exit|Program crashed|[*][*] [A-Z ]*FAILED [*][*]'
+
+report() {   # $1: the file the whole output goes to; $2: "summary" keeps one count line
+    # Every error line is shown, never cut to a tail: a failure that cannot be
+    # read off the run is a failure nobody can act on. An error line ending in
+    # a colon is followed by its indented reasons ("Could not resolve package
+    # dependencies:" names the manifest on the next line), and those are shown
+    # too. xcodebuild prints each error twice; a repeated line is shown once.
+    #
     # A test host that dies mid-run is not a line in this output: XCTest prints
     # "Restarting after unexpected exit", launches a second host, and reports
     # totals that add the two together — so a class whose host crashed can
     # still print "Executed 15 tests, with 0 failures". That is worth a line of
     # its own, at the end, next to the counts it silently qualified.
-    awk '
-        /^\/Users.*error:|Executed [0-9]+ tests|Restarting after unexpected exit|Program crashed|TEST (FAILED|SUCCEEDED)/ { print; if ($0 ~ /Restarting after unexpected exit|Program crashed/) died = 1 }
-        END { if (died) print "  ⚠️  the test host died and XCTest restarted it — these counts span more than one launch" }
-    ' | tail -21
+    #
+    # SwiftPM colours its diagnostics even into a pipe, which puts an escape
+    # sequence rather than a blank before `error:`; the colours go first. The
+    # source excerpt under a diagnostic (`   |   `- error: …`) repeats the line
+    # above it and is left out.
+    tee "$1" | awk -v mode="${2:-all}" -v pattern="$error_pattern" '
+        function show(line) { if (!(line in seen)) { seen[line] = 1; print line } }
+        { gsub(/\033\[[0-9;]*m/, "") }
+        /^[[:space:]]*[0-9]*[[:space:]]*\|/ { next }
+        reasons && /^[[:space:]]+[^[:space:]]/ { show($0); next }
+        { reasons = 0 }
+        $0 ~ pattern {
+            show($0)
+            if ($0 ~ /Restarting after unexpected exit|Program crashed/) died = 1
+            if ($0 ~ /:[[:space:]]*$/) reasons = 1
+            next
+        }
+        /Executed [0-9]+ tests/ { if (mode == "summary") last = $0; else show($0); next }
+        /TEST SUCCEEDED/ { show($0) }
+        END {
+            if (last != "") print last
+            if (died) print "  ⚠️  the test host died and XCTest restarted it — these counts span more than one launch"
+        }
+    '
+}
+
+explain() {   # $1: the failed run's log
+    # A failure the pattern does not know — a tool that stops with a message
+    # of its own words, a group stopped mid-build — would otherwise print
+    # nothing at all. Then the end of the output is the best account there is.
+    if ! sed $'s/\033\\[[0-9;]*m//g' "$1" | grep -qE "$error_pattern"; then
+        echo "  ✗ no error line in the output; it ended with:"
+        sed $'s/\033\\[[0-9;]*m//g' "$1" \
+            | grep -vE 'IDEFileReferenceDebug|IDEContainer|^Method:|^[[:space:]]+[0-9]+[[:space:]]+[-+_]' \
+            | grep -v '^[[:space:]]*$' | tail -15 | sed 's/^/    /'
+    fi
+    echo "  ✗ full output: ${1#"$PWD"/}"
 }
 
 # Neither the app suite nor the package tests are sandboxed, so `cfprefsd`
@@ -114,8 +274,12 @@ if [ "$packages" = yes ] && [ -z "$only" ] && [ -z "$only_group" ]; then
     for package in $(ls -d ./*/Package.swift ./*/*/Package.swift 2>/dev/null \
                      | sed 's|/Package.swift$||' | sort); do
         echo "── ${package#./}"
-        ( cd "$package" && swift test 2>&1 ) | report | tail -1
-        [ "${PIPESTATUS[0]:-0}" -ne 0 ] && failed=1
+        log="$logs/package-${package##*/}.log"
+        ( cd "$package" && swift test 2>&1 ) | report "$log" summary
+        if [ "${PIPESTATUS[0]:-0}" -ne 0 ]; then
+            failed=1
+            explain "$log"
+        fi
         sweep_package_test_prefs
     done
 fi
@@ -158,7 +322,7 @@ run_group() {
     fi
     ran=$((ran + 1))
     echo "── group $group: $first … $last"
-    local before pidfile statusfile runner xcpid wedged since=0
+    local before pidfile statusfile runner xcpid wedged since=0 log="$logs/group-$group.log"
     before=$(wedged_hosts)
     pidfile=$(mktemp) statusfile=$(mktemp)
     # The test host under its own bundle identifier: its preferences domain is
@@ -181,7 +345,7 @@ run_group() {
         echo $! > "$pidfile"
         wait $!
         echo $? > "$statusfile"
-    ) 2>/dev/null | report &   # 2>: the shell's own "Terminated" when a group is stopped
+    ) 2>/dev/null | report "$log" &   # 2>: the shell's own "Terminated" when a group is stopped
     runner=$!
     while kill -0 "$runner" 2>/dev/null; do
         sleep 2
@@ -200,7 +364,10 @@ run_group() {
     status=$(cat "$statusfile" 2>/dev/null)
     rm -f "$pidfile" "$statusfile"
     sweep_app_test_prefs "$group_classes"
-    [ "${status:-1}" -ne 0 ] && failed=1
+    if [ "${status:-1}" -ne 0 ]; then
+        failed=1
+        explain "$log"
+    fi
     group=$((group + 1))
     args=""
     first=""

@@ -144,6 +144,15 @@ struct FPTParser {
 
         if cseLayoutTablePresent, version == 0x20 || version == 0x21, length == 0x20 {
             start = anchor
+        } else if anchor % 0x1000 == 0, version == 0x20 || version == 0x21, length == 0x20 {
+            // A `$FPT` on a 4 KB boundary is the FPT partition's own base: its
+            // entries measure from the marker, not from 0x10 before it. Every
+            // whole image from CSME 12 to 18 has it so (the CSME 18 HP dump's
+            // MFS, EFS, FITC, CDMD and UEP all start 0x10 after the `− 0x10`
+            // reading); the `− 0x10` default is the older layout whose region
+            // base holds a CSE Layout Table and whose marker sits at +0x10 —
+            // then the marker is not aligned.
+            start = anchor
         } else {
             // Erased CSE-header window 0x1000 before the marker: 0x48 zeros + 0x10
             // FF (or the 0x50 variant) — upstream treats that $FPT as region-base.

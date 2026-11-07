@@ -51,6 +51,10 @@ packages:
   # to build a compressed section to search in.
   FirmwareCompression:
     path: Packages/FirmwareCompression
+  # The envelope of the compiled map resources (`Design/MAP_DATA.md`).
+  # UEFIImage and MEFirmware link it; no target here links it directly.
+  MapData:
+    path: Packages/MapData
   # The ME/engine analysis engine. MEATool consumes it; the app's flow tests
   # install a stub `MEADataSource` and so import it directly.
   MEFirmware:
@@ -377,8 +381,8 @@ targets:
         BYTERIPPER_APP_BUNDLE_ID: dev.maxik.DumpCompare
         PRODUCT_BUNDLE_IDENTIFIER: $(BYTERIPPER_APP_BUNDLE_ID)
         PRODUCT_NAME: ByteRipper
-        MARKETING_VERSION: "0.9.5"
-        CURRENT_PROJECT_VERSION: "23"
+        MARKETING_VERSION: "0.10"
+        CURRENT_PROJECT_VERSION: "24"
         # The icon lives in Assets.xcassets; Design/render-appicon.sh regenerates
         # its images from Design/AppIcon.swift.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

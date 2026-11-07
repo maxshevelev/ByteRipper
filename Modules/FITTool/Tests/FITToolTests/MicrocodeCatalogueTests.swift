@@ -158,6 +158,37 @@ final class MicrocodeCatalogueTests: XCTestCase {
         )
     }
 
+    /// The processor on the board finds its microcode too: part of a model's
+    /// name, or a whole S-SPEC, turned into the CPUIDs the table of brand
+    /// names sells it with.
+    func testSearchingByAModelOrAnSSpecFindsItsCpuid() throws {
+        let processors = [ProcessorFamily(
+            cpuids: ["906EB"], codeNames: ["Coffee Lake S"], productFamilies: [], steppings: ["B0"],
+            segments: ["Desktop"],
+            processors: [ProcessorModel(name: "Intel Core i3-8100", sSpec: ["SR3N5"], sSpecSource: nil, series: nil)]
+        )]
+        func found(_ search: String) throws -> [String] {
+            MicrocodeCatalogue.filter(try entries(), vendor: .intel, search: search, processors: processors)
+                .map(\.cpuidText)
+        }
+        XCTAssertEqual(try found("8100"), ["906EB", "906EB"], "part of the model's name")
+        XCTAssertEqual(try found("i3-8100"), ["906EB", "906EB"])
+        XCTAssertEqual(try found("sr3n5"), ["906EB", "906EB"], "the S-SPEC, in any case")
+        XCTAssertEqual(try found("SR3N"), [], "a part of an S-SPEC is not one")
+        XCTAssertEqual(try found("81"), [], "too short to be a name")
+        // Through the AMD list too, a name of Intel's finds nothing.
+        XCTAssertTrue(MicrocodeCatalogue.filter(try entries(), vendor: .amd, search: "8100",
+                                                processors: processors).isEmpty)
+    }
+
+    /// The shipped table answers the bench's own examples.
+    func testTheShippedTableFindsAlderLakeByModelAndSSpec() {
+        let named = MicrocodeCatalogue.families(named: "12800H", in: ProcessorNames.shipped)
+        XCTAssertTrue(named.contains { $0.matches("906A3") }, "i7-12800H is Alder Lake-P/H")
+        let bySSpec = MicrocodeCatalogue.families(named: "SRLFU", in: ProcessorNames.shipped)
+        XCTAssertTrue(bySSpec.contains { $0.matches("906A4") }, "SRLFU is the i3-1215U")
+    }
+
     /// The narrowing a bench asks for by hand: a dump is for one board.
     func testFilteringToTheCpuidsAlreadyInTheImage() throws {
         let found = MicrocodeCatalogue.filter(

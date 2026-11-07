@@ -238,28 +238,17 @@ final class ToolPanelZoomTests: XCTestCase {
             return try XCTUnwrap(cell.textField?.font)
         }
 
-        XCTAssertEqual(try cellFont(column: 1, row: 0).pointSize,
+        XCTAssertEqual(try cellFont(column: 0, row: 0).pointSize,
                        AppearanceSettings.fontSize,
                        "the table reads at the app's zoom")
         let rowBefore = entries.rowHeight
-        let addressBefore = try XCTUnwrap(
-            entries.tableColumn(withIdentifier: .init("address"))
-        ).width
 
         zoom(to: 20)
 
-        XCTAssertEqual(try cellFont(column: 1, row: 0).pointSize, 20,
+        XCTAssertEqual(try cellFont(column: 0, row: 0).pointSize, 20,
                        "a zoom reaches the entries")
-        // The numbers keep their one-width digits at the new size: an address
-        // column that stops lining up is worse than a small one.
-        let address = try cellFont(column: 2, row: 1)
-        XCTAssertEqual(address.pointSize, 20)
-        XCTAssertEqual(address, NSFont.monospacedDigitSystemFont(ofSize: 20, weight: .regular))
+        XCTAssertEqual(try cellFont(column: 0, row: 1).pointSize, 20, "and the microcode's row")
         XCTAssertGreaterThan(entries.rowHeight, rowBefore)
-        XCTAssertGreaterThan(
-            try XCTUnwrap(entries.tableColumn(withIdentifier: .init("address"))).width,
-            addressBefore
-        )
 
         let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
         let detail = try XCTUnwrap(splitter.panes.last)
@@ -279,7 +268,7 @@ final class ToolPanelZoomTests: XCTestCase {
         let panel = try XCTUnwrap(controller.tools.panel)
         let entries = try XCTUnwrap(descendants(of: panel, NSTableView.self).first)
         let cell = try XCTUnwrap(
-            entries.view(atColumn: 1, row: 0, makeIfNecessary: true) as? NSTableCellView
+            entries.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView
         )
 
         let size = try XCTUnwrap(cell.textField?.font?.pointSize)

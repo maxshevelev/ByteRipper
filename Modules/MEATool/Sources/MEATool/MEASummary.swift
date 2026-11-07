@@ -1,5 +1,4 @@
 import Foundation
-import Localization
 import MEFirmware
 import MEPresentation
 import ToolModuleKit
@@ -12,6 +11,12 @@ import ToolModuleKit
 public enum MEASummaryValue: Sendable, Equatable {
     /// A real, selectable value (formatted with `MEAText`).
     case value(String)
+    /// A verdict with the evidence it was read from: the panel draws the
+    /// verdict in the row's tone and the evidence in brackets in the ordinary
+    /// font and colour, so the answer and what stands behind it cannot be
+    /// mistaken for one another. `text` is what a copy of the row shows —
+    /// one line, brackets and all.
+    case verdict(String, evidence: String)
     /// The engine has nothing for this row yet.
     case comingSoon
     /// The analysis on screen was read without a database this row depends
@@ -20,18 +25,27 @@ public enum MEASummaryValue: Sendable, Equatable {
     case pending
 
     /// What the row says — the one wording the panel and a copy of it share.
-    public func text(in language: AppLanguage) -> String {
+    ///
+    /// English in every language, as MEA's console table and the tools' own
+    /// option words are: the Summary is the table a technician quotes and
+    /// compares against a report, and a translated verdict cannot be compared
+    /// with one.
+    public var text: String {
         switch self {
         case .value(let shown): return shown
-        case .comingSoon: return L("Coming soon", in: language)
-        case .pending: return L("Loading…", in: language)
+        case .verdict(let verdict, let evidence):
+            return evidence.isEmpty ? verdict : "\(verdict) (\(evidence))"
+        case .comingSoon: return "Coming soon"
+        case .pending: return "Loading…"
         }
     }
 
     /// Whether the value is a real one, which can be selected and copied.
     public var isValue: Bool {
-        if case .value = self { return true }
-        return false
+        switch self {
+        case .value, .verdict: return true
+        case .comingSoon, .pending: return false
+        }
     }
 }
 
@@ -79,7 +93,11 @@ public struct MEASummaryBlock: Sendable, Equatable {
 /// This is the pure target's summary entry point, mirroring `MEACurator`: the
 /// controller never reads the model, it only lays out what `build` returns.
 /// Every value is formatted here (with `MEAText`, the one shared voice) or
-/// flagged `.comingSoon` when the row's fact is not in the model yet.
+/// flagged `.comingSoon` when the row's fact is not in the model yet. The table
+/// is **English in every language** — row names, values and evidence alike:
+/// this is MEA's console table, which a technician quotes and compares against
+/// a report, and a translated verdict cannot be compared with one. The panel's
+/// own chrome (tabs, placeholders, status) is translated as everything else is.
 ///
 /// The honesty rule a row lives by: a row that is **always** answerable
 /// (Family / Version / Release / Size) shows its value; a row whose fact the
@@ -97,7 +115,7 @@ public enum MEASummary {
     /// that depends on it says so instead of giving a value the reading with
     /// it may change.
     public static func build(_ analysis: FirmwareAnalysis,
-                             pending: MEAPending = .nothing, in language: AppLanguage) -> [MEASummaryBlock] {
+                             pending: MEAPending = .nothing) -> [MEASummaryBlock] {
         var rows: [MEASummaryRow] = []
         let add = { (label: String, value: MEASummaryValue) in
             rows.append(MEASummaryRow(label, value))
@@ -261,16 +279,108 @@ public enum MEASummary {
             if pending.fileTable, analysis.efsVolume != nil, analysis.mfsState != nil {
                 add("File System State", .pending)
             } else if let state = analysis.mfsState {
-                rows.append(MEASummaryRow("File System State",
-                                          .value(MEAText.title(state.rawValue)),
-                                          tone: MEATones.fileSystemState(state, basis: analysis.mfsStateBasis)))
-                if let basis = analysis.mfsStateBasis {
-                    rows.append(MEASummaryRow(L("State basis", in: language),
-                                              .value(MEAText.fileSystemStateBasis(state, basis, in: language)),
-                                              tone: MEATones.stateBasis(basis)))
-                }
+                let name = MEAText.title(state.rawValue)
+                let evidence = analysis.mfsStateBasis.map {
+                    MEAText.fileSystemStateEvidence(state, $0)
+                } ?? ""
+                rows.append(MEASummaryRow(
+                    "File System State",
+                    evidence.isEmpty ? .value(name) : .verdict(name, evidence: evidence),
+                    tone: MEATones.fileSystemState(state, basis: analysis.mfsStateBasis)))
             } else if identified {
                 add("File System State", .comingSoon)
+            }
+        }
+        // Our own three rows, in the order a technician reads a machine in:
+        // what state the firmware is in, what it is built for, and which key it
+        // carries. MEAnalyzer prints none of them (the model's
+        // `ManufacturingState`, `BootGuardProfile` and `oemPublicKeyHash` say
+        // where each fact lives and how it was established, and
+        // `Design/ME_STRUCTURES.md` describes the structures behind them); the
+        // labels are ours, so unlike upstream's row names they go through `L`.
+        //
+        // Manufacturing is gated on the generations that decide it at all:
+        // CSME 11 and later, whose descriptor access rights say it, and where
+        // from CSME 15 an MFIT flag may order it too. An older firmware would
+        // only ever answer `noSwitch`, and a row that can only say "not
+        // applicable" is noise.
+        if analysis.family == .csme, analysis.version.major >= 11 {
+            if let state = analysis.manufacturingState {
+                let basis = analysis.manufacturingBasis
+                let verdict = MEAText.manufacturingState(state, basis: basis)
+                let evidence = MEAText.manufacturingEvidence(state, basis: basis)
+                rows.append(MEASummaryRow(
+                    "EOM on First Boot",
+                    evidence.isEmpty ? .value(verdict) : .verdict(verdict, evidence: evidence),
+                    tone: MEATones.manufacturingState(state)))
+            } else if identified {
+                rows.append(MEASummaryRow("EOM on First Boot", .comingSoon))
+            }
+        }
+        // The board's own record, beside the image's verdict: the live
+        // `/home/mca/manuf_lock`, which no build writes and no MFIT database
+        // names, says whether the machine the dump came from has been through
+        // End of Manufacturing — the state that committed its fuses. Shown on
+        // the file systems that carry such records; while the table that names
+        // its files is on the way, the row says it is loading.
+        if analysis.family == .csme, analysis.mfsVolume?.usesFTBL == true {
+            if let lock = analysis.manufacturingLock {
+                rows.append(MEASummaryRow(
+                    "Manufacturing Lock",
+                    .value(MEAText.manufacturingLock(lock)),
+                    tone: MEATones.manufacturingLock(lock)))
+            } else {
+                // Not found is a dash, not a sentence: the row is the board's
+                // mark, and a board that has not made one simply has none.
+                rows.append(MEASummaryRow(
+                    "Manufacturing Lock",
+                    pending.fileTable ? .pending : .value("—")))
+            }
+        }
+        // Boot Guard and the OEM public key hash — the two facts a dump carries
+        // about the boot chain, shown from CSME 11 on (Boot Guard's own
+        // generation). The profile is a record the image either has or has not
+        // got: an image without one answers "no profile record" rather than a
+        // number, because a number would have to be a guess at what a vendor
+        // configured on some other machine.
+        if analysis.family == .csme, analysis.version.major >= 11 {
+            if let profile = analysis.bootGuardProfile {
+                rows.append(MEASummaryRow("Boot Guard",
+                                          .value(MEAText.bootGuardProfile(profile)),
+                                          tone: MEATones.bootGuardProfile(profile)))
+            } else if identified {
+                rows.append(MEASummaryRow(
+                    "Boot Guard",
+                    .value("No profile record in this image")))
+            }
+            // The reading says which of the four findings it is, so the row
+            // shows wherever the engine has one; nil means a reading taken
+            // before the model carried the field at all, and waits for
+            // identification like every other absence on this table.
+            // RPMC's own state is a file, not a setting the maps lay out — the
+            // tool's "Hardware Binding Enabled", one byte of `bup_sku/hw_binding`
+            // — so it reads on every generation whose tool has the setting
+            // (CSME 13 and later) and says so where the image does not carry it.
+            // The file is found through `FileTable.dat`: until the reading
+            // with that table lands, "not recorded" is a claim the reading
+            // cannot have checked, and the row says it is still loading.
+            if let binding = analysis.hardwareBinding, analysis.version.major >= 13 {
+                let waits = pending.fileTable && binding == .notInImage
+                rows.append(MEASummaryRow(
+                    "RPMC Hardware Binding",
+                    waits ? .pending
+                          : .value(MEAText.hardwareBinding(binding)),
+                    tone: waits ? .standard : MEATones.hardwareBinding(binding)))
+            }
+            if let key = analysis.oemPublicKeyHash {
+                rows.append(MEASummaryRow("OEM Public Key Hash",
+                                          .value(MEAText.oemPublicKeyHash(key)),
+                                          tone: .standard))
+            } else if identified {
+                rows.append(MEASummaryRow(
+                    "OEM Public Key Hash",
+                    .value("No key material in this image"),
+                    tone: .standard))
             }
         }
         // 18 · Size — how far the firmware itself reaches from its `$FPT`,
@@ -351,10 +461,10 @@ public enum MEASummary {
                           .value(issue.message))
         }
         if pending.huffman {
-            messages.append(MEASummaryRow(L("Module checks", in: language), .pending))
+            messages.append(MEASummaryRow("Module checks", .pending))
         }
         if !messages.isEmpty {
-            blocks.append(MEASummaryBlock(title: L("Messages", in: language), rows: messages))
+            blocks.append(MEASummaryBlock(title: "Messages", rows: messages))
         }
         return blocks
     }

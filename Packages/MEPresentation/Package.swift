@@ -34,20 +34,25 @@ let package = Package(
         // a lookup by title in the panel: the tree is hand-named here, so this
         // is the one place that knows what a row *is*, and a title is a label
         // that may be translated while an id is not.
-        .package(path: "../HelpBook")
+        .package(path: "../HelpBook"),
+        // What a row opens as in a fragment panel (`MEAParts`): a copy, or a
+        // file's chunks gathered.
+        .package(path: "../PartCodec")
     ],
     targets: [
         .target(name: "MEPresentation", dependencies: [
             .product(name: "Localization", package: "Localization"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
-            .product(name: "HelpBook", package: "HelpBook")
+            .product(name: "HelpBook", package: "HelpBook"),
+            .product(name: "PartCodec", package: "PartCodec")
         ]),
         .testTarget(name: "MEPresentationTests", dependencies: [
             "MEPresentation",
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "MEFirmware", package: "MEFirmware"),
-            .product(name: "ToolModuleKit", package: "ToolModuleKit")
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "PartCodec", package: "PartCodec")
         ])
     ]
 )

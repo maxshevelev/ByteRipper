@@ -38,7 +38,127 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   (revision 40) are facts the engine read out of the same bytes for the app's
   own use — the file comparison and, later, outlining a file's chunks. A sync
   keeps them, fills them, and leaves them out of any comparison with upstream's
-  output.
+  output. Revision 41 adds three more of the same kind, all read for the repair
+  bench and none of them in upstream: `manufacturingState` with
+  `manufacturingBasis` (what the platform will do with End of Manufacturing on
+  the first boot of this image, from the `/home/mca/eom` and
+  `/home/mca/eom_config` records of both pages, plus the flash descriptor's BIOS
+  master), `bootGuardProfile` (the profile the image is built for, out of the
+  CDMD configuration's JSON) and `oemPublicKeyHash` (the SHA-384 the UEP area
+  repeats). The addresses, the values and the ground truth behind each are in
+  `Skills/me-eom-structures/reference/structures.md`; `analyze` gained
+  `descriptorBytes` for the descriptor fact alone. Revision 42 adds
+  `configuration`, the ME configuration file by file as Flash Image Tool's own
+  settings database lays the files out; revision 43 changes its shape, so a
+  `ConfigurationFile` carries **both** copies a dump has of it — `fitc`, the OEM
+  Configuration partition's record, which is what the build wrote, and `mfs`,
+  the file system's own file, which is what the platform holds now — because one
+  column could not tell a setting the platform rewrote from one the build
+  chose. `Design/ME_STRUCTURES.md` is where that database is described.
+  Revision 44 adds no field and changes one field's answer: `bootGuardProfile`
+  is read out of **two** keepings of the one fact — the CDMD configuration's
+  JSON, which MFIT-built images carry, and the UEP area's Boot Guard bits, which
+  every CSME 15 image carries instead — so images that used to answer "no
+  profile record" now answer a profile. Upstream has no such row either way.
+  Revision 45 changes one more answer the same way: `oemPublicKeyHash` is read
+  from the record the image's **generation** keeps — the 32-byte SHA-256 of
+  CSME 12 to 14 and the 48-byte SHA-384 of 15 and later. Revision 46 adds
+  `platformFamily`: which half of its chipset generation the board is — the
+  mobile parts or the desktop ones — told from the length of the descriptor's
+  PCH strap section, the one thing a dump states about it; and the
+  configuration is now read through the map of that half, because CSME 13, 14
+  and 15 lay a few settings out differently between the two. A dump with no
+  descriptor keeps the mobile map, which is what every map was before. Ours,
+  like the rest of these.
+  Revision 47 reads the tools' **conditional places**: `ConfigurationSetting
+  .condition` says which branch of a setting the tool places only under
+  another setting's value an image holds (the LP family's MCTP EC address is
+  in one of two files, by `eSpiEnabled`), with `assumed` where the branch had
+  to be told from the files present because the condition's own value was not
+  in the image; `.disabled` says the tool switches the setting off under such a
+  condition and the image holds it. Ours, as the rest.
+  Revision 48 adds `hardwareBinding`: whether the platform binds its SPI part
+  to the chipset — Flash Image Tool's "Hardware Binding Enabled", one byte of
+  `/home/bup/bup_sku/hw_binding` (the file system's copy, then the OEM
+  Configuration partition's record of it), `disabled`, `enabled`, an
+  `other` byte the tool's class does not name, or `notInImage`. Ours; upstream
+  has no such row. Its sibling settings in the tool's `RpmcConfiguration`
+  section are UEP placements, read as such by revision 49.
+  Revision 50 adds `manufacturingLock`: what the board the dump came from has
+  done with End of Manufacturing, from the live file system's
+  `/home/mca/manuf_lock` — one byte the platform writes and no build does
+  (`locked`, `open`, or an `other` byte). `manufacturingState` above answers for
+  the image's next boot; this answers for the machine it was taken from. Ours;
+  the record is read by neither upstream nor the tools. It is nil where the
+  volume's files carry no File IDs or the table that names them was not read.
+  Revision 53 adds `sphyNvar`: the SPHY OEM configuration the FITC partition's
+  `phy_oem_cfg` nvar holds, read through the tool's `SphyNvar` layout
+  (`SphyNvarMap`, emitted by `sphy18_map.py`) as name/value readings. The
+  layout's anchors are verified first: the package carries several SPHY
+  variants with identical headers. Ours; upstream reads none of it. Full Info
+  shows it under "SPHY OEM configuration".
+  Revision 52 adds `mipStraps`: the MIP table's other strap containers — PMC
+  SoC, CSME (DBC), PMC IOE, IOE, and the five-block table's PMC SOC 2 and
+  CPU 2 — each a `MIPStrapContainerReadings` read through the tool's own
+  layout (`MIPStrapMap`, emitted by `mip18_map.py`). A container is matched
+  by its block's type and length and may start inside that block
+  (`PmcAndCpu_2` carries PMC SOC 2 at 0 and CPU 2 at 0x48). A layout is
+  chosen by the block's type and length: the IOE document's MTL-M and MTL-P
+  variants place the same names at different offsets. Ours; upstream reads no
+  strap. The Full Info tree shows each container under its own title ("CSME
+  straps", "IOE straps", "PMC IOE straps").
+  Revision 51 adds `cpuStraps`: the CPU strap message a CSME 18 image keeps in
+  the FITC partition's MIP table (`smip` nvar) — the fields of the tool's
+  `CPU_smip` document (`CPUStrapMap`, emitted by `strap18_map.py`), plus the
+  message length and its CRC-16 (`CPUStrapReadings`). Ours; upstream reads no
+  strap. The older generations keep the message in the descriptor's MIP area,
+  which is not part of this model. The Full Info tree shows it under "CPU
+  straps", with the tool's words for the enumerated values.
+  Revision 49 adds `uepSettings`: the FPF/UEP settings an image's `$UEP` area
+  holds, each as the tool's identifier and the value of its bits
+  (`UEPReading`). The map of places is the tool's own (`UEPMap`, emitted from
+  the `GetBitArrayValue` actions). The values are what the build wrote into
+  the image, not the fuses the platform later burns, and most of them are
+  zero. Ours; upstream reads none of the UEP bits. The Full Info tree shows
+  them under "FPF Settings", in the tool's sections.
+  Revision 54 changes what that field answers on CSME 18: the tool's rewritten
+  database places `PLAT_ID`, `DNX`, `RPMC_RB`, `ESE_ROM_SVN_EN`, the CSE FVC
+  states and the validity bits beside them in the container's **second** array,
+  and the map now says which array each setting is in (`arraySize` 0x80), so
+  they are read too. The 15/16 map keeps to the first array, as before.
+  Revision 55 fills the field on **CSME 12** as well: Flash Image Tool 12's CNP
+  `Uep` document (`UEPMap.csme12`, emitted by `uep_fit_map.py`) places 42
+  settings in the container's four 0x80-byte arrays, eight of them only in the
+  later arrays (the SB SVNs, the TPM seed bits, the IDLM SVN). The values are
+  what the build wrote; the Boot Guard profile proper on this generation is
+  still the record `bootGuardProfile` reads, and the array's individual profile
+  bits appear among the readings. Ours, as the rest of the UEP field.
+  Revision 57 fills the same field on **CSME 13 and 14**, from Flash Image
+  Tool 13's Ice Lake and 14's Comet Lake `Uep` documents (`UEPMap.csme13`,
+  `.csme14`): 43 and 44 settings in six and four arrays. The profile bits read
+  what the four FIT builds of each generation set — 0, 3, 4 and 5 — and agree
+  with the record. Ours, as the rest.
+  Revision 56 fills another field on CSME 12: `configuration` is read through
+  Flash Image Tool 12's CNP maps (`MEConfigurationMap.csme12` and
+  `.csme12Desktop`, emitted by `fit_map.py --generation 12`). That generation's
+  volumes carry no `FileTable.dat`, so the engine resolves the map's
+  `/home/...` paths by walking the MFS home directory instead. Ours, as the
+  rest of `configuration`. Revision 58 adds **CSME 11** to the same field:
+  Flash Image Tool 11's SPT map (`MEConfigurationMap.csme11`), one set of
+  documents for both platform halves, its paths read the same way. Ours.
+  Revision 59 does not add a field: the FIT maps now follow the `<Include>`s of
+  the platform layout and read the family's common document too, so the same
+  `configuration` carries the settings it binds — Boot Guard's policy records
+  and the OEM public key hash on CSME 11, the FPF hardware binding, ICC profile
+  keys, OEM tag and certificates on the newer generations. More rows, same
+  shape.
+  Revision 60 adds **`gpioPins`**: the pins `/home/gpio/csme_pins` records —
+  the file Flash Image Tool writes from its `MeFeaturePins` settings. The map
+  of names is emitted from the tool's `GpioCsme*` value classes
+  (`GPIOPinMap`, `gpio_map.py`); CSME 11's records are five dwords, CSME 12+'s
+  are packed bytes, both shapes settled against the tool's own defaults. nil
+  when the image carries no file, the file is empty, or the generation has no
+  map (MFIT's 16 and 18). Ours; upstream reads none of it.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct
