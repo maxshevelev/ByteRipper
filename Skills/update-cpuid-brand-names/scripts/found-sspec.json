@@ -487,6 +487,54 @@
       "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
     },
     {
+      "model": "Intel Core i5-10600K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH6R",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797793/PCN119273-00.pdf",
+              "quote": "Intel® Core™ i5-10600K Processor CM8070104282134 S RH6R 999W41 Q0 (PCN 119273-00 p.2, read from the rendered page)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK gives one code, stepping Q0, on every ordering line. PCN search: 119273-00 (EOL, same code Q0), 117952-00, 117894-00 (boxed EOL), 119274-00, 118095 (labels), 118243 (UKCA mark) — none is a conversion with a new code; no second code found. Architecture 'Comet Lake' is from the input/ PCN family, ARK specifications tab not re-read."
+    },
+    {
+      "model": "Intel Core i5-10600KF",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH6S",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797793/PCN119273-00.pdf",
+              "quote": "Intel® Core™ i5-10600KF Processor CM8070104282136 S RH6S 999W42 Q0 (PCN 119273-00 p.2, read from the rendered page)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK gives one code, stepping Q0, on every ordering line. PCN search: 119273-00 (EOL, same code Q0), 117952-00, 117894-00 (boxed EOL), 119274-00, 118095 (labels), 118243 (UKCA mark) — none is a conversion with a new code; no second code found. Architecture 'Comet Lake' is from the input/ PCN family, ARK specifications tab not re-read."
+    },
+    {
       "model": "Intel Core i5-10600T",
       "searched": "2026-11-07",
       "specs": [
@@ -1210,6 +1258,117 @@
       "note": "ARK page found (Code Name 'Products formerly Ice Lake'), but ordering.html 301-redirects to specifications.html: no ordering tab, and the specifications page lists no Spec Code. Tried: Intel 10th Gen Core U/Y (Ice Lake) Specification Update 341079-023 (cdrdv2.intel.com) - its Table 2-1 gives CPUID 706E5h for U and Y lines but no S-Spec table; it refers to ARK for the processor list. PCN search found none naming the Ice Lake Y models (PCN 118935-00 checked: lists only Comet Lake U i3/i5/i7-10xx0U). Wikipedia Ice Lake table has no S-Spec column; TechPowerUp 403; WikiChip unreachable (connection refused); a search for the model with 'SRG' found no page giving a code. Photographs not tried: these are Y-line BGA packages, whose top-side marking per the Specification Update (Figure 2-2) carries the S-Spec but not the model number, so a photo cannot tie a code to the model."
     },
     {
+      "model": "Intel Core i7-10700",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH6Y",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797793/PCN119273-00.pdf",
+              "quote": "Intel® Core™ i7-10700 Processor CM8070104282327 S RH6Y 999W4A Q0 (PCN 119273-00 p.2, read from the rendered page)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK gives one code, stepping Q0, on every ordering line. PCN search: 119273-00 (EOL, same code Q0), 117952-00, 117894-00 (boxed EOL), 119274-00, 118095 (labels), 118243 (UKCA mark) — none is a conversion with a new code; no second code found. Architecture 'Comet Lake' is from the input/ PCN family, ARK specifications tab not re-read."
+    },
+    {
+      "model": "Intel Core i7-10700F",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH70",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797793/PCN119273-00.pdf",
+              "quote": "Intel® Core™ i7-10700F Processor CM8070104282329 S RH70 999W4D Q0 (PCN 119273-00 p.2, read from the rendered page)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK gives one code, stepping Q0, on every ordering line. PCN search: 119273-00 (EOL, same code Q0), 117952-00, 117894-00 (boxed EOL), 119274-00, 118095 (labels), 118243 (UKCA mark) — none is a conversion with a new code; no second code found. Architecture 'Comet Lake' is from the input/ PCN family, ARK specifications tab not re-read."
+    },
+    {
+      "model": "Intel Core i7-10700K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH72",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/797793",
+              "quote": "Boxed Intel® Core™ i7-10700K Processor BXC8070110700K S RH72 99A100 Q0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/809083",
+              "quote": "BX8070110700KA S RH72 99A5FP Q0 BX8070110700K 99A0V7",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found."
+    },
+    {
+      "model": "Intel Core i7-10700KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK code with stepping (tray marked retired and discontinued). PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found."
+    },
+    {
+      "model": "Intel Core i7-10700T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH6U",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797793/PCN119273-00.pdf",
+              "quote": "Intel® Core™ i7-10700T Processor CM8070104282215 S RH6U 999W44 Q0 (PCN 119273-00 p.2, read from the rendered page)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK gives one code, stepping Q0, on every ordering line. PCN search: 119273-00 (EOL, same code Q0), 117952-00, 117894-00 (boxed EOL), 119274-00, 118095 (labels), 118243 (UKCA mark) — none is a conversion with a new code; no second code found. Architecture 'Comet Lake' is from the input/ PCN family, ARK specifications tab not re-read."
+    },
+    {
       "model": "Intel Core i7-11700",
       "searched": "2026-11-07",
       "specs": [],
@@ -1714,6 +1873,105 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i9-10850K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRK51",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/809083",
+              "quote": "BX8070110850KA S RK51 99A750 Q0 BX8070110850K 99A6W4",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found."
+    },
+    {
+      "model": "Intel Core i9-10900",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH8Z",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/797793",
+              "quote": "Boxed Intel® Core™ i9-10900 Processor BX8070110900 S RH8Z 99A0V9 Q0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found."
+    },
+    {
+      "model": "Intel Core i9-10900F",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK code with stepping. PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found."
+    },
+    {
+      "model": "Intel Core i9-10900K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH91",
+          "stepping": "Q0",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/797793",
+              "quote": "Boxed Intel® Core™ i9-10900K Processor BX8070110900K S RH91 99A0VA Q0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/809083",
+              "quote": "BX8070110900KA S RH91 99A5FR Q0 BX8070110900K 99A0VA",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found."
+    },
+    {
+      "model": "Intel Core i9-10900KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK code with stepping. PCNs listed on the ordering page (797793=119273-00 EOL, 798811=119517-00 label, 800306=117952-00 EOL of boxed, 804577=118243-00 UKCA mark, 808347=118048-00 packaging, 809083=117894-00 EOL of non-'A' boxed codes replaced by '...A' codes with the same S-Spec, 809472=118095-00 RoHS label) were all read: none is a stepping or S-Spec conversion; every one gives the same code at Q0. No other code found. (PCN 119273-00 lists SRH92 for CM8070104282846 in a table whose columns scramble in PDFKit text.)"
+    },
+    {
+      "model": "Intel Core i9-10900T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK code with stepping. PCNs on the ordering page: 797793 (119273-00 EOL) and 809472 (118095-00 RoHS label); neither changes the code. No other code found."
     },
     {
       "model": "Intel Core i9-10900X",

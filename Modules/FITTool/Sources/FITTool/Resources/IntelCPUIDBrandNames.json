@@ -9454,55 +9454,120 @@
       "processors": [
         {
           "name": "Intel Core i9-10900K",
-          "sSpec": []
+          "sSpec": [
+            "SRH91"
+          ],
+          "sSpecSource": {
+            "SRH91": "ark"
+          }
         },
         {
           "name": "Intel Core i9-10900KF",
-          "sSpec": []
+          "sSpec": [
+            "SRH92"
+          ],
+          "sSpecSource": {
+            "SRH92": "ark"
+          }
         },
         {
           "name": "Intel Core i9-10900",
-          "sSpec": []
+          "sSpec": [
+            "SRH8Z"
+          ],
+          "sSpecSource": {
+            "SRH8Z": "ark"
+          }
         },
         {
           "name": "Intel Core i9-10900T",
-          "sSpec": []
+          "sSpec": [
+            "SRH8Y"
+          ],
+          "sSpecSource": {
+            "SRH8Y": "ark"
+          }
         },
         {
           "name": "Intel Core i9-10900F",
-          "sSpec": []
+          "sSpec": [
+            "SRH90"
+          ],
+          "sSpecSource": {
+            "SRH90": "ark"
+          }
         },
         {
           "name": "Intel Core i9-10850K",
-          "sSpec": []
+          "sSpec": [
+            "SRK51"
+          ],
+          "sSpecSource": {
+            "SRK51": "ark"
+          }
         },
         {
           "name": "Intel Core i7-10700K",
-          "sSpec": []
+          "sSpec": [
+            "SRH72"
+          ],
+          "sSpecSource": {
+            "SRH72": "ark"
+          }
         },
         {
           "name": "Intel Core i7-10700KF",
-          "sSpec": []
+          "sSpec": [
+            "SRH74"
+          ],
+          "sSpecSource": {
+            "SRH74": "ark"
+          }
         },
         {
           "name": "Intel Core i7-10700",
-          "sSpec": []
+          "sSpec": [
+            "SRH6Y"
+          ],
+          "sSpecSource": {
+            "SRH6Y": "ark"
+          }
         },
         {
           "name": "Intel Core i7-10700T",
-          "sSpec": []
+          "sSpec": [
+            "SRH6U"
+          ],
+          "sSpecSource": {
+            "SRH6U": "ark"
+          }
         },
         {
           "name": "Intel Core i7-10700F",
-          "sSpec": []
+          "sSpec": [
+            "SRH70"
+          ],
+          "sSpecSource": {
+            "SRH70": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10600K",
-          "sSpec": []
+          "sSpec": [
+            "SRH6R"
+          ],
+          "sSpecSource": {
+            "SRH6R": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10600KF",
-          "sSpec": []
+          "sSpec": [
+            "SRH6S"
+          ],
+          "sSpecSource": {
+            "SRH6S": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10400",

@@ -626,6 +626,26 @@
       ]
     },
     {
+      "model": "Intel Core i5-10600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199311/intel-core-i510600k-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6R",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199315/intel-core-i510600kf-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6S",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i5-10600T",
       "url": "https://www.intel.com/content/www/us/en/products/sku/199279/intel-core-i510600t-processor-12m-cache-up-to-4-00-ghz/ordering.html",
       "specs": [
@@ -1259,6 +1279,56 @@
       "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197120/intel-core-i71060g7-processor-8m-cache-up-to-3-80-ghz/specifications.html): no ordering tab; no Spec Code on the page."
     },
     {
+      "model": "Intel Core i7-10700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199316/intel-core-i710700-processor-16m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6Y",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199318/intel-core-i710700f-processor-16m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH70",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199335/intel-core-i710700k-processor-16m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH72",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199325/intel-core-i710700kf-processor-16m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH74",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199314/intel-core-i710700t-processor-16m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6U",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i7-11700",
       "url": "https://www.intel.com/content/www/us/en/products/sku/212279/intel-core-i711700-processor-16m-cache-up-to-4-90-ghz/ordering.html",
       "specs": [
@@ -1828,6 +1898,67 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i9-10850K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205904/intel-core-i910850k-processor-20m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK51",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199328/intel-core-i910900-processor-20m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8Z",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199329/intel-core-i910900f-processor-20m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH90",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199332/intel-core-i910900k-processor-20m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH91",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199331/intel-core-i910900kf-processor-20m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH92",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199324/intel-core-i910900t-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8Y",
+          "stepping": "Q0"
+        }
+      ],
+      "note": "Tray only; no boxed code on the ordering page."
     },
     {
       "model": "Intel Core i9-10900X",
