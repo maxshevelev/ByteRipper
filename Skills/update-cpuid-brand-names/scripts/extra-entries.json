@@ -114,6 +114,54 @@
         }
       ],
       "note": "Intel's list of processors by CPUID gives B0664 (model 0xB6, stepping ID 4) as Grand Ridge, Atom P6000 series. Every Grand Ridge code on ARK is stepping B0, but no Intel page loaded names the stepping of ID 4, so the entry has none. Intel's Linux microcode repository has no 06-b6-04 file (checked 2026-11-07)."
+    },
+    {
+      "cpuids": [
+        "B0670"
+      ],
+      "codeNames": [
+        "Raptor Lake"
+      ],
+      "cores": [
+        "Raptor Cove",
+        "Enhanced Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_RAPTORLAKE_A0\t\t0xb0670"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_RAPTORLAKE\t\tIFM(6, 0xB7) /* Raptor Cove / Enhanced Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_B7H rows: stepping 1, B0671 (Raptor Lake S; Catlow) — none for B0670."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/master/Intel",
+          "quote": "cpuB0670_plat02_ver0000000E_2022-02-20_PRD_0A83935A.bin — revision 0x0E, platform 0x02, no extended signature table."
+        }
+      ],
+      "note": "coreboot names B0670 Raptor Lake A0; the kernel names model 0xB7 Raptor Lake. No source names a model sold as B0670: Intel's list of processors by CPUID has only B0671 for 06_B7H, and the one public microcode for B0670 (revision 0x0E) is dated 2022-02-20, months before Raptor Lake's launch. So the entry has no models."
     }
   ]
 }

@@ -9961,6 +9961,25 @@
         }
       ],
       "source": "extra"
+    },
+    {
+      "cpuids": [
+        "B0670"
+      ],
+      "codeNames": [
+        "Raptor Lake"
+      ],
+      "cores": [
+        "Raptor Cove",
+        "Enhanced Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
     }
   ]
 }

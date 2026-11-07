@@ -42,6 +42,15 @@ final class ProcessorNamesTests: XCTestCase {
                                            detail: "")])
     }
 
+    /// Raptor Lake's A0, B0670 — coreboot names its stepping — is in the table
+    /// too, with no models: Intel lists them only for B0671.
+    func testRaptorLakesA0HasItsSteppingAndNoModels() throws {
+        let family = try XCTUnwrap(ProcessorNames.families(for: [0xB0670]).first)
+        XCTAssertEqual(family.codeNames, ["Raptor Lake"])
+        XCTAssertEqual(family.steppings, ["A0"])
+        XCTAssertTrue(family.processors.isEmpty)
+    }
+
     func testAnXInTheTableMatchesAnyDigit() {
         XCTAssertEqual(ProcessorNames.families(for: [0x606A6], in: catalogue).map(\.codeNames),
                        [["Ice Lake Xeon-SP"]])
