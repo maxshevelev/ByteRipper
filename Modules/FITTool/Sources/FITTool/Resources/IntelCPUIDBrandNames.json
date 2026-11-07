@@ -6771,15 +6771,32 @@
         },
         {
           "name": "Intel Core i7-10510Y",
-          "sSpec": []
+          "sSpec": [
+            "SRGSC"
+          ],
+          "sSpecSource": {
+            "SRGSC": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10310Y",
-          "sSpec": []
+          "sSpec": [
+            "SRGKS"
+          ],
+          "sSpecSource": {
+            "SRGKS": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10210Y",
-          "sSpec": []
+          "sSpec": [
+            "SRGKT",
+            "SRGSD"
+          ],
+          "sSpecSource": {
+            "SRGKT": "ark",
+            "SRGSD": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10110Y",

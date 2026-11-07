@@ -157,6 +157,17 @@
       ]
     },
     {
+      "model": "Intel Core i3-10100TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/203899/intel-core-i310100te-processor-6m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6F",
+          "stepping": "G1"
+        }
+      ],
+      "note": "ARK places this model elsewhere than the input: Code Name 'Products formerly Comet Lake', Vertical Segment 'Embedded', Sockets Supported 'FCLGA1200' — a socketed Comet Lake S part (G1 stepping), not a BGA Amber/Whiskey/Comet Lake U/Y part, so its listing under 806EC (V0) looks wrong. PCNs on the ordering tab: 798170 (PCN 117936, manufacturing-site minor change) and 826061 (support moved to embedded) — neither a code conversion."
+    },
+    {
       "model": "Intel Core i3-10105",
       "url": "https://www.intel.com/content/www/us/en/products/sku/201894/intel-core-i310105-processor-6m-cache-up-to-4-40-ghz/ordering.html",
       "specs": [
@@ -468,6 +479,38 @@
       "url": null,
       "specs": [],
       "note": "No intel.com page for i3-7120T found by WebSearch. It appears to be an OEM-only part and not on ARK."
+    },
+    {
+      "model": "Intel Core i5-10110Y",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page exists for an i5-10110Y: the search for it on intel.com returned only the i3-10110Y (SKU 196455). The model name looks like a mistake for the Core i3-10110Y."
+    },
+    {
+      "model": "Intel Core i5-10210Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/196454/intel-core-i510210y-processor-6m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGKT",
+          "stepping": "V0"
+        },
+        {
+          "sSpec": "SRGSD",
+          "stepping": "V0"
+        }
+      ],
+      "note": "Code Name on the specifications page: 'Products formerly Amber Lake Y'. PCNs listed: 799822 (shipper box), 808956 (end of life), 809472 (label) — none a code conversion."
+    },
+    {
+      "model": "Intel Core i5-10310Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/196453/intel-core-i510310y-processor-6m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGKS",
+          "stepping": "V0"
+        }
+      ],
+      "note": "PCN listed: 808956 (PCN 118052, end of life of i3-10110Y/i5-10210Y/i5-10310Y) — not a code conversion."
     },
     {
       "model": "Intel Core i5-10400",
@@ -1163,6 +1206,17 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-10510Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/196452/intel-core-i710510y-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGSC",
+          "stepping": "V0"
+        }
+      ],
+      "note": "PCNs listed: 798673 (PCN 118051, end of life), 799822 (PCN 116210, shipper box), 809472 (PCN 118095, label RoHS verbiage) — none a code conversion."
     },
     {
       "model": "Intel Core i7-11700",
