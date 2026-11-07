@@ -28,7 +28,7 @@ with no specs, so the next run does not search it again.
 What is refused (the whole merge stops, naming each problem — fix the result
 file or take the spec out of it, never loosen a rule here):
 
-- a code that is not `SRxxx` — sample codes (`Qxxx`) are not sold models;
+- a code that is not `SRxxx` or `SAxxx` — sample codes (`Qxxx`) are not sold models;
 - a stepping or CPUID no non-photo evidence gives: a marking does not print
   either;
 - a photo whose reading lacks the code or the model number;
@@ -57,7 +57,8 @@ sys.path.insert(0, SIBLING)
 import enrich      # noqa: E402
 import merge_ark   # noqa: E402
 
-CODE = re.compile(r"^SR[0-9A-Z]{3}$")
+# SRxxx, and SAxxx since Intel ran out of SR (ARK: Atom P6922-3 SA4RS).
+CODE = re.compile(r"^S[RA][0-9A-Z]{3}$")
 STEP = re.compile(r"^[A-Z][0-9]$")
 CPUID = re.compile(r"^[0-9A-F]{5}$")
 KINDS = {"intel", "database", "photo"}
@@ -81,7 +82,7 @@ def check_spec(model, spec, problems):
     where = f"{model} {spec.get('sSpec')!r}"
     code = spec.get("sSpec")
     if not isinstance(code, str) or not CODE.match(code):
-        problems.append(f"{where}: not a production S-SPEC (SRxxx)")
+        problems.append(f"{where}: not a production S-SPEC (SRxxx, SAxxx)")
         return None
     evidence = spec.get("evidence") or []
     if not evidence:

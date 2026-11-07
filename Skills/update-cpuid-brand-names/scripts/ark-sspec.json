@@ -27,6 +27,94 @@
       "note": "Product page found (sku 202682, https://www.intel.com/content/www/us/en/products/sku/202682/intel-atom-processor-p5962b-27m-cache-2-20-ghz/specifications.html) but ordering.html redirects to specifications.html, and the specifications page shows no S-Spec, ordering code or stepping."
     },
     {
+      "model": "Intel Atom P6922-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/246037/intel-atom-p69223-processor-8m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFF",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SA4RS",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SA4RT",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SA4RW",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6942-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243724/intel-atom-p69423-processor-16m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2X",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRPFJ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6942-5",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/246034/intel-atom-p69425-processor-16m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRNJG",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6952-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243723/intel-atom-p69523-processor-20m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRNJE",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRV4Q",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6962-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243725/intel-atom-p69623-processor-24m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9A",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRV4P",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6962-5",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243726/intel-atom-p69625-processor-24m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN5P",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRPFL",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i3-12100",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134584/intel-core-i312100-processor-12m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [

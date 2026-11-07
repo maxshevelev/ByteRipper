@@ -22,6 +22,16 @@ final class ProcessorNamesTests: XCTestCase {
         XCTAssertFalse(ProcessorNames.families(for: [0x906EA]).isEmpty, "906EA is in the shipped table")
     }
 
+    /// A CPUID the article has no row for, from `extra-entries.json`:
+    /// Grand Ridge, with ARK's codes and no stepping, which no page ties to it.
+    func testTheShippedTableHasTheExtraEntries() throws {
+        let family = try XCTUnwrap(ProcessorNames.families(for: [0xB0664]).first)
+        XCTAssertEqual(family.codeNames, ["Grand Ridge"])
+        XCTAssertEqual(family.steppings, [])
+        let model = try XCTUnwrap(family.processors.first { $0.name == "Intel Atom P6922-3" })
+        XCTAssertEqual(model.sSpec, ["SRPFF", "SA4RS", "SA4RT", "SA4RW"])
+    }
+
     func testAnXInTheTableMatchesAnyDigit() {
         XCTAssertEqual(ProcessorNames.families(for: [0x606A6], in: catalogue).map(\.codeNames),
                        [["Ice Lake Xeon-SP"]])

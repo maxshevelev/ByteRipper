@@ -31,7 +31,8 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARK_FILE = os.path.join(HERE, "ark-sspec.json")
-CODE = re.compile(r"^(SR[0-9A-Z]{3}|Q[0-9A-Z]{3})$")
+# SRxxx, and SAxxx since Intel ran out of SR (ARK: Atom P6922-3 SA4RS); Qxxx samples.
+CODE = re.compile(r"^(S[RA][0-9A-Z]{3}|Q[0-9A-Z]{3})$")
 STEP = re.compile(r"^[A-Z][0-9]$")
 
 

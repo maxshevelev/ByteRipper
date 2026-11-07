@@ -1,0 +1,33 @@
+{
+  "about": "Entries for CPUIDs the article has no row for, each fact with the page it came from. import.py appends them after the article's and refuses one whose CPUID the article has: the article's own row is kept. A model's codes are ARK's, in ark-sspec.json, placed by enrich.py. A stepping no source ties to the CPUID is left empty, not guessed.",
+  "entries": [
+    {
+      "cpuids": ["B0664"],
+      "codeNames": ["Grand Ridge"],
+      "cores": ["Crestmont"],
+      "productFamilies": ["Intel Atom Processor P Series"],
+      "steppings": [],
+      "segments": ["Server"],
+      "processors": [
+        {"name": "Intel Atom P6922-3"},
+        {"name": "Intel Atom P6942-3"},
+        {"name": "Intel Atom P6942-5"},
+        {"name": "Intel Atom P6952-3"},
+        {"name": "Intel Atom P6962-3"},
+        {"name": "Intel Atom P6962-5"}
+      ],
+      "evidence": [
+        {"gives": ["cpuids", "codeNames", "cores"],
+         "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+         "quote": "#define INTEL_ATOM_CRESTMONT\t\tIFM(6, 0xB6) /* Grand Ridge */"},
+        {"gives": ["processors"],
+         "url": "https://www.intel.com/content/www/us/en/ark/products/codename/198897/products-formerly-grand-ridge.html",
+         "quote": "Products formerly Grand Ridge: Atom P6952-3, P6942-3, P6962-3, P6962-5, P6942-5, P6922-3"},
+        {"gives": ["codeNames", "productFamilies", "segments"],
+         "url": "https://www.intel.com/content/www/us/en/products/sku/243726/intel-atom-p69625-processor-24m-cache-2-60-ghz/specifications.html",
+         "quote": "Product Collection: Intel Atom® Processor P Series; Code Name: Products formerly Grand Ridge; Vertical Segment: Server"}
+      ],
+      "note": "Model 0xB6 is Grand Ridge (the kernel); B0664 is its stepping ID 4. Every Grand Ridge code on ARK is stepping B0, but no Intel page loaded ties B0 to stepping ID 4, so the entry has no stepping. Intel's Linux microcode repository has no 06-b6-04 file (checked 2026-11-07)."
+    }
+  ]
+}

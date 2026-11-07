@@ -26,7 +26,9 @@ The rules, in order:
 2. A code with a stepping (ARK, or a Wikipedia row that has one) goes under the
    one entry of that model whose CPUID has that stepping — by Intel's current
    naming first, by every name its notes ever used when that finds no one
-   entry (`intel_steppings`). None, or more than one: it is left out.
+   entry (`intel_steppings`). None, or more than one: it is left out — unless
+   the model is in one entry only and no source names a stepping for that
+   entry's CPUID: then it goes there, as rule 3 puts a code with no stepping.
 3. A Wikipedia code without a stepping goes in only where the article lists
    the model under one CPUID — there is then nowhere else for it to go. A
    model listed under several CPUIDs gets nothing from such a row. And a page
@@ -311,6 +313,11 @@ def enrich(entries, cache=None, log=print):
             fits = [(e, p) for e, p in places[name] if stepping in entry_steppings(e, table)]
             if len(fits) == 1:
                 break
+        if not fits and len(places[name]) == 1 and not entry_steppings(places[name][0][0], every):
+            # The model's one entry, whose CPUID no source gives a stepping:
+            # nowhere else for the code to go, and nothing it contradicts
+            # (Grand Ridge, B0664 — ARK says B0, nothing ties B0 to ID 4).
+            fits = places[name]
         if len(fits) == 1:
             add(fits[0][1], code, source)
             return True

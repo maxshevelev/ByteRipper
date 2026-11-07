@@ -4,7 +4,7 @@
     "title": "Применение CPUID на практике для замены SoC-комбайнов",
     "retrieved": "2026-11-07"
   },
-  "about": "CPUID (family-model-stepping, as a microcode update's header and its file name write it) to the processors sold with it. An X in a CPUID stands for any one hexadecimal digit. The list is the source's and is not complete; a CPUID can appear in more than one entry. sSpec lists the article's codes and those added from sSpecSources; sSpecSource says, for each added code, which.",
+  "about": "CPUID (family-model-stepping, as a microcode update's header and its file name write it) to the processors sold with it. An X in a CPUID stands for any one hexadecimal digit. The list is the source's and is not complete; a CPUID can appear in more than one entry. An entry with source \"extra\" is not the article's: it is from Skills/update-cpuid-brand-names/scripts/extra-entries.json, which gives each fact's page. sSpec lists the article's codes and those added from sSpecSources; sSpecSource says, for each added code, which.",
   "sSpecSources": {
     "ark": {
       "about": "Intel ARK, the Ordering & Compliance tab of each model's page; the URL per model is in Skills/update-cpuid-brand-names/scripts/ark-sspec.json",
@@ -9856,6 +9856,95 @@
           ]
         }
       ]
+    },
+    {
+      "cpuids": [
+        "B0664"
+      ],
+      "codeNames": [
+        "Grand Ridge"
+      ],
+      "cores": [
+        "Crestmont"
+      ],
+      "productFamilies": [
+        "Intel Atom Processor P Series"
+      ],
+      "steppings": [],
+      "segments": [
+        "Server"
+      ],
+      "processors": [
+        {
+          "name": "Intel Atom P6922-3",
+          "sSpec": [
+            "SRPFF",
+            "SA4RS",
+            "SA4RT",
+            "SA4RW"
+          ],
+          "sSpecSource": {
+            "SRPFF": "ark",
+            "SA4RS": "ark",
+            "SA4RT": "ark",
+            "SA4RW": "ark"
+          }
+        },
+        {
+          "name": "Intel Atom P6942-3",
+          "sSpec": [
+            "SRN2X",
+            "SRPFJ"
+          ],
+          "sSpecSource": {
+            "SRN2X": "ark",
+            "SRPFJ": "ark"
+          }
+        },
+        {
+          "name": "Intel Atom P6942-5",
+          "sSpec": [
+            "SRNJG"
+          ],
+          "sSpecSource": {
+            "SRNJG": "ark"
+          }
+        },
+        {
+          "name": "Intel Atom P6952-3",
+          "sSpec": [
+            "SRNJE",
+            "SRV4Q"
+          ],
+          "sSpecSource": {
+            "SRNJE": "ark",
+            "SRV4Q": "ark"
+          }
+        },
+        {
+          "name": "Intel Atom P6962-3",
+          "sSpec": [
+            "SRM9A",
+            "SRV4P"
+          ],
+          "sSpecSource": {
+            "SRM9A": "ark",
+            "SRV4P": "ark"
+          }
+        },
+        {
+          "name": "Intel Atom P6962-5",
+          "sSpec": [
+            "SRN5P",
+            "SRPFL"
+          ],
+          "sSpecSource": {
+            "SRN5P": "ark",
+            "SRPFL": "ark"
+          }
+        }
+      ],
+      "source": "extra"
     }
   ]
 }
