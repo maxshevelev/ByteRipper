@@ -212,6 +212,30 @@
       "note": "ARK lists SRH3H (G1) only. PCN search (PCN 117936-00, 826013-02, 800306) found no conversion PCN with new codes for this model."
     },
     {
+      "model": "Intel Core i3-11100HE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKX2",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Core™ i3-11100HE Processor FH8069004638051 S RKX2 99AH80 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
+    },
+    {
       "model": "Intel Core i3-12100",
       "searched": "2026-11-07",
       "specs": [],
@@ -1184,6 +1208,30 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i7-11850HE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKWZ",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Core™ i7-11850HE Processor FH8069004638048 S RKWZ 99AH7N R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
     },
     {
       "model": "Intel Core i7-12700",
@@ -5250,6 +5298,150 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not in ARK, not in Specification Update 338848 Rev028 (identification table has no model names), no S-SPEC database or listing names a 4214C; photos.py returned only Silver 4214 (SRFB9) chips, which are not this model. Probably an off-roadmap/cloud SKU with no public code. Web search budget ran out before a further try."
+    },
+    {
+      "model": "Intel Xeon W-11155MLE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKX5",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Xeon® W-11155MLE Processor FH8069004638142 S RKX5 99AH8A R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
+    },
+    {
+      "model": "Intel Xeon W-11155MRE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKX1",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Xeon® W-11155MRE Processor FH8069004638050 S RKX1 99AH7R R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
+    },
+    {
+      "model": "Intel Xeon W-11555MLE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKX3",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Xeon® W-11555MLE Processor FH8069004638140 S RKX3 99AH87 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
+    },
+    {
+      "model": "Intel Xeon W-11555MRE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKWY",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Xeon® W-11555MRE Processor FH8069004638047 S RKWY 99AH7M R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
+    },
+    {
+      "model": "Intel Xeon W-11865MLE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKX4",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Xeon® W-11865MLE Processor FH8069004638151 S RKX4 99AH89 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
+    },
+    {
+      "model": "Intel Xeon W-11865MRE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKWX",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Tiger Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798652/PCN119516-00.pdf",
+              "quote": "Intel® Xeon® W-11865MRE Processor FH8069004638046 S RKWX 99AH7L R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code and links only PCN 798652 (PCN 119516-00, Apr 2023: product support moved to Intel Embedded Architecture, no new codes); its table (Marketing Name / Product Code / S SPEC / MM# / Stepping) gives the same code and stepping. Architecture from ARK's Code Name 'Products formerly Tiger Lake' (read on the i7-11850HE page; siblings share the PCN and platform). No other PCN found; no photos needed."
     }
   ]
 }

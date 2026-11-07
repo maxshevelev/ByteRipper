@@ -258,6 +258,16 @@
       ]
     },
     {
+      "model": "Intel Core i3-11100HE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217371/intel-core-i311100he-processor-8m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX2",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i3-12100",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134584/intel-core-i312100-processor-12m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -1265,6 +1275,16 @@
         {
           "sSpec": "SRKNT",
           "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11850HE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217379/intel-core-i711850he-processor-24m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKWZ",
+          "stepping": "R0"
         }
       ]
     },
@@ -3170,6 +3190,66 @@
       "url": null,
       "specs": [],
       "note": "No Intel product page found for a Silver 4214C; searches return only 4214, 4214Y, 4214R."
+    },
+    {
+      "model": "Intel Xeon W-11155MLE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217375/intel-xeon-w11155mle-processor-8m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX5",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11155MRE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217378/intel-xeon-w11155mre-processor-8m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX1",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11555MLE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217377/intel-xeon-w11555mle-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX3",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11555MRE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217376/intel-xeon-w11555mre-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKWY",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11865MLE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217368/intel-xeon-w11865mle-processor-24m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX4",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11865MRE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217367/intel-xeon-w11865mre-processor-24m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKWX",
+          "stepping": "R0"
+        }
+      ]
     }
   ]
 }

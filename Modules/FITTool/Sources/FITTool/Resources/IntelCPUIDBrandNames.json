@@ -6141,35 +6141,75 @@
       "processors": [
         {
           "name": "Intel Core i7-11850HE",
-          "sSpec": []
+          "sSpec": [
+            "SRKWZ"
+          ],
+          "sSpecSource": {
+            "SRKWZ": "ark"
+          }
         },
         {
           "name": "Intel Core i3-11100HE",
-          "sSpec": []
+          "sSpec": [
+            "SRKX2"
+          ],
+          "sSpecSource": {
+            "SRKX2": "ark"
+          }
         },
         {
           "name": "Intel Xeon W-11865MRE",
-          "sSpec": []
+          "sSpec": [
+            "SRKWX"
+          ],
+          "sSpecSource": {
+            "SRKWX": "ark"
+          }
         },
         {
           "name": "Intel Xeon W-11555MRE",
-          "sSpec": []
+          "sSpec": [
+            "SRKWY"
+          ],
+          "sSpecSource": {
+            "SRKWY": "ark"
+          }
         },
         {
           "name": "Intel Xeon W-11155MRE",
-          "sSpec": []
+          "sSpec": [
+            "SRKX1"
+          ],
+          "sSpecSource": {
+            "SRKX1": "ark"
+          }
         },
         {
           "name": "Intel Xeon W-11555MLE",
-          "sSpec": []
+          "sSpec": [
+            "SRKX3"
+          ],
+          "sSpecSource": {
+            "SRKX3": "ark"
+          }
         },
         {
           "name": "Intel Xeon W-11865MLE",
-          "sSpec": []
+          "sSpec": [
+            "SRKX4"
+          ],
+          "sSpecSource": {
+            "SRKX4": "ark"
+          }
         },
         {
           "name": "Intel Xeon W-11155MLE",
-          "sSpec": []
+          "sSpec": [
+            "SRKX5"
+          ],
+          "sSpecSource": {
+            "SRKX5": "ark"
+          }
         },
         {
           "name": "Intel Celeron 6600HE",
