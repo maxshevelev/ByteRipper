@@ -2,6 +2,12 @@
   "about": "S-SPECs found by Skills/find-sspec beyond ARK and Wikipedia, each with its evidence: an Intel document, an S-SPEC database page, or the marking on the package read from photographs of different chips. A model searched with nothing found is kept with no specs.",
   "models": [
     {
+      "model": "Intel Atom C3558RC",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Intel Atom C3000 Specification Update 336345-022US (March 2024, cdrdv2-public.intel.com/336345/336345_C3000_SU_Rev022.pdf), Table 27 'Component Marking Information', lists C3558 SR388 and C3558R SRH4G but no C3558RC. PCN search found nothing. Photographs not tried: the package is BGA and the top marking (Table 28) prints only S-Spec and speed, no processor number, so a photo cannot tie a code to the model."
+    },
+    {
       "model": "Intel Celeron G3920T",
       "searched": "2026-11-07",
       "specs": [],
@@ -5663,6 +5669,12 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not in ARK, not in Specification Update 338848 Rev028 (identification table has no model names), no S-SPEC database or listing names a 4214C; photos.py returned only Silver 4214 (SRFB9) chips, which are not this model. Probably an off-roadmap/cloud SKU with no public code. Web search budget ran out before a further try."
+    },
+    {
+      "model": "Intel Xeon W-10855",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search ('\"W-10855M\" PCN site:intel.com') found only PCN118701-00 (cdrdv2-public.intel.com/805586/PCN118701-00.pdf), a discontinuance/EOL notice listing CL8070104398912 stepping R1 (per search result; not opened) — no stepping-conversion PCN with another code. Photographs not tried: BGA part, and ARK gives the code with its stepping."
     },
     {
       "model": "Intel Xeon W-11155MLE",

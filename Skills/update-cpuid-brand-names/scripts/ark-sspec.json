@@ -3,6 +3,12 @@
   "retrieved": "2026-11-07",
   "models": [
     {
+      "model": "Intel Atom C3558RC",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found for C3558RC (searches '\"Atom C3558RC\" site:intel.com specifications' and '\"Intel Atom® Processor C3558RC\"' return only the C3558 (SKU 97937, SR388) and C3558R (SKU 204841, SRH4G) pages). The model is known only from NVD CPE entries (cpe:2.3:h:intel:atom_c3558rc), suggesting a custom/OEM SKU without a public ARK page."
+    },
+    {
       "model": "Intel Atom P5921B",
       "url": "https://www.intel.com/content/www/us/en/products/sku/202684/intel-atom-processor-p5921b-9m-cache-2-20-ghz/ordering.html",
       "specs": [],
@@ -3432,6 +3438,12 @@
       "url": null,
       "specs": [],
       "note": "No Intel product page found for a Silver 4214C; searches return only 4214, 4214Y, 4214R."
+    },
+    {
+      "model": "Intel Xeon W-10855",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page for a 'Xeon W-10855'; the product is the W-10855M (SKU 201908: SRH8M, R1, CL8070104398912, Comet Lake H). Not taken for this name, and R1 is not a stepping of A0660/A0661."
     },
     {
       "model": "Intel Xeon W-11155MLE",
