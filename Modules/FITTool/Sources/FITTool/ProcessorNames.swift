@@ -32,7 +32,8 @@ public struct ProcessorFamily: Equatable, Sendable, Decodable {
 public struct ProcessorModel: Equatable, Sendable, Decodable {
     public var name: String
     public var sSpec: [String]
-    /// Where a code that is not the article's came from: `ark` or `wikipedia`.
+    /// Where a code that is not the article's came from: `ark`, `wikipedia`,
+    /// or what `Skills/find-sspec` found — `intel`, `database`, `marking`.
     public var sSpecSource: [String: String]?
     /// A line that names a series rather than its models.
     public var series: Bool?

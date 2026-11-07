@@ -1,13 +1,19 @@
-"""S-SPECs the article does not give, from Intel ARK and from Wikipedia.
+"""S-SPECs the article does not give, from Intel ARK, Wikipedia and what
+`Skills/find-sspec` found.
 
 An S-SPEC belongs to one stepping, and a stepping to one CPUID — so a code is
-only worth adding where it can be put under the right CPUID. Two sources:
+only worth adding where it can be put under the right CPUID. The sources:
 
 - Intel ARK, the manufacturer's own list: each code with its stepping. ARK
   cannot be fetched by a script (it answers 403), so what was read from it is
   kept beside this file in `ark-sspec.json`, with the page each code came from.
 - Wikipedia's "List of Intel … processors" pages, fetched here at a fixed
   revision. Most of their rows give a code but no stepping.
+- `found-sspec.json` beside this file, written by `Skills/find-sspec`: codes
+  with their evidence — an Intel document other than ARK's ordering tab
+  (`intel`), an S-SPEC database page (`database`), or the marking on the
+  package read from photographs of different chips (`marking`). Read before
+  Wikipedia, as ARK is: each code there was checked against its page.
 
 A stepping is turned into a CPUID by Intel's own table — the release notes of
 `github.com/intel/Intel-Linux-Processor-Microcode-Data-Files`, which list
@@ -26,6 +32,11 @@ The rules, in order:
    about one microarchitecture ("… (Broadwell-based)") gives codes only to an
    entry whose code names are of it: the article repeats Broadwell-DE Xeon D
    parts under Ice Lake D, and their codes do not belong there.
+4. A found code (`found-sspec.json`) with a stepping follows rule 2; with a
+   CPUID, it goes under the one entry of that model with that CPUID; with
+   neither — a marking gives neither — it follows rule 3, and the architecture
+   its source names must begin one of the entry's code names ("Comet Lake"
+   for "Comet Lake S"; "Broadwell" never for "Ice Lake D").
 
 A code belongs to one model: one that is already some other model's, or that
 Wikipedia writes for two models (a copy-paste slip there, as SR3B8 for both
@@ -44,6 +55,7 @@ from html.parser import HTMLParser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARK_FILE = os.path.join(HERE, "ark-sspec.json")
+FOUND_FILE = os.path.join(HERE, "found-sspec.json")
 
 INTEL_NOTES_COMMIT = "bdc92abe5c499c3fd7988b76a128d05c9120a520"
 INTEL_NOTES_URL = ("https://raw.githubusercontent.com/intel/"
@@ -277,6 +289,55 @@ def enrich(entries, cache=None, log=print):
             if s.get("stepping") and by_stepping(item["model"], s["sSpec"], s["stepping"], "ark"):
                 counts["ark"] += 1
 
+    # Found by Skills/find-sspec: rule 4.
+    found = {"models": []}
+    if os.path.exists(FOUND_FILE):
+        with open(FOUND_FILE, encoding="utf-8") as f:
+            found = json.load(f)
+    for item in found["models"]:
+        name = item["model"]
+        if item["specs"] and name not in places:
+            log(f"  found: {name} is not in the table")
+            continue
+        for s in item["specs"]:
+            kinds = {e["kind"] for e in s["evidence"]}
+            source = "intel" if "intel" in kinds else "database" if "database" in kinds else "marking"
+            code = s["sSpec"]
+            if s.get("stepping"):
+                if by_stepping(name, code, s["stepping"], source):
+                    counts[source] += 1
+                continue
+            if code in known(name):
+                continue
+            if owner(code):
+                log(f"  {source}: {name} {code} is already {sorted(owner(code))}'s — left out")
+                continue
+            if s.get("cpuid"):
+                fits = [(e, p) for e, p in places[name]
+                        if any(len(c) == len(s["cpuid"]) and
+                               all(x in ("X", y) for x, y in zip(c, s["cpuid"]))
+                               for c in e["cpuids"])]
+                if len(fits) == 1:
+                    add(fits[0][1], code, source)
+                    counts[source] += 1
+                else:
+                    log(f"  {source}: {name} {code} ({s['cpuid']}) fits {len(fits)} entries — left out")
+                continue
+            where = places[name]
+            arch = (s.get("architecture") or "").lower()
+            if len({tuple(e["cpuids"]) for e, _ in where}) != 1:
+                log(f"  {source}: {name} {code} has no stepping, and the model is under "
+                    "several CPUIDs — left out")
+            elif not arch or not all(any(c.lower().startswith(arch) for c in e["codeNames"])
+                                     for e, _ in where):
+                log(f"  {source}: {name} {code} is {s.get('architecture')!r}, the entry is "
+                    f"{where[0][0]['codeNames']} — left out")
+            else:
+                for _, p in where:
+                    if not [c for c in p["sSpec"] if c not in p.get("sSpecSource", {})]:
+                        add(p, code, source)
+                counts[source] += 1
+
     # Wikipedia.
     by_token = collections.defaultdict(list)
     models_of = collections.defaultdict(set)
@@ -322,6 +383,19 @@ def enrich(entries, cache=None, log=print):
                         if not [c for c in p["sSpec"] if c not in p.get("sSpecSource", {})]:
                             add(p, code, "wikipedia")
                     counts["wikipedia"] += 1
+    found_sources = {
+        "intel": {"about": "an Intel document other than ARK's ordering tab (a specification "
+                           "update, a datasheet, a product change notification) that gives the "
+                           "code for the model; the page per code is in "
+                           "Skills/update-cpuid-brand-names/scripts/found-sspec.json"},
+        "database": {"about": "an S-SPEC database page that gives the code with its stepping or "
+                              "CPUID; the page per code is in "
+                              "Skills/update-cpuid-brand-names/scripts/found-sspec.json"},
+        "marking": {"about": "the code printed on the package beside the model number, read from "
+                             "at least two photographs of different chips on different sites; the "
+                             "photographs per code are in "
+                             "Skills/update-cpuid-brand-names/scripts/found-sspec.json"},
+    }
     return {
         "counts": dict(counts),
         "sources": {
@@ -331,6 +405,7 @@ def enrich(entries, cache=None, log=print):
             "wikipedia": {"pages": [{"title": t, "revid": r,
                                      "url": "https://en.wikipedia.org/w/index.php?oldid=" + str(r)}
                                     for t, r in WIKIPEDIA_PAGES.items()]},
+            **{k: v for k, v in found_sources.items() if counts[k]},
             "steppings": {"about": "stepping per CPUID, from Intel's microcode release notes",
                           "url": INTEL_NOTES_URL},
         },

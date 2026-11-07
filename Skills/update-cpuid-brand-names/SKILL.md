@@ -25,6 +25,7 @@ scripts/enrich.py       S-SPECs from ark-sspec.json and Wikipedia, placed by ste
 scripts/ark-sspec.json  what was read from ARK, model by model, with its page
 scripts/gaps.py         the models still without an S-SPEC, in batches for ARK agents
 scripts/merge_ark.py    an agent batch → ark-sspec.json
+scripts/found-sspec.json  codes found by Skills/find-sspec, each with its evidence
 scripts/pins.py         the pinned Wikipedia revisions and Intel commit, moved forward
 reference/ark-agent-brief.md   the brief an ARK agent is given
 ```
@@ -74,9 +75,13 @@ the rules in full):
    the article repeats Broadwell-DE parts there).
 4. A code Wikipedia writes for two models (SR3B8, both 8160F and 8160M) or
    that is already another model's is left out.
+5. A code from `found-sspec.json` (`Skills/find-sspec`) goes by its stepping
+   or its CPUID where its source gives one; a code read from the package's
+   marking has neither, and follows rule 3 with one more condition: the
+   architecture its source names must begin one of the entry's code names.
 
 Every added code is listed in `sSpecSource` with where it came from (`ark`,
-`wikipedia`); `sSpecSources` at the top says which revisions and pages.
+`wikipedia`, and from `found-sspec.json`: `intel`, `database`, `marking`); `sSpecSources` at the top says which revisions and pages.
 
 ## Filling the gaps
 
@@ -113,6 +118,11 @@ network for it.
 
 What the agents read is WebFetch's quotation of the page, not the page: spot-
 check a few codes against ARK in a browser before committing a large batch.
+
+What ARK does not give either — Intel's specification updates, S-SPEC
+databases, the marking on photographed packages — is `Skills/find-sspec`'s
+work, run for a few CPUIDs at a time: it is costly. Its ARK lookups land in
+`ark-sspec.json` as these do, the rest in `found-sspec.json`.
 
 ## Moving the pins
 

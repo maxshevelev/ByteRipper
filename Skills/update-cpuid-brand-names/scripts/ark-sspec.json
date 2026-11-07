@@ -1,6 +1,6 @@
 {
   "about": "S-SPEC and stepping per model as Intel ARK's Ordering & Compliance tab lists them, read through WebFetch (ARK refuses scripts). Only models the article lists under more than one CPUID.",
-  "retrieved": "2026-11-06",
+  "retrieved": "2026-11-07",
   "models": [
     {
       "model": "Intel Atom P5921B",
@@ -79,6 +79,26 @@
         {
           "sSpec": "SRL5Z",
           "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230493/intel-core-i513600k-processor-24m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBD",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230494/intel-core-i513600kf-processor-24m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBE",
+          "stepping": "B0"
         }
       ]
     },
@@ -177,6 +197,26 @@
         {
           "sSpec": "SRG12",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-13700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230500/intel-core-i713700k-processor-30m-cache-up-to-5-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMB8",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-13700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230489/intel-core-i713700kf-processor-30m-cache-up-to-5-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMB9",
+          "stepping": "B0"
         }
       ]
     },
@@ -378,6 +418,26 @@
         {
           "sSpec": "SRG16",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-13900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230496/intel-core-i913900k-processor-36m-cache-up-to-5-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBH",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-13900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230497/intel-core-i913900kf-processor-36m-cache-up-to-5-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBJ",
+          "stepping": "B0"
         }
       ]
     },

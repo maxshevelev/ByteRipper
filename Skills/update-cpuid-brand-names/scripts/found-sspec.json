@@ -1,0 +1,41 @@
+{
+  "about": "S-SPECs found by Skills/find-sspec beyond ARK and Wikipedia, each with its evidence: an Intel document, an S-SPEC database page, or the marking on the package read from photographs of different chips. A model searched with nothing found is kept with no specs.",
+  "models": [
+    {
+      "model": "Intel Core i5-13600K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i5-13600KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i7-13700K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i7-13700KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i9-13900K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i9-13900KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    }
+  ]
+}
