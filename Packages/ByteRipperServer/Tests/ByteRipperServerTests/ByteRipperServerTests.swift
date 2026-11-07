@@ -487,9 +487,9 @@ final class ServerTests: XCTestCase {
         } catch let error as GhidraHostError {
             XCTAssertEqual(error.status, 409)
         }
-        _ = try await remote.tickets(.init(action: .reply, agent: "Flow Manager", module: board, id: remarkID,
+        _ = try await remote.tickets(.init(action: .reply, agent: "Review Manager", module: board, id: remarkID,
                                            status: .verified))
-        let closedTicket = try ticket(try await remote.tickets(.init(action: .close, agent: "Flow Manager", module: board)))
+        let closedTicket = try ticket(try await remote.tickets(.init(action: .close, agent: "Review Manager", module: board)))
         XCTAssertEqual(closedTicket["state"] as? String, "closed")
         let mine = try JSONSerialization.jsonObject(with: try await remote.tickets(
             .init(action: .list, author: "reviewer · bench-mac"))) as? [[String: Any]]

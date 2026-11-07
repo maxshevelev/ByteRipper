@@ -10,7 +10,7 @@ final class TicketBookTests: XCTestCase {
     private let module = String(repeating: "ab", count: 32)
     private let reviewer = TicketBook.Caller(author: "Reviewer · devex-macbook", holder: "token devex-macbook")
     private let verifier = TicketBook.Caller(author: "Verifier · devex-macbook", holder: "token devex-macbook")
-    private let flowManager = TicketBook.Caller(author: "Flow Manager", holder: "local MCP")
+    private let reviewManager = TicketBook.Caller(author: "Review Manager", holder: "local MCP")
 
     override func setUp() {
         file = FileManager.default.temporaryDirectory
@@ -27,8 +27,8 @@ final class TicketBookTests: XCTestCase {
                                      function: "ReadPolicy", address: "0x9A01234", revision: 3),
                                module: module, name: "TcgPei", reviewer: reviewer.author, by: verifier)
         let ticket = try await book.add(.init(severity: .cosmetic, text: "typo in the plate"),
-                                        module: module.uppercased(), name: nil, reviewer: nil, by: flowManager)
-        XCTAssertEqual(ticket.remarks.map(\.author), ["Verifier · devex-macbook", "Flow Manager"])
+                                        module: module.uppercased(), name: nil, reviewer: nil, by: reviewManager)
+        XCTAssertEqual(ticket.remarks.map(\.author), ["Verifier · devex-macbook", "Review Manager"])
         XCTAssertEqual(ticket.name, "TcgPei")
         XCTAssertEqual(ticket.state, "open")
         let again = await TicketBook(file: file).ticket(module)
@@ -65,11 +65,11 @@ final class TicketBookTests: XCTestCase {
     func testANewRemarkOpensAClosedModuleAgain() async throws {
         let book = TicketBook(file: file)
         var ticket = try await book.close(module: module, name: "DebugMaskPei", reviewer: reviewer.author,
-                                          note: "checked, nothing found", by: flowManager)
+                                          note: "checked, nothing found", by: reviewManager)
         XCTAssertEqual(ticket.state, "closed")
         XCTAssertTrue(ticket.remarks.isEmpty)
         ticket = try await book.add(.init(severity: .misleading, text: "a later check: the loop bound is off by one"),
-                                    module: module, name: nil, reviewer: nil, by: flowManager)
+                                    module: module, name: nil, reviewer: nil, by: reviewManager)
         XCTAssertNil(ticket.closed)
         XCTAssertEqual(ticket.state, "open")
         XCTAssertEqual(ticket.reviewer, reviewer.author, "the reviewer the closing knew is kept")
@@ -97,7 +97,7 @@ final class TicketBookTests: XCTestCase {
 
     func testTheReviewerTakingTheModuleIsWhoCannotClose() async throws {
         let book = TicketBook(file: file)
-        _ = try await book.add(.init(severity: .cosmetic, text: "x"), module: module, name: nil, reviewer: nil, by: flowManager)
+        _ = try await book.add(.init(severity: .cosmetic, text: "x"), module: module, name: nil, reviewer: nil, by: reviewManager)
         try await book.noteReviewer(module, name: "TcgPei", author: "Analyzis")
         let ticket = try await book.ticket(module).map { $0 }
         XCTAssertEqual(ticket?.reviewer, "Analyzis")
@@ -105,15 +105,15 @@ final class TicketBookTests: XCTestCase {
         try await book.noteReviewer(other, name: "DxeCore", author: "Reviewer · devex-macbook")
         let unlisted = await book.list()
         XCTAssertEqual(unlisted.map(\.module), [module], "a ticket that only knows its reviewer is listed nowhere")
-        let later = try await book.add(.init(severity: .wrong, text: "z"), module: other, name: nil, reviewer: nil, by: flowManager)
+        let later = try await book.add(.init(severity: .wrong, text: "z"), module: other, name: nil, reviewer: nil, by: reviewManager)
         XCTAssertEqual(later.reviewer, "Reviewer · devex-macbook", "the reviewer noted before the first remark")
         let id = try XCTUnwrap(ticket?.remarks.first?.id)
-        _ = try await book.reply(module: module, remark: id, text: "ok", status: .verified, revision: nil, by: flowManager)
+        _ = try await book.reply(module: module, remark: id, text: "ok", status: .verified, revision: nil, by: reviewManager)
         await assertRefused(409) {
             _ = try await book.close(module: self.module, name: nil, reviewer: nil, note: nil,
                                      by: .init(author: "analyzis", holder: "local MCP"))
         }
-        let closed = try await book.close(module: module, name: nil, reviewer: nil, note: nil, by: flowManager)
+        let closed = try await book.close(module: module, name: nil, reviewer: nil, note: nil, by: reviewManager)
         XCTAssertEqual(closed.state, "closed")
     }
 

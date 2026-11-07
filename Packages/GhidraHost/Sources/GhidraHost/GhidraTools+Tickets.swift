@@ -7,7 +7,7 @@ import Foundation
 /// the reviewer closes the module's ticket (`TicketBook`).
 extension GhidraTools {
     static let agentProperty = AgentSchema.string(
-        "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share "
+        "Your own name as an agent, e.g. \"Review Manager\" or \"Verifier · devex-macbook\": several agents share "
             + "one token, and the board tells them apart by it. Use the same name every time.")
 
     static func ticketTools(_ backend: GhidraBackend) -> [AgentTool] {

@@ -12,7 +12,7 @@ import Foundation
 /// revisions until a verifier marks them verified. An administrator may set
 /// any status from the console.
 ///
-/// Who wrote what is the agent's own name — "Flow Manager", "Verifier ·
+/// Who wrote what is the agent's own name — "Review Manager", "Verifier ·
 /// devex-macbook" — beside the holder that carried the call (a token's name,
 /// or the server's local MCP), since several agents share one holder.
 ///

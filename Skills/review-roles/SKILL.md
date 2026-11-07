@@ -20,10 +20,11 @@ always of the version the server's tools run:
 prompt, so the sessions are told apart on the server's console
 ("Reviewer · Bench-Mac").
 
-These roles differ from the ones that work on the server's own Mac
-(`analyzis`, `flow-manager` in the install's `.claude/skills`): there is no
-Coder beside them, nobody there grants deploy windows, and their token cannot
-replace what other reviews share.
+The server's own Mac has its pair in the install's `.claude/skills`:
+`analyzis` is an ordinary reviewer, held to the Reviewer's rules here, and
+`review-manager` verifies for it and grants the Coder its deploy windows. A
+remote pair has no Coder beside it and grants no deploy windows; no reviewer,
+here or there, replaces what other reviews share.
 
 The server reads this folder and `ghidra-uefi` from `skills/` beside its
 binary (`Scripts/make-agent-dist.sh` puts them there), or from the checkout it

@@ -2501,7 +2501,7 @@
       "additionalProperties" : false,
       "properties" : {
         "agent" : {
-          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "description" : "Your own name as an agent, e.g. \"Review Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
           "type" : "string"
         },
         "module" : {
@@ -2685,7 +2685,7 @@
           "type" : "string"
         },
         "agent" : {
-          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "description" : "Your own name as an agent, e.g. \"Review Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
           "type" : "string"
         },
         "function" : {
@@ -2737,7 +2737,7 @@
       "additionalProperties" : false,
       "properties" : {
         "agent" : {
-          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "description" : "Your own name as an agent, e.g. \"Review Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
           "type" : "string"
         },
         "id" : {
@@ -2790,7 +2790,7 @@
       "additionalProperties" : false,
       "properties" : {
         "agent" : {
-          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "description" : "Your own name as an agent, e.g. \"Review Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
           "type" : "string"
         },
         "module" : {
