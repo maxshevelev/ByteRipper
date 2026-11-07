@@ -529,6 +529,93 @@
       "note": "No intel.com page for i3-7120T found by WebSearch. It appears to be an OEM-only part and not on ARK."
     },
     {
+      "model": "Intel Core i3-8000",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588), an OEM-only part."
+    },
+    {
+      "model": "Intel Core i3-8000T",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588), an OEM-only part."
+    },
+    {
+      "model": "Intel Core i3-8020",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588)."
+    },
+    {
+      "model": "Intel Core i3-8100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126688/intel-core-i38100-processor-6m-cache-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3N5",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-8100H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/149160/intel-core-i38100h-processor-6m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3Z7",
+          "stepping": "U0"
+        }
+      ],
+      "note": "ARK gives stepping U0, not the B0 of CPUID 906EB the table lists it under (spec update 337346: H (U0) = 906EA)."
+    },
+    {
+      "model": "Intel Core i3-8100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129944/intel-core-i38100t-processor-6m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3Y8",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-8120",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588)."
+    },
+    {
+      "model": "Intel Core i3-8300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129942/intel-core-i38300-processor-8m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3XY",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-8300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129943/intel-core-i38300t-processor-8m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3Y1",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Single tray SKU; code name 'Products formerly Coffee Lake' from the specifications tab."
+    },
+    {
+      "model": "Intel Core i3-8350K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126689/intel-core-i38350k-processor-8m-cache-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3N4",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Code name 'Products formerly Coffee Lake' from the specifications tab."
+    },
+    {
       "model": "Intel Core i3-L13G4",
       "url": "https://www.intel.com/content/www/us/en/products/sku/202778/intel-core-i3l13g4-processor-4m-cache-up-to-2-8ghz/ordering.html",
       "specs": [

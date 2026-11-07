@@ -544,6 +544,188 @@
       "note": "From the archived 7th Gen Core Specification Update 334663-009, Table 8 (S-Processor Line), which prints every code without its leading S; later revisions dropped the S-Spec tables. Its Table 2 gives the S line as 0x906Ex, and Intel's microcode notes name one 06-9e CPUID for Kaby Lake, 906E9. No ARK page."
     },
     {
+      "model": "Intel Core i3-8000",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3XL",
+          "stepping": "U0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "database",
+              "url": "https://web.archive.org/web/20250711183031/https://en.wikichip.org/wiki/intel/core_i3/i3-8000",
+              "quote": "Model Number i3-8000 S-Spec SR3XL Market Desktop ... Microarchitecture Coffee Lake Core Name Coffee Lake S Core Family 6 Core Model 158 Core Stepping U0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "WikiChip (live site refuses connections; read via Wayback snapshot 2025-07-11) is the only source. Its stepping U0 contradicts the table's B0 for 906EB and is doubtful for a 4-core i3 (B0 is the 4-core die); not confirmed by Intel. No Intel PCN or spec update names the model (spec update 337346 rev 008 has no S-Spec table). Photographs not tried for this one."
+    },
+    {
+      "model": "Intel Core i3-8000T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3YR",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "database",
+              "url": "https://web.archive.org/web/20241014120804/https://en.wikichip.org/wiki/intel/core_i3/i3-8000t",
+              "quote": "Model Number i3-8000T S-Spec SR3YR Market Desktop ... Microarchitecture Coffee Lake Core Name Coffee Lake S Core Family 6 Core Model 158 Core Stepping B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "WikiChip via Wayback snapshot 2024-10-14 is the only source; no Intel document found naming the model."
+    },
+    {
+      "model": "Intel Core i3-8020",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Weak: a single benchmark site, which labels it 'Part Number'; no stepping. WikiChip's archived page (2024-11-09) gives no S-Spec; TechPowerUp and cpu-world refuse fetches. Photo search (32 images, incl. query '\"i3-8020\" SR3') found only i3-8100/8100T chips."
+    },
+    {
+      "model": "Intel Core i3-8100",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3N5",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/802865",
+              "quote": "Intel® Core™ i3-8100 Processor I3-8100 3.6 GHZ B0 CM8068403377308 S R3N5 960012",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "All PCNs listed on the ordering page (799624, 799685, 802865, 809472, 813820, 797610, 798513, 805737) read: none gives another code."
+    },
+    {
+      "model": "Intel Core i3-8100H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3Z7",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/806174",
+              "quote": "Intel® Core™ i3-8100H Processor CL8068403359228 S R3Z7 963727",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCNs 795943, 806174, 809472 read; no other code. The model probably belongs under 906EA (U0), not 906EB."
+    },
+    {
+      "model": "Intel Core i3-8100T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN 802865 lists i3-8100T (B0, CM8068403377415) but its table text is scrambled (row pairs SR3X9/SR3Y8 with other SKUs); not used. No other code found."
+    },
+    {
+      "model": "Intel Core i3-8120",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Weak: a single benchmark site, labelled 'Part Number'; no stepping. WikiChip's archived page (2025-09-09) gives no S-Spec. Photo search (32 images, incl. '\"i3-8120\" SR3') found only i3-8100/8100T chips."
+    },
+    {
+      "model": "Intel Core i3-8300",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3XY",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/805737",
+              "quote": "Intel® Core™ i3-8300 Processor DESKTOP CM8068403377111 S R3XY 963643",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCNs 799685, 805737, 809472, 813820, 798513 read; no other code."
+    },
+    {
+      "model": "Intel Core i3-8300T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3Y1",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805737/PCN117617-02.pdf",
+              "quote": "Intel® Core™ i3-8300T Processor DESKTOP CM8068403377212 S R3Y1 963646",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 117617-02 is a Product Discontinuance listing the same code; no PCN with a pre/post-conversion code table found. Other PCN IDs on the ordering page (799685, 805737, 809472, 813820, 813834) not opened individually."
+    },
+    {
+      "model": "Intel Core i3-8350K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3N4",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805737/PCN117617-02.pdf",
+              "quote": "Intel® Core™ i3-8350K Processor DESKTOP CM8068403376809 S R3N4 960011; Boxed Intel® Core™ i3-8350K Processor DESKTOP BX80684I38350K S R3N4 961059; Boxed Intel® Core™ i3-8350K Processor DESKTOP BXC80684I38350K S R3N4 961083",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 117617-02 (Product Discontinuance) lists only SR3N4; PCN 115862 / 802013 is a China-box transport/text change. No conversion PCN with a second code found. Other PCN IDs on the ordering page (797610, 798513, 799624, 799685, 809472, 813820) not opened individually."
+    },
+    {
       "model": "Intel Core i3-L13G4",
       "searched": "2026-11-07",
       "specs": [],

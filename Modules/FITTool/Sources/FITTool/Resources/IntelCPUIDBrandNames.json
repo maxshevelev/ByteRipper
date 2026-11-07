@@ -82,6 +82,9 @@
     "intel": {
       "about": "an Intel document other than ARK's ordering tab (a specification update, a datasheet, a product change notification) that gives the code for the model; the page per code is in Skills/update-cpuid-brand-names/scripts/found-sspec.json"
     },
+    "database": {
+      "about": "an S-SPEC database page that gives the code with its stepping or CPUID; the page per code is in Skills/update-cpuid-brand-names/scripts/found-sspec.json"
+    },
     "steppings": {
       "about": "stepping per CPUID, from Intel's microcode release notes",
       "url": "https://raw.githubusercontent.com/intel/Intel-Linux-Processor-Microcode-Data-Files/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md"
@@ -8649,7 +8652,12 @@
         },
         {
           "name": "Intel Core i3-8000T",
-          "sSpec": []
+          "sSpec": [
+            "SR3YR"
+          ],
+          "sSpecSource": {
+            "SR3YR": "database"
+          }
         },
         {
           "name": "Intel Core i3-8020",
@@ -8657,7 +8665,12 @@
         },
         {
           "name": "Intel Core i3-8100",
-          "sSpec": []
+          "sSpec": [
+            "SR3N5"
+          ],
+          "sSpecSource": {
+            "SR3N5": "ark"
+          }
         },
         {
           "name": "Intel Core i3-8100H",
@@ -8665,7 +8678,12 @@
         },
         {
           "name": "Intel Core i3-8100T",
-          "sSpec": []
+          "sSpec": [
+            "SR3Y8"
+          ],
+          "sSpecSource": {
+            "SR3Y8": "ark"
+          }
         },
         {
           "name": "Intel Core i3-8120",
@@ -8673,15 +8691,30 @@
         },
         {
           "name": "Intel Core i3-8300",
-          "sSpec": []
+          "sSpec": [
+            "SR3XY"
+          ],
+          "sSpecSource": {
+            "SR3XY": "ark"
+          }
         },
         {
           "name": "Intel Core i3-8300T",
-          "sSpec": []
+          "sSpec": [
+            "SR3Y1"
+          ],
+          "sSpecSource": {
+            "SR3Y1": "ark"
+          }
         },
         {
           "name": "Intel Core i3-8350K",
-          "sSpec": []
+          "sSpec": [
+            "SR3N4"
+          ],
+          "sSpecSource": {
+            "SR3N4": "ark"
+          }
         },
         {
           "name": "Intel Pentium Gold G5400",

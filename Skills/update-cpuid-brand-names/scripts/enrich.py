@@ -343,6 +343,12 @@ def enrich(entries, cache=None, log=print):
     if os.path.exists(FOUND_FILE):
         with open(FOUND_FILE, encoding="utf-8") as f:
             found = json.load(f)
+    # A code ARK gives with a stepping is placed by that stepping, also when
+    # another page repeats it without one: PCN 117408 lists the i3-8100H's
+    # SR3Z7 with none, ARK says U0 — 906EA, not the 906EB the article
+    # lists the model under, where rule 3 would otherwise put it.
+    ark_stepping = {(item["model"], s["sSpec"]): s["stepping"]
+                    for item in ark["models"] for s in item["specs"] if s.get("stepping")}
     for item in found["models"]:
         name = item["model"]
         if item["specs"] and name not in places:
@@ -352,6 +358,10 @@ def enrich(entries, cache=None, log=print):
             kinds = {e["kind"] for e in s["evidence"]}
             source = "intel" if "intel" in kinds else "database" if "database" in kinds else "marking"
             code = s["sSpec"]
+            if not s.get("stepping") and not s.get("cpuid") and (name, code) in ark_stepping:
+                if by_stepping(name, code, ark_stepping[(name, code)], source):
+                    counts[source] += 1
+                continue
             if s.get("stepping"):
                 if by_stepping(name, code, s["stepping"], source):
                     counts[source] += 1
