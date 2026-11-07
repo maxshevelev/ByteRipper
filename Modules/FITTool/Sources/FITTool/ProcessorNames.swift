@@ -118,6 +118,13 @@ public struct FITProcessorGroup: Equatable, Sendable {
                     lines.append(.init(kind: .family, text: family.codeNames.joined(separator: ", "),
                                        detail: facts(of: family, language: language)))
                 }
+                if family.processors.isEmpty {
+                    // A die whose code name is known and no model sold on it
+                    // (Grand Ridge's B0660: Intel lists only B0664's).
+                    lines.append(.init(kind: .unknown,
+                                       text: L("No processor models known for this CPUID", in: language),
+                                       detail: ""))
+                }
                 for model in family.processors {
                     lines.append(.init(
                         kind: .model,

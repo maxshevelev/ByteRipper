@@ -2,32 +2,118 @@
   "about": "Entries for CPUIDs the article has no row for, each fact with the page it came from. import.py appends them after the article's and refuses one whose CPUID the article has: the article's own row is kept. A model's codes are ARK's, in ark-sspec.json, placed by enrich.py. A stepping no source ties to the CPUID is left empty, not guessed.",
   "entries": [
     {
-      "cpuids": ["B0664"],
-      "codeNames": ["Grand Ridge"],
-      "cores": ["Crestmont"],
-      "productFamilies": ["Intel Atom Processor P Series"],
+      "cpuids": [
+        "B0660"
+      ],
+      "codeNames": [
+        "Grand Ridge"
+      ],
+      "cores": [
+        "Crestmont"
+      ],
+      "productFamilies": [],
       "steppings": [],
-      "segments": ["Server"],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ATOM_CRESTMONT\t\tIFM(6, 0xB6) /* Grand Ridge */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "The one row for 06_B6H is stepping 4, CPUID B0664 — none for B0660."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/master/Intel",
+          "quote": "cpuB0664_plat01_ver00000030_2025-05-29_PRD_E618875A.bin — the one microcode of model 0xB6; none for B0660."
+        }
+      ],
+      "note": "The kernel names model 0xB6 Grand Ridge whatever its stepping. No source names a model sold as B0660: Intel's list of processors by CPUID, ARK's Grand Ridge models and the public microcode collections know only B0664. So the entry has no models, and none of B0664's are moved here."
+    },
+    {
+      "cpuids": [
+        "B0664"
+      ],
+      "codeNames": [
+        "Grand Ridge"
+      ],
+      "cores": [
+        "Crestmont"
+      ],
+      "productFamilies": [
+        "Intel Atom Processor P Series"
+      ],
+      "steppings": [],
+      "segments": [
+        "Server"
+      ],
       "processors": [
-        {"name": "Intel Atom P6922-3"},
-        {"name": "Intel Atom P6942-3"},
-        {"name": "Intel Atom P6942-5"},
-        {"name": "Intel Atom P6952-3"},
-        {"name": "Intel Atom P6962-3"},
-        {"name": "Intel Atom P6962-5"}
+        {
+          "name": "Intel Atom P6922-3"
+        },
+        {
+          "name": "Intel Atom P6942-3"
+        },
+        {
+          "name": "Intel Atom P6942-5"
+        },
+        {
+          "name": "Intel Atom P6952-3"
+        },
+        {
+          "name": "Intel Atom P6962-3"
+        },
+        {
+          "name": "Intel Atom P6962-5"
+        }
       ],
       "evidence": [
-        {"gives": ["cpuids", "codeNames", "cores"],
-         "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
-         "quote": "#define INTEL_ATOM_CRESTMONT\t\tIFM(6, 0xB6) /* Grand Ridge */"},
-        {"gives": ["processors"],
-         "url": "https://www.intel.com/content/www/us/en/ark/products/codename/198897/products-formerly-grand-ridge.html",
-         "quote": "Products formerly Grand Ridge: Atom P6952-3, P6942-3, P6962-3, P6962-5, P6942-5, P6922-3"},
-        {"gives": ["codeNames", "productFamilies", "segments"],
-         "url": "https://www.intel.com/content/www/us/en/products/sku/243726/intel-atom-p69625-processor-24m-cache-2-60-ghz/specifications.html",
-         "quote": "Product Collection: Intel Atom® Processor P Series; Code Name: Products formerly Grand Ridge; Vertical Segment: Server"}
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_B6H | 4 | … | Grand Ridge (Crestmont) | Intel® Atom® Processors P6000 series | Server | B0664 | 0x36"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ATOM_CRESTMONT\t\tIFM(6, 0xB6) /* Grand Ridge */"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/codename/198897/products-formerly-grand-ridge.html",
+          "quote": "Products formerly Grand Ridge: Atom P6952-3, P6942-3, P6962-3, P6962-5, P6942-5, P6922-3"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/products/sku/243726/intel-atom-p69625-processor-24m-cache-2-60-ghz/specifications.html",
+          "quote": "Product Collection: Intel Atom® Processor P Series; Code Name: Products formerly Grand Ridge; Vertical Segment: Server"
+        }
       ],
-      "note": "Model 0xB6 is Grand Ridge (the kernel); B0664 is its stepping ID 4. Every Grand Ridge code on ARK is stepping B0, but no Intel page loaded ties B0 to stepping ID 4, so the entry has no stepping. Intel's Linux microcode repository has no 06-b6-04 file (checked 2026-11-07)."
+      "note": "Intel's list of processors by CPUID gives B0664 (model 0xB6, stepping ID 4) as Grand Ridge, Atom P6000 series. Every Grand Ridge code on ARK is stepping B0, but no Intel page loaded names the stepping of ID 4, so the entry has none. Intel's Linux microcode repository has no 06-b6-04 file (checked 2026-11-07)."
     }
   ]
 }

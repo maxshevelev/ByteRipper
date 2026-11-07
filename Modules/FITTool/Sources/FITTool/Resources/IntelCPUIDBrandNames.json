@@ -9859,6 +9859,22 @@
     },
     {
       "cpuids": [
+        "B0660"
+      ],
+      "codeNames": [
+        "Grand Ridge"
+      ],
+      "cores": [
+        "Crestmont"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "B0664"
       ],
       "codeNames": [

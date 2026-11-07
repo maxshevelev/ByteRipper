@@ -32,6 +32,16 @@ final class ProcessorNamesTests: XCTestCase {
         XCTAssertEqual(model.sSpec, ["SRPFF", "SA4RS", "SA4RT", "SA4RW"])
     }
 
+    /// A die whose code name is known and no model sold on it: B0660, Grand
+    /// Ridge by the kernel, where Intel lists models only for B0664. The
+    /// popover says that no model is known rather than showing nothing.
+    func testACodeNameWithNoModelsSaysSo() throws {
+        let group = try XCTUnwrap(FITProcessorGroup.groups(for: [0xB0660], language: .english).first)
+        XCTAssertEqual(group.codeNames, ["Grand Ridge"])
+        XCTAssertEqual(group.lines, [.init(kind: .unknown, text: "No processor models known for this CPUID",
+                                           detail: "")])
+    }
+
     func testAnXInTheTableMatchesAnyDigit() {
         XCTAssertEqual(ProcessorNames.families(for: [0x606A6], in: catalogue).map(\.codeNames),
                        [["Ice Lake Xeon-SP"]])
