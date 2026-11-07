@@ -386,14 +386,162 @@
     {
       "model": "Intel Core i3-7120",
       "searched": "2026-11-07",
-      "specs": [],
-      "note": "Two third-party pages give a bare 'Part#: SR35D' with no stepping or CPUID: cpu-wiki.pages.dev/cpu/core-i3-7120 and fpsbench.com/cpu/intel-core-i3-7120. It is not recorded because neither page states a stepping, and both may share one source. WikiChip (ECONNREFUSED), TechPowerUp (403) and AnandTech (redirects to the forums) could not be loaded. Photo searches (48 images, queries incl. '\"i3-7120\" SR35D') showed only i3-7100, i3-7100T, i3-7320 and unrelated parts; no package marked i3-7120 was found. The search budget ran out before an Intel spec update or PCN could be looked for."
+      "specs": [
+        {
+          "sSpec": "SR35D",
+          "stepping": "S0",
+          "cpuid": "906E9",
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "R35D I3-7120 S-0 3 MB 2 2 0.35 GHz 1.1 GHz 2400 1600 4 GHz 4 GHz 51 W LGA1151",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "Table 2. S/H/X-Processor Lines Component Identification … 0000000b 1001b 00b 0110b 1110b xxxxb",
+              "gives": [
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| KBL-G/H/S/X/E3 | B0       | 06-9e-09/2a | 000000f4 | 000000f8 | Core Gen7; Xeon E3 v6",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "From the archived 7th Gen Core Specification Update 334663-009, Table 8 (S-Processor Line), which prints every code without its leading S; later revisions dropped the S-Spec tables. Its Table 2 gives the S line as 0x906Ex, and Intel's microcode notes name one 06-9e CPUID for Kaby Lake, 906E9. No ARK page."
     },
     {
       "model": "Intel Core i3-7120T",
       "searched": "2026-11-07",
-      "specs": [],
-      "note": "fpsbench.com/cpu/intel-core-i3-7120t gives 'Part Number: SR35Q', which is contradicted: a photograph (shopee.ph, photos/Intel_Core_i3-7120T/33.jpg) shows a package marked 'INTEL PENTIUM / G4600T / SR35Q 3.00GHZ / L639G039', so SR35Q belongs to the Pentium G4600T. Not recorded. Photo searches (48 images) found no package marked i3-7120T. WikiChip, TechPowerUp and AnandTech could not be loaded. The search budget ran out before an Intel document could be looked for."
+      "specs": [
+        {
+          "sSpec": "SR35Q",
+          "stepping": "S0",
+          "cpuid": "906E9",
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "R35Q I3-7120T S-0 3 MB 2 2 0.35 GHz 1.1 GHz 2400 1600 3.5 GHz 3.5 GHz 35 W LGA1151",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "Table 2. S/H/X-Processor Lines Component Identification … 0000000b 1001b 00b 0110b 1110b xxxxb",
+              "gives": [
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| KBL-G/H/S/X/E3 | B0       | 06-9e-09/2a | 000000f4 | 000000f8 | Core Gen7; Xeon E3 v6",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "From the archived 7th Gen Core Specification Update 334663-009, Table 8 (S-Processor Line), which prints every code without its leading S; later revisions dropped the S-Spec tables. Its Table 2 gives the S line as 0x906Ex, and Intel's microcode notes name one 06-9e CPUID for Kaby Lake, 906E9. No ARK page."
+    },
+    {
+      "model": "Intel Core i3-7320T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR35N",
+          "stepping": "S0",
+          "cpuid": "906E9",
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "R35N I3-7320T S-0 4 MB 2 2 0.35 GHz 1.1 GHz 2400 1600 3.6 GHz 3.6 GHz 35 W LGA1151",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "Table 2. S/H/X-Processor Lines Component Identification … 0000000b 1001b 00b 0110b 1110b xxxxb",
+              "gives": [
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| KBL-G/H/S/X/E3 | B0       | 06-9e-09/2a | 000000f4 | 000000f8 | Core Gen7; Xeon E3 v6",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "From the archived 7th Gen Core Specification Update 334663-009, Table 8 (S-Processor Line), which prints every code without its leading S; later revisions dropped the S-Spec tables. Its Table 2 gives the S line as 0x906Ex, and Intel's microcode notes name one 06-9e CPUID for Kaby Lake, 906E9. No ARK page."
+    },
+    {
+      "model": "Intel Core i3-7340",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR35A",
+          "stepping": "S0",
+          "cpuid": "906E9",
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "R35A I3-7340 S-0 4 MB 2 2 0.35 GHz 1.15 GHz 2400 1600 4.2 GHz 4.2 GHz 51 W LGA1151",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://web.archive.org/web/20180308231520id_/https://www.intel.com/content/dam/www/public/us/en/documents/specification-updates/7th-gen-core-family-spec-update.pdf",
+              "quote": "Table 2. S/H/X-Processor Lines Component Identification … 0000000b 1001b 00b 0110b 1110b xxxxb",
+              "gives": [
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| KBL-G/H/S/X/E3 | B0       | 06-9e-09/2a | 000000f4 | 000000f8 | Core Gen7; Xeon E3 v6",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "From the archived 7th Gen Core Specification Update 334663-009, Table 8 (S-Processor Line), which prints every code without its leading S; later revisions dropped the S-Spec tables. Its Table 2 gives the S line as 0x906Ex, and Intel's microcode notes name one 06-9e CPUID for Kaby Lake, 906E9. No ARK page."
     },
     {
       "model": "Intel Core i3-L13G4",

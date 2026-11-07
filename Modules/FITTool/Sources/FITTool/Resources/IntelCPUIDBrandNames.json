@@ -7862,19 +7862,39 @@
         },
         {
           "name": "Intel Core i3-7120",
-          "sSpec": []
+          "sSpec": [
+            "SR35D"
+          ],
+          "sSpecSource": {
+            "SR35D": "intel"
+          }
         },
         {
           "name": "Intel Core i3-7120T",
-          "sSpec": []
+          "sSpec": [
+            "SR35Q"
+          ],
+          "sSpecSource": {
+            "SR35Q": "intel"
+          }
         },
         {
           "name": "Intel Core i3-7320T",
-          "sSpec": []
+          "sSpec": [
+            "SR35N"
+          ],
+          "sSpecSource": {
+            "SR35N": "intel"
+          }
         },
         {
           "name": "Intel Core i3-7340",
-          "sSpec": []
+          "sSpec": [
+            "SR35A"
+          ],
+          "sSpecSource": {
+            "SR35A": "intel"
+          }
         },
         {
           "name": "Intel Celeron G3930E",
