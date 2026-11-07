@@ -27,6 +27,61 @@
       "note": "Product page found (sku 202682, https://www.intel.com/content/www/us/en/products/sku/202682/intel-atom-processor-p5962b-27m-cache-2-20-ghz/specifications.html) but ordering.html redirects to specifications.html, and the specifications page shows no S-Spec, ordering code or stepping."
     },
     {
+      "model": "Intel Core i3-12100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134584/intel-core-i312100-processor-12m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL62",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i3-12100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/132223/intel-core-i312100f-processor-12m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL63",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i3-12100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223097/intel-core-i312100t-processor-12m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL64",
+          "stepping": "H0"
+        }
+      ],
+      "note": "Ordering tab lists a single TRAY row; no boxed SKU and no C0 code."
+    },
+    {
+      "model": "Intel Core i3-12300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223095/intel-core-i312300-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL61",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i3-12300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223096/intel-core-i312300t-processor-12m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL60",
+          "stepping": "H0"
+        }
+      ],
+      "note": "Ordering tab lists a single TRAY row; no boxed SKU and no C0 code."
+    },
+    {
       "model": "Intel Core i5-10400",
       "url": "https://www.intel.com/content/www/us/en/products/sku/199271/intel-core-i510400-processor-12m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -91,6 +146,61 @@
           "stepping": "H0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i5-12400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223094/intel-core-i512400t-processor-18m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5X",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-12500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96144/intel-core-i512500-processor-18m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5V",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-12500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96140/intel-core-i512500t-processor-18m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5W",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-12600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96149/intel-core-i512600-processor-18m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5T",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page. Code Name on ARK: Alder Lake."
+    },
+    {
+      "model": "Intel Core i5-12600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96150/intel-core-i512600t-processor-18m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5U",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
     },
     {
       "model": "Intel Core i5-13600K",

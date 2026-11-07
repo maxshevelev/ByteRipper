@@ -6502,11 +6502,21 @@
       "processors": [
         {
           "name": "Intel Core i5-12600",
-          "sSpec": []
+          "sSpec": [
+            "SRL5T"
+          ],
+          "sSpecSource": {
+            "SRL5T": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12500",
-          "sSpec": []
+          "sSpec": [
+            "SRL5V"
+          ],
+          "sSpecSource": {
+            "SRL5V": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12400",
@@ -6528,35 +6538,75 @@
         },
         {
           "name": "Intel Core i3-12300",
-          "sSpec": []
+          "sSpec": [
+            "SRL61"
+          ],
+          "sSpecSource": {
+            "SRL61": "ark"
+          }
         },
         {
           "name": "Intel Core i3-12100",
-          "sSpec": []
+          "sSpec": [
+            "SRL62"
+          ],
+          "sSpecSource": {
+            "SRL62": "ark"
+          }
         },
         {
           "name": "Intel Core i3-12100F",
-          "sSpec": []
+          "sSpec": [
+            "SRL63"
+          ],
+          "sSpecSource": {
+            "SRL63": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12600T",
-          "sSpec": []
+          "sSpec": [
+            "SRL5U"
+          ],
+          "sSpecSource": {
+            "SRL5U": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12500T",
-          "sSpec": []
+          "sSpec": [
+            "SRL5W"
+          ],
+          "sSpecSource": {
+            "SRL5W": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12400T",
-          "sSpec": []
+          "sSpec": [
+            "SRL5X"
+          ],
+          "sSpecSource": {
+            "SRL5X": "ark"
+          }
         },
         {
           "name": "Intel Core i3-12300T",
-          "sSpec": []
+          "sSpec": [
+            "SRL60"
+          ],
+          "sSpecSource": {
+            "SRL60": "ark"
+          }
         },
         {
           "name": "Intel Core i3-12100T",
-          "sSpec": []
+          "sSpec": [
+            "SRL64"
+          ],
+          "sSpecSource": {
+            "SRL64": "ark"
+          }
         },
         {
           "name": "Intel Pentium Gold G7400",

@@ -2,10 +2,70 @@
   "about": "S-SPECs found by Skills/find-sspec beyond ARK and Wikipedia, each with its evidence: an Intel document, an S-SPEC database page, or the marking on the package read from photographs of different chips. A model searched with nothing found is kept with no specs.",
   "models": [
     {
+      "model": "Intel Core i3-12100",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
+    },
+    {
+      "model": "Intel Core i3-12100F",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
+    },
+    {
+      "model": "Intel Core i3-12100T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed per the brief."
+    },
+    {
+      "model": "Intel Core i3-12300",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
+    },
+    {
+      "model": "Intel Core i3-12300T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed per the brief."
+    },
+    {
       "model": "Intel Core i5-10500",
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK lists SRH3A (G1) only. Two package photographs read the same code (i.ebayimg.com F3MAAeSwfQho0tOu, lot X122J379; microdream.co.uk, lot erased)."
+    },
+    {
+      "model": "Intel Core i5-12400T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
+    },
+    {
+      "model": "Intel Core i5-12500",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
+    },
+    {
+      "model": "Intel Core i5-12500T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
+    },
+    {
+      "model": "Intel Core i5-12600",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i5-12600T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Done from ARK's ordering tab; steps 2-4 not needed"
     },
     {
       "model": "Intel Core i5-13600K",
