@@ -943,11 +943,11 @@
   // Who, in a cell: an icon, the name, and below it what the name stands
   // for, each cut short with an ellipsis rather than widening the table.
   function whoCell(iconName, title, sub) {
-    return h("td", {}, h("div", { class: "who" },
+    return h("td", {}, h("div", { class: "line-who" },
       h("div", { class: "doc-icon" }, icon(iconName, 16)),
-      h("div", { class: "who-text" },
-        h("div", { class: "who-title", title, text: title }),
-        h("div", { class: "who-sub", title: sub, text: sub }))));
+      h("div", { class: "line-who-text" },
+        h("div", { class: "line-who-title", title, text: title }),
+        h("div", { class: "line-who-sub", title: sub, text: sub }))));
   }
 
   // The last command, in at most two lines; the whole of it is the tooltip.
