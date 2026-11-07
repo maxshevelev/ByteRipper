@@ -1865,10 +1865,138 @@
       "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
     },
     {
+      "model": "Intel Core m3-6Y30",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2EN",
+          "stepping": "D1",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/803801",
+              "quote": "PCN116300-00 (End of Life, July 2, 2018), affected products table (PDFKit text): Intel® Core™ m3-6Y30 Processor HE8066201930521 S R2EN 944326 D1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/805104",
+              "quote": "PCN 114189-01 (Transport Media) lists HE8066201930521 among its ordering codes and SR2EN among its S-Specs (columns scrambled in PDFKit text; no stepping)",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists a single code, stepping D1. Its PCNs were downloaded from cdrdv2 and read: 803801 (116300-00) and 808451 (116311-00) are the EOL notices and give this code with D1; 805104 (114189-01, transport media) lists the same ordering code and S-Spec; 795943 and 799685 (transport media) do not name the model in their text. No PCN gives a pre/post-conversion pair, so no second code was found. Spec Update 332689 could not be downloaded (cdrdv2 returned HTML). No photographs (BGA package). Code Name per ARK: 'Products formerly Skylake'."
+    },
+    {
       "model": "Intel Core m3-8100Y",
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not searched again under 806EC: ARK was asked, and its code is placed under the model's other CPUID (806E9)."
+    },
+    {
+      "model": "Intel Core m5-6Y54",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2EM",
+          "stepping": "D1",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/803801",
+              "quote": "PCN116300-00 (End of Life, July 2, 2018), affected products table (PDFKit text): Intel® Core™ m5-6Y54 Processor HE8066201930524 S R2EM 944325 D1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/805104",
+              "quote": "PCN 114189-01 (Transport Media) lists HE8066201930524 among its ordering codes and SR2EM among its S-Specs (columns scrambled in PDFKit text; no stepping)",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists a single code, stepping D1. Its PCNs were downloaded from cdrdv2 and read: 803801 (116300-00) and 808451 (116311-00) are the EOL notices and give this code with D1; 805104 (114189-01, transport media) lists the same ordering code and S-Spec; 795943 and 799685 (transport media) do not name the model in their text. No PCN gives a pre/post-conversion pair, so no second code was found. Spec Update 332689 could not be downloaded (cdrdv2 returned HTML). No photographs (BGA package). Code Name per ARK: 'Products formerly Skylake'."
+    },
+    {
+      "model": "Intel Core m5-6Y57",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2EG",
+          "stepping": "D1",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/808451",
+              "quote": "PCN116311-00 (End of Life, July 2, 2018), affected products table (PDFKit text): Intel® Core™ m5-6Y57 Processor HE8066201922876 S R2EG 944320 D1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/805104",
+              "quote": "PCN 114189-01 (Transport Media) lists HE8066201922876 among its ordering codes and SR2EG among its S-Specs (columns scrambled in PDFKit text; no stepping)",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists a single code, stepping D1. Its PCNs were downloaded from cdrdv2 and read: 803801 (116300-00) and 808451 (116311-00) are the EOL notices and give this code with D1; 805104 (114189-01, transport media) lists the same ordering code and S-Spec; 795943 and 799685 (transport media) do not name the model in their text. No PCN gives a pre/post-conversion pair, so no second code was found. Spec Update 332689 could not be downloaded (cdrdv2 returned HTML). No photographs (BGA package). Code Name per ARK: 'Products formerly Skylake'."
+    },
+    {
+      "model": "Intel Core m7-6Y75",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2EH",
+          "stepping": "D1",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/808451",
+              "quote": "PCN116311-00 (End of Life, July 2, 2018), affected products table (PDFKit text): Intel® Core™ m7-6Y75 Processor HE8066201922875 S R2EH 944321 D1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2.intel.com/v1/dl/getContent/805104",
+              "quote": "PCN 114189-01 (Transport Media) lists HE8066201922875 among its ordering codes and SR2EH among its S-Specs (columns scrambled in PDFKit text; no stepping)",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists a single code, stepping D1. Its PCNs were downloaded from cdrdv2 and read: 803801 (116300-00) and 808451 (116311-00) are the EOL notices and give this code with D1; 805104 (114189-01, transport media) lists the same ordering code and S-Spec; 795943 and 799685 (transport media) do not name the model in their text. No PCN gives a pre/post-conversion pair, so no second code was found. Spec Update 332689 could not be downloaded (cdrdv2 returned HTML). No photographs (BGA package). Code Name per ARK: 'Products formerly Skylake'."
     },
     {
       "model": "Intel Pentium G4420",

@@ -563,19 +563,39 @@
       "processors": [
         {
           "name": "Intel Core m7-6Y75",
-          "sSpec": []
+          "sSpec": [
+            "SR2EH"
+          ],
+          "sSpecSource": {
+            "SR2EH": "ark"
+          }
         },
         {
           "name": "Intel Core m5-6Y54",
-          "sSpec": []
+          "sSpec": [
+            "SR2EM"
+          ],
+          "sSpecSource": {
+            "SR2EM": "ark"
+          }
         },
         {
           "name": "Intel Core m5-6Y57",
-          "sSpec": []
+          "sSpec": [
+            "SR2EG"
+          ],
+          "sSpecSource": {
+            "SR2EG": "ark"
+          }
         },
         {
           "name": "Intel Core m3-6Y30",
-          "sSpec": []
+          "sSpec": [
+            "SR2EN"
+          ],
+          "sSpecSource": {
+            "SR2EN": "ark"
+          }
         },
         {
           "name": "Intel Pentium 4405Y",

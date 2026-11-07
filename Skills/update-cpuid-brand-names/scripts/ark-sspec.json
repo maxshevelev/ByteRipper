@@ -2001,12 +2001,52 @@
       ]
     },
     {
+      "model": "Intel Core m3-6Y30",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88198/intel-core-m36y30-processor-4m-cache-up-to-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EN",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
       "model": "Intel Core m3-8100Y",
       "url": "https://www.intel.com/content/www/us/en/products/sku/185282/intel-core-m38100y-processor-4m-cache-up-to-3-40-ghz/ordering.html",
       "specs": [
         {
           "sSpec": "SRD23",
           "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core m5-6Y54",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88202/intel-core-m56y54-processor-4m-cache-up-to-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EM",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core m5-6Y57",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88197/intel-core-m56y57-processor-4m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EG",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core m7-6Y75",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88199/intel-core-m76y75-processor-4m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EH",
+          "stepping": "D1"
         }
       ]
     },
