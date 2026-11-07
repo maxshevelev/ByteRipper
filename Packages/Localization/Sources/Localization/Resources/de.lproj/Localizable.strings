@@ -259,6 +259,7 @@
 "Could not update “%1$@”." = "„%1$@“ konnte nicht aktualisiert werden.";
 "Could not write the file." = "Die Datei konnte nicht geschrieben werden.";
 "CPUID" = "CPUID";
+"CPUID, model or S-SPEC" = "CPUID, Modell oder S-SPEC";
 "CPUID %1$@" = "CPUID %1$@";
 "CPUID %1$@ copied." = "CPUID %1$@ kopiert.";
 "credits|by" = "von";

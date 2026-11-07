@@ -78,9 +78,11 @@ import ToolModuleKit
         source.textColor = .secondaryLabelColor
 
         // The list is searched by what a bench writes down and looks up: the
-        // CPUID. The revision and the file name are the catalogue's, not the
-        // user's, and matching them is a guess about which of the two they meant.
-        searchField.placeholderString = L("CPUID")
+        // CPUID, or the processor — part of its model name, or its S-SPEC
+        // (`MicrocodeCatalogue.filter`). The revision and the file name are
+        // the catalogue's, not the user's, and matching them is a guess about
+        // which of the two they meant.
+        searchField.placeholderString = L("CPUID, model or S-SPEC")
         searchField.target = self
         searchField.action = #selector(narrow)
         onlyInImage.target = self

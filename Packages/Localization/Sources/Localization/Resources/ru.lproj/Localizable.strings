@@ -259,6 +259,7 @@
 "Could not update “%1$@”." = "Не удалось обновить «%1$@».";
 "Could not write the file." = "Не удалось записать файл.";
 "CPUID" = "CPUID";
+"CPUID, model or S-SPEC" = "CPUID, модель или S-SPEC";
 "CPUID %1$@" = "CPUID %1$@";
 "CPUID %1$@ copied." = "CPUID %1$@ скопирован.";
 "credits|by" = "от";

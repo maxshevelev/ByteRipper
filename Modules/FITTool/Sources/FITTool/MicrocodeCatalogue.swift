@@ -184,20 +184,40 @@ public enum MicrocodeCatalogue {
         _ entries: [MicrocodeCatalogueEntry],
         vendor: MicrocodeVendor? = nil,
         search: String = "",
-        cpuidsInTheImage: Set<UInt32>? = nil
+        cpuidsInTheImage: Set<UInt32>? = nil,
+        processors: [ProcessorFamily] = ProcessorNames.shipped
     ) -> [MicrocodeCatalogueEntry] {
         let needle = search.trimmingCharacters(in: .whitespaces).uppercased()
+        let named = families(named: needle, in: processors)
         return entries.filter { entry in
             if let vendor, entry.vendor != vendor { return false }
             if let cpuidsInTheImage {
                 guard let cpuid = entry.cpuid, cpuidsInTheImage.contains(cpuid) else { return false }
             }
             guard !needle.isEmpty else { return true }
-            // A search is by the CPUID — what a bench writes down and looks up
-            // — and by nothing else: the revision and the file name are the
-            // catalogue's, and matching them is a guess about which the user
-            // meant.
-            return entry.cpuidText.hasPrefix(needle)
+            // A search is by what a bench writes down and looks up: the CPUID,
+            // or the processor on the board — part of its model name, or its
+            // S-SPEC — found through the table of brand names and turned into
+            // the CPUIDs it is sold with. Not the revision or the file name:
+            // they are the catalogue's, and matching them is a guess about
+            // which the user meant.
+            if entry.cpuidText.hasPrefix(needle) { return true }
+            guard entry.vendor == .intel, !named.isEmpty, let cpuid = entry.cpuid else { return false }
+            let text = MicrocodeHeader.cpuid(cpuid)
+            return named.contains { $0.matches(text) }
+        }
+    }
+
+    /// The groups of processors a search names: one with a model whose name
+    /// holds the text — `12800H`, `i7-1260P`; three characters at least, or
+    /// every name would match — or one sold under exactly that S-SPEC,
+    /// `SRLD1`. A part of an S-SPEC is not one: `SRL` names a hundred parts.
+    static func families(named needle: String, in processors: [ProcessorFamily]) -> [ProcessorFamily] {
+        guard needle.count >= 3 else { return [] }
+        return processors.filter { family in
+            family.processors.contains { model in
+                model.sSpec.contains(needle) || model.name.uppercased().contains(needle)
+            }
         }
     }
 
