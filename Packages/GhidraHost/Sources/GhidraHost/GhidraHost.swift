@@ -26,11 +26,15 @@ public actor GhidraHost {
         /// Where agents' reports about the tools are kept (`IssueBook`); nil
         /// takes none.
         public var issuesFile: URL?
+        /// Where the review board's tickets are kept (`TicketBook`); nil
+        /// keeps none.
+        public var ticketsFile: URL?
 
         public init(projectsRoot: URL = GhidraHost.defaultProjectsRoot, ghidraHome: URL? = nil,
                     sources: OwnerSources = .checkout, idle: Int = 1800,
                     holder: String = "\(NSUserName()) via byteripper-server",
-                    startTimeout: TimeInterval = 300, leasesFile: URL? = nil, issuesFile: URL? = nil) {
+                    startTimeout: TimeInterval = 300, leasesFile: URL? = nil, issuesFile: URL? = nil,
+                    ticketsFile: URL? = nil) {
             self.projectsRoot = projectsRoot
             self.ghidraHome = ghidraHome
             self.sources = sources
@@ -39,6 +43,7 @@ public actor GhidraHost {
             self.startTimeout = startTimeout
             self.leasesFile = leasesFile
             self.issuesFile = issuesFile
+            self.ticketsFile = ticketsFile
         }
     }
 
@@ -140,10 +145,16 @@ public actor GhidraHost {
         /// What an earlier owner of this project ended without saving, as the
         /// next open wrote it down. Absent when nothing was.
         public var writesLost: String?
+        /// Where the module's review stands on the review board: "open" (a
+        /// remark is still to be dealt with), "settled" (none is, not yet
+        /// closed), "closed" (a verifier closed it), or absent: no ticket.
+        public var review: String?
+        public var openRemarks: Int?
 
         enum CodingKeys: String, CodingKey {
-            case module, name, running, reviewed, published, leased, holder, since, closed
+            case module, name, running, reviewed, published, leased, holder, since, closed, review
             case writesLost = "writes_lost"
+            case openRemarks = "open_remarks"
         }
     }
 
@@ -195,7 +206,11 @@ public actor GhidraHost {
         self.writer = writer
         self.leaseBook = Self.loadLeaseBook(configuration.leasesFile)
         self.issues = configuration.issuesFile.map { IssueBook(file: $0) }
+        self.tickets = configuration.ticketsFile.map { TicketBook(file: $0) }
     }
+
+    /// The review board, when the host keeps one.
+    public nonisolated let tickets: TicketBook?
 
     /// Agents' reports about the tools, when the host keeps them.
     public nonisolated let issues: IssueBook?
@@ -218,13 +233,16 @@ public actor GhidraHost {
         for project in GhidraProject.all(in: configuration.projectsRoot) {
             guard let state = try? project.state() else { continue }
             let lease = leaseBook.leases[project.module.hex]
+            let ticket = await tickets?.ticket(project.module.hex)
             rows.append(Summary(module: project.module.hex, name: state.module.name,
                                 running: await runningOwner(project) != nil, reviewed: state.reviewed,
                                 published: state.published, leased: lease != nil,
                                 holder: lease?.holder, since: lease?.since,
                                 closed: leaseBook.closed[project.module.hex],
                                 writesLost: try? String(contentsOf: project.folder.appendingPathComponent("writes-lost"),
-                                                        encoding: .utf8)))
+                                                        encoding: .utf8),
+                                review: ticket.flatMap { $0.state == "none" ? nil : $0.state },
+                                openRemarks: ticket.flatMap { $0.state == "none" ? nil : $0.openRemarks }))
         }
         return rows
     }

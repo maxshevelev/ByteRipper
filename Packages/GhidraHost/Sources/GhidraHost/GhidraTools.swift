@@ -21,6 +21,7 @@ public enum GhidraTools {
         tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
         tools.append(reportIssueTool(backend))
         tools.append(issuesTool(backend))
+        tools += ticketTools(backend)
         return tools
     }
 
@@ -112,7 +113,10 @@ public enum GhidraTools {
         be put right, and touches nothing of the store. A tool that answers wrong, refuses what it \
         should take, or fails is reported with `ghidra_report_issue`, once per problem: the server keeps \
         it for the people who maintain the tools, and `ghidra_issues` reads their answer once it is \
-        resolved.
+        resolved. What a verifying agent finds wrong in a module's review goes on the review board: one \
+        ticket per module, read with `ghidra_tickets`, a remark written with `ghidra_ticket_remark`, \
+        answered or verified with `ghidra_ticket_reply`, and the module's review closed with \
+        `ghidra_ticket_close` by an agent other than its reviewer.
 
         A review aims at decompiled C that reads like the module's source:
         1. Names, not constants: a value of a set becomes an enum member and the parameter, field or return \
@@ -238,6 +242,10 @@ public enum GhidraTools {
             }
         } catch {
             object["library_error"] = "\(error)"
+        }
+        if let ticket = try? await backend.tickets(.init(action: .read, module: module.hex)),
+           let review = reviewSummary(ticket) {
+            object["review"] = review
         }
         return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? hello
     }
@@ -1352,13 +1360,23 @@ public enum GhidraTools {
                 with the holder and since when. A lease an administrator closed is said at your next \
                 call on the module: its unpublished changes are gone, the project is the last published \
                 revision again, and taking the module again goes on from there. Answers `holder` and \
-                `since`.
+                `since`, and `review`: the module's ticket on the review board, when it has one — its \
+                state and the remarks still to be dealt with. Give `agent`, your own name: the board \
+                notes you as the module's reviewer, and another agent closes its ticket.
                 """,
-            inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
+            inputSchema: AgentSchema.object(["module": moduleProperty, "agent": agentProperty], required: ["module"]),
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
-            return try await answer { try await backend.takeModule(module) }
+            let agent = try call.arguments.optionalString("agent")
+            return try await answer {
+                let taken = try await backend.takeModule(module)
+                guard var object = (try? JSONSerialization.jsonObject(with: taken)) as? [String: Any],
+                      let ticket = try? await backend.tickets(.init(action: .reviewer, agent: agent, module: module.hex))
+                else { return taken }
+                if let review = reviewSummary(ticket) { object["review"] = review }
+                return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? taken
+            }
         }
     }
 

@@ -665,6 +665,13 @@ table.lines tr.at-work td { background: var(--danger-soft); }
 .last-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .last-meta:empty { display: none; }
 
+/* ---------- Tickets ---------- */
+
+.remark { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); display: flex; flex-direction: column; gap: 8px; }
+.remark .row { gap: 8px; flex-wrap: wrap; }
+.remark-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.reply { margin-left: 18px; padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+
 /* ---------- The log panel's head ---------- */
 
 

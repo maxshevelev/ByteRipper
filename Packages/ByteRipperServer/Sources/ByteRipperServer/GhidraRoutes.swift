@@ -48,6 +48,25 @@ enum GhidraRoutes {
         })
     }
 
+    /// The console's Tickets page over the host's review board.
+    static func consoleTickets(_ host: GhidraHost) -> ConsoleTickets? {
+        guard let book = host.tickets else { return nil }
+        return ConsoleTickets(list: {
+            (try? TicketBook.encoder.encode(await book.list().map(TicketBook.Listed.init))) ?? Data("[]".utf8)
+        }, force: { module, remark, status, close, note, by in
+            var value: TicketBook.Status?
+            if let status {
+                guard let known = TicketBook.Status(rawValue: status) else {
+                    throw HTTPError(.badRequest, "no status \(status)")
+                }
+                value = known
+            }
+            let ticket = try await answer { try await book.force(module: module, remark: remark, status: value,
+                                                                  close: close, note: note, by: by) }
+            return try TicketBook.encoder.encode(TicketBook.Listed(ticket))
+        })
+    }
+
     /// Who holds a module taken on the server's own MCP socket.
     static let localHolder = "local MCP"
 
@@ -66,6 +85,13 @@ enum GhidraRoutes {
         router.add("GET", "\(prefix)/issues/mine", access: .rights([.ghidraUse])) { request in
             let limit = Int(request.query["limit"] ?? "") ?? 50
             let data = try await answer { try await host.myIssues(by: holder(request), limit: min(max(limit, 1), 200)) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+        // The review board: every call one route, the caller's holder the
+        // token's name, the agent's own name in the request (`TicketBook`).
+        router.add("POST", "\(prefix)/tickets", maxBodyBytes: 256 << 10, access: .rights([.ghidraUse])) { request in
+            let call = try request.json(TicketBook.Request.self)
+            let data = try await answer { try await host.ticketCall(call, holder: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
         router.add("GET", "\(prefix)/issues", access: .rights([.admin])) { request in

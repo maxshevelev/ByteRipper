@@ -335,12 +335,15 @@
     // Which reports the operator has opened, and whether resolved ones show.
     openIssues: new Set(),
     resolvedIssues: false,
+    openTickets: new Set(),
+    ticketState: "open",
   };
 
   const PAGES = {
     "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", mount: mountDocuments },
     "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
-    "/admin/issues": { title: "Issues", subtitle: "What agents reported about the tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, mount: mountIssues },
+    "/admin/tickets": { title: "Module Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "list", endpoint: "/admin/api/tickets", interval: 10000, mount: mountTickets },
+    "/admin/issues": { title: "Server Issues", subtitle: "What agents reported about the server's tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, mount: mountIssues },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
     "/admin/configuration": { title: "Configuration", subtitle: "How an agent on this machine connects to the server.", icon: "sliders", endpoint: "/admin/api/configuration", interval: 15000, mount: mountConfiguration },
     "/admin/status": { title: "Status", subtitle: "The server, its roles, its limits.", icon: "gauge", endpoint: "/admin/api/status", mount: mountStatus },
@@ -1296,6 +1299,133 @@
     });
     if (!done) return;
     await act(() => call("POST", `/admin/api/issues/${issue.id}/resolve`, { note: note.value.trim() || null }), "Report resolved");
+  }
+
+  // ---------- Tickets ----------
+
+  // The review board: one ticket per module. A row says where the module's
+  // review stands; opened, it shows every remark with its thread, and the
+  // administrator's say over a remark's status or the whole ticket.
+  const TICKET_STATES = [["open", "Open"], ["settled", "Settled"], ["closed", "Closed"], ["all", "All"]];
+  const REMARK_STATUSES = ["open", "answered", "fixed", "wont_fix", "verified"];
+
+  function mountTickets(actions) {
+    const seg = h("div", { class: "seg" }, TICKET_STATES.map(([id, label]) =>
+      h("button", { type: "button", "data-state": id, class: state.ticketState === id ? "on" : "",
+        onclick: () => { state.ticketState = id; refresh(); } }, label)));
+    append(actions, seg);
+    const board = card("Review board", "one ticket per module; a verifier other than the reviewer closes it");
+    const root = h("div", { class: "stack" }, board.root);
+
+    function update(tickets) {
+      [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.state === state.ticketState));
+      const shown = tickets.filter((t) => state.ticketState === "all" || t.state === state.ticketState);
+      fill(board.body, shown.length ? ticketTable(shown)
+        : empty("list", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
+          "A verifying agent writes a remark on a module's review with ghidra_ticket_remark; the module's ticket is listed here."));
+    }
+    return { root, update };
+  }
+
+  function ticketPill(stateName) {
+    const kind = stateName === "open" ? "danger" : stateName === "settled" ? "warn" : "ok";
+    return h("span", { class: `pill ${kind}`, text: stateName });
+  }
+
+  function remarkPill(status) {
+    const kind = status === "open" ? "danger" : status === "verified" ? "ok" : status === "wont_fix" ? "plain" : "warn";
+    return h("span", { class: `pill ${kind}`, text: status.replace("_", " ") });
+  }
+
+  function lastActivity(ticket) {
+    const times = [ticket.opened, ticket.closed && ticket.closed.at]
+      .concat(...(ticket.remarks || []).map((r) => [r.at].concat((r.thread || []).map((x) => x.at)))).filter(Boolean);
+    return times.sort().pop();
+  }
+
+  function ticketTable(tickets) {
+    return h("table", { class: "lines" },
+      h("thead", {}, h("tr", {},
+        h("th", { class: "w-who", text: "Module" }), h("th", { class: "w-state", text: "Review" }),
+        h("th", { class: "num w-n", text: "Open" }), h("th", { class: "num w-n", text: "Remarks" }),
+        h("th", { text: "Reviewer" }), h("th", { class: "w-time", text: "Last" }), h("th", { class: "w-open" }))),
+      h("tbody", {}, tickets.flatMap((ticket) => {
+        const opened = state.openTickets.has(ticket.module);
+        const flip = () => { if (opened) state.openTickets.delete(ticket.module); else state.openTickets.add(ticket.module); refresh(); };
+        const row = h("tr", { class: ticket.state === "closed" ? "dim" : "" },
+          whoCell("layers", ticket.name || "module", ticket.module),
+          h("td", {}, ticketPill(ticket.state)),
+          h("td", { class: `num ${ticket.open_remarks ? "danger-text" : ""}`, text: String(ticket.open_remarks || 0) }),
+          h("td", { class: "num", text: String((ticket.remarks || []).length) }),
+          h("td", {}, h("div", { class: "line-who-title", title: ticket.reviewer || "", text: ticket.reviewer || "—" })),
+          h("td", { class: "muted", title: when(lastActivity(ticket)), text: ago(lastActivity(ticket)) }),
+          h("td", { class: "actions" },
+            h("button", { class: "btn small", type: "button", onclick: flip }, icon(opened ? "up" : "down", 15), opened ? "Hide" : "Open")));
+        if (!opened) return [row];
+        return [row, h("tr", { class: "issue-detail" }, h("td", { colspan: "7" }, ticketDetail(ticket)))];
+      })));
+  }
+
+  function ticketDetail(ticket) {
+    const closing = ticket.closed
+      ? h("div", { class: "muted" }, `Closed by ${ticket.closed.by}${ticket.closed.forced ? " (forced from the console)" : ""}, ${when(ticket.closed.at)}`,
+        ticket.closed.note ? ` — ${ticket.closed.note}` : "")
+      : null;
+    const force = ticket.closed
+      ? h("button", { class: "btn small", type: "button", onclick: () => forceTicket(ticket, false) }, icon("refresh", 14), "Open again")
+      : h("button", { class: "btn small", type: "button", onclick: () => forceTicket(ticket, true) }, icon("check", 14), "Close");
+    return h("div", { class: "stack" },
+      h("div", { class: "row" }, closing || h("span", { class: "muted", text: `Opened ${when(ticket.opened)}` }), h("span", { class: "grow" }), force),
+      (ticket.remarks || []).length ? (ticket.remarks || []).map((remark) => remarkBlock(ticket, remark))
+        : h("div", { class: "muted", text: "Closed with no remarks: checked and found right." }));
+  }
+
+  function remarkBlock(ticket, remark) {
+    const where = [remark.function, remark.address].filter(Boolean).join(" · ");
+    return h("div", { class: "remark" },
+      h("div", { class: "row" },
+        remarkPill(remark.status),
+        h("span", { class: "pill plain", text: remark.severity }),
+        h("b", { text: remark.author }),
+        h("span", { class: "muted", text: `${when(remark.at)}${remark.revision ? ` · rev ${remark.revision}` : ""}${where ? ` · ${where}` : ""}` }),
+        h("span", { class: "grow" }),
+        iconButton("sliders", "Set this remark's status", () => forceRemark(ticket, remark))),
+      h("div", { class: "remark-text", text: remark.text }),
+      (remark.thread || []).map((reply) => h("div", { class: "reply" },
+        h("div", { class: "row" },
+          h("b", { text: reply.author }),
+          reply.status ? remarkPill(reply.status) : null,
+          h("span", { class: "muted", text: `${when(reply.at)}${reply.revision ? ` · rev ${reply.revision}` : ""}` })),
+        reply.text ? h("div", { class: "remark-text", text: reply.text }) : null)));
+  }
+
+  async function forceRemark(ticket, remark) {
+    const status = h("select", { class: "field select", "aria-label": "Status" },
+      REMARK_STATUSES.map((s) => h("option", { value: s, text: s.replace("_", " "), selected: s === remark.status })));
+    const note = h("input", { class: "field", placeholder: "Why, for the thread", autocomplete: "off" });
+    const done = await dialog({
+      icon: "sliders", title: `Set the status of ${remark.author}'s remark?`,
+      text: "An administrator's say: it goes into the remark's thread, whatever the rules for agents.",
+      body: h("div", { class: "stack" }, status, note),
+      actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: "Set", kind: "primary", value: true, focus: true }],
+    });
+    if (!done) return;
+    await act(() => call("POST", `/admin/api/tickets/${ticket.module}/force`,
+      { remark: remark.id, status: status.value, note: note.value.trim() || null }), "Status set");
+  }
+
+  async function forceTicket(ticket, close) {
+    const note = h("input", { class: "field", placeholder: close ? "Why it is closed with remarks open" : "Why it is open again", autocomplete: "off" });
+    const done = await dialog({
+      icon: close ? "check" : "refresh", tone: close ? "ok" : "",
+      title: close ? `Close the ticket of ${ticket.name || "this module"}?` : `Open the ticket of ${ticket.name || "this module"} again?`,
+      text: close ? "Closed whatever its remarks hold; the agents see it was forced from the console." : "The module's review is open again until a verifier closes it.",
+      body: note,
+      actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: close ? "Close" : "Open again", kind: "primary", value: true, focus: true }],
+    });
+    if (!done) return;
+    await act(() => call("POST", `/admin/api/tickets/${ticket.module}/force`, { close, note: note.value.trim() || null }),
+      close ? "Ticket closed" : "Ticket open again");
   }
 
   function mountTokens(actions) {

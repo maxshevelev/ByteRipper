@@ -463,6 +463,48 @@ final class ServerTests: XCTestCase {
         XCTAssertEqual((first?["resolved"] as? [String: Any])?["note"] as? String, "fixed in 476")
         let (page, _) = try await call("GET", "admin/issues", admin)
         XCTAssertEqual(page, 200, "the console's page")
+
+        // The review board over HTTP: a verifier's remark, the reviewer's fix,
+        // the reviewer refused the closing, another agent closes; the console
+        // lists the ticket and overrules it.
+        let remote = GhidraRemote(base: base, token: app)
+        let board = String(repeating: "ab", count: 32)
+        func ticket(_ data: Data) throws -> [String: Any] { try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any]) }
+        _ = try await remote.tickets(.init(action: .reviewer, agent: "Reviewer · bench-mac", module: board))
+        let raised = try ticket(try await remote.tickets(.init(
+            action: .add, agent: "Verifier · bench-mac", module: board,
+            remark: .init(severity: .wrong, text: "the plate names the wrong status", function: "Entry"))))
+        XCTAssertEqual(raised["state"] as? String, "open")
+        XCTAssertEqual(raised["reviewer"] as? String, "Reviewer · bench-mac")
+        let remark = try XCTUnwrap((raised["remarks"] as? [[String: Any]])?.first)
+        XCTAssertEqual(remark["holder"] as? String, "token bench-mac")
+        let remarkID = try XCTUnwrap(remark["id"] as? String)
+        _ = try await remote.tickets(.init(action: .reply, agent: "Reviewer · bench-mac", module: board, id: remarkID,
+                                           text: "renamed", status: .fixed, revision: 2))
+        do {
+            _ = try await remote.tickets(.init(action: .close, agent: "Reviewer · bench-mac", module: board))
+            XCTFail("the reviewer closed its own ticket")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409)
+        }
+        _ = try await remote.tickets(.init(action: .reply, agent: "Flow Manager", module: board, id: remarkID,
+                                           status: .verified))
+        let closedTicket = try ticket(try await remote.tickets(.init(action: .close, agent: "Flow Manager", module: board)))
+        XCTAssertEqual(closedTicket["state"] as? String, "closed")
+        let mine = try JSONSerialization.jsonObject(with: try await remote.tickets(
+            .init(action: .list, author: "reviewer · bench-mac"))) as? [[String: Any]]
+        XCTAssertEqual(mine?.map { $0["module"] as? String }, [board])
+
+        let (_, consoleList) = try await call("GET", "admin/api/tickets", admin)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: consoleList) as? [[String: Any]])?.first?["state"] as? String, "closed")
+        let (forced, forcedBody) = try await call("POST", "admin/api/tickets/\(board)/force", admin,
+                                                  body: Data(#"{"close":false,"note":"look again"}"#.utf8))
+        XCTAssertEqual(forced, 200)
+        XCTAssertEqual(try ticket(forcedBody)["state"] as? String, "settled")
+        let (consoleRefused, _) = try await call("GET", "admin/api/tickets", app)
+        XCTAssertEqual(consoleRefused, 403)
+        let (ticketsPage, _) = try await call("GET", "admin/tickets", admin)
+        XCTAssertEqual(ticketsPage, 200, "the console's page")
     }
 
     /// The review kit goes to a client that may use Ghidra, as the app's cache

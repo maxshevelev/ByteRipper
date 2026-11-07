@@ -2496,10 +2496,14 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Takes the module into work: from now on only you write and publish it, through any number of `ghidra_publish`, until you give it back with `ghidra_done` or an administrator closes the lease. There is no term. Take it before the first write — a write without it is refused — and reading needs nothing. A module another holder has in work is refused, with the holder and since when. A lease an administrator closed is said at your next call on the module: its unpublished changes are gone, the project is the last published revision again, and taking the module again goes on from there. Answers `holder` and `since`.",
+    "description" : "Takes the module into work: from now on only you write and publish it, through any number of `ghidra_publish`, until you give it back with `ghidra_done` or an administrator closes the lease. There is no term. Take it before the first write — a write without it is refused — and reading needs nothing. A module another holder has in work is refused, with the holder and since when. A lease an administrator closed is said at your next call on the module: its unpublished changes are gone, the project is the last published revision again, and taking the module again goes on from there. Answers `holder` and `since`, and `review`: the module's ticket on the review board, when it has one — its state and the remarks still to be dealt with. Give `agent`, your own name: the board notes you as the module's reviewer, and another agent closes its ticket.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
+        "agent" : {
+          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "type" : "string"
+        },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
@@ -2630,6 +2634,182 @@
     },
     "name" : "ghidra_issues",
     "title" : "Read your reports and their answers"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The review board: one ticket per module, holding the remarks verifying agents made on its review, each with its author, severity (`wrong`, `misleading`, `cosmetic`), status (`open`, `answered`, `fixed`, `wont_fix`, `verified`) and thread of replies. With `module`, that module's ticket in full (`state: \"none\"` when it has none). Without, the tickets, newest activity first, narrowed by `state` — `open` (a remark is still to be dealt with), `settled` (none is, not yet closed), `closed` — and by `author`, an agent's name: a reviewer reads `author` = its own name to find the remarks on its work, and `state: \"open\"` for what waits. A ticket's `reviewer` is the agent that took the module into work last.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "author" : {
+          "description" : "Only tickets where this agent wrote, replied or is the reviewer.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "state" : {
+          "description" : "Only tickets in this state.",
+          "enum" : [
+            "open",
+            "settled",
+            "closed"
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "ghidra_tickets",
+    "title" : "Read the review board"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Writes a remark on the module's ticket — made if the module has none, opened again if it was closed: a closed module is open again until a verifier closes it once more. One remark per finding: what the review says, what the code does, where (`function`, `address`), and `severity`: `wrong` (the review says what the code does not do), `misleading` (true, but a reader gets a wrong idea), `cosmetic` (wording, a name's style). The remark is raised against the module's published revision unless `revision` names another. It stays open across revisions until a verifier marks it `verified`. Answers the ticket.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The address it is about, hex.",
+          "type" : "string"
+        },
+        "agent" : {
+          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "The function it is in, by name or entry.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "revision" : {
+          "description" : "The revision read, when not the last published.",
+          "type" : "integer"
+        },
+        "severity" : {
+          "description" : "How much it matters.",
+          "enum" : [
+            "wrong",
+            "misleading",
+            "cosmetic"
+          ],
+          "type" : "string"
+        },
+        "text" : {
+          "description" : "The finding: what the review says, what the code does, what it should say.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "agent",
+        "module",
+        "severity",
+        "text"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_ticket_remark",
+    "title" : "Write a remark on a module's review"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Replies in a remark's thread and, with `status`, moves it on. The reviewer sets `answered` (a reply, the review unchanged — say why), `fixed` (with the `revision` the fix is published in) or `wont_fix` (say why). Another agent — not the one that took the module into work — sets `verified` after reading the fix or accepting the answer, or `open` when it is not right yet; the reviewer setting either is refused. A reply with no `status` is part of the conversation. Answers the ticket.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "agent" : {
+          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "type" : "string"
+        },
+        "id" : {
+          "description" : "The remark's `id`, as `ghidra_tickets` lists it.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "revision" : {
+          "description" : "For `fixed`: the revision the fix is published in.",
+          "type" : "integer"
+        },
+        "status" : {
+          "description" : "The remark's new status.",
+          "enum" : [
+            "open",
+            "answered",
+            "fixed",
+            "wont_fix",
+            "verified"
+          ],
+          "type" : "string"
+        },
+        "text" : {
+          "description" : "The reply.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "agent",
+        "module",
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_ticket_reply",
+    "title" : "Reply to a remark"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Closes the module's ticket: its review is checked and stands. Refused while a remark is `open`, `answered` or `fixed` and not yet `verified`, naming them, and refused to the agent that took the module into work — another verifier closes it. A module with no remarks is closed with none: checked and found right. A later remark opens it again. Answers the ticket.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "agent" : {
+          "description" : "Your own name as an agent, e.g. \"Flow Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "note" : {
+          "description" : "What was checked, in a line.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "agent",
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_ticket_close",
+    "title" : "Close a module's review"
   },
   {
     "annotations" : {

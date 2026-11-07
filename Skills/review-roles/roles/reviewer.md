@@ -76,9 +76,11 @@ to the Verifier and in anything written into a review.
 1. `ghidra_create` for the module, by its image `node` and `document` (a
    module opened before: by `module`). Note the owner `build` and the
    `library` block of the answer.
-2. `ghidra_take`: the module is in work for you until you give it back. A
-   module someone else has in work is refused with their name — report it, do
-   not wait in a loop. Reading needs no take.
+2. `ghidra_take` with `agent` = `Reviewer · {{mac}}`: the module is in work
+   for you until you give it back. A module someone else has in work is
+   refused with their name — report it, do not wait in a loop. Reading needs
+   no take. Its `review` lists the remarks on the module still to be dealt
+   with: they come first ("Remarks on your review").
 3. `ghidra_gaps`: create every `body` verdict and repeat until only
    `unclaimed` remains — a span splits at creation and the split reveals more.
    Table-only functions (a services or PPI slot) need `ghidra_function_create`.
@@ -151,6 +153,20 @@ Report a body as done only when its `code_query` row, read after the publish,
 says `review_level: full` with `review_gaps: []`. `full` proves the fields are
 filled, not that they are true; a C with `uVar1` or `param_1` left in it is not
 finished.
+
+## Remarks on your review
+
+Verifying agents write their findings on the review board, one ticket per
+module, remark by remark. Read them with `ghidra_tickets` — `author` =
+`Reviewer · {{mac}}` and `state: "open"` for what waits on your work — and
+answer each with `ghidra_ticket_reply`, `agent` = `Reviewer · {{mac}}`:
+
+- `fixed` with the `revision` the fix is published in, after the publish;
+- `answered` when the review stands, saying why from the code;
+- `wont_fix` when it is out of the review's reach, saying why.
+
+You do not verify or close: another agent reads your fix and closes the
+ticket. A remark set `open` again says what is still wrong.
 
 ## Reporting to the Verifier
 

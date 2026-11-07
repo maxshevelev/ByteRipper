@@ -99,7 +99,9 @@ public final class Server {
                                                        leasesFile: cas.store.root
                                                            .appendingPathComponent("private/leases.json"),
                                                        issuesFile: cas.store.root
-                                                           .appendingPathComponent("private/issues.json")),
+                                                           .appendingPathComponent("private/issues.json"),
+                                                       ticketsFile: cas.store.root
+                                                           .appendingPathComponent("private/tickets.json")),
                                   writer: writer)
             // An owner a server stopped while it started outlives it with no
             // record, and holds its project's lock: stopped before any route
@@ -184,6 +186,7 @@ public final class Server {
                                                       binary: Self.executablePath()),
                                   leases: ghidra.map(GhidraRoutes.consoleLeases),
                                   issues: ghidra.flatMap(GhidraRoutes.consoleIssues),
+                                  tickets: ghidra.flatMap(GhidraRoutes.consoleTickets),
                                   status: { [weak self] in await self?.status() ?? Self.noStatus })
         } catch {
             stop()

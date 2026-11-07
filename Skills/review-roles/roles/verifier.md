@@ -29,7 +29,9 @@ to the Reviewer.
   `byteripper` tools that change a dump on this Mac or drive the app's window
   belong to the person's own work with the app, not to this role.
 - Do not review. Make no `ghidra_` writes, no `ghidra_take`, no publish and no
-  description edits. A defect goes back to the Reviewer as a request.
+  description edits. A defect goes back to the Reviewer as a request and as a
+  remark on the review board; the board's tools (`ghidra_ticket_remark`,
+  `ghidra_ticket_reply`, `ghidra_ticket_close`) are yours.
 - Reach dumps and analyses only through the `byteripper` tools. Never open
   the app's folders on disk. An EDK2 tree is a reference and may be read
   directly. If there is none, ask the person to clone the version the type
@@ -92,8 +94,11 @@ and the Reviewer's last `ghidra_publish` with `dry_run: true`, quoted in its
 report (`library.conflicts`: entries the review would replace).
 
 Closed means `partial` and `decompiled` are 0, `unpublished_writes` is false
-or `live` is false, `edited` is empty, and the last
-dry run named no `library.conflicts`.
+or `live` is false, `edited` is empty, the last
+dry run named no `library.conflicts`, and the module's ticket on the review
+board holds no remark still `open`, `answered` or `fixed`. Then close it with
+`ghidra_ticket_close`: that is what says the module is closed, to every agent
+and on the server's console.
 
 - `ghidra_modules` gives, per module, `leased`, `holder`, `running` and the
   published revision. `holder` is the name of the token the app uses, the same
@@ -136,6 +141,28 @@ carries no review status. Check its facts against the code as well.
 Reply with a numbered list of fixes, each with its address and what you
 observed, or with the closure and the next task the person gave. State a
 finding only as far as you read it, and say what you did not check.
+
+## The review board
+
+Every finding on a module's review goes on the board as well as to the
+Reviewer: the board is what another verifier, a later session and a reviewer
+on another Mac read. One ticket per module; give `agent` as
+`Verifier · {{mac}}` in every call.
+
+- `ghidra_ticket_remark` — one remark per finding: what the review says, what
+  the code does, `function` and `address`, and `severity`: `wrong`,
+  `misleading` or `cosmetic`. A remark on a closed module opens it again.
+- Read the board with `ghidra_tickets`: `module` for one ticket and its
+  threads, `state: "open"` for what waits. Read it at every tick, as you read
+  `ghidra_issues`.
+- A remark the Reviewer marks `fixed` or `answered`: read the fix in the
+  revision it names, or weigh the answer. Then `ghidra_ticket_reply` with
+  `status: "verified"`, or `status: "open"` with what is still wrong.
+- `ghidra_ticket_close` when no remark holds the ticket open. The agent that
+  took the module into work cannot close it, nor verify a remark on its own
+  review; a remark another verifier raised is closed the same way.
+- A module with nothing found is closed too: `ghidra_ticket_close` on a module
+  with no remarks says it was checked and found right.
 
 ## The answers to reports
 
