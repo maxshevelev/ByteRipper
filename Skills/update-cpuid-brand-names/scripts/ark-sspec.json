@@ -192,6 +192,26 @@
       "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page. Code Name on ARK: Alder Lake."
     },
     {
+      "model": "Intel Core i5-12600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134589/intel-core-i512600k-processor-20m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4T",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-12600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134590/intel-core-i512600kf-processor-20m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4U",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i5-12600T",
       "url": "https://www.intel.com/content/www/us/en/products/sku/96150/intel-core-i512600t-processor-18m-cache-up-to-4-60-ghz/ordering.html",
       "specs": [
@@ -319,6 +339,57 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-12700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134591/intel-core-i712700-processor-25m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4Q",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134592/intel-core-i712700f-processor-25m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4R",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134594/intel-core-i712700k-processor-25m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4N",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134595/intel-core-i712700kf-processor-25m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4P",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134596/intel-core-i712700t-processor-25m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4S",
+          "stepping": "C0"
+        }
+      ],
+      "note": "Tray only; no boxed entry on the ordering tab."
     },
     {
       "model": "Intel Core i7-13700K",
@@ -540,6 +611,57 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i9-12900",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134597/intel-core-i912900-processor-30m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4K",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134598/intel-core-i912900f-processor-30m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4L",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134599/intel-core-i912900k-processor-30m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4H",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134600/intel-core-i912900kf-processor-30m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4J",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134601/intel-core-i912900t-processor-30m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4M",
+          "stepping": "C0"
+        }
+      ],
+      "note": "Tray only; no boxed entry on the ordering tab."
     },
     {
       "model": "Intel Core i9-13900K",

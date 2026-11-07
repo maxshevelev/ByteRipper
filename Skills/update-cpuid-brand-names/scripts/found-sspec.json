@@ -62,6 +62,18 @@
       "note": "Done from ARK's ordering tab; steps 2-4 not needed."
     },
     {
+      "model": "Intel Core i5-12600K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4T, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i5-12600KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4U, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
       "model": "Intel Core i5-12600T",
       "searched": "2026-11-07",
       "specs": [],
@@ -80,6 +92,33 @@
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
     },
     {
+      "model": "Intel Core i7-12700",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i7-12700F",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i7-12700K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4N, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-12700KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4P, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-12700T",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
       "model": "Intel Core i7-13700K",
       "searched": "2026-11-07",
       "specs": [],
@@ -90,6 +129,35 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i9-12900",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4K, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i9-12900F",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4L, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i9-12900K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4H, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i9-12900KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists a single code, SRL4J, stepping C0, on tray, boxed and China boxed parts; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i9-12900T",
+      "searched": "2026-11-07",
+      "specs": []
     },
     {
       "model": "Intel Core i9-13900K",

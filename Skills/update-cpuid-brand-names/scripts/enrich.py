@@ -24,8 +24,9 @@ The rules, in order:
 
 1. The article's own codes stay as they are.
 2. A code with a stepping (ARK, or a Wikipedia row that has one) goes under the
-   one entry of that model whose CPUID has that stepping. None, or more than
-   one: it is left out.
+   one entry of that model whose CPUID has that stepping — by Intel's current
+   naming first, by every name its notes ever used when that finds no one
+   entry (`intel_steppings`). None, or more than one: it is left out.
 3. A Wikipedia code without a stepping goes in only where the article lists
    the model under one CPUID — there is then nowhere else for it to go. A
    model listed under several CPUIDs gets nothing from such a row. And a page
@@ -101,11 +102,33 @@ def fetch(url, cache):
 
 # --- Intel: stepping per CPUID ------------------------------------------------
 
-def intel_steppings(cache):
-    """{CPUID: {stepping}} from the rows `| HSX-E/EP | Cx/M1 | 06-3f-02/6f | …`."""
+def intel_steppings(cache, current=False):
+    """{CPUID: {stepping}} from the rows `| HSX-E/EP | Cx/M1 | 06-3f-02/6f | …`.
+
+    The notes are every release's, newest first, and a later release can
+    correct an earlier one: releases up to 2022 called 06-97-05 "C0", later
+    ones "H0" — which it is (ARK: the i5-12400's C0 is SRL4V, its H0 SRL5Y,
+    two dies). It can also be wrong where the older one was right: since 2023
+    SKX-D (06-55-04) is written "H0", where ARK and the older rows say M1. So
+    two readings:
+
+    - all (the default): every stepping any release wrote for the CPUID;
+    - `current`: each product's row from the newest release that has one —
+      product by product, since a release lists only the platforms it updates
+      (06-4e-03's SKL-U23e, K1, is in an older release than its SKL-U/Y, D0).
+      A row may write a stepping as `Dx` ("a D stepping"): that is the
+      D-steppings the product's older rows name (ICX-SP's `Dx/M1`, earlier
+      `D0`), or nothing.
+
+    `enrich` places a code by the current reading first and falls back to all.
+    """
     text = fetch(INTEL_NOTES_URL, cache).decode("utf-8")
-    table = collections.defaultdict(set)
+    rows = collections.defaultdict(list)          # (CPUID, product) → [(release, {stepping})]
+    release = 0
     for line in text.splitlines():
+        if line.startswith("## "):
+            release += 1
+            continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) < 3:
             continue
@@ -117,10 +140,21 @@ def intel_steppings(cache):
         ext_family = max(family - 0xF, 0) if family >= 0xF else 0
         base_family = min(family, 0xF)
         cpuid = (ext_family << 20) | ((model >> 4) << 16) | (base_family << 8) | ((model & 0xF) << 4) | stepping
-        for s in re.split(r"[/,]", cells[1]):
-            s = s.strip()
-            if re.fullmatch(r"[A-Z]\d", s):
-                table[f"{cpuid:X}"].add(s)
+        names = {s.strip() for s in re.split(r"[/,]", cells[1])}
+        rows[(f"{cpuid:X}", cells[0])].append((release, {s for s in names if re.fullmatch(r"[A-Z][0-9x]", s)}))
+    table = collections.defaultdict(set)
+    for (cpuid, _), seen in rows.items():
+        if not current:
+            table[cpuid] |= {s for _, n in seen for s in n if s[1] != "x"}
+            continue
+        newest = min(r for r, _ in seen)
+        latest = set().union(*(n for r, n in seen if r == newest))
+        older = set().union(*(n for r, n in seen if r != newest))
+        for s in latest:
+            if s[1] != "x":
+                table[cpuid].add(s)
+            else:
+                table[cpuid] |= {o for o in older if o[0] == s[0] and o[1] != "x"}
     return table
 
 
@@ -238,12 +272,13 @@ def _token(name):
 
 
 def enrich(entries, cache=None, log=print):
-    steppings = intel_steppings(cache)
+    every = intel_steppings(cache)
+    current = intel_steppings(cache, current=True)
 
-    def entry_steppings(entry):
+    def entry_steppings(entry, table):
         found = set(entry["steppings"])
         for c in entry["cpuids"]:
-            found |= steppings.get(c, set())
+            found |= table.get(c, set())
         return found
 
     places = collections.defaultdict(list)          # model → [(entry, processor)]
@@ -269,7 +304,13 @@ def enrich(entries, cache=None, log=print):
         if owner(code):
             log(f"  {source}: {name} {code} is already {sorted(owner(code))}'s — left out")
             return False
-        fits = [(e, p) for e, p in places[name] if stepping in entry_steppings(e)]
+        # Intel's current reading first: 06-97-05 was "C0" until 2022 and is
+        # H0, so a C0 code fits 90672 alone. All its readings when that finds
+        # no one place: SKX-D is "H0" now, its Xeon D-21xx codes ARK's M1.
+        for table in (current, every):
+            fits = [(e, p) for e, p in places[name] if stepping in entry_steppings(e, table)]
+            if len(fits) == 1:
+                break
         if len(fits) == 1:
             add(fits[0][1], code, source)
             return True

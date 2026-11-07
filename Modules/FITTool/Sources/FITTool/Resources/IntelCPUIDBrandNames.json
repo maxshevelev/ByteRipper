@@ -6423,59 +6423,129 @@
         },
         {
           "name": "Intel Core i9-12900K",
-          "sSpec": []
+          "sSpec": [
+            "SRL4H"
+          ],
+          "sSpecSource": {
+            "SRL4H": "ark"
+          }
         },
         {
           "name": "Intel Core i9-12900KF",
-          "sSpec": []
+          "sSpec": [
+            "SRL4J"
+          ],
+          "sSpecSource": {
+            "SRL4J": "ark"
+          }
         },
         {
           "name": "Intel Core i7-12700K",
-          "sSpec": []
+          "sSpec": [
+            "SRL4N"
+          ],
+          "sSpecSource": {
+            "SRL4N": "ark"
+          }
         },
         {
           "name": "Intel Core i7-12700KF",
-          "sSpec": []
+          "sSpec": [
+            "SRL4P"
+          ],
+          "sSpecSource": {
+            "SRL4P": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12600K",
-          "sSpec": []
+          "sSpec": [
+            "SRL4T"
+          ],
+          "sSpecSource": {
+            "SRL4T": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12600KF",
-          "sSpec": []
+          "sSpec": [
+            "SRL4U"
+          ],
+          "sSpecSource": {
+            "SRL4U": "ark"
+          }
         },
         {
           "name": "Intel Core i9-12900",
-          "sSpec": []
+          "sSpec": [
+            "SRL4K"
+          ],
+          "sSpecSource": {
+            "SRL4K": "ark"
+          }
         },
         {
           "name": "Intel Core i9-12900F",
-          "sSpec": []
+          "sSpec": [
+            "SRL4L"
+          ],
+          "sSpecSource": {
+            "SRL4L": "ark"
+          }
         },
         {
           "name": "Intel Core i7-12700",
-          "sSpec": []
+          "sSpec": [
+            "SRL4Q"
+          ],
+          "sSpecSource": {
+            "SRL4Q": "ark"
+          }
         },
         {
           "name": "Intel Core i7-12700F",
-          "sSpec": []
+          "sSpec": [
+            "SRL4R"
+          ],
+          "sSpecSource": {
+            "SRL4R": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12400",
-          "sSpec": []
+          "sSpec": [
+            "SRL4V"
+          ],
+          "sSpecSource": {
+            "SRL4V": "ark"
+          }
         },
         {
           "name": "Intel Core i5-12400F",
-          "sSpec": []
+          "sSpec": [
+            "SRL4W"
+          ],
+          "sSpecSource": {
+            "SRL4W": "ark"
+          }
         },
         {
           "name": "Intel Core i9-12900T",
-          "sSpec": []
+          "sSpec": [
+            "SRL4M"
+          ],
+          "sSpecSource": {
+            "SRL4M": "ark"
+          }
         },
         {
           "name": "Intel Core i7-12700T",
-          "sSpec": []
+          "sSpec": [
+            "SRL4S"
+          ],
+          "sSpecSource": {
+            "SRL4S": "ark"
+          }
         }
       ]
     },
