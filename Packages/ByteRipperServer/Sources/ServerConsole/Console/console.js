@@ -332,7 +332,6 @@
     live: null,
     // Which request logs the operator has opened, by token: the page is drawn
     // again on every poll, and a log that shut itself would be unreadable.
-    openLogs: new Set(),
     // Which reports the operator has opened, and whether resolved ones show.
     openIssues: new Set(),
     resolvedIssues: false,
@@ -857,32 +856,38 @@
   // ---------- Activity ----------
 
   function mountActivity() {
-    const agents = card("Agents", "connections to the local MCP socket, and the calls each is making");
-    const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
     const modules = card("Modules in work", "one holder at a time writes and publishes a module in Ghidra");
     const closedLeases = h("div", {});
-    const root = h("div", { class: "stack" }, agents.root, modules.root, closedLeases, clients.root);
+    const agents = card("Local agents", "connections to the local MCP socket, one row each");
+    const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
+    const root = h("div", { class: "stack" }, modules.root, closedLeases, agents.root, clients.root);
 
     function update(data) {
+      updateLeases(modules, closedLeases, data.leases);
       if (!data.mcp.length) {
-        fill(agents.body, empty("bot", "No agent is connected",
+        fill(agents.body, empty("bot", "No local agent is connected",
           "An agent on this machine reaches the server through the relay; its calls appear here as soon as its client connects.",
           h("div", { class: "empty-action" }, h("button", { class: "btn small", type: "button", onclick: () => go("/admin/configuration") },
             icon("sliders", 15), "Agent configuration"))));
       } else {
-        fill(agents.body, h("div", { class: "agents" }, data.mcp.map(agentCard)));
+        fill(agents.body, h("table", { class: "lines" },
+          h("thead", {}, h("tr", {},
+            h("th", { class: "w-who", text: "Agent" }), h("th", { class: "w-state", text: "State" }),
+            h("th", { class: "num w-n", text: "Calls" }), h("th", { class: "num w-n", text: "Errors" }),
+            h("th", { class: "w-time", text: "Connected" }), h("th", { text: "Last call" }), h("th", { class: "w-open" }))),
+          h("tbody", {}, data.mcp.map(agentLine))));
       }
-      updateLog(data.mcp);
-      updateLeases(modules, closedLeases, data.leases);
       if (!data.rest.length) {
         fill(clients.body, empty("globe", "No REST requests yet", "The app and the scripts show up here, one row per token, when they reach the store or Ghidra."));
       } else {
-        fill(clients.body, h("div", { class: "table-wrap" }, h("table", {},
+        fill(clients.body, h("table", { class: "lines" },
           h("thead", {}, h("tr", {},
-            h("th", { text: "Token" }), h("th", { class: "num", text: "Requests" }), h("th", { class: "num", text: "Refused" }),
-            h("th", { text: "Last request" }), h("th", { text: "Last seen" }), h("th", {}))),
-          h("tbody", {}, data.rest.flatMap(clientRows)))));
+            h("th", { class: "w-who", text: "Token" }), h("th", { class: "w-state", text: "State" }),
+            h("th", { class: "num w-n", text: "Requests" }), h("th", { class: "num w-n", text: "Refused" }),
+            h("th", { class: "w-time", text: "Last seen" }), h("th", { text: "Last request" }), h("th", { class: "w-open" }))),
+          h("tbody", {}, data.rest.map(clientLine))));
       }
+      updateLog([...data.mcp.map(agentEntry), ...data.rest.map(clientEntry)]);
     }
     return { root, update };
   }
@@ -910,23 +915,6 @@
     return h("span", { class: "pill ok blinking" }, h("span", { text }));
   }
 
-  function callLine(call) {
-    const kind = call.outcome === "answered" ? "ok" : call.outcome === "cancelled" ? "plain" : "danger";
-    return h("div", { class: `log-line ${call.running ? "running" : ""}` },
-      h("span", { class: "log-time", text: clockTime(call.started) }),
-      h("code", { class: "log-name", title: call.tool, text: call.tool }),
-      h("span", { class: "log-ms", text: call.running ? "" : elapsed(call.duration_ms) }),
-      call.running ? workingPill("running") : h("span", { class: `pill ${kind}`, title: call.detail || "", text: call.outcome }));
-  }
-
-  function requestLine(request) {
-    return h("div", { class: `log-line ${request.running ? "running" : ""}` },
-      h("span", { class: "log-time", text: clockTime(request.started) }),
-      h("code", { class: "log-name", title: `${request.method} ${request.path}`, text: `${request.method} ${request.path}` }),
-      h("span", { class: "log-ms", text: request.running ? "" : elapsed(request.duration_ms) }),
-      request.running ? workingPill("running") : statusPill(request.status || 0));
-  }
-
   // A connection at work: Live's pill in red, saying Active, its dot blinking
   // at the rate of the app's toolbar dot (`AgentActivityBadge`). The blink's
   // phase follows the clock, so a card drawn anew every second does not
@@ -950,25 +938,99 @@
     return `#${number} ${agent || "Connection"}`;
   }
 
-  function agentCard(row) {
-    const end = Date.now();
-    const log = row.log || [];
-    return h("div", { class: `agent ${row.active ? "active" : ""}` },
-      h("div", { class: "agent-head" },
-        h("div", { class: "agent-badge" }, icon("bot", 18)),
-        h("div", {}, h("div", { class: "agent-title", text: connectionTitle(row.number, row.agent) }),
-          h("div", { class: "agent-sub", text: row.client || "client not known" })),
-        connectionState(row)),
-      h("div", { class: "agent-stats" },
-        h("div", { class: "agent-stat" }, h("b", { text: row.calls }), h("span", { text: "calls" })),
-        h("div", { class: "agent-stat" }, h("b", { class: row.errors ? "danger-text" : "", text: row.errors }), h("span", { text: "errors" })),
-        h("div", { class: "agent-stat" }, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), h("span", { text: "connected" }))),
-      h("div", { class: "agent-log" },
-        log.length
-          ? log.slice(-3).reverse().map(callLine)
-          : h("div", { class: "log-empty", text: "No call yet" })),
-      h("button", { class: "btn small agent-open", type: "button", disabled: !log.length, onclick: () => openLog(row) },
-        icon("scroll", 15), "Open log", log.length ? h("span", { class: "count-badge", text: String(log.length) }) : null));
+  // ---------- Activity: one line per local agent and per REST token ----------
+
+  // Who, in a cell: an icon, the name, and below it what the name stands
+  // for, each cut short with an ellipsis rather than widening the table.
+  function whoCell(iconName, title, sub) {
+    return h("td", {}, h("div", { class: "who" },
+      h("div", { class: "doc-icon" }, icon(iconName, 16)),
+      h("div", { class: "who-text" },
+        h("div", { class: "who-title", title, text: title }),
+        h("div", { class: "who-sub", title: sub, text: sub }))));
+  }
+
+  // The last command, in at most two lines; the whole of it is the tooltip.
+  function lastCell(text, when, pill) {
+    if (!text) return h("td", { class: "muted", text: "—" });
+    return h("td", {}, h("div", { class: "last" },
+      h("code", { class: "last-text", title: text, text }),
+      h("div", { class: "last-meta" }, pill, h("span", { class: "muted", text: when }))));
+  }
+
+  function openButton(entry) {
+    const count = entry.log.length;
+    return h("td", { class: "actions" },
+      h("button", { class: "btn small", type: "button", disabled: !count, onclick: () => openLog(entry) },
+        icon("scroll", 15), "Open log", count ? h("span", { class: "count-badge", text: String(count) }) : null));
+  }
+
+  function agentLine(row) {
+    const entry = agentEntry(row);
+    const last = entry.log[entry.log.length - 1];
+    const summary = last ? [last.tool, argumentSummary(last.arguments)].filter(Boolean).join(" · ") : "";
+    return h("tr", { class: row.active ? "at-work" : "" },
+      whoCell("bot", entry.title, entry.sub),
+      h("td", {}, connectionState(row)),
+      h("td", { class: "num", text: row.calls }),
+      h("td", { class: `num ${row.errors ? "danger-text" : ""}`, text: row.errors }),
+      h("td", { class: "muted", text: duration((Date.now() - Date.parse(row.started)) / 1000) }),
+      lastCell(summary, last ? clockTime(last.started) : "", last ? outcomePill(last) : null),
+      openButton(entry));
+  }
+
+  function clientLine(row) {
+    const entry = clientEntry(row);
+    return h("tr", {},
+      whoCell(row.token ? "key" : "alert", entry.title, entry.sub),
+      h("td", {}, entry.working ? workingPill("in flight") : h("span", { class: "pill plain", text: "Idle" })),
+      h("td", { class: "num", text: row.requests }),
+      h("td", { class: `num ${row.refused ? "danger-text" : ""}`, text: row.refused }),
+      h("td", { class: "muted", text: ago(row.last_seen) }),
+      lastCell(row.last, "", statusPill(row.last_status)),
+      openButton(entry));
+  }
+
+  // What the log panel shows, the same for both: a key that survives the
+  // next refresh, the head, the counts, and the calls — a REST request made
+  // to read as a call, its route the "tool" and its path the arguments.
+  function agentEntry(row) {
+    return {
+      key: `mcp:${row.number}`, kind: "agent", row, icon: "bot",
+      title: connectionTitle(row.number, row.agent), sub: row.client || "client not known",
+      log: row.log || [], noun: "call",
+    };
+  }
+
+  function clientEntry(row) {
+    const log = (row.log || []).map(requestCall);
+    return {
+      key: `rest:${row.token || "*"}`, kind: "rest", row, icon: row.token ? "key" : "alert",
+      title: row.name, sub: row.token || "requests without an accepted token",
+      log, noun: "request", working: log.some((r) => r.running),
+    };
+  }
+
+  // A route by its shape: a SHA-256, a UUID or a number in the path becomes
+  // a placeholder, so the filter offers "GET /ghidra/v1/live/:sha", not one
+  // entry per module.
+  function route(path) {
+    return (path || "").split("?")[0].split("/").map((part) =>
+      /^[0-9a-f]{32,}$/i.test(part) ? ":sha"
+        : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(part) ? ":id"
+          : /^(0x)?[0-9a-f]{5,}$/i.test(part) && /\d/.test(part) ? ":n" : part).join("/");
+  }
+
+  function requestCall(request) {
+    const status = request.status || 0;
+    return {
+      id: request.id, rest: true, started: request.started, finished: request.finished,
+      running: request.running, duration_ms: request.duration_ms, status, peer: request.peer,
+      tool: `${request.method} ${route(request.path)}`, arguments: request.path,
+      outcome: request.running ? "running" : status >= 400 ? "error" : "answered",
+      detail: status >= 400 ? `HTTP ${status}` : null,
+      request: { method: request.method, path: request.path, status: status || null, peer: request.peer || null },
+    };
   }
 
   // ---------- The log panel ----------
@@ -978,7 +1040,7 @@
   // holds still to be read and counts what came since — and a selected call's
   // arguments, answer and error below it.
   const log = {
-    number: null, row: null, frozen: null, selected: null,
+    key: null, row: null, frozen: null, selected: null,
     query: "", outcome: "all", tool: "", tail: true, root: null, parts: null,
   };
 
@@ -1004,7 +1066,7 @@
         if (next) { log.selected = next.id; drawLog(); }
       } });
     const detail = h("div", { class: "drawer-detail" });
-    const panel = h("aside", { class: "drawer", role: "dialog", "aria-label": "Connection log" },
+    const panel = h("aside", { class: "drawer", role: "dialog", "aria-label": "Activity log" },
       head, stats,
       h("div", { class: "drawer-tools" },
         h("div", { class: "search" }, icon("search", 15), search), outcomes, tools, tail),
@@ -1012,15 +1074,15 @@
     const backdrop = h("div", { class: "drawer-backdrop", onclick: closeLog });
     document.body.append(backdrop, panel);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && log.number !== null && !document.querySelector("dialog[open]")) closeLog();
+      if (event.key === "Escape" && log.key !== null && !document.querySelector("dialog[open]")) closeLog();
     });
     log.root = { panel, backdrop };
     log.parts = { search, outcomes, tools, tail, head, stats, banner, list, detail };
   }
 
-  function openLog(row) {
+  function openLog(entry) {
     if (!log.root) buildLog();
-    Object.assign(log, { number: row.number, row, frozen: null, selected: null, query: "", outcome: "all", tool: "", tail: true });
+    Object.assign(log, { key: entry.key, row: entry, frozen: null, selected: null, query: "", outcome: "all", tool: "", tail: true });
     log.parts.search.value = "";
     setTail(true);
     log.root.panel.classList.add("open");
@@ -1030,8 +1092,8 @@
   }
 
   function closeLog() {
-    if (!log.root || log.number === null) return;
-    log.number = null;
+    if (!log.root || log.key === null) return;
+    log.key = null;
     log.root.panel.classList.remove("open");
     log.root.backdrop.classList.remove("open");
   }
@@ -1046,11 +1108,11 @@
     drawLog();
   }
 
-  function updateLog(rows) {
-    if (log.number === null) return;
-    const row = rows.find((r) => r.number === log.number);
-    if (row) log.row = row;
-    else if (log.row) log.row = Object.assign({}, log.row, { open: false, active: false });
+  function updateLog(entries) {
+    if (log.key === null) return;
+    const entry = entries.find((e) => e.key === log.key);
+    if (entry) log.row = entry;
+    else if (log.row) log.row = Object.assign({}, log.row, { gone: true, row: Object.assign({}, log.row.row, { open: false, active: false }) });
     drawLog();
   }
 
@@ -1084,40 +1146,50 @@
   }
 
   function outcomePill(call) {
+    if (call.rest && !call.running) return statusPill(call.status);
     if (call.running) return h("span", { class: "pill ok blinking", text: "running" });
     const kind = call.outcome === "answered" ? "ok" : call.outcome === "cancelled" ? "plain" : "danger";
     return h("span", { class: `pill ${kind}`, text: call.outcome });
   }
 
   function drawLog() {
-    if (log.number === null || !log.row) return;
-    const row = log.row;
+    if (log.key === null || !log.row) return;
+    const entry = log.row;
+    const row = entry.row;
     const parts = log.parts;
     const end = Date.now();
+    const rest = entry.kind === "rest";
     fill(parts.head,
-      h("div", { class: "agent-badge" }, icon("bot", 18)),
-      h("div", { class: "grow" }, h("div", { class: "agent-title", text: connectionTitle(row.number, row.agent) }),
-        h("div", { class: "agent-sub", text: row.client || "client not known" })),
-      connectionState(row),
+      h("div", { class: "agent-badge" }, icon(entry.icon, 18)),
+      h("div", { class: "grow" }, h("div", { class: "agent-title", text: entry.title }),
+        h("div", { class: "agent-sub", text: entry.sub })),
+      rest ? (entry.working ? workingPill("in flight") : h("span", { class: "pill plain", text: "Idle" })) : connectionState(row),
       iconButton("x", "Close the log", closeLog));
-    fill(parts.stats,
+    fill(parts.stats, rest ? [
+      h("span", {}, h("b", { text: row.requests }), " requests"),
+      h("span", {}, h("b", { class: row.refused ? "danger-text" : "", text: row.refused }), " refused"),
+      h("span", {}, "last seen ", h("b", { text: ago(row.last_seen) })),
+      h("span", { class: "muted", text: "the last 50 requests are kept, in memory only" }),
+    ] : [
       h("span", {}, h("b", { text: row.calls }), " calls"),
       h("span", {}, h("b", { class: row.errors ? "danger-text" : "", text: row.errors }), " errors"),
       h("span", {}, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), " connected"),
-      h("span", { class: "muted", text: "the last 50 calls are kept, in memory only" }));
+      h("span", { class: "muted", text: "the last 50 calls are kept, in memory only" }),
+    ]);
+    parts.search.placeholder = rest ? "Search routes and paths" : "Search tools and arguments";
 
     [...parts.outcomes.children].forEach((b) => b.classList.toggle("on", b.dataset.outcome === log.outcome));
-    const toolNames = [...new Set((row.log || []).map((c) => c.tool))].sort();
-    const options = [h("option", { value: "", text: "All tools" }), ...toolNames.map((t) => h("option", { value: t, text: t }))];
+    const toolNames = [...new Set(entry.log.map((c) => c.tool))].sort();
+    const options = [h("option", { value: "", text: rest ? "All routes" : "All tools" }), ...toolNames.map((t) => h("option", { value: t, text: t }))];
     if (parts.tools.options.length !== options.length || [...parts.tools.options].some((o, i) => o.value !== options[i].value)) {
       fill(parts.tools, options);
     }
     parts.tools.value = toolNames.includes(log.tool) ? log.tool : "";
 
-    const since = log.tail ? 0 : Math.max(0, (row.log || []).filter((c) => !log.frozen.some((f) => f.id === c.id)).length);
+    const since = log.tail ? 0 : Math.max(0, entry.log.filter((c) => !log.frozen.some((f) => f.id === c.id)).length);
     fill(parts.banner, !log.tail
       ? h("div", { class: "paused" }, icon("pause", 14),
-        since ? `${since} new ${since === 1 ? "call" : "calls"} since you paused` : "Paused: the list holds still",
+        since ? `${since} new ${entry.noun}${since === 1 ? "" : "s"} since you paused` : "Paused: the list holds still",
         h("button", { class: "btn small", type: "button", onclick: () => setTail(true) }, icon("play", 13), "Resume"))
       : null);
 
@@ -1127,8 +1199,8 @@
     const scroll = parts.list.scrollTop;
     fill(parts.list,
       h("div", { class: "drawer-row drawer-columns" },
-        h("span", { text: "Time" }), h("span", { text: "Tool" }), h("span", { text: "Arguments" }),
-        h("span", { class: "num", text: "Duration" }), h("span", { class: "num", text: "Answer" }), h("span", { text: "" })),
+        h("span", { text: "Time" }), h("span", { text: rest ? "Route" : "Tool" }), h("span", { text: rest ? "Path" : "Arguments" }),
+        h("span", { class: "num", text: "Duration" }), h("span", { class: "num", text: rest ? "" : "Answer" }), h("span", { text: "" })),
       calls.length ? calls.map((call) => h("div", {
         class: `drawer-row ${call.id === log.selected ? "selected" : ""} ${call.running ? "running" : ""}`,
         role: "option", "aria-selected": call.id === log.selected ? "true" : "false",
@@ -1136,7 +1208,7 @@
       },
         h("span", { class: "log-time", text: clockTime(call.started) }),
         h("code", { class: "log-name", title: call.tool, text: call.tool }),
-        h("span", { class: "drawer-args", title: call.arguments || "", text: argumentSummary(call.arguments) }),
+        h("span", { class: "drawer-args", title: call.arguments || "", text: rest ? call.arguments : argumentSummary(call.arguments) }),
         h("span", { class: "drawer-ms" },
           h("span", { class: "ms-bar" }, call.running ? null : (() => {
             const bar = h("span", {});
@@ -1146,55 +1218,24 @@
           h("span", { text: call.running ? "…" : elapsed(call.duration_ms) })),
         h("span", { class: "num muted", text: call.answer_bytes !== undefined ? bytes(call.answer_bytes) : "" }),
         outcomePill(call)))
-        : h("div", { class: "browser-empty", text: (row.log || []).length ? "No call matches." : "No call yet." }));
+        : h("div", { class: "browser-empty", text: entry.log.length ? `No ${entry.noun} matches.` : `No ${entry.noun} yet.` }));
     parts.list.scrollTop = scroll;
 
     const call = calls.find((c) => c.id === log.selected);
     if (!call) { fill(parts.detail); parts.detail.hidden = true; return; }
     parts.detail.hidden = false;
     let pretty = call.arguments || "{}";
-    try { pretty = JSON.stringify(JSON.parse(pretty), null, 2); } catch { /* cut short: shown as it is */ }
+    if (rest) pretty = JSON.stringify(call.request, null, 2);
+    else try { pretty = JSON.stringify(JSON.parse(pretty), null, 2); } catch { /* cut short: shown as it is */ }
     fill(parts.detail,
       h("div", { class: "detail-head" },
         h("code", { class: "detail-tool", text: call.tool }), outcomePill(call),
         h("span", { class: "muted small", text: `${clockTime(call.started)} · ${call.running ? "running" : elapsed(call.duration_ms)}${call.answer_bytes !== undefined ? ` · ${bytes(call.answer_bytes)} answered` : ""}` })),
       call.detail ? h("div", { class: "detail-error" }, icon("alert", 15), h("span", { text: call.detail })) : null,
       h("div", { class: "codeblock" },
-        h("div", { class: "codebar" }, h("span", { class: "codebar-title" }, icon("braces", 14), "Arguments"),
-          h("button", { class: "btn small", type: "button", onclick: () => copy(pretty, "the arguments") }, icon("copy", 14), "Copy")),
+        h("div", { class: "codebar" }, h("span", { class: "codebar-title" }, icon("braces", 14), rest ? "Request" : "Arguments"),
+          h("button", { class: "btn small", type: "button", onclick: () => copy(pretty, rest ? "the request" : "the arguments") }, icon("copy", 14), "Copy")),
         h("pre", { class: "code", text: pretty })));
-  }
-
-  function clientRows(row) {
-    const key = row.token || "*";
-    const open = state.openLogs.has(key);
-    const log = row.log || [];
-    const working = log.some((request) => request.running);
-    const logRow = h("tr", { class: `log-row ${open ? "" : "hidden"}` },
-      h("td", { colspan: "6" },
-        h("div", { class: "log" }, log.length
-          ? log.slice(-20).reverse().map(requestLine)
-          : h("div", { class: "log-empty", text: "No request yet" }))));
-    const toggle = h("button", { class: "btn ghost small", type: "button" }, open ? "Hide log" : "Log");
-    toggle.addEventListener("click", () => {
-      const showing = !state.openLogs.has(key);
-      if (showing) state.openLogs.add(key); else state.openLogs.delete(key);
-      logRow.classList.toggle("hidden", !showing);
-      toggle.textContent = showing ? "Hide log" : "Log";
-    });
-    return [
-      h("tr", {},
-        h("td", {}, h("div", { class: "row" },
-          h("div", { class: "doc-icon" }, icon(row.token ? "key" : "alert", 16)),
-          h("div", {}, h("div", { class: "doc-title", text: row.name }), row.token ? h("div", { class: "doc-path", text: row.token }) : null),
-          working ? workingPill("in flight") : null)),
-        h("td", { class: "num", text: row.requests }),
-        h("td", { class: `num ${row.refused ? "danger-text" : ""}`, text: row.refused }),
-        h("td", {}, h("div", { class: "row" }, h("code", { text: row.last }), statusPill(row.last_status))),
-        h("td", { class: "muted", text: ago(row.last_seen) }),
-        h("td", { class: "actions" }, toggle)),
-      logRow,
-    ];
   }
 
   // ---------- Tokens ----------

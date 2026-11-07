@@ -633,21 +633,40 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 .progress { margin-top: 12px; }
 .progress-label { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
 
-/* ---------- Agents ---------- */
+/* ---------- Activity: one line per local agent and per REST token ---------- */
 
-.agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; padding: 18px 20px; }
-
-.agent {
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* Fixed columns, so a long name or command never widens the table: names
+   end in an ellipsis, the last command takes at most two lines. */
+table.lines { table-layout: fixed; }
+table.lines th.w-who { width: 26%; }
+table.lines th.w-state { width: 92px; }
+table.lines th.w-n { width: 82px; }
+table.lines th.w-time { width: 104px; }
+table.lines th.w-open { width: 128px; }
+table.lines td { vertical-align: middle; }
+table.lines tr.at-work td { background: var(--danger-soft); }
+.who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.who-text { min-width: 0; }
+.who-title, .who-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-title { font-weight: 650; }
+.who-sub { font-size: 12px; color: var(--muted); }
+.last { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.last-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-all;
 }
-.agent.ended { opacity: 0.6; }
-.agent-head { display: flex; align-items: center; gap: 11px; }
+.last-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.last-meta:empty { display: none; }
+
+/* ---------- The log panel's head ---------- */
+
+
 .agent-badge {
   width: 36px;
   height: 36px;
@@ -658,16 +677,8 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
   color: var(--on-accent);
   flex: none;
 }
-.agent.ended .agent-badge { background: var(--panel-3); color: var(--muted); }
 .agent-title { font-weight: 650; }
 .agent-sub { font-size: 12px; color: var(--muted); }
-.agent-head .pill { margin-left: auto; }
-.agent-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.agent-stat { padding: 8px 10px; border-radius: 9px; background: var(--panel-3); }
-.agent-stat b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
-.agent-stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.agent-last { font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
-.agent-last code { color: var(--text-2); }
 
 /* ---------- Activity: the call log ---------- */
 
@@ -676,26 +687,6 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 @keyframes blink { from { opacity: 1; } to { opacity: 0.15; } }
 .pill.blinking::before { animation: blink 0.5s ease-in-out infinite alternate; animation-delay: var(--phase, 0ms); }
 
-.agent-log {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  max-height: 190px;
-  overflow-y: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.log { display: flex; flex-direction: column; gap: 1px; padding: 4px 0 8px; }
-.log-line {
-  display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 54px max-content;
-  align-items: center;
-  gap: 10px;
-  padding: 3px 6px;
-  border-radius: 6px;
-  font-size: 12.5px;
-}
-.log-line.running { background: var(--ok-soft); }
 .log-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .log-name {
   font-family: var(--mono);
@@ -706,14 +697,9 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
   white-space: nowrap;
 }
 .log-ms { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-.log-line .pill { justify-self: end; }
-.log-empty { color: var(--muted); font-size: 12.5px; padding: 2px 6px; }
-.log-row td { padding: 0 20px 10px; }
 
 /* ---------- At work ---------- */
 
-.agent.active { border-color: var(--danger-soft); }
-.agent-open { align-self: flex-start; }
 .count-badge {
   min-width: 20px;
   padding: 0 6px;
