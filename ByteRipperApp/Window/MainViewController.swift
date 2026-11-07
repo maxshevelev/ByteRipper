@@ -2007,6 +2007,20 @@ final class MainViewController: NSViewController {
         return delta + given
     }
 
+    /// How much of a growth of `move` the screen has room for. A window never
+    /// grows past its screen's visible width — the Dock and the menu bar are
+    /// not the window's to cover — and what it cannot grow by, the panel takes
+    /// from the dump instead, booked in `borrowed` so closing the panel gives
+    /// it back to the dump rather than shrinking the window below where it
+    /// was. A shrink is granted whole.
+    private func grantedByScreen(_ move: CGFloat, from start: NSRect, on window: NSWindow,
+                                 borrowed: inout CGFloat) -> CGFloat {
+        guard move > 0, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return move }
+        let granted = max(0, min(move, visible.width - start.width))
+        borrowed += move - granted
+        return granted
+    }
+
     /// The window move that goes with opening or closing the tool panel: the
     /// window grows or shrinks by whatever the dump's own spare width cannot
     /// absorb, so the dump keeps the width its content needs. The mirror of the
@@ -2018,10 +2032,11 @@ final class MainViewController: NSViewController {
         // The split keeps its dividers whether a pane is 400 points wide or
         // none at all, so no seam appears or goes with the panel and the
         // panel's change is the width alone.
-        let move = windowDelta(forPanel: delta, slack: dumpAreaSlack(),
+        var move = windowDelta(forPanel: delta, slack: dumpAreaSlack(),
                                borrowed: &borrowedByToolPanel)
-        guard move != 0 else { return nil }
         let start = window.frame
+        move = grantedByScreen(move, from: start, on: window, borrowed: &borrowedByToolPanel)
+        guard move != 0 else { return nil }
         let targetWidth = max(0, start.width + move)
         return { [weak window] progress in
             guard let window else { return }
@@ -3001,11 +3016,12 @@ final class MainViewController: NSViewController {
         // A fragment panel's map opens into the panel's own spare room first,
         // exactly as the tab's does into the dump's; the window is asked only
         // for what that cannot hold.
-        let move = windowDelta(forPanel: visible ? width : -width,
+        var move = windowDelta(forPanel: visible ? width : -width,
                                slack: dumpAreaSlack(of: surface),
                                borrowed: &surface.borrowedByMinimap)
-        guard move != 0 else { return nil }
         let start = window.frame
+        move = grantedByScreen(move, from: start, on: window, borrowed: &surface.borrowedByMinimap)
+        guard move != 0 else { return nil }
         let targetWidth = max(0, start.width + move)
         return { [weak window] progress in
             guard let window else { return }
@@ -7832,11 +7848,15 @@ extension MainViewController: NSWindowDelegate {
         let frameHeight = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 0, height: contentHeight)).height
         frame.size.width = min(fitWidth, screen?.visibleFrame.width ?? fitWidth)
         frame.size.height = min(frameHeight, screen?.visibleFrame.height ?? frameHeight)
-        // Anchor the top edge and keep the window fully on the visible screen.
+        // Anchor the top edge and keep the window fully on the visible screen
+        // — across too, so a wider window is not pushed under a Dock at the
+        // side.
         frame.origin.y = oldTop - frame.size.height
         if let screen {
             frame.origin.y = min(max(frame.origin.y, screen.visibleFrame.minY),
                                  screen.visibleFrame.maxY - frame.size.height)
+            frame.origin.x = min(max(frame.origin.x, screen.visibleFrame.minX),
+                                 screen.visibleFrame.maxX - frame.size.width)
         }
         return frame
     }

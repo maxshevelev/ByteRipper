@@ -257,6 +257,31 @@ final class MinimapTests: XCTestCase {
                        "hiding the minimap shrinks the window back")
     }
 
+    /// A window as wide as its screen's visible area does not grow under the
+    /// Dock for the minimap: the panel takes the room from the dump instead,
+    /// and hiding it gives the room back without the window shrinking below
+    /// the width it had.
+    func testShowingTheMinimapNeverGrowsTheWindowPastTheScreen() throws {
+        let (_, window) = try makeController()
+        let (split, _) = try minimapViews(window)
+        let visible = try XCTUnwrap((window.screen ?? NSScreen.main)?.visibleFrame)
+        window.setFrame(NSRect(x: visible.minX, y: visible.minY, width: visible.width - 10,
+                               height: min(600, visible.height)), display: true)
+        window.layoutIfNeeded()
+        let initialWidth = window.frame.width
+
+        split.surface.minimap.setPanelVisible(true, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertLessThanOrEqual(window.frame.width, visible.width + 0.5, "never wider than the visible screen")
+        XCTAssertLessThanOrEqual(window.frame.maxX, visible.maxX + 0.5, "never under a Dock at the side")
+        XCTAssertGreaterThanOrEqual(window.frame.minX, visible.minX - 0.5)
+
+        split.surface.minimap.setPanelVisible(false, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertEqual(window.frame.width, initialWidth, accuracy: 1,
+                       "hiding it leaves the window the width it had")
+    }
+
     /// Showing the minimap moves the window's edge and the panel's edge as ONE
     /// animation (§19): the window used to jump to its new width in a single
     /// step while the panel glided in over 0.2 s, so the growth arrived well
