@@ -1369,6 +1369,104 @@
       "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
     },
     {
+      "model": "Intel Core i7-8510Y",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SREKN",
+          "stepping": "H0",
+          "cpuid": null,
+          "architecture": null,
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/803214/PCN116769-00.pdf",
+              "quote": "Intel® Core™ Processor I7-8510Y HE8067702739887 S REKN 983287",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/products/sku/189912/intel-core-i58210y-processor-4m-cache-up-to-3-60-ghz/ordering.html",
+              "quote": "Spec Code SREKN | Ordering Code HE8067702739887 | Stepping H0 (listed on the i5-8210Y's page; the ordering code is the i7-8510Y's per PCN 116769-00)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 116769-00 (Product Marking, Feb 20, 2019; columns Marketing Name / Processor# / Product Code / S-Spec / MM#) ties SREKN / HE8067702739887 to the i7-8510Y; it gives no stepping. Intel's i5-8210Y ordering tab lists the same ordering code and SREKN with stepping H0 — under the wrong SKU (the PCN gives the i5-8210Y SREKQ), so the stepping H0 comes from an ARK page that misattributes the code; the code-to-model link rests on the PCN. Architecture null: no loaded source names the 8510Y's code name (third-party: Amber Lake). WikiChip refused connections. ARK lists SREKN with its ordering code and stepping H0 on the i5-8210Y's page by mistake; the PCN ties the ordering code to the i7-8510Y."
+    },
+    {
+      "model": "Intel Core i7-8550U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8557U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK only. No PCN naming the i7-8557U was searched separately beyond ARK (search budget); none turned up in the 8560U PCN search."
+    },
+    {
+      "model": "Intel Core i7-8559U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8560U",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRGML",
+          "stepping": "D0",
+          "cpuid": null,
+          "architecture": null,
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/809387/PCN118065-00.pdf",
+              "quote": "Intel® Core™ i7-8560U Processor FH8068404166110 S RGML 999L1W D0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 118065-00 (Product Discontinuance, February 1, 2021), table columns: Marketing Name / Product Code / S-Spec / MM# / Stepping; the 8560U row extracted cleanly on one line (other rows of that table were scrambled by PDFKit, this one was not). The PCN gives no code name, so architecture is null (third-party sites say Whiskey Lake, not loaded). Stepping D0 is not one of 806E9's steppings (H0/J1) — D0 is the stepping ARK gives the Coffee Lake i7-8557U/8569U, and the ordering code FH80684041661xx sits next to the 8557U's; worth checking which CPUID this belongs under."
+    },
+    {
+      "model": "Intel Core i7-8565U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8569U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK only; no separate PCN search made."
+    },
+    {
+      "model": "Intel Core i7-8650U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8665U",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
       "model": "Intel Core i7-8700",
       "searched": "2026-11-07",
       "specs": [
@@ -1390,6 +1488,12 @@
         }
       ],
       "note": "PCN search found only discontinuance/support/assembly-site PCNs (115909, 116217, 117617-02, 117618-00); none introduces another code. Stepping from ARK."
+    },
+    {
+      "model": "Intel Core i7-8700B",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
     },
     {
       "model": "Intel Core i7-8700K",
@@ -1438,6 +1542,48 @@
         }
       ],
       "note": "PCN 117618-00 (support transfer to IoT) lists the same code and stepping; no conversion PCN found."
+    },
+    {
+      "model": "Intel Core i7-8705G",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8706G",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8709G",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8750H",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8750HF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Tried: ARK search, PCN search (\"8750HF\" PCN site:intel.com: only the i7-8750H EOL PCN 117411 with SR3YY U0, a different SKU), general S-Spec search. WikiChip refused connections. BGA package marking does not print the model, so photographs cannot tie a code to it. Nothing found."
+    },
+    {
+      "model": "Intel Core i7-8809G",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8850H",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
     },
     {
       "model": "Intel Core i9-10900X",

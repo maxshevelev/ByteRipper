@@ -1002,14 +1002,11 @@
       "url": "https://www.intel.com/content/www/us/en/products/sku/189912/intel-core-i58210y-processor-4m-cache-up-to-3-60-ghz/ordering.html",
       "specs": [
         {
-          "sSpec": "SREKN",
-          "stepping": "H0"
-        },
-        {
           "sSpec": "SREKQ",
           "stepping": "H0"
         }
-      ]
+      ],
+      "note": "ARK also lists SREKN (HE8067702739887, H0) here; Intel's PCN 116769-00 gives that code and ordering code to the i7-8510Y (\"I7-8510Y HE8067702739887 S REKN\") and SREKQ to the i5-8210Y, so SREKN is the i7-8510Y's and is kept there (found-sspec.json)."
     },
     {
       "model": "Intel Core i5-8310Y",
@@ -1502,6 +1499,12 @@
       ]
     },
     {
+      "model": "Intel Core i7-8510Y",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for the i7-8510Y."
+    },
+    {
       "model": "Intel Core i7-8550U",
       "url": "https://www.intel.com/content/www/us/en/products/sku/122589/intel-core-i78550u-processor-8m-cache-up-to-4-00-ghz/ordering.html",
       "specs": [
@@ -1512,6 +1515,17 @@
       ]
     },
     {
+      "model": "Intel Core i7-8557U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/192996/intel-core-i78557u-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ1",
+          "stepping": "D0"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Coffee Lake\". Stepping D0 is not one of 806E9's steppings (H0/J1); the model probably belongs under another CPUID."
+    },
+    {
       "model": "Intel Core i7-8559U",
       "url": "https://www.intel.com/content/www/us/en/products/sku/137979/intel-core-i78559u-processor-8m-cache-up-to-4-50-ghz/ordering.html",
       "specs": [
@@ -1520,6 +1534,12 @@
           "stepping": "D0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-8560U",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for the i7-8560U (search returned only i7-8565U and i7-8559U)."
     },
     {
       "model": "Intel Core i7-8565U",
@@ -1534,6 +1554,17 @@
           "stepping": "V0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-8569U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/191050/intel-core-i78569u-processor-8m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREYZ",
+          "stepping": "D0"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Coffee Lake\". Stepping D0 is not one of 806E9's steppings (H0/J1)."
     },
     {
       "model": "Intel Core i7-8650U",
@@ -1639,6 +1670,12 @@
           "stepping": "U0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-8750HF",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for the i7-8750HF (search returned only the i7-8750H)."
     },
     {
       "model": "Intel Core i7-8809G",

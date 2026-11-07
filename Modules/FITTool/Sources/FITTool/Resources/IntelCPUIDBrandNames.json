@@ -6256,7 +6256,12 @@
         },
         {
           "name": "Intel Core i7-8510Y",
-          "sSpec": []
+          "sSpec": [
+            "SREKN"
+          ],
+          "sSpecSource": {
+            "SREKN": "intel"
+          }
         },
         {
           "name": "Intel Core i7-8550U",
@@ -6274,11 +6279,9 @@
         {
           "name": "Intel Core i5-8210Y",
           "sSpec": [
-            "SREKN",
             "SREKQ"
           ],
           "sSpecSource": {
-            "SREKN": "ark",
             "SREKQ": "ark"
           }
         },
