@@ -143,3 +143,39 @@ final class HandedFilesPlacementTests: XCTestCase {
                        .init(firstFilePane: 0, openSecond: true, ignoredCount: 1))
     }
 }
+
+/// The files of one drop arrive one event apiece (`HandedFilesBatch`).
+@MainActor
+final class HandedFilesBatchTests: XCTestCase {
+    private let a = URL(fileURLWithPath: "/tmp/a.bin")
+    private let b = URL(fileURLWithPath: "/tmp/b.bin")
+
+    /// Two events back to back are one drop: one window, both files.
+    func testFilesHandedBackToBackOpenTogether() {
+        var opened: [[URL]] = []
+        let done = expectation(description: "the batch opens")
+        let batch = HandedFilesBatch(delay: .milliseconds(100)) { opened.append($0); done.fulfill() }
+
+        batch.add([a])
+        batch.add([b])
+        batch.add([a])
+        XCTAssertTrue(opened.isEmpty, "nothing opens while the files are still coming")
+
+        wait(for: [done], timeout: 2)
+        XCTAssertEqual(opened, [[a, b]], "one batch, each file once, in the order handed")
+    }
+
+    /// Files handed apart are two gestures: two batches.
+    func testFilesHandedApartOpenApart() {
+        var opened: [[URL]] = []
+        let batch = HandedFilesBatch(delay: .milliseconds(50)) { opened.append($0) }
+
+        batch.add([a])
+        batch.flush()
+        batch.add([b])
+        batch.flush()
+        XCTAssertEqual(opened, [[a], [b]])
+        batch.flush()
+        XCTAssertEqual(opened.count, 2, "an empty batch opens nothing")
+    }
+}

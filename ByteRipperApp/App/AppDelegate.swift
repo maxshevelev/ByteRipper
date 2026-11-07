@@ -21,6 +21,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// before `applicationDidFinishLaunching` finishes building the window, so
     /// they queue here and drain once it is up.
     private var pendingOpenURLs: [URL] = []
+    /// The files of one drop on the Dock icon, which arrive one event apiece,
+    /// gathered so they open together (`HandedFilesBatch`).
+    private lazy var handedFiles = HandedFilesBatch { [weak self] urls in
+        guard let self else { return }
+        self.openHandedFiles(urls, windowAtHand: self.launchWindowAtHand)
+        self.launchWindowAtHand = nil
+    }
+    /// The empty window a launch the files started has made, for the first
+    /// batch to take: the launch can finish between two files of one drop, and
+    /// the second must still join the first.
+    private var launchWindowAtHand: MainWindowController?
     /// Node links that came before the first window: opened once it is up.
     private var pendingNodeLinks: [(file: URL, node: String?)] = []
     private var isReady = false
@@ -217,8 +228,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             pendingOpenURLs.removeAll()
             // A launch that restored nothing has made one empty window, and
             // the files take it; one that restored a workspace leaves its
-            // windows as they were.
-            openHandedFiles(urls, windowAtHand: restored ? nil : windowControllers.last)
+            // windows as they were. Through the batch: the rest of the drop
+            // may still be on its way.
+            launchWindowAtHand = restored ? nil : windowControllers.last
+            handedFiles.add(urls)
         }
         if !pendingNodeLinks.isEmpty {
             let links = pendingNodeLinks
@@ -492,7 +505,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         guard !files.isEmpty else { return }
         if isReady {
-            openHandedFiles(files)
+            handedFiles.add(files)
         } else {
             pendingOpenURLs.append(contentsOf: files)
         }
