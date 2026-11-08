@@ -1576,7 +1576,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Makes a function at `address`: code only a table points at — a slot of a services table, a member of a PPI or a protocol — which no call names, so Ghidra left it outside any function and `ghidra_rename` finds nothing there. Disassembles it first if needed. With `name`, names it as `ghidra_rename` would. A function already there is answered as it is. An address inside another function's body is refused, naming that function: a function made there splits the body it belongs to. Undo a split with `ghidra_function_delete` or `ghidra_function_merge` first.",
+    "description" : "Makes a function at `address`: code only a table points at — a slot of a services table, a member of a PPI or a protocol — which no call names, so Ghidra left it outside any function and `ghidra_rename` finds nothing there. Disassembles it first if needed. With `name`, names it as `ghidra_rename` would. A function already there is answered as it is. An address inside another function's body is refused, naming that function: a function made there splits the body it belongs to. Undo a split with `ghidra_function_delete` or `ghidra_function_merge` first. A function made where another function ends by jumping (`JMP` to this entry) makes that jump a tail call, so the other function's C calls this one instead of holding its body; `tail_calls` lists each jump marked.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1634,6 +1634,40 @@
     },
     "name" : "ghidra_function_delete",
     "title" : "Remove a function"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Sets how the jump at `address` is read: `call_return` makes an unconditional jump a tail call — a call of its target that returns for the function — and `none` gives the instruction its own flow back. The correction for a function that ends by jumping to another function's entry while its C holds that function's whole body, often with \"Exceeded maximum restarts\" and broken locals: Ghidra still reads the jump as flow inside the body. `ghidra_function_create` marks such jumps itself when it makes the target; this is for a target made before, and for taking a mark back. Read the C again after it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The jump instruction's address, e.g. \"0x9A16DC1\".",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "override" : {
+          "description" : "`call_return` or `none`.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "override"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_flow_override",
+    "title" : "Read a jump as a tail call"
   },
   {
     "annotations" : {
@@ -2935,7 +2969,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The Intel ME / CSME / TXE / SPS firmware in the image, as the ME Analyzer panel's Summary tab gives it: family, version, release, type, SKU, the platform, the security version (SVN), whether the firmware database knows this build, and the analysis's messages (a corrupted partition, a module whose hash fails, an update that will not apply). `tone` marks a verdict: good, caution or bad. A value of \"Coming soon\" is a row this engine does not answer yet. The File System State row carries `basis`: what each of the three steps that decide it found (the reserved MFS files, whether the EFS volume holds files, the configuration partitions), which step decided it, `complete: false` when a step that could have raised the state could not be taken — an EFS partition that could not be read — and an `explanation`. Say the basis when you report the state: Configured with an unreadable EFS is not the same fact as Configured with an empty one. The first call on a dump analyses its ME region, which takes a second or two.",
+    "description" : "The Intel ME / CSME / TXE / SPS firmware in the image, as the ME Analyzer panel's Summary tab gives it: family, version, release, type, SKU, the platform, the security version (SVN), whether the firmware database knows this build, and the analysis's messages (a corrupted partition, a module whose hash fails, an update that will not apply). `tone` marks a verdict: good, caution or bad. A value of \"Coming soon\" is a row this engine does not answer yet. The File System State row carries `basis`: what each of the three steps that decide it found (the reserved MFS files, whether the EFS volume holds files, the configuration partitions), which step decided it, `complete: false` when a step that could have raised the state could not be taken — an EFS partition that could not be read — and an `explanation`, which is the row's own line: the state and, in brackets, the evidence it was read from. Say the evidence when you report the state: Configured with an unreadable EFS is not the same fact as Configured with an empty one. Three rows of our own answer what a bench asks of a dump it is about to flash: \"Manufacturing\" (whether the platform closes End of Manufacturing on the first boot of this image — \"Will close on the EOM flag\" or \"Will close on the descriptor's rights\" (the two mechanisms: the flag only MFIT sets, and the access rights a serial image relies on), \"Will not close\", \"Will close on the EOM flag, with the descriptor open\", \"Not readable from this image\" or \"No such switch in this firmware\"), which carries a `basis` of its own (the flag and which page it was read from, what End of Manufacturing commits, and the descriptor's state — the last of those is `flexible`, MFIT's `FlexibleEomSettings` in its four values, which the Configuration tab shows on `/home/mca/eom_config`); \"Boot Guard\", the profile the image is built for (0 - No_FVME, 3 - VM, 4 - FVE, 5 - FVME, with `profile` and `profile_index` beside it, or \"No profile record in this image\"); and \"OEM Public Key Hash\", the 48-byte SHA-384 the ME region carries, all zeros meaning OEM signing is disabled. The first call on a dump analyses its ME region, which takes a second or two.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {

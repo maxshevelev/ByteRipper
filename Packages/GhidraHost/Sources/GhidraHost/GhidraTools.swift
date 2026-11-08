@@ -98,7 +98,7 @@ public enum GhidraTools {
         holder at a time writes and publishes a module, and reading needs nothing; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_equates_on_memory`, `ghidra_type_definition`, \
-        `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
+        `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`. \
         A library function lives in the shared registry and nowhere else: a module holds a link to its entry. \
@@ -857,7 +857,9 @@ public enum GhidraTools {
                   + "With `name`, names it as `ghidra_rename` would. A function already there is answered as it is. "
                   + "An address inside another function's body is refused, naming that function: a function made "
                   + "there splits the body it belongs to. Undo a split with `ghidra_function_delete` or "
-                  + "`ghidra_function_merge` first.",
+                  + "`ghidra_function_merge` first. A function made where another function ends by jumping "
+                  + "(`JMP` to this entry) makes that jump a tail call, so the other function's C calls this one "
+                  + "instead of holding its body; `tail_calls` lists each jump marked.",
                   ["address": AgentSchema.string("The entry address, e.g. the value in the table's slot."),
                    "name": AgentSchema.string("A name for it, optional."),
                    "reason": AgentSchema.string("Why this name, in a few words.")],
@@ -875,6 +877,19 @@ public enum GhidraTools {
                   ["address": AgentSchema.string("The function's entry, or any address inside it.")],
                   required: ["address"]) { arguments in
                 try optional(arguments, ["address"])
+            },
+            write("ghidra_flow_override", "set/flow", "Read a jump as a tail call",
+                  "Sets how the jump at `address` is read: `call_return` makes an unconditional jump a tail call — "
+                  + "a call of its target that returns for the function — and `none` gives the instruction its "
+                  + "own flow back. The correction for a function that ends by jumping to another function's "
+                  + "entry while its C holds that function's whole body, often with \"Exceeded maximum "
+                  + "restarts\" and broken locals: Ghidra still reads the jump as flow inside the body. "
+                  + "`ghidra_function_create` marks such jumps itself when it makes the target; this is for "
+                  + "a target made before, and for taking a mark back. Read the C again after it.",
+                  ["address": AgentSchema.string("The jump instruction's address, e.g. \"0x9A16DC1\"."),
+                   "override": AgentSchema.string("`call_return` or `none`.")],
+                  required: ["address", "override"]) { arguments in
+                try optional(arguments, ["address", "override"])
             },
             write("ghidra_function_locals_reset", "clear/locals", "Let a function's locals go",
                   "Removes the local variables of the function at `address` — the decompiler's and the "

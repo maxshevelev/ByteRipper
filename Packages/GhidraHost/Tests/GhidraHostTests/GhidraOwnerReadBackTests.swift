@@ -1000,6 +1000,42 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(callee["unaffected_kept"] as? [String], ["ECX", "EDX"])
     }
 
+    /// A function that ends by jumping to another function's entry reads the
+    /// jump as a tail call once both are functions, whichever was made
+    /// second; `set/flow` takes the mark back and puts it again (issue
+    /// 5872c498, PlatformStage2Pei's _ModuleEntryPoint at 0x9A16D90 jumping
+    /// to 0x9A16DC6).
+    func testAJumpToAnotherFunctionsEntryIsATailCall() async throws {
+        let bytes = try image()
+        guard SHA256Digest(data: bytes).hex.hasPrefix("b7d73a20") else { throw XCTSkip("GHIDRA_TYPE_MODULE is not PlatformStage2Pei") }
+        try await open(bytes)
+        try await post("/v1/delete/function", ["address": "0x9A16D90"])
+        try await post("/v1/create/function", ["address": "0x9A16DC6", "name": "PlatformStage2PeiEntryPoint"])
+        let made = try await post("/v1/create/function", ["address": "0x9A16D90"])
+        let tails = try XCTUnwrap(made["tail_calls"] as? [[String: Any]], "\(made)")
+        XCTAssertEqual(tails.count, 1, "\(tails)")
+        XCTAssertEqual(tails.first?["to"] as? String, "0x9A16DC6")
+        XCTAssertEqual(tails.first?["entry"] as? String, "0x9A16D90")
+        let jump = try XCTUnwrap(tails.first?["address"] as? String)
+        let c = try await read("/v1/function/0x9A16D90")["c"] as? String ?? ""
+        XCTAssertFalse(c.contains("Exceeded maximum restarts"), c)
+        XCTAssertTrue(c.contains("PlatformStage2PeiEntryPoint("), "the C calls the other function: \(c)")
+
+        let plain = try await post("/v1/set/flow", ["address": jump, "override": "none"])
+        XCTAssertEqual(plain["override"] as? String, "none")
+        let inlined = try await read("/v1/function/0x9A16D90")["c"] as? String ?? ""
+        XCTAssertFalse(inlined.contains("PlatformStage2PeiEntryPoint("), "the jump is flow again: \(inlined)")
+        let marked = try await post("/v1/set/flow", ["address": jump, "override": "call_return"])
+        XCTAssertEqual(marked["override"] as? String, "call_return")
+        XCTAssertEqual(marked["entry"] as? String, "0x9A16D90")
+        let again = try await read("/v1/function/0x9A16D90")["c"] as? String ?? ""
+        XCTAssertTrue(again.contains("PlatformStage2PeiEntryPoint("), again)
+        do {
+            _ = try await post("/v1/set/flow", ["address": "0x9A16D90", "override": "call_return"])
+            XCTFail("an instruction that is not a jump")
+        } catch {}
+    }
+
     /// An owner left with no record — its host stopped before it wrote
     /// `owner.json` — keeps the project's lock; the next open stops it and
     /// opens (issues f9bb8693, d3b03c04).

@@ -95,7 +95,10 @@ with), `ghidra_type_uses` (where every module's published analysis names a type)
 C — named; a function's entry is refused here, that is `ghidra_rename`'s),
 `ghidra_function_create` (a function where only a table points — a services
 table's or a PPI's slot; an address inside another function's body is refused,
-see `ghidra_function_merge` and `ghidra_function_delete`), `ghidra_function_locals_reset`
+see `ghidra_function_merge` and `ghidra_function_delete`; a jump from another function's end
+to the new entry is marked a tail call), `ghidra_flow_override` (a jump read as a tail call, or
+given its own flow back — for a function whose C holds the body of the function it jumps to),
+`ghidra_function_locals_reset`
 (the function's locals let go and the C decompiled again — the candidate for a function the
 decompiler refuses, not a guarantee), `ghidra_rename_variable`
 (a local by its storage and first use, a parameter by its ordinal; a storage the

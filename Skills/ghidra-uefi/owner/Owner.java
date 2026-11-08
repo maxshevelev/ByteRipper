@@ -321,6 +321,7 @@ public class Owner {
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
                     case "/v1/create/function" -> write(exchange, this::createFunction);
                     case "/v1/delete/function" -> write(exchange, this::deleteFunction);
+                    case "/v1/set/flow" -> write(exchange, this::setFlow);
                     case "/v1/clear/locals" -> write(exchange, this::clearLocals);
                     case "/v1/merge/functions" -> write(exchange, this::mergeFunctions);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
@@ -4515,6 +4516,11 @@ public class Owner {
             function = program.getFunctionManager().getFunctionAt(at);
             created = true;
         }
+        // Another function that ends by jumping here jumps into a function
+        // now: Ghidra still reads the jump as flow inside its own body and
+        // decompiles this whole body into it (issue 5872c498). It is a tail
+        // call, and is marked so.
+        JsonArray tailCalls = created ? markTailCalls(function) : new JsonArray();
         if (body.has("name") && !body.get("name").isJsonNull()) {
             JsonObject rename = body.deepCopy();
             rename.addProperty("address", hex(at));
@@ -4525,6 +4531,84 @@ public class Owner {
         answer.addProperty("name", function.getName());
         answer.addProperty("created", created);
         answer.addProperty("size", function.getBody().getNumAddresses());
+        if (tailCalls.size() > 0) answer.add("tail_calls", tailCalls);
+        return answer;
+    }
+
+    /**
+     * The unconditional jumps between `function` and another function's entry
+     * marked as calls that return (`CALL_RETURN`): tail calls. Both ways —
+     * another body's jump to this entry, and this body's jump to another
+     * entry — since either function can be the one made second. Answers each
+     * jump, the function it is in and where it goes.
+     */
+    private JsonArray markTailCalls(Function function) throws Exception {
+        JsonArray marked = new JsonArray();
+        Address entry = function.getEntryPoint();
+        for (ghidra.program.model.symbol.Reference reference : program.getReferenceManager().getReferencesTo(entry)) {
+            if (!reference.getReferenceType().isJump() || reference.getReferenceType().isConditional()) continue;
+            Address from = reference.getFromAddress();
+            Function holding = program.getFunctionManager().getFunctionContaining(from);
+            if (holding == null || holding.equals(function)) continue;
+            markTailCall(from, holding, entry, marked);
+        }
+        for (ghidra.program.model.listing.Instruction instruction : program.getListing().getInstructions(function.getBody(), true)) {
+            ghidra.program.model.symbol.FlowType flow = instruction.getFlowType();
+            if (!flow.isJump() || flow.isConditional()) continue;
+            for (Address target : instruction.getFlows()) {
+                Function called = program.getFunctionManager().getFunctionAt(target);
+                if (called == null || called.equals(function)) continue;
+                markTailCall(instruction.getAddress(), function, target, marked);
+            }
+        }
+        return marked;
+    }
+
+    private void markTailCall(Address from, Function holding, Address target, JsonArray marked) {
+        ghidra.program.model.listing.Instruction jump = program.getListing().getInstructionAt(from);
+        if (jump == null || jump.getFlowOverride() != ghidra.program.model.listing.FlowOverride.NONE) return;
+        jump.setFlowOverride(ghidra.program.model.listing.FlowOverride.CALL_RETURN);
+        decompiled.remove(holding.getEntryPoint());
+        JsonObject item = new JsonObject();
+        item.addProperty("address", hex(from));
+        item.addProperty("function", holding.getName());
+        item.addProperty("entry", hex(holding.getEntryPoint()));
+        item.addProperty("to", hex(target));
+        marked.add(item);
+    }
+
+    /**
+     * How a jump's flow is read: `call_return` makes a jump a tail call — a
+     * call of its target that returns for the function — and `none` gives the
+     * instruction back its own flow. A jump into another function's entry
+     * that Ghidra reads as flow inside the body decompiles that body into the
+     * jumping function's C; this is the correction (issue 5872c498).
+     */
+    private JsonObject setFlow(JsonObject body) throws Exception {
+        Address at = address(required(body, "address"));
+        ghidra.program.model.listing.Instruction instruction = program.getListing().getInstructionAt(at);
+        if (instruction == null) throw new Failure(404, "no instruction at " + hex(at));
+        String asked = required(body, "override").trim().toLowerCase(java.util.Locale.ROOT);
+        ghidra.program.model.listing.FlowOverride override = switch (asked) {
+            case "call_return" -> ghidra.program.model.listing.FlowOverride.CALL_RETURN;
+            case "none" -> ghidra.program.model.listing.FlowOverride.NONE;
+            default -> throw new Failure(400, "override is call_return or none, not " + asked);
+        };
+        ghidra.program.model.symbol.FlowType own = instruction.getPrototype().getFlowType(instruction.getInstructionContext());
+        if (override != ghidra.program.model.listing.FlowOverride.NONE && !(own.isJump() && !own.isConditional())) {
+            throw new Failure(400, hex(at) + " is " + instruction + ", not an unconditional jump");
+        }
+        instruction.setFlowOverride(override);
+        Function holding = program.getFunctionManager().getFunctionContaining(at);
+        if (holding != null) decompiled.remove(holding.getEntryPoint());
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(at));
+        answer.addProperty("instruction", instruction.toString());
+        answer.addProperty("override", override == ghidra.program.model.listing.FlowOverride.NONE ? "none" : "call_return");
+        if (holding != null) {
+            answer.addProperty("function", holding.getName());
+            answer.addProperty("entry", hex(holding.getEntryPoint()));
+        }
         return answer;
     }
 
