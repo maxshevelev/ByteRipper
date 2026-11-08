@@ -1,4 +1,4 @@
-@source-sha ce70b15d0e57c63663d913fd49ad4ebf0979cbc86d9fa3b52f7e5b20857515d0
+@source-sha 984a114fd15e0c4af39d4cf1885c4e2c120a3878d0026fe8ea57b94a81b42732
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -47,6 +47,8 @@ Der Server gibt einem Agenten auch seine Rolle und die Regeln der Durchsicht. Ei
 Antwortet ein Werkzeug des Servers falsch oder schlägt fehl, meldet der Agent dies dem Server: den Aufruf, die erhaltene Antwort und das erwartete Ergebnis. Der Server bewahrt diese Meldungen auf; sein Administrator liest sie in der Konsole des Servers auf der Seite **Server Issues** und schließt jede Meldung mit einer Antwort ab: was behoben wurde und in welcher Version, oder warum sich nichts ändert. Die Agenten des Mac, von dem die Meldung kam, lesen die Antworten und handeln danach. Eine Meldung ändert an keinem Modul etwas.
 
 Für die Prüfung der Analysen führt der Server eine Tafel mit Anmerkungen. Ein prüfender Agent trägt, was er in der Analyse eines Moduls für falsch hält, als Anmerkung in das Ticket des Moduls ein – jedes Modul hat genau ein Ticket –, mit Schweregrad und Stelle im Code. Der Agent, der das Modul analysiert, liest die Anmerkungen, beantwortet oder behebt sie und vermerkt dies im Verlauf der Anmerkung. Ein anderer prüfender Agent als derjenige, der das Modul in Arbeit genommen hat, bestätigt jede Anmerkung und schließt das Ticket. Solange eine Anmerkung offen ist, gilt die Analyse des Moduls nicht als abgeschlossen; eine neue Anmerkung öffnet ein abgeschlossenes Modul wieder. Der Administrator liest die Tickets mit ihrem Verlauf in der Konsole des Servers auf der Seite **Review Tickets** und kann dort jeden Status setzen.
+
+Die Typen, die eine Analyse definiert, werden mit den danach analysierten Modulen geteilt. Eine Veröffentlichung, deren Typ vom gemeinsamen nicht nur durch eine Ergänzung abweicht – ein neues Enum-Element, einen Kommentar, einen echten Namen anstelle eines Platzhalters –, wird abgelehnt, und es wird nichts geschrieben. Welche Definition richtig ist, entscheidet nicht der Agent. In der Konsole des Servers hat auf der Seite **Activity** jedes Modul unter **Modules in work** eine Schaltfläche, die die gemeinsamen Typen zeigt, die seine Veröffentlichung ersetzen würde: die Definition des Moduls neben der gemeinsamen und das Modul, das die gemeinsame geschrieben hat. **Publish, replacing them** veröffentlicht das Modul im Namen des Agenten, der es in Arbeit hat, und macht seine Definitionen zu den gemeinsamen, als nächste Version der gemeinsamen Typen. Die Programme anderer Module ändern sich dabei nicht.
 
 ## Was der Server nicht tut
 

@@ -1157,3 +1157,11 @@ details.revoked[open] summary::before { content: "▾ "; }
 .issue-detail td { background: var(--panel-2); }
 .issue-part h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .issue-part pre.code { white-space: pre-wrap; word-break: break-word; max-height: 320px; }
+
+/* An administrator's decision on shared types: the module's and the shared
+   definition side by side. */
+dialog.wide { width: min(1100px, calc(100vw - 32px)); }
+.type-conflicts { display: flex; flex-direction: column; gap: 18px; max-height: 60vh; overflow-y: auto; }
+.type-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.type-pair pre.code { border: 1px solid var(--border); border-radius: 10px; max-height: 40vh; overflow: auto; font-size: 12px; }
+@media (max-width: 760px) { .type-pair { grid-template-columns: 1fr; } }

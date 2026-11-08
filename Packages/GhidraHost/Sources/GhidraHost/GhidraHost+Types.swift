@@ -156,7 +156,8 @@ extension GhidraHost {
         return "the shared \(bits) types" + (version.map { " (version \($0))" } ?? "")
             + " hold these differently, and this publish would replace them: " + listed.joined(separator: ", ")
             + ". Nothing was written. Make the module's type the shared one (`ghidra_type_definition` shows both), "
-            + "or, when the shared one is wrong, an administrator publishes with `take_type_conflicts`."
+            + "or, when the shared one is wrong, tell the person with the evidence: only they replace a shared type, "
+            + "in the server's console (Activity, the module in work, its shared-types button). An agent cannot."
     }
 
     /// A type taken out of the shared archive, as a version of its own.

@@ -590,7 +590,9 @@ history keeps it. They run on the store's directory.
 - A text is replaced by publishing over the review server's routes with a token that has
   the `admin` right: `take_library_conflicts` names the entries and `library_reasons`
   says why; `take_type_conflicts=1` replaces a shared type, as the shared types' next
-  version.
+  version. The person does that from the server's console: on **Activity**, the module in
+  work's shared-types button shows the module's definition beside the shared one and
+  publishes as the module's holder, replacing them. An agent never does it.
 
 **A refusal for a replacement.** `library.conflicts` means this module's review would
 replace what the registry says. Read the entry's review (`library_registry` with its

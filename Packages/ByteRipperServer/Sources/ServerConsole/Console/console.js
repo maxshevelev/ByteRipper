@@ -259,8 +259,8 @@
     }, kind === "ok" ? 2600 : 5200);
   }
 
-  function dialog({ icon: iconName, tone = "", title, text, body, actions }) {
-    const el = h("dialog", {});
+  function dialog({ icon: iconName, tone = "", title, text, body, actions, wide = false }) {
+    const el = h("dialog", wide ? { class: "wide" } : {});
     const close = (value) => { el.close(); el.remove(); return value; };
     let resolveResult;
     const result = new Promise((resolve) => { resolveResult = resolve; });
@@ -1647,6 +1647,7 @@
         h("td", { class: "num", text: String(row.publishes || 0) }),
         h("td", { class: "muted", text: row.revision ? `rev ${row.revision}` : "—" }),
         h("td", { class: "actions" },
+          iconButton("layers", "Shared types this module would replace — and publish replacing them", () => typeConflicts(row)),
           iconButton("ban", "Close the lease — the holder's unpublished changes are dropped", () => closeLease(row), "danger")))))));
   }
 
@@ -1685,6 +1686,47 @@
     });
     if (!sure) return;
     await act(() => call("POST", `/admin/api/leases/${row.module}/close`), `${name}: lease closed`);
+  }
+
+  // The shared types a module in work would replace at its publish. Only an
+  // administrator decides that: the agent's publish is refused and names
+  // them; here the two definitions stand side by side, and the publish runs
+  // as the lease's holder with the module's versions taken.
+  async function typeConflicts(row) {
+    const name = row.name || row.module;
+    toast(`${name}: asking the owner what a publish would replace…`, "ok");
+    let data;
+    try {
+      data = await call("GET", `/admin/api/leases/${row.module}/type-conflicts`);
+    } catch (error) {
+      if (error.status !== 401) toast(error.message, "error");
+      return;
+    }
+    if (!data.conflicts.length) {
+      toast(`${name}: its publish replaces no shared type`, "ok");
+      return;
+    }
+    const body = h("div", { class: "type-conflicts" }, data.conflicts.map((c) => h("div", { class: "type-conflict" },
+      h("div", { class: "doc-title mono", text: c.name }),
+      h("div", { class: "muted", text: `Shared copy written by ${c.origin_name || c.origin || "a module not known here"}` }),
+      h("div", { class: "type-pair" },
+        h("div", {}, h("div", { class: "codebar-title", text: `${name} (would be shared)` }), h("pre", { class: "code", text: c.module_c || "—" })),
+        h("div", {}, h("div", { class: "codebar-title", text: "Shared now" }), h("pre", { class: "code", text: c.shared_c || "—" }))))));
+    await dialog({
+      icon: "layers", tone: "danger", wide: true,
+      title: `${name} would replace ${data.conflicts.length === 1 ? "a shared type" : `${data.conflicts.length} shared types`}`,
+      text: `The publish runs as ${data.holder}, the module's holder. Each type below becomes the shared one, as the shared types' next version. `
+        + "The programs of other modules do not change.",
+      body,
+      actions: [
+        { label: "Cancel", value: false, focus: true },
+        { label: "Publish, replacing them", kind: "danger", run: async () => {
+          const done = await act(() => call("POST", `/admin/api/leases/${row.module}/publish-taking-types`),
+            (a) => `${name}: published` + (a && a.manifest && a.manifest.reading && a.manifest.reading.rev ? ` as revision ${a.manifest.reading.rev}` : ""));
+          return done !== undefined;
+        } },
+      ],
+    });
   }
 
   // ---------- Configuration ----------

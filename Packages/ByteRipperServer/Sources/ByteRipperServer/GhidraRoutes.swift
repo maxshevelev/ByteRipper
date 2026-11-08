@@ -25,8 +25,16 @@ enum GhidraRoutes {
     /// too, and need `cas.write` beside it (`Design/SERVER_HEADLESS_PLAN.md`
     /// decision 4).
     /// The console's Leases page: the same rows and the same close as the routes.
-    static func consoleLeases(_ host: GhidraHost) -> ConsoleLeases {
-        ConsoleLeases(list: {
+    static func consoleLeases(_ host: GhidraHost, published: @escaping @Sendable () async -> Void) -> ConsoleLeases {
+        // The holder of a module in work: the console acts as it, since only
+        // the holder publishes.
+        @Sendable func holder(of digest: SHA256Digest) async throws -> String {
+            guard let held = await host.leaseRows().first(where: { $0.module == digest.hex })?.holder else {
+                throw HTTPError(.conflict, "the module is not in work: only a module someone holds is published")
+            }
+            return held
+        }
+        return ConsoleLeases(list: {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             return (try? encoder.encode(await host.leaseRows())) ?? Data("[]".utf8)
@@ -34,7 +42,45 @@ enum GhidraRoutes {
             let digest = try digest(module)
             let closed = try await answer { try await host.closeLease(digest, by: by) }
             return try JSONEncoder().encode(closed)
-        }, localHolder: localHolder)
+        }, localHolder: localHolder, typeConflicts: { module in
+            let digest = try digest(module)
+            let holder = try await holder(of: digest)
+            let raw = try await answer { try await host.preview(digest, holder: holder) }
+            let preview = (try JSONSerialization.jsonObject(with: raw)) as? [String: Any] ?? [:]
+            let origins = preview["type_conflict_origins"] as? [String: String] ?? [:]
+            var rows: [[String: Any]] = []
+            for name in preview["type_conflicts"] as? [String] ?? [] {
+                let origin = origins[name] ?? ""
+                // A withdrawn name only stays in this module: nothing to replace.
+                if origin.hasPrefix("withdrawn ") { continue }
+                var row: [String: Any] = ["name": name]
+                if let source = SHA256Digest(hex: origin) {
+                    row["origin"] = source.hex
+                    row["origin_name"] = (try? await host.project(source).state().module.name) ?? NSNull()
+                }
+                var query = URLComponents()
+                query.queryItems = [URLQueryItem(name: "name", value: name)]
+                if let data = try? await host.read(digest, "/v1/type?" + (query.percentEncodedQuery ?? ""), holder: holder),
+                   let definition = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    row["module_c"] = (definition["program"] as? [String: Any])?["c"] ?? NSNull()
+                    row["shared_c"] = (definition["shared"] as? [String: Any])?["c"] ?? NSNull()
+                }
+                rows.append(row)
+            }
+            var answer: [String: Any] = ["module": digest.hex, "holder": holder, "conflicts": rows]
+            answer["revision"] = preview["revision"]
+            answer["library_refused"] = (preview["library"] as? [String: Any])?["conflicts"]
+            return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
+        }, publishTakingTypes: { module, by in
+            let digest = try digest(module)
+            let holder = try await holder(of: digest)
+            let publication = try await answer {
+                try await host.publish(digest, by: "\(by) (console: replaces the shared types)",
+                                       options: GhidraHost.PublishOptions(takeTypeConflicts: true), holder: holder)
+            }
+            await published()
+            return try JSONEncoder().encode(PublishAnswer(publication))
+        })
     }
 
     /// The console's Issues page over the host's reports.

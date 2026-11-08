@@ -12,12 +12,23 @@ public struct ConsoleLeases: Sendable {
     /// The holder every agent on the local MCP socket holds a lease as: a
     /// lease of that holder is shown with the connection that works on it.
     public let localHolder: String
+    /// The shared types the module in work would replace at its publish: for
+    /// each, who wrote the shared one and both definitions. What the console
+    /// shows before an administrator decides.
+    public let typeConflicts: (@Sendable (_ module: String) async throws -> Data)?
+    /// The module's publish as its holder, each conflicting shared type
+    /// replaced by the module's: an administrator's decision, made by `by`.
+    public let publishTakingTypes: (@Sendable (_ module: String, _ by: String) async throws -> Data)?
 
     public init(list: @escaping @Sendable () async -> Data,
                 close: @escaping @Sendable (_ module: String, _ by: String) async throws -> Data,
-                localHolder: String) {
+                localHolder: String,
+                typeConflicts: (@Sendable (_ module: String) async throws -> Data)? = nil,
+                publishTakingTypes: (@Sendable (_ module: String, _ by: String) async throws -> Data)? = nil) {
         self.list = list
         self.close = close
         self.localHolder = localHolder
+        self.typeConflicts = typeConflicts
+        self.publishTakingTypes = publishTakingTypes
     }
 }

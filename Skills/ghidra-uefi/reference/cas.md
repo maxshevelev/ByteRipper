@@ -203,8 +203,8 @@ makes the next version. Comments and descriptions are the last publish's: a
 module whose text for a type, a field or an enum member differs from the
 archive's writes its own, and that too is the next version. A type the
 archive holds differently in any other way refuses the publish, and nothing is
-written; only an administrator replaces one (`take_type_conflicts`), and that
-too is a version. A name withdrawn from the archive does not refuse: it stays
+written; only an administrator replaces one (`take_type_conflicts`, from the
+server console's Activity page for a module in work), and that too is a version. A name withdrawn from the archive does not refuse: it stays
 in the module's program and is reported. A withdrawal is a version of its own.
 A typedef named like the function it renames — what the C parser makes of
 `typedef UINT32 NAME(…)` — is that function, so a module that holds the

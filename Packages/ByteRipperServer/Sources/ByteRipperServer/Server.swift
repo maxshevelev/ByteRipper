@@ -179,12 +179,13 @@ public final class Server {
         // The console, on every address behind the admin token, and only
         // under this server's own names (decision 19).
         let console: Console
+        let publishedFeed = cas?.feed
         do {
             console = try Console(registry: registry, tokens: tokens, authorizer: authorizer, rest: rest,
                                   mcp: socket.activity,
                                   agent: ConsoleAgent(socket: configuration.mcpSocket.path,
                                                       binary: Self.executablePath()),
-                                  leases: ghidra.map(GhidraRoutes.consoleLeases),
+                                  leases: ghidra.map { GhidraRoutes.consoleLeases($0, published: { await publishedFeed?.rescan() }) },
                                   issues: ghidra.flatMap(GhidraRoutes.consoleIssues),
                                   tickets: ghidra.flatMap(GhidraRoutes.consoleTickets),
                                   status: { [weak self] in await self?.status() ?? Self.noStatus })
