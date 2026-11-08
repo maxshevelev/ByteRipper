@@ -345,7 +345,7 @@
   const PAGES = {
     "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", count: "documents", mount: mountDocuments },
     "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
-    "/admin/tickets": { title: "Module Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "list", endpoint: "/admin/api/tickets", interval: 10000, count: "tickets", mount: mountTickets },
+    "/admin/tickets": { title: "Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "list", endpoint: "/admin/api/tickets", interval: 10000, count: "tickets", mount: mountTickets },
     "/admin/issues": { title: "Server Issues", subtitle: "What agents reported about the server's tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, count: "issues", mount: mountIssues },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
     "/admin/configuration": { title: "Configuration", subtitle: "How an agent on this machine connects to the server.", icon: "sliders", endpoint: "/admin/api/configuration", interval: 15000, mount: mountConfiguration },
