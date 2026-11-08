@@ -1707,7 +1707,7 @@
       return;
     }
     const body = h("div", { class: "type-conflicts" }, data.conflicts.map((c) => h("div", { class: "type-conflict" },
-      h("div", { class: "doc-title mono", text: c.name }),
+      h("div", { class: "doc-title mono", text: c.tag ? `${c.name} (and its tag ${c.tag})` : c.name }),
       h("div", { class: "muted", text: `Shared copy written by ${c.origin_name || c.origin || "a module not known here"}` }),
       h("div", { class: "type-pair" },
         h("div", {}, h("div", { class: "codebar-title", text: `${name} (would be shared)` }), h("pre", { class: "code", text: c.module_c || "—" })),

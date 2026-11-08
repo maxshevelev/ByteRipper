@@ -49,11 +49,16 @@ enum GhidraRoutes {
             let preview = (try JSONSerialization.jsonObject(with: raw)) as? [String: Any] ?? [:]
             let origins = preview["type_conflict_origins"] as? [String: String] ?? [:]
             var rows: [[String: Any]] = []
-            for name in preview["type_conflicts"] as? [String] ?? [] {
+            let names = preview["type_conflicts"] as? [String] ?? []
+            for name in names {
+                // A typedef and its tag are one type to decide on: the tag
+                // goes with its typedef's row, under the typedef's origin.
+                if name.hasPrefix("_"), names.contains(String(name.dropFirst())) { continue }
                 let origin = origins[name] ?? ""
                 // A withdrawn name only stays in this module: nothing to replace.
                 if origin.hasPrefix("withdrawn ") { continue }
                 var row: [String: Any] = ["name": name]
+                if names.contains("_" + name) { row["tag"] = "_" + name }
                 if let source = SHA256Digest(hex: origin) {
                     row["origin"] = source.hex
                     row["origin_name"] = (try? await host.project(source).state().module.name) ?? NSNull()
