@@ -169,8 +169,11 @@ public final class ServerActivity {
         rows.removeAll { $0.number == number }
     }
 
-    /// The rows the console shows: the open connections.
-    public var listed: [Row] { rows }
+    /// The rows the console shows: the open connections that have called a
+    /// tool. A client that only connected — every Claude Code session with
+    /// this server configured does at start — has nothing to do with the
+    /// server until its first call, and shows from that call on.
+    public var listed: [Row] { rows.filter { !$0.log.isEmpty } }
 
     /// `value` as compact JSON, cut with an ellipsis past `argumentsLimit`.
     nonisolated static func arguments(_ value: JSONValue) -> String {

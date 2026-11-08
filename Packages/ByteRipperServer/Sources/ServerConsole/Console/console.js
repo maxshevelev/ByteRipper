@@ -909,8 +909,8 @@
     function update(data) {
       updateLeases(modules, closedLeases, data.leases);
       if (!data.mcp.length) {
-        fill(agents.body, empty("bot", "No local agent is connected",
-          "An agent on this machine reaches the server through the relay; its calls appear here as soon as its client connects.",
+        fill(agents.body, empty("bot", "No local agent is at work",
+          "An agent on this machine reaches the server through the relay; it appears here with its first call.",
           h("div", { class: "empty-action" }, h("button", { class: "btn small", type: "button", onclick: () => go("/admin/configuration") },
             icon("sliders", 15), "Agent configuration"))));
       } else {
@@ -971,8 +971,7 @@
 
   function connectionState(row) {
     if (row.active) return lamp();
-    if (row.spoke) return h("span", { class: "pill ok", text: "Live" });
-    return h("span", { class: "pill warn", title: "Connected, has said nothing yet", text: "Silent" });
+    return h("span", { class: "pill ok", text: "Live" });
   }
 
   // A connection by its number and the agent behind it — the Claude Code

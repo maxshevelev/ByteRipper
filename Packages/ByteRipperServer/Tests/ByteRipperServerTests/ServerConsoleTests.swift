@@ -450,6 +450,20 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertFalse(row.log[0].isRunning)
     }
 
+    /// A connection that has called no tool is not listed: a Claude Code
+    /// session connects at start whether or not it ever uses the server.
+    func testAnAgentShowsFromItsFirstCall() throws {
+        let activity = ServerActivity()
+        activity.opened(number: 1, about: "test")
+        activity.spoke(1)
+        XCTAssertTrue(activity.listed.isEmpty, "connected and listed the tools, called none")
+        let started = Date()
+        activity.started(AgentCallRecord(id: UUID(), client: "x", tool: "documents", arguments: [:],
+                                         started: started, duration: .zero, finished: started,
+                                         answerBytes: 0, outcome: .running), connection: 1)
+        XCTAssertEqual(activity.listed.map(\.number), [1], "listed while its first call runs")
+    }
+
     /// The same for an agent connection: its log shows the tool while it works
     /// and what came of it when it ends.
     func testAnAgentsCallLogShowsTheRunningCall() throws {
