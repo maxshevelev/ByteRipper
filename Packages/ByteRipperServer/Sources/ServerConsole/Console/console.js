@@ -330,6 +330,9 @@
     page: null,
     timer: null,
     live: null,
+    // The sidebar's counts: their elements by page, and the timer that asks.
+    counts: {},
+    countTimer: null,
     // Which request logs the operator has opened, by token: the page is drawn
     // again on every poll, and a log that shut itself would be unreadable.
     // Which reports the operator has opened, and whether resolved ones show.
@@ -340,10 +343,10 @@
   };
 
   const PAGES = {
-    "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", mount: mountDocuments },
+    "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", count: "documents", mount: mountDocuments },
     "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
-    "/admin/tickets": { title: "Module Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "list", endpoint: "/admin/api/tickets", interval: 10000, mount: mountTickets },
-    "/admin/issues": { title: "Server Issues", subtitle: "What agents reported about the server's tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, mount: mountIssues },
+    "/admin/tickets": { title: "Module Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "list", endpoint: "/admin/api/tickets", interval: 10000, count: "tickets", mount: mountTickets },
+    "/admin/issues": { title: "Server Issues", subtitle: "What agents reported about the server's tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, count: "issues", mount: mountIssues },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
     "/admin/configuration": { title: "Configuration", subtitle: "How an agent on this machine connects to the server.", icon: "sliders", endpoint: "/admin/api/configuration", interval: 15000, mount: mountConfiguration },
     "/admin/status": { title: "Status", subtitle: "The server, its roles, its limits.", icon: "gauge", endpoint: "/admin/api/status", mount: mountStatus },
@@ -367,7 +370,7 @@
   window.addEventListener("popstate", render);
   document.addEventListener("visibilitychange", () => {
     if (!state.page) return;
-    if (document.hidden) { stopPolling(); setLive("paused"); } else { poll(); }
+    if (document.hidden) { stopPolling(); setLive("paused"); } else { poll(); pollCounts(); }
   });
 
   async function render() {
@@ -442,9 +445,11 @@
     closeLog();
     const page = PAGES[path];
     const name = state.session.name || "admin";
+    state.counts = {};
     const nav = h("nav", { class: "nav" }, Object.entries(PAGES).map(([target, info]) =>
       h("a", { href: target, class: target === path ? "active" : "", onclick: (event) => { event.preventDefault(); go(target); } },
-        icon(info.icon), h("span", { class: "nav-label", text: info.title }))));
+        icon(info.icon), h("span", { class: "nav-label", text: info.title }),
+        info.count ? (state.counts[info.count] = h("span", { class: "count" })) : null)));
     const live = h("span", { class: "live" }, h("span", { class: "dot" }), h("span", { text: "Live" }));
     const actions = h("div", { class: "topbar-actions" });
     const content = h("div", { class: "stack" }, h("div", { class: "loading" }, h("div", { class: "spinner" })));
@@ -469,6 +474,38 @@
     const view = page.mount(actions);
     state.page = { endpoint: page.endpoint, view, content, first: true, interval: page.interval || POLL_MS };
     poll();
+    pollCounts();
+  }
+
+  // The sidebar's counts, asked every ten seconds on any page: the documents
+  // open (and, dimmed, those whose file is missing), the reports not yet
+  // resolved, and the review tickets not yet closed — open (a remark
+  // waits) and settled (every remark verified, the close still to do). A count
+  // whose endpoint does not answer — no Ghidra role — stays empty.
+  async function pollCounts() {
+    clearTimeout(state.countTimer);
+    state.countTimer = null;
+    const counts = state.counts;
+    const [status, issues, tickets] = await Promise.allSettled([
+      call("GET", "/admin/api/status"), call("GET", "/admin/api/issues"), call("GET", "/admin/api/tickets")]);
+    if (state.counts !== counts) return;
+    const show = (key, value, hot, extra) => {
+      const el = counts[key];
+      if (!el) return;
+      el.className = `count${hot && value > 0 ? " hot" : ""}`;
+      fill(el, value === null ? "" : String(value),
+        extra ? h("span", { class: "count-extra", title: `${extra} missing on disk`, text: ` +${extra}` }) : null);
+    };
+    const docs = status.status === "fulfilled" && status.value && status.value.documents;
+    show("documents", docs ? docs.open : null, false, docs && docs.missing ? docs.missing : 0);
+    show("issues", issues.status === "fulfilled" && Array.isArray(issues.value)
+      ? issues.value.filter((issue) => !issue.resolved).length : null, true);
+    const board = tickets.status === "fulfilled" && Array.isArray(tickets.value) ? tickets.value : null;
+    const waiting = board ? board.filter((ticket) => ticket.state === "open").length : 0;
+    const settled = board ? board.filter((ticket) => ticket.state === "settled").length : 0;
+    show("tickets", board ? waiting + settled : null, true);
+    if (counts.tickets) counts.tickets.title = board ? `${waiting} open, ${settled} settled` : "";
+    if (state.counts === counts && state.session && !document.hidden) state.countTimer = setTimeout(pollCounts, 10000);
   }
 
   async function signOut() {
@@ -487,6 +524,8 @@
   function stopPolling() {
     clearTimeout(state.timer);
     state.timer = null;
+    clearTimeout(state.countTimer);
+    state.countTimer = null;
   }
 
   // Asks the page's endpoint now, and again in two seconds.
