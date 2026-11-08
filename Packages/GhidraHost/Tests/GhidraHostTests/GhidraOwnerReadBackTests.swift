@@ -978,6 +978,28 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         } catch {}
     }
 
+    /// ECX can be kept too: it is all of x86's `likelytrash`, and a list
+    /// emptied by the keep leaves the convention, which Ghidra refused
+    /// whole (issue 1413016b, Ps2KeyboardPei's IsTscFrequencyGuid).
+    func testECXCanBeKeptThoughItIsAllOfTheLikelyTrash() async throws {
+        let bytes = try image()
+        guard SHA256Digest(data: bytes).hex.hasPrefix("98290ef9") else { throw XCTSkip("GHIDRA_TYPE_MODULE is not DebugMaskPei") }
+        try await open(bytes)
+        let signature = "EFI_GUID * CopyGenericVariableGuid(EFI_GUID *DestinationGuid)"
+        let set = try await post("/v1/set/signature", ["address": "0x9A0FD2A", "signature": signature,
+                                                       "storage": ["EDX:4"], "return_storage": "EAX:4",
+                                                       "unaffected": ["ecx"]])
+        XCTAssertEqual(set["unaffected_kept"] as? [String], ["ECX"], "\(set)")
+        XCTAssertTrue((set["calling_convention"] as? String)?.hasSuffix("_keeps_ECX") == true, "\(set)")
+        XCTAssertEqual(set["storage"] as? [String], ["EDX:4"], "the places stay: \(set)")
+        let both = try await post("/v1/set/signature", ["address": "0x9A0FD2A", "signature": signature,
+                                                        "storage": ["EDX:4"], "return_storage": "EAX:4",
+                                                        "unaffected": ["ecx", "edx"]])
+        XCTAssertEqual(both["unaffected_kept"] as? [String], ["ECX", "EDX"], "\(both)")
+        let callee = try await read("/v1/function/0x9A0FD2A")
+        XCTAssertEqual(callee["unaffected_kept"] as? [String], ["ECX", "EDX"])
+    }
+
     /// An owner left with no record — its host stopped before it wrote
     /// `owner.json` — keeps the project's lock; the next open stops it and
     /// opens (issues f9bb8693, d3b03c04).

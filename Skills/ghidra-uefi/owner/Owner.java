@@ -5707,6 +5707,16 @@ public class Owner {
             entry.setAttribute("name", register.getName());
             unaffected.appendChild(entry);
         }
+        // A list left with no entry goes: the compiler spec's grammar takes
+        // `killedbycall` and `likelytrash` only with one, and x86's
+        // `likelytrash` holds nothing but ECX (issue 1413016b).
+        for (org.w3c.dom.Element list : lists) {
+            boolean empty = true;
+            for (org.w3c.dom.Node entry = list.getFirstChild(); entry != null; entry = entry.getNextSibling()) {
+                if (entry instanceof org.w3c.dom.Element) { empty = false; break; }
+            }
+            if (empty) prototype.removeChild(list);
+        }
         javax.xml.transform.Transformer transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
         transformer.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
         java.io.StringWriter out = new java.io.StringWriter();
