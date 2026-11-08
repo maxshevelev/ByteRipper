@@ -2118,6 +2118,9 @@ public class Owner {
         if (a instanceof ghidra.program.model.data.TypeDef p && b instanceof ghidra.program.model.data.TypeDef q) {
             return namesOnlyGiven(p.getDataType(), q.getDataType(), seen, given);
         }
+        if (a instanceof ghidra.program.model.data.Structure p && b instanceof ghidra.program.model.data.Structure q) {
+            return fieldsOnlyGiven(p, q, seen, given);
+        }
         if (a instanceof ghidra.program.model.data.Composite p && b instanceof ghidra.program.model.data.Composite q) {
             if ((p instanceof ghidra.program.model.data.Union) != (q instanceof ghidra.program.model.data.Union)) return false;
             ghidra.program.model.data.DataTypeComponent[] left = p.getDefinedComponents();
@@ -2154,6 +2157,80 @@ public class Owner {
             return true;
         }
         return a.isEquivalent(b) || sameShape(a, b, new java.util.HashSet<>());
+    }
+
+    /**
+     * A structure read further than the shared copy: every shared field is
+     * the module's at the same offset and size, named where the shared one
+     * was a placeholder — or it is filler, a placeholder over bytes nobody
+     * typed (`UINT8 Unknown04[24]`, `undefined4`), and the module's fields
+     * cut it into what the code proves, none of them crossing its edges.
+     * Fields where the shared copy holds no field at all are added. The
+     * size stays the same, and a field the shared copy names keeps its
+     * place, size and name.
+     */
+    private static boolean fieldsOnlyGiven(ghidra.program.model.data.Structure ours,
+                                           ghidra.program.model.data.Structure theirs,
+                                           java.util.Set<String> seen, boolean[] given) {
+        if (ours.getLength() != theirs.getLength()) return false;
+        ghidra.program.model.data.DataTypeComponent[] left = ours.getDefinedComponents();
+        ghidra.program.model.data.DataTypeComponent[] right = theirs.getDefinedComponents();
+        for (ghidra.program.model.data.DataTypeComponent shared : right) {
+            int start = shared.getOffset(), end = start + shared.getLength();
+            boolean filler = placeholderField(shared.getFieldName()) && filler(shared.getDataType());
+            ghidra.program.model.data.DataTypeComponent same = null;
+            for (ghidra.program.model.data.DataTypeComponent mine : left) {
+                if (mine.getOffset() == start && mine.getLength() == shared.getLength()) { same = mine; break; }
+            }
+            if (same != null) {
+                String mine = same.getFieldName(), theirName = shared.getFieldName();
+                if (!java.util.Objects.equals(mine, theirName)) {
+                    if (!placeholderField(theirName) || placeholderField(mine)) return false;
+                    given[0] = true;
+                }
+                // Bytes the module typed where the shared copy had none.
+                if (filler && !filler(same.getDataType())) { given[0] = true; continue; }
+                if (!namesOnlyGiven(same.getDataType(), shared.getDataType(), seen, given)) return false;
+                continue;
+            }
+            // A field the shared copy names, moved, resized or gone: a replacement.
+            if (!filler) return false;
+            for (ghidra.program.model.data.DataTypeComponent mine : left) {
+                int from = mine.getOffset(), to = from + mine.getLength();
+                if (to <= start || from >= end) continue;
+                if (from < start || to > end) return false;
+                if (!placeholderField(mine.getFieldName()) || !filler(mine.getDataType())) given[0] = true;
+            }
+        }
+        // The module's fields over bytes the shared copy left without a field.
+        for (ghidra.program.model.data.DataTypeComponent mine : left) {
+            int from = mine.getOffset(), to = from + mine.getLength();
+            boolean covered = false;
+            for (ghidra.program.model.data.DataTypeComponent shared : right) {
+                int start = shared.getOffset(), end = start + shared.getLength();
+                if (to > start && from < end) { covered = true; break; }
+            }
+            if (!covered) given[0] = true;
+        }
+        return true;
+    }
+
+    /** Bytes nobody typed: `undefined`, `undefinedN`, or an array of one-byte elements. */
+    static boolean filler(DataType type) {
+        if (type == null) return true;
+        if (type instanceof ghidra.program.model.data.TypeDef def) type = def.getBaseDataType();
+        if (type instanceof ghidra.program.model.data.Undefined || type instanceof ghidra.program.model.data.DefaultDataType) return true;
+        if (type instanceof ghidra.program.model.data.Array array) {
+            DataType element = array.getDataType();
+            if (element instanceof ghidra.program.model.data.TypeDef def) element = def.getBaseDataType();
+            return element.getLength() == 1 && (element instanceof ghidra.program.model.data.Undefined
+                || element instanceof ghidra.program.model.data.DefaultDataType
+                || element instanceof ghidra.program.model.data.ByteDataType
+                || element instanceof ghidra.program.model.data.UnsignedCharDataType
+                || element instanceof ghidra.program.model.data.CharDataType
+                || element instanceof ghidra.program.model.data.SignedByteDataType);
+        }
+        return false;
     }
 
     /** A type name Ghidra made up: an inline function type, or a `.conflict` copy. */

@@ -1298,7 +1298,9 @@ public enum GhidraTools {
                 are shared by the registry's rule, and the store keeps the shared archive in versions: a \
                 type new to it is added; the same type is nothing; an addition — an enum member, a real \
                 name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member \
-                type Ghidra made up as `_func_N`) — makes the next version, `types_version`. Comments and \
+                type Ghidra made up as `_func_N`), a placeholder over untyped bytes (`UINT8 Unknown04[24]`) cut \
+                into fields inside it while every named field keeps its place and size — makes the next \
+                version, `types_version`. Comments and \
                 descriptions are the last publish's: this module's text for a type, a field or an enum member \
                 replaces the shared one, and that is a version too. A type the archive holds differently in any other way \
                 refuses the whole publish before anything is stored, naming each type and the module that \

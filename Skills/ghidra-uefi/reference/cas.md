@@ -198,8 +198,10 @@ in versions, by the registry's rule. While a publish holds the store, its owner
 merges the review's types into a copy of the current version: a type new to
 the archive is added; the same type is nothing; an addition — an enum member, a
 real name where the shared copy had a placeholder (`Unknown…`, `field_0x…`,
-`param_N`, a member type Ghidra made up as `_func_N` or a `.conflict` copy) —
-makes the next version. Comments and descriptions are the last publish's: a
+`param_N`, a member type Ghidra made up as `_func_N` or a `.conflict` copy), a
+placeholder over untyped bytes (`UINT8 Unknown04[24]`, `undefined4`) cut into
+fields that stay inside its bytes, with every named field at its place and size
+and the structure's size unchanged — makes the next version. Comments and descriptions are the last publish's: a
 module whose text for a type, a field or an enum member differs from the
 archive's writes its own, and that too is the next version. A type the
 archive holds differently in any other way refuses the publish, and nothing is

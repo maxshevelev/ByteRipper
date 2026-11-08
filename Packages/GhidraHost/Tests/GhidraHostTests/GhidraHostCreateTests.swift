@@ -755,6 +755,58 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         }
     }
 
+    /// A placeholder over bytes nobody typed, cut into fields the code proves,
+    /// is the same type read further: an amendment, as a placeholder named is.
+    /// A structure that only points at it follows. A named field moved is
+    /// still a replacement (CHIPSET_SERVICES_PPI in PlatformStage2Pei).
+    func testAPlaceholderCutIntoFieldsAmendsTheSharedType() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostPlaceholderCutTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 300,
+                                                   holder: "GhidraHostPlaceholderCutTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        try await host.take(module)
+        defer { Task { await host.stop(module) } }
+        let bits = GhidraHost.archiveBits(language: try json(await host.read(module, "/v1/hello"))["language"] as? String ?? "")
+        func define(_ c: String) async throws {
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["c": c]))
+        }
+        func versions() throws -> [TypeArchiveVersion] { try store.typeArchive(bits: bits)?.versions ?? [] }
+
+        try await define("typedef struct _CUT_PPI { unsigned int Size; unsigned char Unknown04[24]; void *Function1C; unsigned char Unknown20[4]; } CUT_PPI;")
+        try await define("typedef union _CUT_SLOT { CUT_PPI *Services; unsigned int Raw; } CUT_SLOT;")
+        _ = try await host.publish(module, by: "agent")
+        XCTAssertEqual(try versions().count, 1)
+
+        try await define("typedef struct _CUT_PPI { unsigned int Size; unsigned char Unknown04[8]; void *Function0C; "
+            + "unsigned char Unknown10[4]; void *Function14; void *Function18; void *Function1C; void *Function20; } CUT_PPI;")
+        let cut = try await host.publish(module, by: "agent")
+        XCTAssertEqual(cut.typeConflicts, [], "cut into fields, nothing named moved")
+        let after = try versions()
+        XCTAssertEqual(after.count, 2)
+        XCTAssertTrue(!Set(after[1].amended).isDisjoint(with: ["CUT_PPI", "_CUT_PPI"]), "\(after[1])")
+
+        // Function1C moved: a field the shared copy names is a replacement.
+        try await define("typedef struct _CUT_PPI { unsigned int Size; unsigned char Unknown04[8]; void *Function0C; "
+            + "unsigned char Unknown10[4]; void *Function14; void *Function18; void *Function20; void *Function1C; } CUT_PPI;")
+        do {
+            _ = try await host.publish(module, by: "agent")
+            XCTFail("a named field moved is refused")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409)
+            XCTAssertTrue("\(error)".contains("CUT_PPI"), "\(error)")
+        }
+        XCTAssertEqual(try versions().count, 2, "nothing written")
+    }
+
     func testSharedTypesComeInVersionsAndAReplacementRefusesThePublish() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
