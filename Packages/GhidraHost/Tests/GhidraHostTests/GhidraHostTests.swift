@@ -387,6 +387,24 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         }
     }
 
+    /// A decline's dry run answers what it would leave and the host writes
+    /// nothing; a decline said again finds its entry among the declined
+    /// (issue 3676616e).
+    func testADeclinesDryRunAnswersAndADeclineSaidTwiceFindsItsEntry() {
+        let id = setMem.key
+        let plan = GhidraHost.libraryPlan([match("0x1000", exact: id), match("0x6000", exact: id, declined: [id])],
+                                          index: index, hashed: 2, comparisons: [:])
+        XCTAssertEqual(GhidraHost.declineTarget(plan, address: "0x1000", id: nil), id)
+        XCTAssertEqual(GhidraHost.declineTarget(plan, address: "0x6000", id: nil), id, "already declined")
+        XCTAssertEqual(GhidraHost.declineTarget(plan, address: "0X6000", id: nil), id)
+        XCTAssertNil(GhidraHost.declineTarget(plan, address: "0x9000", id: nil))
+        let dry = GhidraHost.dryDecline(plan, address: "0x1000", id: id)
+        XCTAssertEqual(dry["declined"] as? [String], [id])
+        XCTAssertEqual(dry["dry_run"] as? Bool, true)
+        XCTAssertEqual(GhidraHost.dryDecline(plan, address: "0x6000", id: id)["declined"] as? [String], [id],
+                       "an entry declined already is listed once")
+    }
+
     func testEachMatchIsSortedByWhatItCallsFor() {
         let id = setMem.key
         let assertOnly = GhidraHost.LibraryComparison(comparable: true, why: nil, differences: [

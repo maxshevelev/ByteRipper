@@ -413,9 +413,13 @@ extension GhidraHost {
                 throw GhidraHostError(.refused, "name the function by `address`", status: 400)
             }
             let (plan, _) = try await libraryPlan(module)
-            let all = plan.toApply + plan.candidates + plan.applied + plan.edited
-            guard let id = request.id ?? all.first(where: { $0.address == address })?.id else {
+            guard let id = Self.declineTarget(plan, address: address, id: request.id) else {
                 throw GhidraHostError(.refused, "no entry matches the function at \(address)", status: 404)
+            }
+            // A dry run answers what the decline would leave, and writes nothing.
+            if request.dryRun == true {
+                return try JSONSerialization.data(withJSONObject: Self.dryDecline(plan, address: address, id: id),
+                                                  options: [.sortedKeys])
             }
             let body = try JSONSerialization.data(withJSONObject: ["address": address, "id": id,
                                                                    "reason": request.reason ?? "", "by": "agent"])
@@ -469,6 +473,24 @@ extension GhidraHost {
             answer["results"] = (applied as? [String: Any])?["items"] ?? []
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         }
+    }
+
+    /// The entry a decline at `address` names: `id` when given, else the one
+    /// matching there — declined already included, so a decline said twice
+    /// answers the same rather than "no entry".
+    static func declineTarget(_ plan: LibraryPlan, address: String, id: String?) -> String? {
+        if let id { return id }
+        let all = plan.toApply + plan.candidates + plan.applied + plan.edited + plan.declined
+        return all.first(where: { $0.address.caseInsensitiveCompare(address) == .orderedSame })?.id
+    }
+
+    /// What a decline would answer, for a dry run: the entries declined at
+    /// `address` with `id` among them. Nothing is written.
+    static func dryDecline(_ plan: LibraryPlan, address: String, id: String) -> [String: Any] {
+        var declined = plan.declined
+            .filter { $0.address.caseInsensitiveCompare(address) == .orderedSame }.map(\.id)
+        if !declined.contains(id) { declined.append(id) }
+        return ["address": address, "id": id, "declined": declined, "dry_run": true]
     }
 
     /// The entries this module is the source of learn what their data references
