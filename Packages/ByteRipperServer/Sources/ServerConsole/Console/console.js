@@ -1621,12 +1621,12 @@
     }
   }
 
+  // The module by its name; its SHA-256 only on hover, where it does not
+  // take the table's width.
   function moduleCell(row) {
-    return h("td", {}, h("div", { class: "row" },
+    return h("td", {}, h("div", { class: "row", title: row.module },
       h("div", { class: "doc-icon" }, icon("layers", 16)),
-      h("div", {},
-        h("div", { class: "doc-title", text: row.name || "module" }),
-        h("div", { class: "doc-path", text: row.module }))));
+      h("div", { class: "doc-title", text: row.name || row.module.slice(0, 12) })));
   }
 
   function leaseTable(rows) {
