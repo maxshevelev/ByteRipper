@@ -26,6 +26,8 @@
 @covers panel.uefi.dmi-area
 @covers panel.uefi.compare-update
 @covers menu.offset.uefi-show-in-tree
+@covers panel.uefi.copy-name
+@covers panel.uefi.server
 
 **Tools ▸ UEFI Structure** reads the open dump as an Intel/UEFI flash image and shows it as a tree. The title line above the tree says what the image as a whole is.
 
@@ -38,6 +40,8 @@ The **Type** and **Subtype** columns name each node as the reference parser name
 The **ME region** row opens onto the same analysis the [[topic:tool-me|ME Analyzer]] gives, so an image can be read end to end in one tree. It opens as soon as the region has been read; values that wait for a database read **Loading…** there as they do in the ME Analyzer. A double click on a row of that sub-tree opens it as a fragment panel, as it does in the ME Analyzer.
 
 **The reveal button** on the right of the title row shows in the tree the node under the caret in the dump — the start of a selection where there is one. It opens the branches on the way, and a branch not yet decoded is decoded for it, so the reveal can take as long as that read. It then selects the innermost node whose range holds the byte. A byte of the ME region is shown in a row of its sub-tree; the region is opened for the reveal if it has not been read yet. The dump is not moved: the reveal brings the tree to the byte, not the byte to the tree. The same reveal is in the dump's context menu: a right-click on a byte and **UEFI Structure ▸ Show in Tree** show the node holding the byte that was clicked, whatever the caret.
+
+When the analyses are kept on an analysis server, the title line shows the state of the server right after the image's name: the same cloud as in the code panel, whose colours are explained in [[topic:code-panel|Code Panel]]. With the analyses kept on this Mac, there is no cloud.
 
 **Show DMI Area** — the badge left of the magnifying glass, which names whose layout the store is: **Lenovo DMI**, **ASUS DMI**, **Acer DMI**, **Panasonic DMI**, **HP DMI** or **Apple DMI**, plain **DMI** on an image with stores of two vendors — goes to where the image keeps the board's [[term:dmi|DMI]] data: the serial numbers, the UUID, the model, the Windows key. It is in the title row only on an image whose store the tree reads — Lenovo's [[term:lenv|LENV]] store, ASUS's [[term:gpnv|GPNV store]], Acer's [[term:acer-dmi|DMI area]], Panasonic's [[term:panasonic-dmi|DMI area]], HP's [[term:hp-dmi|HP_MUD]] variable or Apple's [[term:apple-dmi|SysF store]] — and appears a moment after the tree, once the image has been searched for one. A click opens the branches on the way, selects the store's row and moves the dump to its bytes; the row's details sum the store up. On an image with more than one store the button opens a menu of them, each by kind and address.
 
@@ -81,6 +85,7 @@ Right-click a node:
 - **Open Decompressed Body** / **Save Decompressed Body as…** for a compressed section — what those bytes actually expand to.
 - **Open Decompressed Variable** for the `overrides` variable of an Apple system-flags store — its device overrides, which are kept as a bzip2 stream, unpacked into a tab as text. The tab is a copy: nothing here compresses the text again, so editing it does not change the dump.
 - **Go to Top Swap Copy** / **Go to Original** for a node in either block of an image with a [[term:top-swap|Top Swap]] copy — selects the same node in the other block and shows its bytes in the dump, so that each part of the copy can be matched with the part of the top block it duplicates.
+- **Copy Name** on every row — the name the row shows in the **Name** column, to the clipboard. The name at the top of the details can be selected and copied as well, like the fields under it.
 
 A module opened with **Open with Code** is read in the code panel, which has a page of its own: [[topic:code-panel|Code Panel]].
 

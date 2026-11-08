@@ -1,4 +1,4 @@
-@source-sha 3dac633a5aa72dc95aa415ad599018e74ab71bc2bd33c6f31073fee2b207fedb
+@source-sha 4c99e2d9379f5a785c471e40b4380f219eeb2a5cc003e003a3cef814efc32fa8
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -14,6 +14,8 @@ Die Spalten **Typ** und **Subtyp** benennen jeden Knoten so, wie der Referenz-Pa
 Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:tool-me|ME Analyzer]] liefert — so lässt sich ein Image in einem Baum von vorn bis hinten lesen. Sie öffnet sich, sobald die Region gelesen ist; Werte, die auf eine Datenbank warten, zeigen dort wie im ME Analyzer **Wird geladen…**. Ein Doppelklick auf eine Zeile dieses Teilbaums öffnet sie in einem Fragmentbereich, wie im ME Analyzer.
 
 **Die Schaltfläche in Form einer Zielscheibe im rechten Teil der Titelzeile** zeigt im Baum den Knoten unter der Einfügemarke im Dump — den Anfang einer Auswahl, wo es eine gibt. Sie öffnet die Zweige auf dem Weg; ein Zweig, der noch nicht decodiert ist, wird für die Anzeige decodiert, und die Anzeige kann so lange dauern wie das Lesen. Ausgewählt wird der innerste Knoten, dessen Bereich das Byte enthält. Ein Byte des ME-Regions wird in einer Zeile seines Unterbaums gezeigt; die Region wird für die Anzeige geöffnet, wenn sie noch nicht gelesen ist. Der Dump bewegt sich nicht: die Anzeige führt den Baum zum Byte, nicht das Byte zum Baum. Dieselbe Anzeige bietet das Kontextmenü des Dumps: Ein Rechtsklick auf ein Byte und **UEFI-Struktur ▸ Im Baum zeigen** zeigen den Knoten, der das angeklickte Byte enthält, unabhängig von der Einfügemarke.
+
+Werden die Analysen auf einem Analyseserver geführt, zeigt die Titelzeile direkt nach dem Namen des Images den Zustand des Servers: dieselbe Wolke wie im [[topic:code-panel|Code-Bereich]], wo auch die Bedeutung ihrer Farben beschrieben ist. Werden die Analysen auf diesem Mac geführt, gibt es keine Wolke.
 
 **DMI-Bereich zeigen** — die gerahmte Schaltfläche links von der Lupe; ihre Aufschrift nennt den Hersteller, nach dessen Format der Speicher aufgebaut ist: **Lenovo DMI**, **ASUS DMI**, **Acer DMI**, **Panasonic DMI**, **HP DMI** oder **Apple DMI**, bei einem Abbild mit Speichern zweier Hersteller nur **DMI** — führt dorthin, wo das Abbild die [[term:dmi|DMI]]-Daten der Platine hält: die Seriennummern, die UUID, das Modell, den Windows-Schlüssel. Sie steht nur bei einem Abbild in der Titelzeile, dessen Speicher der Baum lesen kann — Lenovos [[term:lenv|LENV]]-Speicher, der [[term:gpnv|GPNV-Speicher]] von ASUS, der [[term:acer-dmi|DMI-Bereich]] von Acer, der [[term:panasonic-dmi|DMI-Bereich]] von Panasonic, die Variable [[term:hp-dmi|HP_MUD]] von HP oder der [[term:apple-dmi|SysF-Speicher]] von Apple —, und erscheint kurz nach dem Baum, sobald das Abbild danach durchsucht ist. Ein Klick öffnet die Zweige auf dem Weg, wählt den Knoten des Speichers aus und führt den Dump zu dessen Bytes; die Details des Knotens fassen den Speicher zusammen. Enthält das Abbild mehrere Speicher, öffnet die Schaltfläche ein Menü mit ihnen, jeder mit Art und Adresse.
 
@@ -58,6 +60,7 @@ Rechtsklick auf einen Knoten:
 - **Entpackten Rumpf öffnen** / **Entpackten Rumpf sichern unter…** bei einer komprimierten Sektion — das, wozu diese Bytes sich tatsächlich entfalten.
 - **Entpackte Variable öffnen** bei der Variable `overrides` des Apple-Systemspeichers — ihre Geräteüberschreibungen liegen als bzip2-Datenstrom vor und werden als Text in einem Tab geöffnet. Der Tab ist eine Kopie: Der Text wird hier nicht wieder komprimiert, eine Änderung der Kopie lässt den Dump daher unberührt.
 - **Zur Top-Swap-Kopie** / **Zum Original** bei einem Knoten in einem der beiden Blöcke eines Images mit [[term:top-swap|Top-Swap]]-Kopie — wählt denselben Knoten im anderen Block aus und zeigt seine Bytes im Dump, sodass sich jedem Teil der Kopie der Teil des obersten Blocks zuordnen lässt, den er wiederholt.
+- **Namen kopieren** in jeder Zeile — der Name, den die Zeile in der Spalte **Name** zeigt, wird in die Zwischenablage kopiert. Auch der Name oben in den Details lässt sich markieren und kopieren, wie die Felder darunter.
 
 Ein mit **Mit Code öffnen** geöffnetes Modul wird im Code-Bereich gelesen, der eine eigene Seite hat: [[topic:code-panel|Code-Bereich]].
 

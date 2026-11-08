@@ -831,6 +831,37 @@ final class UEFIToolFlowTests: XCTestCase {
                       "the dump outlines the entry the tree selects: \(focused) for \(entry.range)")
     }
 
+    /// Every UEFI row's menu offers Copy Name, which puts the name the row
+    /// reads on the pasteboard; and the panel wears the app's server sign
+    /// after the image's name.
+    func testCopyNameCopiesTheRowsNameAndTheTitleWearsTheServerSign() throws {
+        let controller = try open(LenovoTestImage.make())
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        var chain: [UEFINode] = []
+        let reached = expectation(description: "the way to block 2's serial is opened")
+        tree.materialize(containing: UInt64(LenovoTestImage.serialInBlock2)) { chain = $0; reached.fulfill() }
+        wait(for: [reached], timeout: 5)
+        let store = try XCTUnwrap(chain.first { $0.kind == .lenovoDMIStore })
+
+        let menu = vc.treeMenuForTesting(store.id)
+        let copy = try XCTUnwrap(menu.first { $0.title == "Copy Name" }, "\(menu.map(\.title))")
+        let name = try XCTUnwrap(vc.rowNameForTesting(store.id))
+        XCTAssertFalse(name.isEmpty)
+        let pasteboard = NSPasteboard.general
+        let kept = pasteboard.string(forType: .string)
+        defer {
+            pasteboard.clearContents()
+            if let kept { pasteboard.setString(kept, forType: .string) }
+        }
+        pasteboard.clearContents()
+        let action = try XCTUnwrap(copy.action)
+        XCTAssertTrue(NSApp.sendAction(action, to: copy.target, from: copy))
+        XCTAssertEqual(pasteboard.string(forType: .string), name)
+
+        XCTAssertTrue(vc.titleStatus is CodeServerIndicator, "the title wears the app's server sign")
+    }
+
     /// The tree's menu starts with what a double click on the row opens, and
     /// on a block stored encoded tells the bytes as stored from the block
     /// decoded.

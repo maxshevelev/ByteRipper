@@ -142,6 +142,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // folder, from a process that is about to swap the store's defaults
         // out from under it. A suite must not touch the library it is not
         // testing.
+        // UEFI Structure wears the code panel's server sign after the image's
+        // name; the module cannot reach the app, so the app hands it over.
+        UEFIToolModule.makeTitleStatus = { CodeServerIndicator() }
         if !MainViewController.isRunningTests {
             FavoritePatternStore.start()
             // Stored code analyses, where the Ghidra skill writes them — or a

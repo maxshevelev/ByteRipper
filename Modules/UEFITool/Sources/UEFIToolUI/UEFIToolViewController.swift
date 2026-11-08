@@ -273,6 +273,8 @@ import UEFITool
     private var queuedRefresh: Bool?
 
     private let summaryLabel = NSTextField(labelWithString: "")
+    /// What the app put after the image's name (`UEFIToolModule.makeTitleStatus`).
+    private(set) var titleStatus: NSView?
     /// The title row's right-hand button: reveal in the tree the node under
     /// the caret in the dump. Same glyph as the toolbar's Go To, because it is
     /// the same act — go where the caret points — pointed at the tree instead
@@ -556,6 +558,17 @@ import UEFITool
         view.addSubview(splitter)
         view.addSubview(bottomRow)
 
+        // The app's server sign right after the image's name; the name
+        // truncates before it, and it before the buttons at the right end.
+        // help: panel.uefi.server
+        let titleStatus = UEFIToolModule.makeTitleStatus?()
+        if let titleStatus {
+            titleStatus.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(titleStatus)
+            self.titleStatus = titleStatus
+        }
+        summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         // Hidden, the button takes no room and leaves no gap.
         let dmiWidth = dmiButton.widthAnchor.constraint(equalToConstant: 0)
         let dmiGap = dmiButton.trailingAnchor.constraint(equalTo: searchButton.leadingAnchor, constant: 0)
@@ -568,7 +581,7 @@ import UEFITool
             summaryLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
             // The button owns the title row's right end; a long image name
             // truncates before it rather than running under it.
-            summaryLabel.trailingAnchor.constraint(
+            (titleStatus ?? summaryLabel).trailingAnchor.constraint(
                 lessThanOrEqualTo: dmiButton.leadingAnchor, constant: -8
             ),
             dmiWidth,
@@ -603,6 +616,12 @@ import UEFITool
             bottomRow.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
             barWidth
         ])
+        if let titleStatus {
+            NSLayoutConstraint.activate([
+                titleStatus.leadingAnchor.constraint(equalTo: summaryLabel.trailingAnchor, constant: 6),
+                titleStatus.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor)
+            ])
+        }
 
         // The tree starts under the title, or under the search bar while it is
         // open; one of the two is always in force.
@@ -1261,7 +1280,11 @@ import UEFITool
         detail.prepareForRows(subject: subject)
 
         if !node.title.isEmpty {
+            // help: panel.uefi.copy-name
+            // Selectable, as the fields under it are: the name is what gets
+            // copied out of here most.
             let title = NSTextField(labelWithString: node.title)
+            title.isSelectable = true
             title.font = ToolPanelFont.title()
             title.translatesAutoresizingMaskIntoConstraints = false
             detail.content.addArrangedSubview(title)
@@ -1543,6 +1566,14 @@ import UEFITool
     /// For the tests: the titles of the tree's menu on the row of `id`.
     func nodeMenuTitlesForTesting(_ id: NodeID) -> [String] {
         tree?.node(id).map { nodeMenuItems(for: $0).map(\.title) } ?? []
+    }
+    /// For the tests: the whole right-click menu on the row of `id`.
+    func treeMenuForTesting(_ id: NodeID) -> [NSMenuItem] {
+        tree?.node(id).map { treeMenuItems(for: $0) } ?? []
+    }
+    /// For the tests: the name the row of `id` reads, as Copy Name copies it.
+    func rowNameForTesting(_ id: NodeID) -> String? {
+        tree?.node(id).map { text(for: $0, in: Column.name) }
     }
 
     // MARK: - Searching the tree
@@ -2778,17 +2809,36 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     /// The menu a right-click asks for, from what the node under the pointer
     /// offers: Fix Checksum when its checksum is wrong, an export when it is —
-    /// or is inside — a compressed section that opened, and nothing at all on
-    /// any other row. Fix greys out on a read-only file rather than vanishing,
-    /// so the menu still says what fixing would do. It is never offered inside
-    /// a compressed section: the file holds those bytes compressed.
+    /// or is inside — a compressed section that opened; then, on every UEFI
+    /// row, Copy Name and Add Annotation…. Fix greys out on a read-only file
+    /// rather than vanishing, so the menu still says what fixing would do. It
+    /// is never offered inside a compressed section: the file holds those
+    /// bytes compressed.
     private func contextMenu(for event: NSEvent) -> NSMenu? {
         let point = outline.convert(event.locationInWindow, from: nil)
         let row = outline.row(at: point)
         guard row >= 0, let clicked = outline.item(atRow: row), let node = node(of: clicked) else {
             return nil
         }
+        let items = treeMenuItems(for: node)
+        guard !items.isEmpty else { return nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        items.forEach(menu.addItem)
+        return menu
+    }
+
+    /// The right-click menu's items on a UEFI row.
+    private func treeMenuItems(for node: UEFINode) -> [NSMenuItem] {
         var items = nodeMenuItems(for: node)
+        // help: panel.uefi.copy-name
+        // The name as the row reads it: what a technician pastes into a
+        // search, a report or a message.
+        if !items.isEmpty { items.append(.separator()) }
+        let copyName = NSMenuItem(title: L("Copy Name"), action: #selector(copyNodeNameClicked(_:)), keyEquivalent: "")
+        copyName.target = self
+        copyName.representedObject = text(for: node, in: Column.name)
+        items.append(copyName)
         // help: panel.uefi.annotate-node
         if onAnnotateNode != nil {
             if !items.isEmpty { items.append(.separator()) }
@@ -2798,11 +2848,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
-        guard !items.isEmpty else { return nil }
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        items.forEach(menu.addItem)
-        return menu
+        return items
     }
 
     /// Turns the empty padding rows on or off, and remembers the choice.
@@ -3087,6 +3133,12 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func saveDecompressedClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
         onSaveDecompressed?(nodeID)
+    }
+
+    @objc private func copyNodeNameClicked(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(name, forType: .string)
     }
 
     @objc private func annotateNodeClicked(_ sender: NSMenuItem) {

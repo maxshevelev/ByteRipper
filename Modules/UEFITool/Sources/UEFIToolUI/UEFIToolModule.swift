@@ -41,6 +41,12 @@ public enum UEFIToolModule: ToolModule {
         }
     }
 
+    /// What the panel shows right after the image's name: the app's sign of
+    /// whether the analysis server answers, the same one the code panel wears.
+    /// The module does not know servers; the app hands it the view at launch,
+    /// and a panel opened with nothing set shows nothing there.
+    public static var makeTitleStatus: (@MainActor () -> NSView)?
+
     /// Use the local store the Ghidra skill writes to
     /// (`~/Library/Application Support/ByteRipper/Analysis`).
     public static func useDefaultCodeAnalysisStore() {
