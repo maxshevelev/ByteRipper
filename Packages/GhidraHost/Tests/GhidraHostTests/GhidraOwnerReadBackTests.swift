@@ -1036,6 +1036,48 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         } catch {}
     }
 
+    /// After a tail call, EAX holds two values in one function: the PPI a
+    /// call at the entry returns and the tail call's status. Named with the
+    /// type it already has, the PPI keeps both calls' answers and the status
+    /// keeps its own name (issue 537ef101).
+    func testTwoValuesInEAXAfterATailCallAreNamedApart() async throws {
+        let bytes = try image()
+        guard SHA256Digest(data: bytes).hex.hasPrefix("b7d73a20") else { throw XCTSkip("GHIDRA_TYPE_MODULE is not PlatformStage2Pei") }
+        try await open(bytes)
+        try await post("/v1/delete/function", ["address": "0x9A16D90"])
+        try await post("/v1/create/function", ["address": "0x9A16DC6", "name": "PlatformStage2PeiEntryPoint"])
+        try await post("/v1/create/function", ["address": "0x9A16D90"])
+        for (address, signature) in [
+            ("0x9A176B6", "EFI_PEI_PCD_PPI * GetPiPcdPpi(void)"),
+            ("0x9A16DC6", "EFI_STATUS PlatformStage2PeiEntryPoint(EFI_PEI_FILE_HANDLE FileHandle, EFI_PEI_SERVICES **PeiServices)"),
+            ("0x9A16D90", "EFI_STATUS _ModuleEntryPoint(EFI_PEI_FILE_HANDLE FileHandle, EFI_PEI_SERVICES **PeiServices)")
+        ] {
+            try await post("/v1/set/signature", ["address": address, "signature": signature, "by": "agent", "reason": "test"])
+        }
+        // As on the live server: the jump read as flow and decompiled so,
+        // then marked a tail call in the running owner.
+        try await post("/v1/set/flow", ["address": "0x9A16DC1", "override": "none"])
+        _ = try await read("/v1/function/0x9A16D90")
+        try await post("/v1/set/flow", ["address": "0x9A16DC1", "override": "call_return"])
+        var locals = try await read("/v1/function/0x9A16D90")
+        if let status = ((locals["locals"] as? [[String: Any]]) ?? []).first(where: { ($0["first_use"] as? String) == "0x9A16DC1" }) {
+            try await post("/v1/rename/variable", ["function": "0x9A16D90", "storage": status["storage"] as Any,
+                                                  "first_use": "0x9A16DC1", "name": "Status"])
+        }
+        locals = try await read("/v1/function/0x9A16D90")
+        let all = ((locals["locals"] as? [[String: Any]]) ?? []) + ((locals["variables"] as? [[String: Any]]) ?? [])
+        let eax = all.filter { ($0["storage"] as? String) == "EAX:4" }
+        let first = try XCTUnwrap(eax.first(where: { ($0["first_use"] as? String)?.uppercased() == "0X9A16D90" }), "\(all)")
+        let named = try await post("/v1/rename/variable", ["function": "0x9A16D90", "storage": "EAX:4",
+                                                           "first_use": first["first_use"] as Any, "name": "PcdPpi",
+                                                           "type": "EFI_PEI_PCD_PPI *"])
+        XCTAssertEqual(named["name"] as? String, "PcdPpi", "\(named)")
+        let c = try await read("/v1/function/0x9A16D90")["c"] as? String ?? ""
+        XCTAssertEqual(c.components(separatedBy: "PcdPpi = GetPiPcdPpi()").count - 1, 2,
+                       "both calls' answers are PcdPpi: \(c)")
+        XCTAssertTrue(c.contains("Status = PlatformStage2PeiEntryPoint("), c)
+    }
+
     /// An owner left with no record — its host stopped before it wrote
     /// `owner.json` — keeps the project's lock; the next open stops it and
     /// opens (issues f9bb8693, d3b03c04).

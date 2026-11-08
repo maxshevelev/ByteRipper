@@ -5496,6 +5496,24 @@ public class Owner {
             answer.addProperty("stale", true);
             return answer;
         }
+        // A type the variable already has is no change. Given anyway, it locks
+        // the type on one piece of a register the decompiler had merged: with
+        // a tail call's status also in EAX, the name then lands on the status
+        // (issue 537ef101). The name alone keeps the pieces together.
+        if (type != null && match.getDataType() != null && sameType(match.getDataType(), type)) {
+            type = null;
+            if (name == null) {
+                JsonObject answer = identity();
+                answer.addProperty("function", hex(function.getEntryPoint()));
+                answer.addProperty("name", match.getName());
+                answer.addProperty("storage", match.getStorage().toString());
+                Address first = match.getPCAddress();
+                answer.addProperty("first_use", first == null ? null : hex(first));
+                answer.addProperty("parameter", match.isParameter());
+                answer.addProperty("unchanged", true);
+                return answer;
+            }
+        }
         String applied = name != null ? name : match.getName();
         String asked = match.getName();
         String askedStorage = match.getStorage().toString();
