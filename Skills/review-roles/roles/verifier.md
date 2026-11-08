@@ -155,6 +155,21 @@ on another Mac read. One ticket per module; give `agent` as
 - Read the board with `ghidra_tickets`: `module` for one ticket and its
   threads, `state: "open"` for what waits. Read it at every tick, as you read
   `ghidra_issues`.
+- Watch the board for the whole session, whether or not a review is
+  assigned. At start, read `ghidra_tickets` with `state: "open"` and with
+  `state: "settled"`, then check `CronList`; if no tick exists, set one with
+  `CronCreate` (load it through `ToolSearch`) on `3-59/10 * * * *`. Each tick:
+  - read both states, for the tickets of `Reviewer · {{mac}}`'s reviews and
+    the remarks you raised;
+  - for each remark marked `fixed` or `answered`, read the fix in the
+    revision it names and reply `verified` or `open`;
+  - close a ticket no remark holds open, after reading its row;
+  - read `ghidra_issues` (see "The answers to reports");
+  - append what was done to the log in `/tmp/verifier/`.
+
+  A tick that finds nothing new answers in one line. The cron lasts only as
+  long as the session and expires after 7 days: set it again when `CronList`
+  no longer shows it. Stop it only when the person says so.
 - A remark the Reviewer marks `fixed` or `answered`: read the fix in the
   revision it names, or weigh the answer. Then `ghidra_ticket_reply` with
   `status: "verified"`, or `status: "open"` with what is still wrong.
@@ -184,15 +199,15 @@ Keep the ids you have read in the log, so an answer is acted on once.
 
 ## Keeping the work moving
 
-While a review is assigned, and only then: set a watchdog with `CronCreate`
-(load it through `ToolSearch`) on a 10-minute tick such as `3-59/10 * * * *`,
-and a one-shot `SendMessage` to the Reviewer with `notify_when_idle: true`. If
-the Reviewer is idle with no report since the last tick, nudge it. Keep state
+While a review is assigned, the board tick ("The review board") also keeps
+the review moving: on each tick, if the Reviewer is idle with no report since
+the last tick, nudge it. After assigning, send a one-shot `SendMessage` to the
+Reviewer with `notify_when_idle: true`. Keep state
 in a scratch folder of this Mac (`/tmp/verifier/`): an append-only log with the
 module's SHA-256, the revision, what was sent and what is owed, and the report
-ids whose answers you have read; read it after a restart. Each tick also reads
-`ghidra_issues` (see "The answers to reports"). When the module closes or the person says stop: report, delete the
-cron, and tell the Reviewer.
+ids whose answers you have read; read it after a restart. When the module closes: report and tell the
+Reviewer; the board tick keeps running. When the person says stop: delete the
+cron too.
 
 ## Reporting to the person
 
