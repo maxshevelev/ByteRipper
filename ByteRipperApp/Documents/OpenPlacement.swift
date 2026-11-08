@@ -94,3 +94,28 @@ enum OpenPlacement {
                       ignoredCount: max(0, fileCount - 1))
     }
 }
+
+/// Where files handed to the app go — dropped on its icon in the Dock,
+/// double-clicked in the Finder, "Open With": the three arrive as one event,
+/// and the app cannot tell them apart.
+///
+/// A window of their own. One file is looked at by itself and two are
+/// compared, so either is a new task rather than a change to the window in
+/// front, whose panes stay as they were. In that window the files are placed
+/// as in any empty window (`OpenPlacement.plan`): the first two in the panes,
+/// anything past them not opened, with a word why.
+enum HandedFilesPlacement: Equatable {
+    /// The one file is open already: its window comes forward, and it is not
+    /// opened a second time.
+    case bringForward
+    /// A new window.
+    case newWindow
+    /// The window the launch has just made, still empty — a launch the files
+    /// started does not leave an empty window beside theirs.
+    case windowAtHand
+
+    static func plan(fileCount: Int, alreadyOpen: Bool, emptyWindowAtHand: Bool) -> Self {
+        if fileCount == 1 && alreadyOpen { return .bringForward }
+        return emptyWindowAtHand ? .windowAtHand : .newWindow
+    }
+}

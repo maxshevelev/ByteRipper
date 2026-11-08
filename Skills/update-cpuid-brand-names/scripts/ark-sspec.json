@@ -1,7 +1,13 @@
 {
   "about": "S-SPEC and stepping per model as Intel ARK's Ordering & Compliance tab lists them, read through WebFetch (ARK refuses scripts). Only models the article lists under more than one CPUID.",
-  "retrieved": "2026-11-06",
+  "retrieved": "2026-11-07",
   "models": [
+    {
+      "model": "Intel Atom C3558RC",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found for C3558RC (searches '\"Atom C3558RC\" site:intel.com specifications' and '\"Intel Atom® Processor C3558RC\"' return only the C3558 (SKU 97937, SR388) and C3558R (SKU 204841, SRH4G) pages). The model is known only from NVD CPE entries (cpe:2.3:h:intel:atom_c3558rc), suggesting a custom/OEM SKU without a public ARK page."
+    },
     {
       "model": "Intel Atom P5921B",
       "url": "https://www.intel.com/content/www/us/en/products/sku/202684/intel-atom-processor-p5921b-9m-cache-2-20-ghz/ordering.html",
@@ -25,6 +31,728 @@
       "url": null,
       "specs": [],
       "note": "Product page found (sku 202682, https://www.intel.com/content/www/us/en/products/sku/202682/intel-atom-processor-p5962b-27m-cache-2-20-ghz/specifications.html) but ordering.html redirects to specifications.html, and the specifications page shows no S-Spec, ordering code or stepping."
+    },
+    {
+      "model": "Intel Atom P6922-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/246037/intel-atom-p69223-processor-8m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFF",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SA4RS",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SA4RT",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SA4RW",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6942-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243724/intel-atom-p69423-processor-16m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2X",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRPFJ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6942-5",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/246034/intel-atom-p69425-processor-16m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRNJG",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6952-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243723/intel-atom-p69523-processor-20m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRNJE",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRV4Q",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6962-3",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243725/intel-atom-p69623-processor-24m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9A",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRV4P",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Atom P6962-5",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243726/intel-atom-p69625-processor-24m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN5P",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRPFL",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Celeron G3920T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Celeron G3920T\" site:intel.com specifications' returned only sibling SKUs (G3920 SKU 90737); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
+      "model": "Intel Celeron G3940",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Celeron G3940\" site:intel.com specifications' returned only sibling SKUs (G3920, G3930, G3930E, G3930T, G3950); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
+      "model": "Intel Celeron J6413",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/207909/intel-celeron-processor-j6413-1-5m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKL7",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Celeron N6211",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/207898/intel-celeron-processor-n6211-1-5m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKL9",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-1000G1",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197122/intel-core-i31000g1-processor-4m-cache-up-to-3-20-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i3-1000G4",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197123/intel-core-i31000g4-processor-4m-cache-up-to-3-20-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i3-10100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199283/intel-core-i310100-processor-6m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3N",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/203473/intel-core-i310100f-processor-6m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8U",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199284/intel-core-i310100t-processor-6m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3Q",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10100TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/203899/intel-core-i310100te-processor-6m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6F",
+          "stepping": "G1"
+        }
+      ],
+      "note": "ARK places this model elsewhere than the input: Code Name 'Products formerly Comet Lake', Vertical Segment 'Embedded', Sockets Supported 'FCLGA1200' — a socketed Comet Lake S part (G1 stepping), not a BGA Amber/Whiskey/Comet Lake U/Y part, so its listing under 806EC (V0) looks wrong. PCNs on the ordering tab: 798170 (PCN 117936, manufacturing-site minor change) and 826061 (support moved to embedded) — neither a code conversion."
+    },
+    {
+      "model": "Intel Core i3-10105",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201894/intel-core-i310105-processor-6m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3P",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10105F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/203474/intel-core-i310105f-processor-6m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8V",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10105T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201890/intel-core-i310105t-processor-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3R",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199281/intel-core-i310300-processor-8m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3J",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199282/intel-core-i310300t-processor-8m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3L",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10305",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201893/intel-core-i310305-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3K",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10305T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201898/intel-core-i310305t-processor-8m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3M",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10320",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199280/intel-core-i310320-processor-8m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3G",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10325",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201889/intel-core-i310325-processor-8m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3H",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-11100HE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217371/intel-core-i311100he-processor-8m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX2",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-12100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134584/intel-core-i312100-processor-12m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL62",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i3-12100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/132223/intel-core-i312100f-processor-12m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL63",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i3-12100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223097/intel-core-i312100t-processor-12m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL64",
+          "stepping": "H0"
+        }
+      ],
+      "note": "Ordering tab lists a single TRAY row; no boxed SKU and no C0 code."
+    },
+    {
+      "model": "Intel Core i3-12300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223095/intel-core-i312300-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL61",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i3-12300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223096/intel-core-i312300t-processor-12m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL60",
+          "stepping": "H0"
+        }
+      ],
+      "note": "Ordering tab lists a single TRAY row; no boxed SKU and no C0 code."
+    },
+    {
+      "model": "Intel Core i3-13100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230575/intel-core-i313100-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBU",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232163/intel-core-i313100e-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMFR",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230576/intel-core-i313100f-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBV",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230579/intel-core-i313100t-processor-12m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBT",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232105/intel-core-i313100te-processor-12m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMFT",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-14100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236774/intel-core-i3-processor-14100-12m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMX1",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-14100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236786/intel-core-i3-processor-14100f-12m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMX2",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-14100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236775/intel-core-i3-processor-14100t-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMX0",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90729/intel-core-i36100-processor-3m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HG",
+          "stepping": "S0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90611/intel-core-i36100e-processor-3m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DV",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/89063/intel-core-i36100h-processor-3m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FR",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90734/intel-core-i36100t-processor-3m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HE",
+          "stepping": "S0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88181/intel-core-i36100te-processor-4m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2LS",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6102E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90612/intel-core-i36102e-processor-3m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DX",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6120",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Core i3-6120T",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Core i3-6300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90731/intel-core-i36300-processor-4m-cache-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HA",
+          "stepping": "S0"
+        }
+      ],
+      "note": "Code Name not shown on the ordering tab. PCN 116799-00 (https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf, saved as pdf/pcn116799.pdf) lists the same code and stepping: 'Intel® Core™ i3-6300 Processor I3-6300 CM8066201926905 S R2HA 945193 S0'."
+    },
+    {
+      "model": "Intel Core i3-6300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90728/intel-core-i36300t-processor-4m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HD",
+          "stepping": "S0"
+        }
+      ],
+      "note": "Code Name not shown on the ordering tab. PCN 116799-00 (https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf, saved as pdf/pcn116799.pdf) lists the same code and stepping: 'Intel® Core™ i3-6300T Processor I3-6300T CM8066201927004 S R2HD 945205 S0'."
+    },
+    {
+      "model": "Intel Core i3-6320",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90733/intel-core-i36320-processor-4m-cache-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2H9",
+          "stepping": "S0"
+        }
+      ],
+      "note": "Code Name not shown on the ordering tab. PCN 116799-00 (https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf, saved as pdf/pcn116799.pdf) lists the same code and stepping: 'Intel® Core™ i3-6320 Processor I3-6320 CM8066201926904 S R2H9 945192 S0'."
+    },
+    {
+      "model": "Intel Core i3-6320T",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Core i3-7100E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97131/intel-core-i37100e-processor-3m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR34V",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-7101E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97130/intel-core-i37101e-processor-3m-cache-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR32Z",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-7101TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97125/intel-core-i37101te-processor-3m-cache-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR330",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SR374",
+          "stepping": "B0"
+        }
+      ],
+      "note": "ARK lists two spec codes, SR330 and SR374, both stepping B0 and both under the same tray ordering code. The PCN that explains the second code was not searched for (search budget used up)."
+    },
+    {
+      "model": "Intel Core i3-7102E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97124/intel-core-i37102e-processor-3m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR34W",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-7120",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com page for i3-7120 found by WebSearch. It appears to be an OEM-only part launched in July 2017 and not on ARK."
+    },
+    {
+      "model": "Intel Core i3-7120T",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com page for i3-7120T found by WebSearch. It appears to be an OEM-only part and not on ARK."
+    },
+    {
+      "model": "Intel Core i3-8000",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588), an OEM-only part."
+    },
+    {
+      "model": "Intel Core i3-8000T",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588), an OEM-only part."
+    },
+    {
+      "model": "Intel Core i3-8020",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588)."
+    },
+    {
+      "model": "Intel Core i3-8100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126688/intel-core-i38100-processor-6m-cache-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3N5",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-8100H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/149160/intel-core-i38100h-processor-6m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3Z7",
+          "stepping": "U0"
+        }
+      ],
+      "note": "ARK gives stepping U0, not the B0 of CPUID 906EB the table lists it under (spec update 337346: H (U0) = 906EA)."
+    },
+    {
+      "model": "Intel Core i3-8100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129944/intel-core-i38100t-processor-6m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3Y8",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-8120",
+      "url": null,
+      "specs": [],
+      "note": "Not on ARK: absent from Intel's 8th Generation Core i3 series page (122588)."
+    },
+    {
+      "model": "Intel Core i3-8300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129942/intel-core-i38300-processor-8m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3XY",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-8300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129943/intel-core-i38300t-processor-8m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3Y1",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Single tray SKU; code name 'Products formerly Coffee Lake' from the specifications tab."
+    },
+    {
+      "model": "Intel Core i3-8350K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126689/intel-core-i38350k-processor-8m-cache-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3N4",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Code name 'Products formerly Coffee Lake' from the specifications tab."
+    },
+    {
+      "model": "Intel Core i3-L13G4",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/202778/intel-core-i3l13g4-processor-4m-cache-up-to-2-8ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH4X",
+          "stepping": "B3"
+        },
+        {
+          "sSpec": "SRJGC",
+          "stepping": "B3"
+        }
+      ],
+      "note": "SRH4X is the 8GB (FC-CSP2H, T&R) variant, SRJGC the 4GB variant; both 'Retired and discontinued'. ARK Code Name: Products formerly Lakefield."
+    },
+    {
+      "model": "Intel Core i5-10110Y",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page exists for an i5-10110Y: the search for it on intel.com returned only the i3-10110Y (SKU 196455). The model name looks like a mistake for the Core i3-10110Y."
+    },
+    {
+      "model": "Intel Core i5-10210Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/196454/intel-core-i510210y-processor-6m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGKT",
+          "stepping": "V0"
+        },
+        {
+          "sSpec": "SRGSD",
+          "stepping": "V0"
+        }
+      ],
+      "note": "Code Name on the specifications page: 'Products formerly Amber Lake Y'. PCNs listed: 799822 (shipper box), 808956 (end of life), 809472 (label) — none a code conversion."
+    },
+    {
+      "model": "Intel Core i5-1030G4",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197121/intel-core-i51030g4-processor-6m-cache-up-to-3-50-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i5-1030G7",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197119/intel-core-i51030g7-processor-6m-cache-up-to-3-50-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i5-10310Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/196453/intel-core-i510310y-processor-6m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGKS",
+          "stepping": "V0"
+        }
+      ],
+      "note": "PCN listed: 808956 (PCN 118052, end of life of i3-10110Y/i5-10210Y/i5-10310Y) — not a code conversion."
     },
     {
       "model": "Intel Core i5-10400",
@@ -51,6 +779,178 @@
         {
           "sSpec": "SRH79",
           "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199276/intel-core-i510400t-processor-12m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3F",
+          "stepping": "G1"
+        }
+      ],
+      "note": "ARK lists PCN content id 813820 besides 798170/826013; a search for the ordering code with PCN found no document for it."
+    },
+    {
+      "model": "Intel Core i5-10500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199277/intel-core-i510500-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3A",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199275/intel-core-i510500t-processor-12m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3B",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10505",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201891/intel-core-i510505-processor-12m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH38",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199273/intel-core-i510600-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH37",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199311/intel-core-i510600k-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6R",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199315/intel-core-i510600kf-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6S",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199279/intel-core-i510600t-processor-12m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH39",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212270/intel-core-i511400-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKP0",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11400F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212271/intel-core-i511400f-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKP1",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212273/intel-core-i511400t-processor-12m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKP2",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Tray only; no boxed ordering code listed."
+    },
+    {
+      "model": "Intel Core i5-11500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212277/intel-core-i511500-processor-12m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNY",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212272/intel-core-i511500t-processor-12m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNZ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212274/intel-core-i511600-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNW",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212275/intel-core-i511600k-processor-12m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNU",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212276/intel-core-i511600kf-processor-12m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNV",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212278/intel-core-i511600t-processor-12m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNX",
+          "stepping": "B0"
         }
       ]
     },
@@ -83,6 +983,402 @@
       ]
     },
     {
+      "model": "Intel Core i5-12400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/223094/intel-core-i512400t-processor-18m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5X",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-12500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96144/intel-core-i512500-processor-18m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5V",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-12500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96140/intel-core-i512500t-processor-18m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5W",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-12600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96149/intel-core-i512600-processor-18m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5T",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page. Code Name on ARK: Alder Lake."
+    },
+    {
+      "model": "Intel Core i5-12600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134589/intel-core-i512600k-processor-20m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4T",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-12600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134590/intel-core-i512600kf-processor-20m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4U",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-12600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/96150/intel-core-i512600t-processor-18m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL5U",
+          "stepping": "H0"
+        }
+      ],
+      "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
+    },
+    {
+      "model": "Intel Core i5-13400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230495/intel-core-i513400-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBF",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRMBP",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13400E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232148/intel-core-i513400e-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMG5",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13400F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230501/intel-core-i513400f-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBG",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRMBN",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230577/intel-core-i513400t-processor-20m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBR",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230493/intel-core-i513600k-processor-24m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBD",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230494/intel-core-i513600kf-processor-24m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBE",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-14400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236788/intel-core-i5-processor-14400-20m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3Q",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "SRN46",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-14400F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236777/intel-core-i5-processor-14400f-20m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3R",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "SRN47",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-14400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236790/intel-core-i5-processor-14400t-20m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3N",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6300HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88959/intel-core-i56300hq-processor-6m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FP",
+          "stepping": "R0"
+        },
+        {
+          "sSpec": "SR2SK",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6350HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93335/intel-core-i56350hq-processor-6m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QZ",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88185/intel-core-i56400-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L7",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88187/intel-core-i56400t-processor-6m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L1",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6440EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90425/intel-core-i56440eq-processor-6m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DU",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6440HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88962/intel-core-i56440hq-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FS",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6442EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90617/intel-core-i56442eq-processor-6m-cache-up-to-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DY",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88184/intel-core-i56500-processor-6m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L6",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88183/intel-core-i56500t-processor-6m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L8",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6500TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88186/intel-core-i56500te-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2LR",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88188/intel-core-i56600-processor-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L5",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88191/intel-core-i56600k-processor-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L4",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88189/intel-core-i56600t-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L9",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97147/intel-core-i57400-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR32W",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97184/intel-core-i57400t-processor-6m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR332",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97123/intel-core-i57500-processor-6m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR335",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97121/intel-core-i57500t-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR337",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97150/intel-core-i57600-processor-6m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR334",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97144/intel-core-i57600k-processor-6m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR32V",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97183/intel-core-i57600t-processor-6m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR336",
+          "stepping": "B0"
+        }
+      ],
+      "note": "WebSearch did not turn up the page. SKU 97183 was guessed, and the fetched page's title is exactly 'Intel Core i5-7600T Processor (6M Cache, up to 3.70 GHz)'."
+    },
+    {
+      "model": "Intel Core i5-7640X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/121500/intel-core-i57640x-xseries-processor-6m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3FR",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i5-8200Y",
       "url": "https://www.intel.com/content/www/us/en/products/sku/185280/intel-core-i58200y-processor-4m-cache-up-to-3-90-ghz/ordering.html",
       "specs": [
@@ -97,14 +1393,11 @@
       "url": "https://www.intel.com/content/www/us/en/products/sku/189912/intel-core-i58210y-processor-4m-cache-up-to-3-60-ghz/ordering.html",
       "specs": [
         {
-          "sSpec": "SREKN",
-          "stepping": "H0"
-        },
-        {
           "sSpec": "SREKQ",
           "stepping": "H0"
         }
-      ]
+      ],
+      "note": "ARK also lists SREKN (HE8067702739887, H0) here; Intel's PCN 116769-00 gives that code and ordering code to the i7-8510Y (\"I7-8510Y HE8067702739887 S REKN\") and SREKQ to the i5-8210Y, so SREKN is the i7-8510Y's and is kept there (found-sspec.json)."
     },
     {
       "model": "Intel Core i5-8310Y",
@@ -115,6 +1408,106 @@
           "stepping": "H0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i5-8400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126687/intel-core-i58400-processor-9m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QT",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129940/intel-core-i58400t-processor-9m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3X6",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8420",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found (site:intel.com search returns only third-party spec sites)."
+    },
+    {
+      "model": "Intel Core i5-8420T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
+    },
+    {
+      "model": "Intel Core i5-8500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129939/intel-core-i58500-processor-9m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3XE",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129941/intel-core-i58500t-processor-9m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3XD",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8550",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for a desktop i5-8550 (searches return only i5/i7-8550U). The name appears in the Nov 2017 leaked 8th/9th-gen list (AnandTech) and AIDA64 beta changelog as an unannounced SKU; it seems never to have been sold under this name."
+    },
+    {
+      "model": "Intel Core i5-8600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129937/intel-core-i58600-processor-9m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3X0",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126685/intel-core-i58600k-processor-9m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QU",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129938/intel-core-i58600t-processor-9m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3X3",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8650",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for a desktop i5-8650 (site:intel.com search returned no Intel page). Listed only in the Nov 2017 leaked 8th/9th-gen list and AIDA64 beta as an unannounced SKU; it seems never to have been sold under this name."
+    },
+    {
+      "model": "Intel Core i5-8650K",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
     },
     {
       "model": "Intel Core i5-9400",
@@ -181,6 +1574,388 @@
       ]
     },
     {
+      "model": "Intel Core i5-L16G7",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/202777/intel-core-i5l16g7-processor-4m-cache-up-to-3-0ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH4U",
+          "stepping": "B3"
+        },
+        {
+          "sSpec": "SRJGA",
+          "stepping": "B3"
+        }
+      ],
+      "note": "SRH4U is the 8GB (FC-CSP2H, T&R) variant, SRJGA the 4GB variant; both 'Retired and discontinued'. ARK lists PCN 999V1T against SRH4U (per search snippet; appears to be the EOL notice, not loaded)."
+    },
+    {
+      "model": "Intel Core i7-10510Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/196452/intel-core-i710510y-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGSC",
+          "stepping": "V0"
+        }
+      ],
+      "note": "PCNs listed: 798673 (PCN 118051, end of life), 799822 (PCN 116210, shipper box), 809472 (PCN 118095, label RoHS verbiage) — none a code conversion."
+    },
+    {
+      "model": "Intel Core i7-1060G7",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197120/intel-core-i71060g7-processor-8m-cache-up-to-3-80-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i7-10700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199316/intel-core-i710700-processor-16m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6Y",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199318/intel-core-i710700f-processor-16m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH70",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199335/intel-core-i710700k-processor-16m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH72",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199325/intel-core-i710700kf-processor-16m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH74",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-10700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199314/intel-core-i710700t-processor-16m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH6U",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212279/intel-core-i711700-processor-16m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNS",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212280/intel-core-i711700f-processor-16m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNR",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212047/intel-core-i711700k-processor-16m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNL",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212048/intel-core-i711700kf-processor-16m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNN",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212251/intel-core-i711700t-processor-16m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNT",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11850HE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217379/intel-core-i711850he-processor-24m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKWZ",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134591/intel-core-i712700-processor-25m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4Q",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134592/intel-core-i712700f-processor-25m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4R",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134594/intel-core-i712700k-processor-25m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4N",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134595/intel-core-i712700kf-processor-25m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4P",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-12700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134596/intel-core-i712700t-processor-25m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4S",
+          "stepping": "C0"
+        }
+      ],
+      "note": "Tray only; no boxed entry on the ordering tab."
+    },
+    {
+      "model": "Intel Core i7-13700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230500/intel-core-i713700k-processor-30m-cache-up-to-5-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMB8",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-13700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230489/intel-core-i713700kf-processor-30m-cache-up-to-5-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMB9",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88196/intel-core-i76700-processor-8m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L2",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88967/intel-core-i76700hq-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FQ",
+          "stepping": "R0"
+        },
+        {
+          "sSpec": "SR2SL",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88195/intel-core-i76700k-processor-8m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L0",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88200/intel-core-i76700t-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L3",
+          "stepping": "R0"
+        },
+        {
+          "sSpec": "SR2BU",
+          "stepping": "R0"
+        }
+      ],
+      "note": "Two codes on the ordering tab: SR2L3 (tray) and SR2BU (boxed, for China), both R0; re-fetched to confirm."
+    },
+    {
+      "model": "Intel Core i7-6700TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88201/intel-core-i76700te-processor-8m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2LP",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6770HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93341/intel-core-i76770hq-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QY",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6820EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90426/intel-core-i76820eq-processor-8m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DT",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6820HK",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88969/intel-core-i76820hk-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FL",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6820HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88970/intel-core-i76820hq-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FU",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6822EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90615/intel-core-i76822eq-processor-8m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DW",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6870HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93340/intel-core-i76870hq-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QX",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6920HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88972/intel-core-i76920hq-processor-8m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FT",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6970HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93336/intel-core-i76970hq-processor-8m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QW",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-7700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97128/intel-core-i77700-processor-8m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR338",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-7700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97129/intel-core-i77700k-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR33A",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-7700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97122/intel-core-i77700t-processor-8m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR339",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i7-7740X",
       "url": "https://www.intel.com/content/www/us/en/products/sku/121499/intel-core-i77740x-xseries-processor-8m-cache-up-to-4-50-ghz/ordering.html",
       "specs": [
@@ -225,6 +2000,12 @@
       ]
     },
     {
+      "model": "Intel Core i7-8510Y",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for the i7-8510Y."
+    },
+    {
       "model": "Intel Core i7-8550U",
       "url": "https://www.intel.com/content/www/us/en/products/sku/122589/intel-core-i78550u-processor-8m-cache-up-to-4-00-ghz/ordering.html",
       "specs": [
@@ -235,6 +2016,17 @@
       ]
     },
     {
+      "model": "Intel Core i7-8557U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/192996/intel-core-i78557u-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ1",
+          "stepping": "D0"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Coffee Lake\". Stepping D0 is not one of 806E9's steppings (H0/J1); the model probably belongs under another CPUID."
+    },
+    {
       "model": "Intel Core i7-8559U",
       "url": "https://www.intel.com/content/www/us/en/products/sku/137979/intel-core-i78559u-processor-8m-cache-up-to-4-50-ghz/ordering.html",
       "specs": [
@@ -243,6 +2035,12 @@
           "stepping": "D0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-8560U",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for the i7-8560U (search returned only i7-8565U and i7-8559U)."
     },
     {
       "model": "Intel Core i7-8565U",
@@ -257,6 +2055,17 @@
           "stepping": "V0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-8569U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/191050/intel-core-i78569u-processor-8m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREYZ",
+          "stepping": "D0"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Coffee Lake\". Stepping D0 is not one of 806E9's steppings (H0/J1)."
     },
     {
       "model": "Intel Core i7-8650U",
@@ -279,11 +2088,53 @@
       ]
     },
     {
+      "model": "Intel Core i7-8670",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
+    },
+    {
+      "model": "Intel Core i7-8670T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
+    },
+    {
+      "model": "Intel Core i7-8700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126686/intel-core-i78700-processor-12m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QS",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i7-8700B",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134905/intel-core-i78700b-processor-12m-cache-up-to-4-60-ghz/ordering.html",
       "specs": [
         {
           "sSpec": "SRCX2",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-8700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126684/intel-core-i78700k-processor-12m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QR",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-8700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129948/intel-core-i78700t-processor-12m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3WX",
           "stepping": "U0"
         }
       ]
@@ -334,6 +2185,12 @@
       ]
     },
     {
+      "model": "Intel Core i7-8750HF",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for the i7-8750HF (search returned only the i7-8750H)."
+    },
+    {
       "model": "Intel Core i7-8809G",
       "url": "https://www.intel.com/content/www/us/en/products/sku/130409/intel-core-i78809g-processor-with-radeon-rx-vega-m-gh-graphics-8m-cache-up-to-4-20-ghz/ordering.html",
       "specs": [
@@ -382,6 +2239,219 @@
       ]
     },
     {
+      "model": "Intel Core i9-10850K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205904/intel-core-i910850k-processor-20m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK51",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199328/intel-core-i910900-processor-20m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8Z",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199329/intel-core-i910900f-processor-20m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH90",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199332/intel-core-i910900k-processor-20m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH91",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199331/intel-core-i910900kf-processor-20m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH92",
+          "stepping": "Q0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10900T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199324/intel-core-i910900t-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8Y",
+          "stepping": "Q0"
+        }
+      ],
+      "note": "Tray only; no boxed code on the ordering page."
+    },
+    {
+      "model": "Intel Core i9-10900X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/198019/intel-core-i910900x-xseries-processor-19-25m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGV7",
+          "stepping": "L1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10920X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/198012/intel-core-i910920x-xseries-processor-19-25m-cache-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGSJ",
+          "stepping": "L1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10940X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/198014/intel-core-i910940x-xseries-processor-19-25m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGSH",
+          "stepping": "L1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212252/intel-core-i911900-processor-16m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNJ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212254/intel-core-i911900f-processor-16m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNK",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212325/intel-core-i911900k-processor-16m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKND",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212321/intel-core-i911900kf-processor-16m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNF",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212256/intel-core-i911900t-processor-16m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNQ",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Ordering tab lists only the tray part; no boxed variant."
+    },
+    {
+      "model": "Intel Core i9-12900",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134597/intel-core-i912900-processor-30m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4K",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134598/intel-core-i912900f-processor-30m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4L",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134599/intel-core-i912900k-processor-30m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4H",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134600/intel-core-i912900kf-processor-30m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4J",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-12900T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/134601/intel-core-i912900t-processor-30m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRL4M",
+          "stepping": "C0"
+        }
+      ],
+      "note": "Tray only; no boxed entry on the ordering tab."
+    },
+    {
+      "model": "Intel Core i9-13900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230496/intel-core-i913900k-processor-36m-cache-up-to-5-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBH",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-13900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230497/intel-core-i913900kf-processor-36m-cache-up-to-5-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBJ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i9-7900X",
       "url": "https://www.intel.com/content/www/us/en/products/sku/123613/intel-core-i97900x-xseries-processor-13-75m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -422,6 +2492,16 @@
       ]
     },
     {
+      "model": "Intel Core i9-7980XE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126699/intel-core-i97980xe-extreme-edition-processor-24-75m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3RS",
+          "stepping": "M0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i9-9900K",
       "url": "https://www.intel.com/content/www/us/en/products/sku/186605/intel-core-i99900k-processor-16m-cache-up-to-5-00-ghz/ordering.html",
       "specs": [
@@ -451,11 +2531,95 @@
       ]
     },
     {
+      "model": "Intel Core m3-6Y30",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88198/intel-core-m36y30-processor-4m-cache-up-to-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EN",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
       "model": "Intel Core m3-8100Y",
       "url": "https://www.intel.com/content/www/us/en/products/sku/185282/intel-core-m38100y-processor-4m-cache-up-to-3-40-ghz/ordering.html",
       "specs": [
         {
           "sSpec": "SRD23",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core m5-6Y54",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88202/intel-core-m56y54-processor-4m-cache-up-to-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EM",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core m5-6Y57",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88197/intel-core-m56y57-processor-4m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EG",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core m7-6Y75",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88199/intel-core-m76y75-processor-4m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2EH",
+          "stepping": "D1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Pentium G4420",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Pentium G4420T",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Pentium G4520T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Pentium G4520T\" site:intel.com specifications' returned only sibling SKUs (G4520 SKU 90732); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
+      "model": "Intel Pentium G4540",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Pentium G4540\" site:intel.com specifications' returned only sibling SKUs (G4500, G4520, G4560, G4620); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
+      "model": "Intel Processor 300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236846/intel-processor-300-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3J",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Processor 300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236852/intel-processor-300t-6m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3K",
           "stepping": "H0"
         }
       ]
@@ -479,6 +2643,12 @@
           "stepping": "V2"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-1519",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page for a Xeon D-1519 exists: searches ('\"Xeon D-1519\" site:intel.com specifications') return only the Intel Pentium Processor D1519 (SKU 91559). Its ordering tab https://www.intel.com/content/www/us/en/products/sku/91559/intel-pentium-processor-d1519-6m-cache-1-50-ghz/ordering.html lists one row: Spec Code SR2DM, Ordering Code GG8067402569601, Stepping V2 (title 'Intel® Pentium® Processor D1519 (6M Cache, 1.50 GHz)'). Not recorded as the Xeon's code because the brand differs; the table's 'Xeon D-1519' is probably this Pentium D1519 (V2 = CPUID 50663 per Xeon D-1500 Specification Update 332054-022US, Table 1: 'V2=0011b'). Intel's Xeon D-1500 product brief also lists 'Intel® Pentium® Processors D1508/D1509/D1519' as members of the family."
     },
     {
       "model": "Intel Xeon D-1521",
@@ -539,6 +2709,12 @@
           "stepping": "V2"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-1533",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page for a Xeon D-1533 without suffix: searches return only the Xeon D-1533N (SKU 122998). Its ordering tab https://www.intel.com/content/www/us/en/products/sku/122998/intel-xeon-processor-d1533n-9m-cache-2-10-ghz/ordering.html lists one row: Spec Code SR3KS, Ordering Code GG8068203255103, Stepping A1. Not recorded: D-1533N is a different SKU, and A1 is not CPUID 50663 (the Specification Update gives V2=0011b, Y0=0100b, A1=0101b; A1 is 50665, a D-1500N stepping)."
     },
     {
       "model": "Intel Xeon D-1533N",
@@ -761,6 +2937,226 @@
       ]
     },
     {
+      "model": "Intel Xeon D-1702",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226115/intel-xeon-d1702-processor-5m-cache-up-to-1-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1N",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only. A web-search summary mentioned stepping Z1; a direct fetch of the page shows only Z2."
+    },
+    {
+      "model": "Intel Xeon D-1712TR",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226108/intel-xeon-d1712tr-processor-10m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1G",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1713NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226102/intel-xeon-d1713nt-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM19",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1713NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226104/intel-xeon-d1713nte-processor-10m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1A",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1714",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226109/intel-xeon-d1714-processor-10m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1H",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1715TER",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226105/intel-xeon-d1715ter-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1E",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1718T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226107/intel-xeon-d1718t-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1F",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1722NE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226113/intel-xeon-d1722ne-processor-10m-cache-up-to-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1M",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only. A web-search summary mentioned 'SRLC4, stepping Z1' for this page; a direct fetch of the page shows no SRLC4 and no Z1, so it is not recorded."
+    },
+    {
+      "model": "Intel Xeon D-1726",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226112/intel-xeon-d1726-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1L",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1732TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226106/intel-xeon-d1732te-processor-15m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1D",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1733NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226099/intel-xeon-d1733nt-processor-15m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM17",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1734NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226114/intel-xeon-d1734nt-processor-15m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1Q",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1735TR",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226103/intel-xeon-d1735tr-processor-15m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1C",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1736",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226111/intel-xeon-d1736-processor-15m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1K",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1736NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226098/intel-xeon-d1736nt-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM16",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1739",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226110/intel-xeon-d1739-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1J",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1746TER",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226100/intel-xeon-d1746ter-processor-15m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1B",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLBU is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-1747NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226116/intel-xeon-d1747nte-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1P",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLC6 is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-1748TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226119/intel-xeon-d1748te-processor-15m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1R",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLC8 is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-1749NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226101/intel-xeon-d1749nt-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM15",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLBP is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
       "model": "Intel Xeon D-2123IT",
       "url": "https://www.intel.com/content/www/us/en/products/sku/136429/intel-xeon-d2123it-processor-8-25m-cache-2-20-ghz/ordering.html",
       "specs": [
@@ -891,6 +3287,248 @@
       ]
     },
     {
+      "model": "Intel Xeon D-2712T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226233/intel-xeon-d2712t-processor-15m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM22",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCK",
+          "stepping": "U1"
+        }
+      ],
+      "note": "Ordering tab lists the U2 code as current and the U1 code SRLCK under 'Retired and discontinued'."
+    },
+    {
+      "model": "Intel Xeon D-2733NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226234/intel-xeon-d2733nt-processor-15m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM21",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the U2 code; the earlier U1 code SRLCJ is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-2738",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226235/intel-xeon-d2738-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM29",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the U2 code; the earlier U1 code SRLCQ is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-2745NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226236/intel-xeon-d2745nx-processor-17-5m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1V",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the U2 code; the earlier U1 code SRLCC is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-2752NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226247/intel-xeon-d2752nte-processor-20m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRLCG",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCG listed under 'Retired and discontinued'. ARK gives stepping U1, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2752TER",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226248/intel-xeon-d2752ter-processor-20m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM27",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCN",
+          "stepping": "U1"
+        }
+      ],
+      "note": "Two codes, one ordering code: SRM27 (U2) current, SRLCN (U1) under 'Retired and discontinued'. ARK gives stepping U1/U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2753NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226237/intel-xeon-d2753nt-processor-20m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM20",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM20 listed (US and FR pages); no retired U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2757NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226238/intel-xeon-d2757nx-processor-20m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRLCB",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCB listed under 'Retired and discontinued'; no U2 code shown. ARK gives stepping U1, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2766NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226241/intel-xeon-d2766nt-processor-20m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRLCS",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCS listed under 'Retired and discontinued'; no U2 code shown. ARK gives stepping U1, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2775TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226250/intel-xeon-d2775te-processor-25m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM26",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM26 listed; no U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2776NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226239/intel-xeon-d2776nt-processor-25m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1Y",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM1Y listed; no U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2777NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226240/intel-xeon-d2777nx-processor-25m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1T",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM1T listed; no U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2779",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226242/intel-xeon-d2779-processor-25m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM28",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCP it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2786NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226252/intel-xeon-d2786nte-processor-27-5m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1X",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCE",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCE (U1) is under 'Retired and discontinued', SRM1X (U2) under 'Ordering and Spec Information'; both the same ordering code."
+    },
+    {
+      "model": "Intel Xeon D-2795NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226243/intel-xeon-d2795nt-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2D",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCU it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2796NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226249/intel-xeon-d2796nt-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2A",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCR it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2796TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226251/intel-xeon-d2796te-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM23",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCL it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2798NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226246/intel-xeon-d2798nt-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1W",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCD it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2798NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226245/intel-xeon-d2798nx-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1S",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLC9 it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2799",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226244/intel-xeon-d2799-processor-30m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2C",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCT",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCT (U1) is under 'Retired and discontinued', SRM2C (U2) under 'Ordering and Spec Information'; both the same ordering code."
+    },
+    {
+      "model": "Intel Xeon E-2184G",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found (WebSearch '\"<model>\" Xeon S-Spec' and '\"<model>\" Xeon' return only sibling SKUs); no ordering tab to read."
+    },
+    {
       "model": "Intel Xeon E-2278G",
       "url": "https://www.intel.com/content/www/us/en/products/sku/193745/intel-xeon-e2278g-processor-16m-cache-3-40-ghz/ordering.html",
       "specs": [
@@ -901,11 +3539,337 @@
       ]
     },
     {
+      "model": "Intel Xeon E-2284G",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found (WebSearch '\"<model>\" Xeon S-Spec' and '\"<model>\" Xeon' return only sibling SKUs); no ordering tab to read."
+    },
+    {
       "model": "Intel Xeon E-2288G",
       "url": "https://www.intel.com/content/www/us/en/products/sku/193743/intel-xeon-e2288g-processor-16m-cache-3-70-ghz/ordering.html",
       "specs": [
         {
           "sSpec": "SRFB3",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon E-2414",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236193/intel-xeon-e2414-processor-12m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXD",
+          "stepping": "B0"
+        }
+      ],
+      "note": "ARK gives stepping B0 only; whether this B0 is the RPL-S B0 die (B0671) was not checked"
+    },
+    {
+      "model": "Intel Xeon E-2434",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236192/intel-xeon-e2434-processor-12m-cache-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXC",
+          "stepping": "B0"
+        }
+      ],
+      "note": "ARK gives stepping B0 only; whether this B0 is the RPL-S B0 die (B0671) was not checked"
+    },
+    {
+      "model": "Intel Xeon E-2436",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236190/intel-xeon-e2436-processor-18m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXB",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon E-2456",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236188/intel-xeon-e2456-processor-18m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXA",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5318H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204086/intel-xeon-gold-5318h-processor-24-75m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJY3",
+          "stepping": "A1"
+        },
+        {
+          "sSpec": "SRJGD",
+          "stepping": "A1"
+        }
+      ],
+      "note": "SRJGD is listed under 'Retired and discontinued' with the same ordering code CD8070604481600 and stepping A1; SRJY3 under 'Ordering and Spec Information'."
+    },
+    {
+      "model": "Intel Xeon Gold 5320H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204090/intel-xeon-gold-5320h-processor-27-5m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJY1",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6328H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204088/intel-xeon-gold-6328h-processor-22m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXY",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6328HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205687/intel-xeon-gold-6328hl-processor-22m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXZ",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6330H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204091/intel-xeon-gold-6330h-processor-33m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK5A",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6348H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204095/intel-xeon-gold-6348h-processor-33m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXX",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8160F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/123687/intel-xeon-platinum-8160f-processor-33m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3KG",
+          "stepping": "H0"
+        }
+      ],
+      "note": "Wikipedia's SR3B8 for the 8160F is wrong: Intel's ordering page and PCN 117185-00 give SR3KG; SR3B8 is the 8160M."
+    },
+    {
+      "model": "Intel Xeon Platinum 8160M",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/120502/intel-xeon-platinum-8160m-processor-33m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3B8",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8353H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204092/intel-xeon-platinum-8353h-processor-24-75m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJY2",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8354H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204094/intel-xeon-platinum-8354h-processor-24-75m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK5Y",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8356H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204097/intel-xeon-platinum-8356h-processor-35-75m-cache-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK57",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8360H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204089/intel-xeon-platinum-8360h-processor-33m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK59",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8360HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205688/intel-xeon-platinum-8360hl-processor-33m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK58",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8376H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204096/intel-xeon-platinum-8376h-processor-38-5m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXS",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8376HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205683/intel-xeon-platinum-8376hl-processor-38-5m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXT",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8380H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204087/intel-xeon-platinum-8380h-processor-38-5m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXQ",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8380HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205684/intel-xeon-platinum-8380hl-processor-38-5m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXR",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 9220",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found for a Platinum 9220; WebSearch on intel.com returns only 9221/9222/9242/9282."
+    },
+    {
+      "model": "Intel Xeon Platinum 9221",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/195434/intel-xeon-platinum-9221-processor-71-5m-cache-2-30-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9222",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/195437/intel-xeon-platinum-9222-processor-71-5m-cache-2-30-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9242",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/194145/intel-xeon-platinum-9242-processor-71-5m-cache-2-30-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9282",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/194146/intel-xeon-platinum-9282-processor-77m-cache-2-60-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Silver 4214C",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found for a Silver 4214C; searches return only 4214, 4214Y, 4214R."
+    },
+    {
+      "model": "Intel Xeon W-10855",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page for a 'Xeon W-10855'; the product is the W-10855M (SKU 201908: SRH8M, R1, CL8070104398912, Comet Lake H). Not taken for this name, and R1 is not a stepping of A0660/A0661."
+    },
+    {
+      "model": "Intel Xeon W-11155MLE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217375/intel-xeon-w11155mle-processor-8m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX5",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11155MRE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217378/intel-xeon-w11155mre-processor-8m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX1",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11555MLE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217377/intel-xeon-w11555mle-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX3",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11555MRE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217376/intel-xeon-w11555mre-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKWY",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11865MLE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217368/intel-xeon-w11865mle-processor-24m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKX4",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon W-11865MRE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/217367/intel-xeon-w11865mre-processor-24m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKWX",
           "stepping": "R0"
         }
       ]

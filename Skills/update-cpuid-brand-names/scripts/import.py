@@ -21,6 +21,11 @@ Nothing is invented: a model the page does not name is not added, and an
 obvious slip of the page (a truncated number, a duplicate) is either
 removed or left as written — never guessed into another model.
 
+A CPUID the article has no row for can be given one in `extra-entries.json`
+beside this file, every fact with the page it came from; such an entry is
+written after the article's with `"source": "extra"`, and refused once the
+article has the CPUID itself.
+
 The article gives an S-SPEC for about a third of its models; `enrich.py`
 adds what Intel ARK and Wikipedia give for the rest, where the code can be
 put under the right CPUID, and says so for each code it adds.
@@ -47,6 +52,7 @@ import enrich as enrichment  # noqa: E402 — the file beside this one
 
 URL = ("https://comsystem-tlt.ru/obzori/"
        "primenenie-cpuid-na-praktike-dlja-zameni-soc--kombajnov-")
+EXTRA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extra-entries.json")
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..",
                    "Modules", "FITTool", "Sources", "FITTool", "Resources",
                    "IntelCPUIDBrandNames.json")
@@ -235,6 +241,29 @@ def unique(items):
     return out
 
 
+def extra_entries(entries):
+    """The entries of `extra-entries.json`: CPUIDs the article has no row for,
+    each with the pages its facts came from. One whose CPUID the article has
+    is refused — the article's row stands, and two rows would split it."""
+    with open(EXTRA, encoding="utf-8") as f:
+        extra = json.load(f)["entries"]
+    have = {c for e in entries for c in e["cpuids"]}
+    out = []
+    for e in extra:
+        if have & set(e["cpuids"]):
+            sys.exit(f"extra-entries.json: {e['cpuids']} is in the article now — take it out")
+        if not e.get("evidence"):
+            sys.exit(f"extra-entries.json: {e['cpuids']} has no evidence")
+        out.append({
+            "cpuids": e["cpuids"], "codeNames": e["codeNames"], "cores": e.get("cores", []),
+            "productFamilies": e.get("productFamilies", []), "steppings": e.get("steppings", []),
+            "segments": e.get("segments", []),
+            "processors": [{"name": p["name"], "sSpec": list(p.get("sSpec", []))} for p in e["processors"]],
+            "source": "extra",
+        })
+    return out
+
+
 def main(argv):
     retrieved = datetime.date.today().isoformat()
     cache = None
@@ -288,6 +317,8 @@ def main(argv):
         sys.exit("corrections that match nothing on the page:\n  "
                  + "\n  ".join(CORRECTIONS))
 
+    entries += extra_entries(entries)
+
     added = enrichment.enrich(entries, cache=cache)
 
     document = {
@@ -300,7 +331,10 @@ def main(argv):
                   "and its file name write it) to the processors sold with it. "
                   "An X in a CPUID stands for any one hexadecimal digit. The "
                   "list is the source's and is not complete; a CPUID can appear "
-                  "in more than one entry. sSpec lists the article's codes and "
+                  "in more than one entry. An entry with source \"extra\" is not "
+                  "the article's: it is from Skills/update-cpuid-brand-names/"
+                  "scripts/extra-entries.json, which gives each fact's page. "
+                  "sSpec lists the article's codes and "
                   "those added from sSpecSources; sSpecSource says, for each "
                   "added code, which."),
         "sSpecSources": added["sources"],

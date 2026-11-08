@@ -91,12 +91,12 @@ public struct FITDisplayRow: Equatable, Sendable {
 
     /// What the right-button menu offers here. Every row leads with its offset
     /// — going where the row points is the point of the row — and a row that
-    /// leads to microcode offers the CPUID, its replacement, and — when it may
-    /// go — its removal. The checksum fix is offered on the header row, where
+    /// leads to microcode offers its replacement and — when it may go — its
+    /// removal. The CPUID is not an item: the lines under the row are text to
+    /// select and copy. The checksum fix is offered on the header row, where
     /// the byte lives, when it is needed.
     public var commands: [FITRowCommand] {
         var commands: [FITRowCommand] = [.goToOffset(offsetToGoTo)]
-        if let cpuidText { commands.append(.copyCPUID(cpuidText)) }
         if canReplace { commands.append(.replaceMicrocode(index)) }
         if canRemove { commands.append(.removeMicrocode(index)) }
         if checksumFixAvailable { commands.append(.fixChecksum) }
@@ -109,11 +109,9 @@ public struct FITDisplayRow: Equatable, Sendable {
 /// A value rather than a menu, so what is on offer is decided in the pure
 /// target and tested by `swift test`: the panel builds items from this and
 /// nothing more. An item that does not apply to the row is *absent* rather than
-/// present and greyed — a greyed "Copy CPUID" on the header row explains
-/// nothing.
+/// present and greyed — a greyed "Remove Microcode" on the header row
+/// explains nothing.
 public enum FITRowCommand: Equatable, Sendable {
-    /// The number a bench writes down and looks up.
-    case copyCPUID(String)
     /// Go to what the row points at, and put it in focus.
     case goToOffset(UInt64)
     /// Swap the microcode this row names for another, whatever its CPUID. The
@@ -129,7 +127,6 @@ public enum FITRowCommand: Equatable, Sendable {
 
     public var title: LocalizedText {
         switch self {
-        case .copyCPUID: return L("Copy CPUID")
         // What the double-click does, said in the menu: where the entry leads.
         case .goToOffset: return L("Show Target")
         case .replaceMicrocode: return L("Replace Microcode")

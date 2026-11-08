@@ -25,6 +25,8 @@ scripts/enrich.py       S-SPECs from ark-sspec.json and Wikipedia, placed by ste
 scripts/ark-sspec.json  what was read from ARK, model by model, with its page
 scripts/gaps.py         the models still without an S-SPEC, in batches for ARK agents
 scripts/merge_ark.py    an agent batch → ark-sspec.json
+scripts/found-sspec.json  codes found by Skills/find-sspec, each with its evidence
+scripts/extra-entries.json  CPUIDs the article lacks, each fact with its page
 scripts/pins.py         the pinned Wikipedia revisions and Intel commit, moved forward
 reference/ark-agent-brief.md   the brief an ARK agent is given
 ```
@@ -67,16 +69,31 @@ the rules in full):
 2. A code with a stepping — ARK's, or a Wikipedia row that has one — goes under
    the one entry of that model whose CPUID has that stepping, by Intel's
    release notes (`06-9e-0a` → `906EA` → `U0`) and the article's own steppings.
-   None, or two (Alder Lake's `C0` is both `90672` and `90675`): left out.
+   Intel's current name for a stepping first (its notes called `06-97-05`
+   `C0` until 2022, `H0` since), every name it ever used when that finds no
+   one entry. None, or two: left out — unless the model is in one entry only
+   and no source gives that entry's CPUID a stepping (Grand Ridge, `B0664`).
 3. A Wikipedia code without a stepping goes in only where the article lists
    the model under one CPUID, and only from a page about that entry's
    microarchitecture (`… (Broadwell-based)` gives nothing to an Ice Lake entry:
    the article repeats Broadwell-DE parts there).
 4. A code Wikipedia writes for two models (SR3B8, both 8160F and 8160M) or
    that is already another model's is left out.
+5. A code from `found-sspec.json` (`Skills/find-sspec`) goes by its stepping
+   or its CPUID where its source gives one; a code read from the package's
+   marking has neither, and follows rule 3 with one more condition: the
+   architecture its source names must begin one of the entry's code names.
+
+A CPUID the article has no row for gets one from `extra-entries.json`, written
+after the article's with `"source": "extra"`: code names, cores, families,
+segments and models, each with the page that says so (the kernel's
+`intel-family.h` for a model number's code name, ARK for the models), and a
+stepping only where a page ties it to the CPUID. Its models' codes go in
+`ark-sspec.json` like any others. `import.py` refuses an extra entry once the
+article has the CPUID: then take it out.
 
 Every added code is listed in `sSpecSource` with where it came from (`ark`,
-`wikipedia`); `sSpecSources` at the top says which revisions and pages.
+`wikipedia`, and from `found-sspec.json`: `intel`, `database`, `marking`); `sSpecSources` at the top says which revisions and pages.
 
 ## Filling the gaps
 
@@ -113,6 +130,11 @@ network for it.
 
 What the agents read is WebFetch's quotation of the page, not the page: spot-
 check a few codes against ARK in a browser before committing a large batch.
+
+What ARK does not give either — Intel's specification updates, S-SPEC
+databases, the marking on photographed packages — is `Skills/find-sspec`'s
+work, run for a few CPUIDs at a time: it is costly. Its ARK lookups land in
+`ark-sspec.json` as these do, the rest in `found-sspec.json`.
 
 ## Moving the pins
 

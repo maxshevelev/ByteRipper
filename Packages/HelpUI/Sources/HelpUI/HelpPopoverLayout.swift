@@ -50,9 +50,12 @@ import AppKit
         }
     }
 
-    /// The title: what the popover is about.
+    /// The title: what the popover is about. Selectable, as the note and the
+    /// words under it are: a title is often the very thing a reader wants to
+    /// copy — a CPUID, a setting's name.
     public static func title(_ words: String) -> NSTextField {
         let title = NSTextField(labelWithString: words)
+        title.isSelectable = true
         title.font = .systemFont(ofSize: titleSize, weight: .semibold)
         title.alignment = .left
         title.lineBreakMode = .byTruncatingTail

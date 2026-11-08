@@ -63,6 +63,11 @@ final class MainWindowController: NSWindowController {
     /// window is cascaded off its predecessor instead (§3.1).
     private let frameAutosaveName: String?
 
+    /// Whether the window found a frame saved under its autosave name — the
+    /// launch window returning to where it was left. Any other window is
+    /// placed by the cascade.
+    private var restoresFrame = false
+
     init(frameAutosaveName: String? = "MainWindow") {
         self.frameAutosaveName = frameAutosaveName
         let controller = MainViewController()
@@ -83,7 +88,6 @@ final class MainWindowController: NSWindowController {
         // whole title bar — so hide the title text. The title stays set for the
         // Window menu, Mission Control, etc. (§10.3).
         window.titleVisibility = .hidden
-        window.center()
         // Every window the app makes carries the same tabbing identifier, which
         // is what lets one be added to another as a tab, and what makes ⌘T and
         // the tab bar's + button offer to do it.
@@ -104,6 +108,7 @@ final class MainWindowController: NSWindowController {
         // above is silently dropped and nothing is ever autosaved.
         if let frameAutosaveName {
             window.setFrameAutosaveName(frameAutosaveName)
+            restoresFrame = window.setFrameUsingName(frameAutosaveName)
         }
         buildToolbar()
         // The toolbar exists only now, so the mode's effect on it has to be
@@ -178,17 +183,21 @@ final class MainWindowController: NSWindowController {
         DispatchQueue.main.async { [weak self] in self?.syncNotesBadge() }
         guard let window else { return }
         // A window that has joined another as a tab wears that window's frame.
-        // Sizing or centring it here would resize the whole tab group, and the
+        // Sizing or placing it here would resize the whole tab group, and the
         // tab has no size of its own to want.
         if let group = window.tabGroup, group.windows.count > 1 { return }
-        if window.frame.width < 200 || window.frame.height < 200
+        // Only the launch window restores a frame. A later one, and a launch
+        // window whose frame is unusable, steps down and right off the window
+        // in front, as a Mac document window does. `NSWindowController` would
+        // cascade only a window loaded from a nib, never one made in code, so
+        // the step is taken here, at the size the window is fitted to.
+        if !restoresFrame || window.frame.width < 200 || window.frame.height < 200
             || !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(window.frame) }) {
             // The width first: the landing screen's bottom row is laid out by
             // it, and the height is measured from that layout.
-            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: maxLaunchHeight), display: false)
-            let height = launchHeight
-            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: height), display: true)
-            window.center()
+            window.setFrame(NSRect(origin: window.frame.origin,
+                                   size: NSSize(width: launchWidth, height: maxLaunchHeight)), display: false)
+            cascade(NSSize(width: launchWidth, height: launchHeight))
             fittedHeight = window.frame.height
             return
         }
@@ -196,6 +205,65 @@ final class MainWindowController: NSWindowController {
         frame.size.width = launchWidth
         window.setFrame(frame, display: false)
         setHeight(launchHeight, keepingTopOf: frame)
+    }
+
+    /// A window opened for files the Dock or the Finder handed over: sized as
+    /// Window ▸ Zoom sizes it — the width to the hex grids and the panels
+    /// beside them, the height to the dump — within its screen's visible
+    /// area, which leaves out the menu bar and the Dock. Its top-left corner
+    /// stays where the cascade put it, unless the new size would carry the
+    /// window past the visible area.
+    func fitToFiles() {
+        guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        if let group = window.tabGroup, group.windows.count > 1 { return }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let size = mainViewController.windowWillUseStandardFrame(window, defaultFrame: window.frame).size
+        place(size, topLeft: NSPoint(x: window.frame.minX, y: window.frame.maxY), in: visible)
+    }
+
+    /// The dump window in front of this one, which a new window steps off.
+    private var windowInFront: NSWindow? {
+        NSApp.orderedWindows.first { other in
+            other !== window && other.isVisible && !other.isMiniaturized
+                && other.windowController is MainWindowController
+        }
+    }
+
+    /// Gives the window `size` and puts its top-left one cascade step down and
+    /// right of the window in front — the step `cascadeTopLeft(from:)` takes,
+    /// the one every Mac document window takes. With no window in front, the
+    /// step is taken from the top-left corner of the visible area.
+    private func cascade(_ size: NSSize) {
+        guard let window else { return }
+        let front = windowInFront
+        guard let visible = (front?.screen ?? window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        window.setFrame(NSRect(origin: window.frame.origin, size: capped(size, to: visible)), display: false)
+        let from = front.map { NSPoint(x: $0.frame.minX, y: $0.frame.maxY) }
+            ?? NSPoint(x: visible.minX, y: visible.maxY)
+        // Placed at that point, the window answers with the point one step on.
+        let topLeft = window.cascadeTopLeft(from: from)
+        place(size, topLeft: topLeft, in: visible)
+    }
+
+    /// `size`, no larger than `visible`.
+    private func capped(_ size: NSSize, to visible: NSRect) -> NSSize {
+        NSSize(width: min(size.width, visible.width).rounded(.down),
+               height: min(size.height, visible.height).rounded(.down))
+    }
+
+    /// Gives the window `size` with its top-left at `topLeft`, within the
+    /// visible area, which leaves out the menu bar and the Dock. A window that
+    /// would reach past the area's right edge starts again at its left, and
+    /// one that would reach below its bottom — under a Dock there — starts
+    /// again at its top, as AppKit's own cascade does.
+    private func place(_ size: NSSize, topLeft: NSPoint, in visible: NSRect) {
+        guard let window else { return }
+        let size = capped(size, to: visible)
+        var topLeft = topLeft
+        if topLeft.x + size.width > visible.maxX || topLeft.x < visible.minX { topLeft.x = visible.minX }
+        if topLeft.y - size.height < visible.minY || topLeft.y > visible.maxY { topLeft.y = visible.maxY }
+        window.setFrame(NSRect(x: topLeft.x.rounded(), y: (topLeft.y - size.height).rounded(),
+                               width: size.width, height: size.height), display: true)
     }
 
     /// Fits the window to the landing screen again when what the screen shows

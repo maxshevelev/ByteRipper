@@ -1,4 +1,4 @@
-@source-sha 378ec0b55d535671302f9da9179c7521ee46e2ac912810e6783d4ca0498ac5d2
+@source-sha 12718df3a50482b14f0d165e4262e6ff5b1ab2144d2dab9c8a781a2593d4cc1e
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -16,7 +16,7 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 - **Ablage ▸ Vergleichen mit…** (⌥⌘O) öffnet die Datei im anderen Bereich: im freien, sonst im nicht aktiven. So kommt die zweite Datei für den Vergleich hinzu. Bei **Ablage ▸ Benutzte Dokumente** wird die Zeile mit gedrückter ⌥-Taste zum selben Befehl.
 - **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie abgelegt werden kann — diesen Bereich ersetzen, am Anfang oder am Ende anfügen, zum Vergleich öffnen oder in einem neuen Tab öffnen. Solange sich die Datei über dem Fenster befindet, sind alle Bänder halbtransparent sichtbar; das Band unter dem Zeiger ist hervorgehoben, und dort wird die Datei beim Loslassen abgelegt. Zwei Dateien auf einmal: die zweite öffnet im anderen Bereich, sofern dieser frei ist.
 - **Ablage ▸ Benutzte Dokumente** — die Dumps, die Sie zuletzt offen hatten.
-- **Aus dem Finder**, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]).
+- **Aus dem Finder oder dem Dock** — ein Doppelklick oder **Öffnen mit** im Finder, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]), oder Dateien, die auf das Programmsymbol im Dock gezogen werden. Eine Datei öffnet sich in einem neuen Fenster; ist sie bereits geöffnet, wird stattdessen ihr Fenster nach vorn geholt. Zwei Dateien öffnen sich in einem neuen Fenster nebeneinander, zum Vergleich. Von drei oder mehr Dateien werden die ersten zwei verglichen, die übrigen werden nicht geöffnet. Das neue Fenster ist so breit, wie sein Inhalt es braucht, und reicht weder unter die Menüleiste noch unter das Dock.
 - **Ablage ▸ Neue Datei** (⌘N) legt eine leere unbenannte Datei an — ein Ort, in den sich Bytes einsetzen lassen.
 
 ## Bereiche, Tabs und Fenster
@@ -24,6 +24,8 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 Jeder Bereichskopf nennt seine Datei und ob es ungesicherte Änderungen gibt; die Größe steht in der Statuszeile darunter. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen. Wird die letzte Datei eines Tabs geschlossen, schließt sich auch der Tab, sofern weitere Tabs geöffnet sind und er weder [[topic:bookmarks|Lesezeichen]] noch [[topic:fragments|Fragment-Bereiche]] enthält; der letzte Tab des Programms bleibt leer geöffnet.
 
 Ein Fenster kann mehrere Tabs halten (**Ablage ▸ Neuer Tab**, ⌘T), jeder mit einem eigenen Paar Dateibereiche zum Vergleichen. So werden in einem Fenster mehrere voneinander unabhängige Vergleiche geführt: BIOS-Dumps im einen Tab, Dumps des Embedded Controllers im nächsten.
+
+**Ablage ▸ Neues Fenster** (⇧⌘N) öffnet ein Fenster um einen Schritt nach rechts unten versetzt zum vorderen Fenster, wie es bei Mac-Programmen üblich ist. Ein Fenster, das unter das Dock oder über den Bildschirmrand hinaus reichen würde, beginnt wieder am oberen bzw. linken Rand. Das Fenster, das ByteRipper beim Start öffnet, erscheint an der Stelle, an der es beim letzten Beenden des Programms stand.
 
 ## Wenn die Datei schon offen ist
 

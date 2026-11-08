@@ -1,4 +1,4 @@
-@source-sha 719d4ad257deb5f075f5179cbbf94f914221d500598d17f90eeb58ec6205ccc9
+@source-sha 9b1965ca2966602e4575d58446a6e1ceed7d13d869fcd09bc51f1d3020009f50
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -51,4 +51,4 @@ Einen Arbeitsbereich, den eine neuere Version geschrieben hat, lässt das Progra
 
 ## Eine Datei aus dem Finder öffnen
 
-Wird ByteRipper durch das Öffnen einer Datei im Finder gestartet, wird zuerst der Arbeitsbereich wiederhergestellt, und die Datei öffnet sich in einem neuen Tab. Eine Datei, die im Arbeitsbereich bereits geöffnet ist, wird nicht ein zweites Mal geöffnet: Ihr Tab wird nach vorn geholt.
+Wird ByteRipper durch das Öffnen einer Datei im Finder gestartet, wird zuerst der Arbeitsbereich wiederhergestellt, und die Datei öffnet sich in einem neuen Fenster. Eine Datei, die im Arbeitsbereich bereits geöffnet ist, wird nicht ein zweites Mal geöffnet: Ihr Fenster wird nach vorn geholt.

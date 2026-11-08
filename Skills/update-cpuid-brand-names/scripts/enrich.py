@@ -1,13 +1,19 @@
-"""S-SPECs the article does not give, from Intel ARK and from Wikipedia.
+"""S-SPECs the article does not give, from Intel ARK, Wikipedia and what
+`Skills/find-sspec` found.
 
 An S-SPEC belongs to one stepping, and a stepping to one CPUID — so a code is
-only worth adding where it can be put under the right CPUID. Two sources:
+only worth adding where it can be put under the right CPUID. The sources:
 
 - Intel ARK, the manufacturer's own list: each code with its stepping. ARK
   cannot be fetched by a script (it answers 403), so what was read from it is
   kept beside this file in `ark-sspec.json`, with the page each code came from.
 - Wikipedia's "List of Intel … processors" pages, fetched here at a fixed
   revision. Most of their rows give a code but no stepping.
+- `found-sspec.json` beside this file, written by `Skills/find-sspec`: codes
+  with their evidence — an Intel document other than ARK's ordering tab
+  (`intel`), an S-SPEC database page (`database`), or the marking on the
+  package read from photographs of different chips (`marking`). Read before
+  Wikipedia, as ARK is: each code there was checked against its page.
 
 A stepping is turned into a CPUID by Intel's own table — the release notes of
 `github.com/intel/Intel-Linux-Processor-Microcode-Data-Files`, which list
@@ -18,14 +24,23 @@ The rules, in order:
 
 1. The article's own codes stay as they are.
 2. A code with a stepping (ARK, or a Wikipedia row that has one) goes under the
-   one entry of that model whose CPUID has that stepping. None, or more than
-   one: it is left out.
+   one entry of that model whose CPUID has that stepping — by Intel's current
+   naming first, by every name its notes ever used when that finds no one
+   entry (`intel_steppings`). None, or more than one: it is left out — unless
+   the model is in one entry only and no source names a stepping for that
+   entry's CPUID: then it goes there, as rule 3 puts a code with no stepping.
 3. A Wikipedia code without a stepping goes in only where the article lists
    the model under one CPUID — there is then nowhere else for it to go. A
    model listed under several CPUIDs gets nothing from such a row. And a page
    about one microarchitecture ("… (Broadwell-based)") gives codes only to an
    entry whose code names are of it: the article repeats Broadwell-DE Xeon D
    parts under Ice Lake D, and their codes do not belong there.
+4. A found code (`found-sspec.json`) with a stepping follows rule 2; with a
+   CPUID — or a stepping that fits no entry, and a CPUID — it goes under the
+   one entry of that model with that CPUID; with
+   neither — a marking gives neither — it follows rule 3, and the architecture
+   its source names must begin one of the entry's code names ("Comet Lake"
+   for "Comet Lake S"; "Broadwell" never for "Ice Lake D").
 
 A code belongs to one model: one that is already some other model's, or that
 Wikipedia writes for two models (a copy-paste slip there, as SR3B8 for both
@@ -44,6 +59,7 @@ from html.parser import HTMLParser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARK_FILE = os.path.join(HERE, "ark-sspec.json")
+FOUND_FILE = os.path.join(HERE, "found-sspec.json")
 
 INTEL_NOTES_COMMIT = "bdc92abe5c499c3fd7988b76a128d05c9120a520"
 INTEL_NOTES_URL = ("https://raw.githubusercontent.com/intel/"
@@ -89,11 +105,33 @@ def fetch(url, cache):
 
 # --- Intel: stepping per CPUID ------------------------------------------------
 
-def intel_steppings(cache):
-    """{CPUID: {stepping}} from the rows `| HSX-E/EP | Cx/M1 | 06-3f-02/6f | …`."""
+def intel_steppings(cache, current=False):
+    """{CPUID: {stepping}} from the rows `| HSX-E/EP | Cx/M1 | 06-3f-02/6f | …`.
+
+    The notes are every release's, newest first, and a later release can
+    correct an earlier one: releases up to 2022 called 06-97-05 "C0", later
+    ones "H0" — which it is (ARK: the i5-12400's C0 is SRL4V, its H0 SRL5Y,
+    two dies). It can also be wrong where the older one was right: since 2023
+    SKX-D (06-55-04) is written "H0", where ARK and the older rows say M1. So
+    two readings:
+
+    - all (the default): every stepping any release wrote for the CPUID;
+    - `current`: each product's row from the newest release that has one —
+      product by product, since a release lists only the platforms it updates
+      (06-4e-03's SKL-U23e, K1, is in an older release than its SKL-U/Y, D0).
+      A row may write a stepping as `Dx` ("a D stepping"): that is the
+      D-steppings the product's older rows name (ICX-SP's `Dx/M1`, earlier
+      `D0`), or nothing.
+
+    `enrich` places a code by the current reading first and falls back to all.
+    """
     text = fetch(INTEL_NOTES_URL, cache).decode("utf-8")
-    table = collections.defaultdict(set)
+    rows = collections.defaultdict(list)          # (CPUID, product) → [(release, {stepping})]
+    release = 0
     for line in text.splitlines():
+        if line.startswith("## "):
+            release += 1
+            continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) < 3:
             continue
@@ -105,10 +143,21 @@ def intel_steppings(cache):
         ext_family = max(family - 0xF, 0) if family >= 0xF else 0
         base_family = min(family, 0xF)
         cpuid = (ext_family << 20) | ((model >> 4) << 16) | (base_family << 8) | ((model & 0xF) << 4) | stepping
-        for s in re.split(r"[/,]", cells[1]):
-            s = s.strip()
-            if re.fullmatch(r"[A-Z]\d", s):
-                table[f"{cpuid:X}"].add(s)
+        names = {s.strip() for s in re.split(r"[/,]", cells[1])}
+        rows[(f"{cpuid:X}", cells[0])].append((release, {s for s in names if re.fullmatch(r"[A-Z][0-9x]", s)}))
+    table = collections.defaultdict(set)
+    for (cpuid, _), seen in rows.items():
+        if not current:
+            table[cpuid] |= {s for _, n in seen for s in n if s[1] != "x"}
+            continue
+        newest = min(r for r, _ in seen)
+        latest = set().union(*(n for r, n in seen if r == newest))
+        older = set().union(*(n for r, n in seen if r != newest))
+        for s in latest:
+            if s[1] != "x":
+                table[cpuid].add(s)
+            else:
+                table[cpuid] |= {o for o in older if o[0] == s[0] and o[1] != "x"}
     return table
 
 
@@ -226,12 +275,13 @@ def _token(name):
 
 
 def enrich(entries, cache=None, log=print):
-    steppings = intel_steppings(cache)
+    every = intel_steppings(cache)
+    current = intel_steppings(cache, current=True)
 
-    def entry_steppings(entry):
+    def entry_steppings(entry, table):
         found = set(entry["steppings"])
         for c in entry["cpuids"]:
-            found |= steppings.get(c, set())
+            found |= table.get(c, set())
         return found
 
     places = collections.defaultdict(list)          # model → [(entry, processor)]
@@ -257,7 +307,18 @@ def enrich(entries, cache=None, log=print):
         if owner(code):
             log(f"  {source}: {name} {code} is already {sorted(owner(code))}'s — left out")
             return False
-        fits = [(e, p) for e, p in places[name] if stepping in entry_steppings(e)]
+        # Intel's current reading first: 06-97-05 was "C0" until 2022 and is
+        # H0, so a C0 code fits 90672 alone. All its readings when that finds
+        # no one place: SKX-D is "H0" now, its Xeon D-21xx codes ARK's M1.
+        for table in (current, every):
+            fits = [(e, p) for e, p in places[name] if stepping in entry_steppings(e, table)]
+            if len(fits) == 1:
+                break
+        if not fits and len(places[name]) == 1 and not entry_steppings(places[name][0][0], every):
+            # The model's one entry, whose CPUID no source gives a stepping:
+            # nowhere else for the code to go, and nothing it contradicts
+            # (Grand Ridge, B0664 — ARK says B0, nothing ties B0 to ID 4).
+            fits = places[name]
         if len(fits) == 1:
             add(fits[0][1], code, source)
             return True
@@ -276,6 +337,70 @@ def enrich(entries, cache=None, log=print):
         for s in item["specs"]:
             if s.get("stepping") and by_stepping(item["model"], s["sSpec"], s["stepping"], "ark"):
                 counts["ark"] += 1
+
+    # Found by Skills/find-sspec: rule 4.
+    found = {"models": []}
+    if os.path.exists(FOUND_FILE):
+        with open(FOUND_FILE, encoding="utf-8") as f:
+            found = json.load(f)
+    # A code ARK gives with a stepping is placed by that stepping, also when
+    # another page repeats it without one: PCN 117408 lists the i3-8100H's
+    # SR3Z7 with none, ARK says U0 — 906EA, not the 906EB the article
+    # lists the model under, where rule 3 would otherwise put it.
+    ark_stepping = {(item["model"], s["sSpec"]): s["stepping"]
+                    for item in ark["models"] for s in item["specs"] if s.get("stepping")}
+    for item in found["models"]:
+        name = item["model"]
+        if item["specs"] and name not in places:
+            log(f"  found: {name} is not in the table")
+            continue
+        for s in item["specs"]:
+            kinds = {e["kind"] for e in s["evidence"]}
+            source = "intel" if "intel" in kinds else "database" if "database" in kinds else "marking"
+            code = s["sSpec"]
+            if not s.get("stepping") and not s.get("cpuid") and (name, code) in ark_stepping:
+                if by_stepping(name, code, ark_stepping[(name, code)], source):
+                    counts[source] += 1
+                continue
+            if s.get("stepping"):
+                if by_stepping(name, code, s["stepping"], source):
+                    counts[source] += 1
+                    continue
+                # A stepping Intel's notes do not name (Ice Lake D's package
+                # steppings Z1/Z2, U1/U2, where the notes say B0): the CPUID
+                # its source gives decides, where it gives one.
+                if not s.get("cpuid"):
+                    continue
+            if code in known(name):
+                continue
+            if owner(code):
+                log(f"  {source}: {name} {code} is already {sorted(owner(code))}'s — left out")
+                continue
+            if s.get("cpuid"):
+                fits = [(e, p) for e, p in places[name]
+                        if any(len(c) == len(s["cpuid"]) and
+                               all(x in ("X", y) for x, y in zip(c, s["cpuid"]))
+                               for c in e["cpuids"])]
+                if len(fits) == 1:
+                    add(fits[0][1], code, source)
+                    counts[source] += 1
+                else:
+                    log(f"  {source}: {name} {code} ({s['cpuid']}) fits {len(fits)} entries — left out")
+                continue
+            where = places[name]
+            arch = (s.get("architecture") or "").lower()
+            if len({tuple(e["cpuids"]) for e, _ in where}) != 1:
+                log(f"  {source}: {name} {code} has no stepping, and the model is under "
+                    "several CPUIDs — left out")
+            elif not arch or not all(any(c.lower().startswith(arch) for c in e["codeNames"])
+                                     for e, _ in where):
+                log(f"  {source}: {name} {code} is {s.get('architecture')!r}, the entry is "
+                    f"{where[0][0]['codeNames']} — left out")
+            else:
+                for _, p in where:
+                    if not [c for c in p["sSpec"] if c not in p.get("sSpecSource", {})]:
+                        add(p, code, source)
+                counts[source] += 1
 
     # Wikipedia.
     by_token = collections.defaultdict(list)
@@ -322,6 +447,19 @@ def enrich(entries, cache=None, log=print):
                         if not [c for c in p["sSpec"] if c not in p.get("sSpecSource", {})]:
                             add(p, code, "wikipedia")
                     counts["wikipedia"] += 1
+    found_sources = {
+        "intel": {"about": "an Intel document other than ARK's ordering tab (a specification "
+                           "update, a datasheet, a product change notification) that gives the "
+                           "code for the model; the page per code is in "
+                           "Skills/update-cpuid-brand-names/scripts/found-sspec.json"},
+        "database": {"about": "an S-SPEC database page that gives the code with its stepping or "
+                              "CPUID; the page per code is in "
+                              "Skills/update-cpuid-brand-names/scripts/found-sspec.json"},
+        "marking": {"about": "the code printed on the package beside the model number, read from "
+                             "at least two photographs of different chips on different sites; the "
+                             "photographs per code are in "
+                             "Skills/update-cpuid-brand-names/scripts/found-sspec.json"},
+    }
     return {
         "counts": dict(counts),
         "sources": {
@@ -331,6 +469,7 @@ def enrich(entries, cache=None, log=print):
             "wikipedia": {"pages": [{"title": t, "revid": r,
                                      "url": "https://en.wikipedia.org/w/index.php?oldid=" + str(r)}
                                     for t, r in WIKIPEDIA_PAGES.items()]},
+            **{k: v for k, v in found_sources.items() if counts[k]},
             "steppings": {"about": "stepping per CPUID, from Intel's microcode release notes",
                           "url": INTEL_NOTES_URL},
         },

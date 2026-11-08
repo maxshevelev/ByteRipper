@@ -317,7 +317,6 @@
 "CPUID" = "CPUID";
 "CPUID, model or S-SPEC" = "CPUID, Modell oder S-SPEC";
 "CPUID %1$@" = "CPUID %1$@";
-"CPUID %1$@ copied." = "CPUID %1$@ kopiert.";
 "credits|by" = "von";
 "CSE Layout Table" = "CSE Layout Table";
 "Cancel" = "Abbrechen";
@@ -360,7 +359,6 @@
 "Slot" = "Slot";
 "Copy" = "Kopieren";
 "Copy Name" = "Namen kopieren";
-"Copy CPUID" = "CPUID kopieren";
 "Copy File Name" = "Dateinamen kopieren";
 "Copy Full Path" = "Vollständigen Pfad kopieren";
 "Copy Screenshot" = "Bildschirmfoto kopieren";
@@ -1105,8 +1103,12 @@
 "pre-release" = "Vorabversion";
 "r.%1$@" = "r.%1$@";
 "No processor names known for CPUID %1$@" = "Für CPUID %1$@ sind keine Prozessormodelle bekannt";
+"No processor models known for this CPUID" = "Für diese CPUID sind keine Prozessormodelle bekannt";
 "platform %1$@" = "Plattform %1$@";
 "series, models not listed" = "Serie, Modelle nicht aufgeführt";
+"Processors" = "Prozessoren";
+"Show the processors with this CPUID" = "Prozessoren mit dieser CPUID anzeigen";
+"Stepping %1$@" = "Stepping %1$@";
 "settings|View" = "Darstellung";
 "the rest of the file" = "der Rest der Datei";
 "theme|Dark" = "Dunkel";

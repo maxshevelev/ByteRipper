@@ -23,6 +23,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// before `applicationDidFinishLaunching` finishes building the window, so
     /// they queue here and drain once it is up.
     private var pendingOpenURLs: [URL] = []
+    /// The files of one drop on the Dock icon, which arrive one event apiece,
+    /// gathered so they open together (`HandedFilesBatch`).
+    private lazy var handedFiles = HandedFilesBatch { [weak self] urls in
+        guard let self else { return }
+        self.openHandedFiles(urls, windowAtHand: self.launchWindowAtHand)
+        self.launchWindowAtHand = nil
+    }
+    /// The empty window a launch the files started has made, for the first
+    /// batch to take: the launch can finish between two files of one drop, and
+    /// the second must still join the first.
+    private var launchWindowAtHand: MainWindowController?
     /// Node links that came before the first window: opened once it is up.
     private var pendingNodeLinks: [(file: URL, node: String?)] = []
     private var isReady = false
@@ -223,11 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if !pendingOpenURLs.isEmpty {
             let urls = pendingOpenURLs
             pendingOpenURLs.removeAll()
-            if restored {
-                openFilesBesideWorkspace(urls)
-            } else {
-                openFiles(urls)
-            }
+            // A launch that restored nothing has made one empty window, and
+            // the files take it; one that restored a workspace leaves its
+            // windows as they were. Through the batch: the rest of the drop
+            // may still be on its way.
+            launchWindowAtHand = restored ? nil : windowControllers.last
+            handedFiles.add(urls)
         }
         if !pendingNodeLinks.isEmpty {
             let links = pendingNodeLinks
@@ -337,20 +349,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// What the last restore could not bring back as it was.
     private(set) var lastRestoreIssues: [RestoreIssue] = []
 
-    /// Files handed to a launch that restored a workspace: one already open in
-    /// it is brought forward, the rest open in a tab of their own — never into
-    /// a restored tab, where they would replace a file the person left there.
-    private func openFilesBesideWorkspace(_ urls: [URL]) {
-        var fresh: [URL] = []
-        for url in urls {
-            if let (holder, pane) = openDocuments.location(of: url, excluding: nil) {
-                holder.revealOpenFile(inPane: pane)
-            } else {
-                fresh.append(url)
-            }
+    /// Files the Dock, the Finder or "Open With" handed to the app
+    /// (`HandedFilesPlacement`): one already open comes forward; otherwise a
+    /// window of their own — `windowAtHand` when the launch has just made an
+    /// empty one — one file to look at, two to compare, fitted to them within
+    /// the screen's area clear of the Dock (`fitToFiles`).
+    private func openHandedFiles(_ urls: [URL], windowAtHand: MainWindowController? = nil) {
+        let open = urls.count == 1 ? openDocuments.location(of: urls[0], excluding: nil) : nil
+        let atHand = windowAtHand.flatMap { controller -> MainWindowController? in
+            let model = controller.mainViewController.windowModel
+            return model.pane1.isOpen || model.pane2.isOpen ? nil : controller
         }
-        guard !fresh.isEmpty else { return }
-        makeWindow(tabbedWith: frontmostWindowController()?.window).mainViewController.openFiles(fresh)
+        switch HandedFilesPlacement.plan(fileCount: urls.count, alreadyOpen: open != nil,
+                                         emptyWindowAtHand: atHand != nil) {
+        case .bringForward:
+            if let (holder, pane) = open { holder.revealOpenFile(inPane: pane) }
+        case .windowAtHand:
+            atHand?.mainViewController.openFiles(urls)
+            atHand?.fitToFiles()
+        case .newWindow:
+            let controller = makeWindow()
+            controller.mainViewController.openFiles(urls)
+            controller.fitToFiles()
+        }
     }
 
     /// One warning for everything the restore could not bring back as it was,
@@ -421,8 +442,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// shows it.
     ///
     /// Only the first window saves its frame: one autosave name can serve one
-    /// window, so every later one is cascaded off the window in front of it
-    /// instead — which is also where a new window belongs on screen.
+    /// window, so every later one steps down and right off the window in front
+    /// of it instead (`MainWindowController.showWindow`) — which is also where
+    /// a new window belongs on screen.
     @discardableResult
     func makeWindow(tabbedWith anchor: NSWindow? = nil) -> MainWindowController {
         // Only the launch window saves a frame: one autosave name can serve one
@@ -456,10 +478,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         windowControllers.append(controller)
         // A tab takes its place from the window it joins, so it is added before
-        // being shown; a window on its own is placed by `NSWindowController`,
-        // which cascades a window it shows unless that window autosaves its
-        // frame — so the launch window lands where it was left and every later
-        // one steps down and right of the one in front.
+        // being shown; a window on its own is placed by its controller's
+        // `showWindow` — the launch window lands where it was left and every
+        // later one steps down and right of the one in front.
         if let anchor, let window = controller.window, anchor !== window {
             anchor.addTabbedWindow(window, ordered: .above)
         }
@@ -474,14 +495,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         makeWindow(tabbedWith: anchor).mainViewController.openFiles([url])
     }
 
-    /// The window a file handed to the app should open into: the one in front,
-    /// or a fresh one when every window has been closed (the app stays running
-    /// with no window only while something else keeps it alive).
-    private func openFiles(_ urls: [URL]) {
-        let controller = frontmostWindowController() ?? makeWindow()
-        controller.mainViewController.openFiles(urls)
-    }
-
     /// The key window's controller, else the most recently made one.
     private func frontmostWindowController() -> MainWindowController? {
         if let key = NSApp.keyWindow,
@@ -491,9 +504,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return windowControllers.last
     }
 
-    /// Finder double-click / "Open with" hands the file here. The files flow
-    /// into the same open pipeline as the Open panel (§4.1), in the window in
-    /// front — a file launched with the app opens directly into a pane.
+    /// The Dock, a Finder double-click and "Open With" hand files here, and the
+    /// three cannot be told apart. They open in a window of their own
+    /// (`openHandedFiles`) — a file launched with the app in the window the
+    /// launch made.
     func application(_ application: NSApplication, open urls: [URL]) {
         // A node link an agent wrote: the file, then the node in its tree.
         let links = urls.compactMap(AgentNodeURLs.parse)
@@ -510,7 +524,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         guard !files.isEmpty else { return }
         if isReady {
-            openFiles(files)
+            handedFiles.add(files)
         } else {
             pendingOpenURLs.append(contentsOf: files)
         }

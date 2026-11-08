@@ -215,6 +215,65 @@ final class MultiWindowTests: XCTestCase {
         XCTAssertGreaterThan(frame.width, 200)
     }
 
+    /// A window opened for files handed over by the Dock or the Finder is
+    /// fitted to them as Zoom fits a window, within the screen's visible area
+    /// — clear of the Dock and the menu bar — its top-left where the cascade
+    /// put it.
+    func testAWindowForHandedFilesIsFittedClearOfTheDock() throws {
+        let controller = MainWindowController(frameAutosaveName: nil)
+        defer { controller.close() }
+        controller.showWindow(nil)
+        let window = try XCTUnwrap(controller.window)
+        let placed = window.frame
+        let url = try tempFile([UInt8](repeating: 0xAB, count: 0x400))
+        controller.mainViewController.openFiles([url])
+
+        controller.fitToFiles()
+
+        let visible = try XCTUnwrap((window.screen ?? NSScreen.main)?.visibleFrame)
+        let frame = window.frame
+        XCTAssertTrue(visible.insetBy(dx: -1, dy: -1).contains(frame),
+                      "inside the visible area, clear of the Dock: \(frame) in \(visible)")
+        let zoomed = controller.mainViewController.windowWillUseStandardFrame(window, defaultFrame: .zero)
+        XCTAssertEqual(frame.width, min(zoomed.width, visible.width).rounded(.down), accuracy: 1,
+                       "as wide as Zoom makes it")
+        if frame.maxX < visible.maxX - 1, frame.minY > visible.minY + 1 {
+            XCTAssertEqual(frame.minX, placed.minX, accuracy: 1, "the left edge stays")
+            XCTAssertEqual(frame.maxY, placed.maxY, accuracy: 1, "the top edge stays")
+        }
+    }
+
+    /// A window after another steps down and right off it, as a Mac document
+    /// window does — `NSWindowController` cascades only a window from a nib,
+    /// so ours did not step at all — and a run of them stays inside the
+    /// visible area: one that would reach under the Dock starts again at the
+    /// top, one past the right edge at the left.
+    func testNewWindowsCascadeClearOfTheDock() throws {
+        var controllers: [MainWindowController] = []
+        defer { controllers.forEach { $0.close() } }
+        for _ in 0..<12 {
+            // The window shown last is the one in front, as it is in the app;
+            // a test host in the background does not bring it there itself,
+            // and a window another test left open would be in front instead.
+            controllers.last?.window?.orderFrontRegardless()
+            let controller = MainWindowController(frameAutosaveName: nil)
+            controller.showWindow(nil)
+            controllers.append(controller)
+        }
+        let first = try XCTUnwrap(controllers[0].window).frame
+        let second = try XCTUnwrap(controllers[1].window).frame
+        let visible = try XCTUnwrap((controllers[0].window?.screen ?? NSScreen.main)?.visibleFrame)
+        XCTAssertGreaterThan(second.minX, first.minX, "a step to the right")
+        if second.maxY < visible.maxY - 1 {
+            XCTAssertLessThan(second.maxY, first.maxY, "a step down")
+        }
+        for controller in controllers {
+            let frame = try XCTUnwrap(controller.window).frame
+            XCTAssertTrue(visible.insetBy(dx: -1, dy: -1).contains(frame),
+                          "inside the visible area, clear of the Dock: \(frame) in \(visible)")
+        }
+    }
+
     // MARK: - The window's name
 
     /// A window is named after the files it holds, because that name is what the

@@ -317,7 +317,6 @@
 "CPUID" = "CPUID";
 "CPUID, model or S-SPEC" = "CPUID, модель или S-SPEC";
 "CPUID %1$@" = "CPUID %1$@";
-"CPUID %1$@ copied." = "CPUID %1$@ скопирован.";
 "credits|by" = "от";
 "CSE Layout Table" = "CSE Layout Table";
 "Cancel" = "Отмена";
@@ -360,7 +359,6 @@
 "Slot" = "Слот";
 "Copy" = "Скопировать";
 "Copy Name" = "Скопировать имя";
-"Copy CPUID" = "Скопировать CPUID";
 "Copy File Name" = "Скопировать имя файла";
 "Copy Full Path" = "Скопировать полный путь";
 "Copy Screenshot" = "Скопировать снимок";
@@ -1105,8 +1103,12 @@
 "pre-release" = "предрелиз";
 "r.%1$@" = "r.%1$@";
 "No processor names known for CPUID %1$@" = "Модели процессоров для CPUID %1$@ неизвестны";
+"No processor models known for this CPUID" = "Модели процессоров с этим CPUID неизвестны";
 "platform %1$@" = "платформа %1$@";
 "series, models not listed" = "серия, модели не перечислены";
+"Processors" = "Процессоры";
+"Show the processors with this CPUID" = "Показать процессоры с этим CPUID";
+"Stepping %1$@" = "Степпинг %1$@";
 "settings|View" = "Вид";
 "the rest of the file" = "остаток файла";
 "theme|Dark" = "Тёмная";

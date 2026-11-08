@@ -2,7 +2,7 @@ import XCTest
 import AppPalette
 import ALSplitView
 import FITTool
-import FITToolUI
+@testable import FITToolUI
 import ToolModuleKit
 import UEFIToolUI
 @testable import ByteRipper
@@ -899,6 +899,44 @@ final class FITToolFlowTests: XCTestCase {
                       "no vendor picker: there is nothing to pick")
     }
 
+    /// The CPUID column has the FIT panel's `ⓘ` after a CPUID the table of
+    /// brand names knows, opening the same popover — and none after one it
+    /// does not, or after another vendor's.
+    func testTheFormsCPUIDsHaveTheProcessorsInfo() throws {
+        _ = try open(FITTestImage.make())
+        let loaded = expectation(description: "the catalogue arrives")
+        try session().withCatalogueSeam { loaded.fulfill() }
+        try button("Add Microcode…").performClick(nil)
+        wait(for: [loaded], timeout: 5)
+
+        let sheet = try XCTUnwrap(try session().viewController.presentedViewControllers?.first
+            as? FITAddMicrocodeViewController)
+        let table = sheet.table
+        let cell = try XCTUnwrap(table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? FITCatalogueCPUIDCell)
+        XCTAssertEqual(cell.textField?.stringValue, "806EA")
+        XCTAssertFalse(cell.infoButton.isHidden)
+        XCTAssertEqual(cell.infoButton.accessibilityLabel(), "Processors")
+        cell.layoutSubtreeIfNeeded()
+        let words = try XCTUnwrap(cell.textField).frame
+        XCTAssertTrue((0...8).contains(cell.infoButton.frame.minX - words.maxX), "right after the CPUID")
+        XCTAssertEqual(cell.infoColor, .linkColor)
+        cell.backgroundStyle = .emphasized
+        XCTAssertEqual(cell.infoColor, .alternateSelectedControlTextColor, "inverse on a selected row")
+        cell.backgroundStyle = .normal
+        XCTAssertEqual(cell.infoColor, .linkColor)
+
+        cell.infoButton.performClick(nil)
+        let popover = try XCTUnwrap(sheet.processorsPopover, "the popover is open")
+        defer { popover.close() }
+        XCTAssertEqual(popover.group.cpuid, "806EA")
+        XCTAssertTrue(popover.shownText.contains("Core i5-8250U"), popover.shownText)
+
+        XCTAssertNil(FITProcessorsPopover.group(for: 0x000B_06A8, vendor: .intel), "not in the table")
+        XCTAssertNil(FITProcessorsPopover.group(for: 0x0080_0F11, vendor: .amd), "not about AMD")
+        cell.show("B06A8", group: nil)
+        XCTAssertTrue(cell.infoButton.isHidden, "no ⓘ where nothing is known")
+    }
+
     /// A status line longer than the room beside the buttons — the file being
     /// fetched, a download that failed — wraps there. It used to be one line
     /// that insisted on its whole width, and the sheet widened for as long as
@@ -1063,22 +1101,6 @@ final class FITToolFlowTests: XCTestCase {
         let settled = expectation(description: "the session comes back")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { settled.fulfill() }
         wait(for: [settled], timeout: 2)
-    }
-
-    /// What the right-button menu's first item does.
-    func testCopyingTheCpuidPutsItOnThePasteboard() throws {
-        let board = NSPasteboard(name: NSPasteboard.Name("dev.maxik.tests.fit"))
-        FITToolSession.pasteboard = board
-        defer { FITToolSession.pasteboard = .general }
-        _ = try open(FITTestImage.make())
-
-        try session().copyCPUID(of: 1)
-
-        XCTAssertEqual(board.string(forType: .string), "806EA")
-
-        // The header has no CPUID, and asking for one leaves the board alone.
-        try session().copyCPUID(of: 0)
-        XCTAssertEqual(board.string(forType: .string), "806EA")
     }
 
     /// The second defect of §11: a checksum left over from an edit that changed
@@ -1285,44 +1307,35 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(table.tableColumns.map(\.title), ["Type"])
     }
 
-    /// A microcode row opens a level by itself: a row for its CPUID, which
-    /// opens into the processors behind it and stays open after the panel is
-    /// shown again. A line chosen puts its microcode in focus.
-    func testAMicrocodeRowOpensIntoItsCPUID() throws {
+    /// A microcode row opens a level by itself: one plate of its CPUIDs, with
+    /// their code names. The plate is not a row of the table — it cannot be
+    /// chosen and opens into nothing; the processors behind a CPUID are not
+    /// part of the update, and its `ⓘ` lists them in a popover.
+    func testAMicrocodeRowOpensIntoAPlateOfItsCPUIDs() throws {
         _ = try open(FITTestImage.make())
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
         let display = try session().display
-        let lines = display.rows[1].processorGroups.first?.lines ?? []
-        XCTAssertFalse(lines.isEmpty, "806EA is in the shipped table")
+        XCTAssertFalse(display.rows[1].processorGroups.first?.lines.isEmpty ?? true, "806EA is in the shipped table")
         XCTAssertFalse(outline.isExpandable(try XCTUnwrap(outline.item(atRow: 0))), "the header opens into nothing")
         XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 1)), "the microcode is open to begin with")
-        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2, "the rows, the one CPUID, and Add")
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2, "the rows, the plate, and Add")
         // Add sits under the last microcode, after what the microcode opened.
         let add = try button("Add Microcode…")
         XCTAssertEqual(outline.row(for: add), 3)
-        let cpuidRow = try text(of: outline, row: 2)
-        XCTAssertTrue(cpuidRow.hasPrefix("CPUID 806EA"), cpuidRow)
-        // The stepping and the segments are under the pointer, not on a row.
-        let cpuidCell = try XCTUnwrap(outline.view(atColumn: 0, row: 2, makeIfNecessary: true) as? NSTableCellView)
-        XCTAssertTrue(cpuidCell.textField?.toolTip?.contains("Mobile") == true, cpuidCell.textField?.toolTip ?? "no tip")
+        let plate = try plate(in: outline, row: 2)
+        XCTAssertEqual(plate.lineTexts, ["CPUID 806EA  Coffee Lake U43e, Kaby Lake Refresh U"])
         let microcodeRow = try text(of: outline, row: 1)
         XCTAssertFalse(microcodeRow.contains("806EA"), "the row itself does not repeat it: \(microcodeRow)")
+        let plateItem = try XCTUnwrap(outline.item(atRow: 2))
+        XCTAssertFalse(outline.isExpandable(plateItem), "the plate opens into nothing")
+        XCTAssertEqual(outline.delegate?.outlineView?(outline, shouldSelectItem: plateItem), false,
+                       "the plate cannot be chosen")
 
-        let cpuid = try XCTUnwrap(outline.item(atRow: 2))
-        XCTAssertFalse(outline.isItemExpanded(cpuid), "the CPUID is closed to begin with")
-        outline.expandItem(cpuid)
-        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2 + lines.count)
-        XCTAssertEqual(outline.row(for: add), 3 + lines.count, "still under the last microcode's rows")
-        let firstLine = try text(of: outline, row: 3)
-        XCTAssertTrue(firstLine.hasPrefix(lines[0].text), firstLine)
-
-        // Choosing a line puts its microcode in focus and shows the panel
-        // again, with new items: the line stays chosen and the rows open.
-        outline.selectRowIndexes([4], byExtendingSelection: false)
-        XCTAssertEqual(outline.selectedRow, 4)
+        // Choosing the microcode keeps it open.
+        outline.selectRowIndexes([1], byExtendingSelection: false)
         XCTAssertEqual(try session().display.detail.title, "#2 Microcode")
-        XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 2)), "still open")
-        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2 + lines.count)
+        XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 1)), "still open")
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2)
 
         // Closed by the reader, it stays closed when the panel is shown again.
         outline.collapseItem(outline.item(atRow: 1))
@@ -1330,28 +1343,102 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertFalse(outline.isItemExpanded(outline.item(atRow: 1)))
     }
 
-    /// An update for several processors opens into a row per CPUID, each of
-    /// which opens into the processors behind it — and one the shipped table
-    /// does not know says so.
-    func testEachCPUIDOfAnUpdateIsALevelOfItsOwn() throws {
+    /// The `ⓘ` right after a CPUID opens a popover: the CPUID as its title,
+    /// what the table says of the group — its names, its product family, the
+    /// stepping, the segments — under it, and the models with their S-SPECs.
+    func testACPUIDsInfoMarkListsItsProcessorsInAPopover() throws {
+        _ = try open(FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        let panel = try XCTUnwrap(outline.delegate as? FITToolViewController)
+        let plate = try plate(in: outline, row: 2)
+        XCTAssertEqual(plate.textView.string, "CPUID 806EA  \u{FFFC}  Coffee Lake U43e, Kaby Lake Refresh U",
+                       "the ⓘ right after the CPUID, the code names after it")
+        let mark = try XCTUnwrap(plate.textView.textStorage?.attribute(.toolTip, at: 13, effectiveRange: nil) as? String)
+        XCTAssertEqual(mark, "Show the processors with this CPUID")
+        XCTAssertNotNil(plate.textView.rectOfInfo(0))
+
+        plate.textView.openInfo(0)
+
+        let popover = try XCTUnwrap(panel.processorsPopover, "the popover is open")
+        defer { popover.close() }
+        XCTAssertEqual(popover.group.cpuid, "806EA")
+        let note = try XCTUnwrap(popover.group.notes.first)
+        XCTAssertTrue(note.contains("8th Generation Intel Core Processor Family"), note)
+        XCTAssertTrue(note.contains("Stepping"), note)
+        XCTAssertTrue(popover.shownText.contains("Core i5-8250U"), popover.shownText)
+
+        // The head is text to select and copy too: the CPUID, and the code
+        // names and facts under it.
+        let head = (popover.view.subviews.first?.subviews ?? []).compactMap { $0 as? NSTextField }
+        let title = try XCTUnwrap(head.first { $0.stringValue == "CPUID 806EA" })
+        let names = try XCTUnwrap(head.first { $0.stringValue == note })
+        XCTAssertTrue(title.isSelectable, "the CPUID is copied like the rest")
+        XCTAssertTrue(names.isSelectable, "the code names are copied like the rest")
+    }
+
+    /// The CPUIDs are text on the table's background: the table lets a click
+    /// into them, the reader selects them as text, and a copy is the words
+    /// without the `ⓘ` — which is why the row's menu has no Copy CPUID.
+    func testTheCPUIDsAreTextToSelectAndCopy() throws {
+        _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
+            (0x000B_06A2, 1), (0x000B_06A8, 1)
+        ]))
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        let plate = try plate(in: outline, row: 2)
+        let text = plate.textView
+        XCTAssertTrue(text.isSelectable)
+        XCTAssertFalse(text.isEditable)
+        XCTAssertFalse(text.drawsBackground, "on the table's own background")
+        XCTAssertFalse(plate.subviews.contains { !($0 is NSTextView) }, "nothing but the text: no badge")
+        XCTAssertTrue(outline.validateProposedFirstResponder(text, for: nil), "a click reaches the text")
+
+        let board = NSPasteboard(name: NSPasteboard.Name("dev.maxik.tests.fit.cpuids"))
+        board.clearContents()
+        text.selectAll(nil)
+        XCTAssertTrue(text.writeSelection(to: board, type: .string))
+        let copied = try XCTUnwrap(board.string(forType: .string))
+        XCTAssertTrue(copied.hasPrefix("CPUID B06A2  Raptor Lake"), copied)
+        XCTAssertTrue(copied.hasSuffix("\nCPUID B06A8"), copied)
+        XCTAssertFalse(copied.contains("\u{FFFC}"), "no ⓘ in a copy")
+
+        board.clearContents()
+        text.setSelectedRange(NSRange(location: 6, length: 5))
+        XCTAssertTrue(text.writeSelection(to: board, type: .string))
+        XCTAssertEqual(board.string(forType: .string), "B06A2", "a part of a line, as selected")
+
+        let row = try XCTUnwrap(try session().display.rows.first { $0.cpuids.count == 2 })
+        XCTAssertFalse(row.commands.map(\.title.text).contains("Copy CPUID"))
+    }
+
+    /// An update for several processors puts a line a CPUID under it, in the
+    /// update's order, as tall as its lines — and one the shipped table does
+    /// not know has no `ⓘ`.
+    func testEachCPUIDOfAnUpdateIsALineOfThePlate() throws {
         _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
             (0x000B_06A2, 1), (0x000B_06A3, 1), (0x000B_06A8, 1)
         ]))
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
         let row = try session().display.rows[1]
         XCTAssertEqual(row.processorGroups.map(\.cpuid), ["B06A2", "B06A3", "B06A8"])
+        XCTAssertEqual(outline.numberOfRows, try session().display.rows.count + 2, "one plate, not a row a CPUID")
 
-        let cpuids = try (2...4).map { try text(of: outline, row: $0) }
-        XCTAssertTrue(cpuids[0].hasPrefix("CPUID B06A2"), cpuids[0])
-        XCTAssertTrue(cpuids[1].hasPrefix("CPUID B06A3"), cpuids[1])
-        XCTAssertTrue(cpuids[2].hasPrefix("CPUID B06A8"), cpuids[2])
+        let plate = try plate(in: outline, row: 2)
+        let lines = plate.lineTexts
+        XCTAssertEqual(lines.count, 3)
+        XCTAssertTrue(lines[0].hasPrefix("CPUID B06A2"), lines[0])
+        XCTAssertTrue(lines[1].hasPrefix("CPUID B06A3"), lines[1])
+        XCTAssertTrue(lines[2].hasPrefix("CPUID B06A8"), lines[2])
         XCTAssertEqual(outline.level(forRow: 2), 1)
+        XCTAssertGreaterThan(outline.rect(ofRow: 2).height, 2 * outline.rowHeight, "as tall as its lines")
+        XCTAssertEqual(lines[2], "CPUID B06A8", "the CPUID alone: the table knows no names for it")
 
-        outline.expandItem(outline.item(atRow: 4))
-        XCTAssertEqual(outline.level(forRow: 5), 2)
-        XCTAssertEqual(try text(of: outline, row: 5), "No processor names known for CPUID B06A8")
-        XCTAssertLessThanOrEqual(outline.frame.width, (outline.enclosingScrollView?.contentView.bounds.width ?? 0) + 0.5,
-                                 "an opened level is indented inside the column, not added to it")
+        XCTAssertNotNil(plate.textView.rectOfInfo(0))
+        XCTAssertNil(plate.textView.rectOfInfo(2), "no ⓘ where the table knows nothing of the CPUID")
+        XCTAssertTrue(plate.textView.string.hasSuffix("\nCPUID B06A8"), plate.textView.string)
+    }
+
+    private func plate(in outline: NSOutlineView, row: Int) throws -> FITCPUIDPlate {
+        try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? FITCPUIDPlate)
     }
 
     private func text(of outline: NSOutlineView, row: Int) throws -> String {
@@ -1388,21 +1475,17 @@ final class FITToolFlowTests: XCTestCase {
         }, "the copy is read-only")
     }
 
-    /// Choosing a row with processors open does not move the table: the rows
+    /// Choosing a row in a table taller than its view does not move it: the rows
     /// keep their items across the show the choice brings, so the tree is not
     /// closed and opened again under the reader — which pulled the scroll up
     /// and left the row just clicked at the bottom of the view.
     func testChoosingARowDoesNotScrollTheTable() throws {
         _ = try open(FITTestImage.make() + FITTestImage.make())
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
-        // Every CPUID open: the table and its backup's processors, taller than
-        // the view.
-        for row in (0..<outline.numberOfRows).reversed() {
-            if let item = outline.item(atRow: row), outline.level(forItem: item) == 1 {
-                outline.expandItem(item)
-            }
-        }
-        window?.layoutIfNeeded()
+        // A window too short for the table and its backup's copy.
+        let window = try XCTUnwrap(self.window)
+        window.setContentSize(NSSize(width: window.contentLayoutRect.width, height: 300))
+        window.layoutIfNeeded()
         let clip = try XCTUnwrap(outline.enclosingScrollView?.contentView)
         try XCTSkipUnless(outline.frame.height > clip.bounds.height + 100, "the table fits the view")
         clip.scroll(to: NSPoint(x: 0, y: outline.frame.height - clip.bounds.height))
@@ -1413,52 +1496,30 @@ final class FITToolFlowTests: XCTestCase {
         let item = outline.item(atRow: row) as AnyObject
 
         outline.selectRowIndexes([row], byExtendingSelection: false)
-        window?.layoutIfNeeded()
+        window.layoutIfNeeded()
 
         XCTAssertEqual(clip.bounds.origin, before, "the table stays where it was scrolled")
         XCTAssertTrue(outline.item(atRow: row) as AnyObject === item, "the row keeps its item")
         XCTAssertEqual(outline.selectedRow, row)
     }
 
-    /// Another line under the microcode already in focus is not news: the
-    /// session is not asked, and the panel is not shown again — the detail
-    /// list stays the very one on screen.
-    func testAnotherLineOfTheFocusedMicrocodeShowsNothingAgain() throws {
-        let controller = try open(FITTestImage.make())
-        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
-        outline.expandItem(outline.item(atRow: 2))           // 806EA's models
-        outline.selectRowIndexes([3], byExtendingSelection: false)
-        XCTAssertEqual(try session().display.detail.title, "#2 Microcode")
-        let panel = try XCTUnwrap(controller.tools.panel)
-        let shown = try XCTUnwrap(descendants(of: panel, ToolFieldList.self).first)
-
-        outline.selectRowIndexes([4], byExtendingSelection: false)
-        XCTAssertEqual(outline.selectedRow, 4)
-        XCTAssertTrue(descendants(of: panel, ToolFieldList.self).first === shown, "not shown again")
-
-        // The header is another row: that one is shown.
-        outline.selectRowIndexes([0], byExtendingSelection: false)
-        XCTAssertFalse(descendants(of: panel, ToolFieldList.self).first === shown)
-    }
-
-    /// The backup's copy reads quieter all the way down: a CPUID row under its
-    /// microcode is grey like the row, where the table's own is not.
-    func testTheBackupsCPUIDRowsAreGreyLikeItsRows() throws {
+    /// The backup's copy reads quieter all the way down: the CPUIDs on the
+    /// plate under its microcode are grey like the row, where the table's own
+    /// are not.
+    func testTheBackupsCPUIDsAreGreyLikeItsRows() throws {
         _ = try open(FITTestImage.make() + FITTestImage.make())
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
-        func colour(_ row: Int) throws -> NSColor? {
-            let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
-            let text = try XCTUnwrap(cell.textField?.attributedStringValue)
+        let plates = (0..<outline.numberOfRows).compactMap {
+            outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? FITCPUIDPlate
+        }
+        XCTAssertEqual(plates.count, 2, "the table's microcode and the backup's, each open a level")
+        func colour(_ plate: FITCPUIDPlate) throws -> NSColor? {
+            let text = try XCTUnwrap(plate.textView.textStorage)
             return text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
         }
-        // The heading in front of the copy is a label, not a cell: skipped.
-        let cpuidRows = (0..<outline.numberOfRows).filter {
-            (outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? NSTableCellView)?
-                .textField?.stringValue.hasPrefix("CPUID 806EA") == true
-        }
-        XCTAssertEqual(cpuidRows.count, 2, "the table's microcode and the backup's, each open a level")
-        XCTAssertEqual(try colour(cpuidRows[0]), .labelColor)
-        XCTAssertEqual(try colour(cpuidRows[1]), .secondaryLabelColor)
+        XCTAssertEqual(try colour(plates[0]), .labelColor)
+        XCTAssertEqual(try colour(plates[1]), .secondaryLabelColor)
+        XCTAssertTrue(plates[0].lineTexts[0].hasPrefix("CPUID 806EA"))
     }
 
     /// The one column takes the panel's width, wider or narrower, down to its
