@@ -68,6 +68,8 @@
     database: "M12 8c5 0 9-1.3 9-3s-4-3-9-3-9 1.3-9 3 4 3 9 3z M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5 M3 12c0 1.7 4 3 9 3s9-1.3 9-3",
     terminal: "M4 17l6-6-6-6 M12 19h8",
     search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.3-4.3",
+    // SF Symbols' exclamationmark.magnifyingglass: a review's findings.
+    reviewFindings: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15z M21 21l-5.2-5.2 M10.5 6.8v4.4 M10.5 14.2h.01",
     pause: "M8 5v14 M16 5v14",
     play: "M7 4l13 8-13 8z",
     scroll: "M8 6h13 M8 12h13 M8 18h9 M3 6h.01 M3 12h.01 M3 18h.01",
@@ -345,7 +347,7 @@
   const PAGES = {
     "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", count: "documents", mount: mountDocuments },
     "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
-    "/admin/tickets": { title: "Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "list", endpoint: "/admin/api/tickets", interval: 10000, count: "tickets", mount: mountTickets },
+    "/admin/tickets": { title: "Review Tickets", subtitle: "What verifying agents found in each module's review, and the replies.", icon: "reviewFindings", endpoint: "/admin/api/tickets", interval: 10000, count: "tickets", mount: mountTickets },
     "/admin/issues": { title: "Server Issues", subtitle: "What agents reported about the server's tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, count: "issues", mount: mountIssues },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
     "/admin/configuration": { title: "Configuration", subtitle: "How an agent on this machine connects to the server.", icon: "sliders", endpoint: "/admin/api/configuration", interval: 15000, mount: mountConfiguration },
@@ -1360,7 +1362,7 @@
       [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.state === state.ticketState));
       const shown = tickets.filter((t) => state.ticketState === "all" || t.state === state.ticketState);
       fill(board.body, shown.length ? ticketTable(shown)
-        : empty("list", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
+        : empty("reviewFindings", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
           "A verifying agent writes a remark on a module's review with ghidra_ticket_remark; the module's ticket is listed here."));
     }
     return { root, update };
