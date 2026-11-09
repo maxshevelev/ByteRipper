@@ -131,6 +131,7 @@ import ToolModuleKit
     /// when the reader last had it open.
     private let descriptionBadge = PartBadgeView(text: "")
     private let descriptionBadgeHolder = CodeClickThroughView()
+    private var descriptionButtonTrailing: NSLayoutConstraint?
     /// The panel's page in the book: whoever holds the pane sets it in its title
     /// bar, over the whole panel.
     public let titleBarHelp: NSView = HelpButton.greyCircle(for: .topic(.codePanel))
@@ -1130,7 +1131,12 @@ import ToolModuleKit
 
     private func drawDescriptionBadge() {
         descriptionBadgeHolder.isHidden = descriptionMark == nil
+        descriptionButtonTrailing?.constant = Self.bookTrailing(badge: descriptionMark != nil)
     }
+
+    /// The book's trailing margin: the pane's padding, and room for the New
+    /// badge on its right while that shows.
+    static func bookTrailing(badge: Bool) -> CGFloat { badge ? -24 : -8 }
 
     /// Back to the code from the description, on the side it was left on.
     private func leaveDescription() {
@@ -3392,8 +3398,13 @@ import ToolModuleKit
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
         constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12)
         constraints += margin(moduleBlock.trailingAnchor, descriptionButton.leadingAnchor, -6)
-        // Room on the book's right for its New badge.
-        constraints += margin(descriptionButton.trailingAnchor, functionPane.trailingAnchor, -24)
+        // Against the pane's padding, as the list below it; the New badge,
+        // while it shows, takes room on the book's right.
+        let bookTrailing = descriptionButton.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor,
+                                                                       constant: Self.bookTrailing(badge: false))
+        bookTrailing.priority = NSLayoutConstraint.Priority(999)
+        descriptionButtonTrailing = bookTrailing
+        constraints.append(bookTrailing)
         constraints.append(descriptionButton.centerYAnchor.constraint(equalTo: moduleLine.centerYAnchor))
         // On the book's top right corner, over the book.
         constraints += [

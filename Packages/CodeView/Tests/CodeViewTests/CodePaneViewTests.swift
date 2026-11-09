@@ -5245,6 +5245,8 @@ final class CodePaneViewTests: XCTestCase {
         window.contentView = shown
         view.onReadDescription = { $0 == 3 ? self.olderDescription : nil }
         XCTAssertFalse(view.descriptionBadgeIsShown)
+        view.layoutSubtreeIfNeeded()
+        let bare = view.descriptionButtonFrame
         let older = SHA256Digest(data: Data(olderDescription.utf8)).hex
         view.restoreSeen([CodePaneView.descriptionSeenKey: SeenRecord(revision: 3, fingerprint: older)],
                          baselines: [:])
@@ -5256,6 +5258,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(badge.minX, book.midX + 3, accuracy: 1, "on the book's right corner")
         XCTAssertGreaterThan(view.isFlipped ? book.minY - badge.minY : badge.maxY - book.maxY, 0, "at its top")
         XCTAssertLessThanOrEqual(badge.maxX, view.convert(view.bounds, to: nil).maxX)
+        XCTAssertEqual(bare.maxX - book.maxX, 16, accuracy: 0.5, "the badge takes room on the book's right")
 
         view.clickDescriptionButton()
         await view.descriptionRead?.value
@@ -5266,6 +5269,8 @@ final class CodePaneViewTests: XCTestCase {
         view.clickDescriptionButton()
         XCTAssertFalse(view.descriptionIsNew)
         XCTAssertFalse(view.descriptionBadgeIsShown)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.descriptionButtonFrame.maxX, bare.maxX, accuracy: 0.5, "against the padding again")
         view.clickDescriptionButton()
         XCTAssertEqual(view.descriptionComparisonRevision, 3, "the comparison stays")
     }
