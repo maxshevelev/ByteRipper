@@ -387,6 +387,12 @@ public enum GhidraTools {
                 if request.action == .decline, address == nil {
                     throw AgentToolError("`decline` names the function by `address`.")
                 }
+                // Without `address` an apply links every match: an `id` or a
+                // `reason` meant for one would be dropped while all were linked.
+                if address == nil, request.id != nil || request.reason != nil {
+                    throw AgentToolError("`id` and `reason` are for one function: name it by `address`. "
+                        + "Without `address` every match in `to_apply` is linked.")
+                }
                 let full = try arguments.bool("full", default: false)
                 let reply = try await answer { try await backend.library(module, request) }
                 return full ? reply : Self.compactPlan(reply)
@@ -1176,7 +1182,16 @@ public enum GhidraTools {
                   ["address": AgentSchema.string("The instruction's address."),
                    "functions": .object(["type": "array", "items": .object(["type": "string"]),
                                          "description": .string("Functions by entry address, instead of `address`; needs `value`.")]),
-                   "items": .object(["type": "array", "items": .object(["type": "object"]),
+                   "items": .object(["type": "array",
+                                     "items": AgentSchema.object([
+                                         "address": AgentSchema.string("The instruction's address."),
+                                         "operand": AgentSchema.integer("The operand by its index, from 0."),
+                                         "value": AgentSchema.string("Or the constant, to pick the operand that holds it."),
+                                         "name": AgentSchema.string("Its name over the call's `name`."),
+                                         "enum": AgentSchema.string("Its enum over the call's `enum`."),
+                                         "comment": AgentSchema.string("Its comment over the call's `comment`."),
+                                         "enum_comment": AgentSchema.string("Its enum's comment over the call's.")
+                                     ], required: ["address"]),
                                      "description": .string("Several operands, each {address, operand or value, and optionally name, enum, comment}.")]),
                    "dry_run": AgentSchema.boolean("With `functions`: answer what would be named and write nothing."),
                    "name": AgentSchema.string("A C identifier, in the module's convention; empty removes it."),
@@ -1187,6 +1202,9 @@ public enum GhidraTools {
                    "enum_comment": AgentSchema.string("What the enum groups, e.g. \"FCH legacy I/O ports\".")],
                   required: ["name"]) { arguments in
                 var body = try optional(arguments, ["address", "name", "value", "enum", "comment", "enum_comment"])
+                if arguments.has("functions"), arguments.has("items") {
+                    throw AgentToolError("Give `functions` or `items`, not both: one call names by one of them.")
+                }
                 if let functions = arguments["functions"] { body["functions"] = functions }
                 if let items = arguments["items"] { body["items"] = items }
                 if try arguments.bool("dry_run", default: false) { body["dry_run"] = .bool(true) }
@@ -1206,7 +1224,10 @@ public enum GhidraTools {
                    "name": AgentSchema.string("Its name; empty removes the label."),
                    "type": AgentSchema.string("Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".")],
                   required: ["address"]) { arguments in
-                try optional(arguments, ["address", "name", "type", "clear_code"])
+                var body = try optional(arguments, ["address", "name", "type"])
+                // A boolean, as the schema says: read as a string it was refused every time.
+                if arguments.has("clear_code") { body["clear_code"] = .bool(try arguments.bool("clear_code", default: false)) }
+                return body
             },
             write("ghidra_describe", "set/description", "Write the module's description",
                   "Writes the module's description — Markdown, what the module is for, how it works and how "

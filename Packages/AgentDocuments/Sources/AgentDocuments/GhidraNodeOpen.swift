@@ -42,6 +42,15 @@ public enum GhidraNodeOpen {
             annotations: AgentTool.Annotations(readOnly: false, idempotent: true)
         ) { call in
             let arguments = call.arguments
+            // One way to name the module, as the schema says "or": the other
+            // was read past without a word.
+            if arguments.has("node"), arguments.has("module") {
+                throw AgentToolError("Give `node` (with its `document`), or `module`, not both.")
+            }
+            if arguments.has("module"), arguments.has("document") || arguments.has("name") {
+                throw AgentToolError("A module opened by `module` has its name and its document already: "
+                    + "give `module` alone.")
+            }
             if let node = try arguments.optionalString("node") {
                 let found = try await self.image(node: node, document: try arguments.optionalString("document"),
                                                  in: documents)

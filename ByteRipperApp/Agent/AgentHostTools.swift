@@ -215,7 +215,8 @@ final class AgentHostTools {
             throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
                 + "which is \(Self.hexText(size)) bytes long.")
         }
-        let end = min(offset + length, size)
+        // Bounded before it is added: a length past the end means to the end.
+        let end = offset + min(length, size - offset)
         desk.bringForward(place)
         // The place the reader is leaving goes into the history first, so
         // their Back undoes what the agent did.

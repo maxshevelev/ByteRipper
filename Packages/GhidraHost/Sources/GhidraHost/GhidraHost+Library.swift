@@ -414,6 +414,10 @@ extension GhidraHost {
             }
             let (plan, _) = try await libraryPlan(module)
             guard let id = Self.declineTarget(plan, address: address, id: request.id) else {
+                if let asked = request.id {
+                    throw GhidraHostError(.refused, "entry \(asked) does not match the function at \(address): "
+                        + "`ghidra_library` lists the entries that do", status: 404)
+                }
                 throw GhidraHostError(.refused, "no entry matches the function at \(address)", status: 404)
             }
             // A dry run answers what the decline would leave, and writes nothing.
@@ -478,10 +482,13 @@ extension GhidraHost {
     /// The entry a decline at `address` names: `id` when given, else the one
     /// matching there — declined already included, so a decline said twice
     /// answers the same rather than "no entry".
+    /// An `id` no entry at `address` has is none: declining it would leave
+    /// the entry that does match to be linked later.
     static func declineTarget(_ plan: LibraryPlan, address: String, id: String?) -> String? {
-        if let id { return id }
         let all = plan.toApply + plan.candidates + plan.applied + plan.edited + plan.declined
-        return all.first(where: { $0.address.caseInsensitiveCompare(address) == .orderedSame })?.id
+        let here = all.filter { $0.address.caseInsensitiveCompare(address) == .orderedSame }
+        if let id { return here.first(where: { $0.id.caseInsensitiveCompare(id) == .orderedSame })?.id }
+        return here.first?.id
     }
 
     /// What a decline would answer, for a dry run: the entries declined at

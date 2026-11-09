@@ -367,6 +367,12 @@ final class AgentDumpToolsTests: XCTestCase {
         let selection = controller.windowModel.pane2.hexSelection()
         XCTAssertEqual(selection.start..<selection.end, 0x10..<0x14)
         XCTAssertTrue(service.desk.background.entries.isEmpty, "the background copy gave way to the tab")
+
+        // A length past any file means to the end, not an overflow.
+        let shownId = try XCTUnwrap(shown["document"]?.stringValue)
+        let toEnd = try await client.answer("show", ["document": .string(shownId), "offset": "0xF0",
+                                                     "length": "0xFFFFFFFFFFFFFFFF"])
+        XCTAssertEqual(toEnd["shown"]?["end"], "0x100")
     }
 
     // MARK: - Annotations

@@ -346,7 +346,7 @@ final class AgentEditTools {
     nonisolated static func hexBytes(_ text: String, name: String) throws -> [UInt8] {
         let digits = text.replacingOccurrences(of: "0x", with: "").replacingOccurrences(of: "0X", with: "")
             .filter { !$0.isWhitespace && $0 != "," }
-        guard digits.count.isMultiple(of: 2), digits.allSatisfy(\.isHexDigit) else {
+        guard digits.count.isMultiple(of: 2), digits.allSatisfy({ $0.isASCII && $0.isHexDigit }) else {
             throw AgentToolError("`\(name)` is not hex bytes. Give pairs of hex digits, e.g. \"DE AD BE EF\".")
         }
         var bytes: [UInt8] = []

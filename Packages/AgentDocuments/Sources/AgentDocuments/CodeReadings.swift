@@ -92,7 +92,7 @@ public final class CodeReadings {
     nonisolated static let whereProperties: [String: JSONValue] = [
         "node": AgentSchema.string("The module's PE32/TE image node in the dump, e.g. \"0.6.4.0.0.205.2\" — from `code_modules`."),
         "module": AgentSchema.string("Or the module by its bytes' SHA-256, read from the store without a dump."),
-        "recipe": AgentSchema.string("With `module`: which analysis, when there are several. Default: the newest.")
+        "recipe": AgentSchema.string("With `module` only: which analysis, when there are several. Default: the newest.")
     ]
 
     public nonisolated var queryTool: AgentTool {
@@ -104,7 +104,7 @@ public final class CodeReadings {
         properties["address"] = AgentSchema.string("A Ghidra address, for \"uses\".")
         properties["level"] = AgentSchema.choice(ReviewLevel.allCases.map(\.rawValue),
                                                  "With `what: \"functions\"`: only functions at this review level.")
-        properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.")
+        properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written; with `what: \"post_codes\"`, the code's value in hex, such as \"0xB2\".")
         properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
         properties["after"] = AgentSchema.string("The `next` of the page before; a list too long for one answer says one.")
         return AgentTool(
@@ -395,6 +395,11 @@ public final class CodeReadings {
     /// else a module SHA read from the store alone.
     public func source(_ arguments: AgentArguments) async throws -> Source {
         if let text = try arguments.optionalString("module") {
+            // One way to name the module: with `module` a `node` or a
+            // `document` would be read past without a word.
+            if arguments.has("node") || arguments.has("document") {
+                throw AgentToolError("Give `module`, or `document` and `node`, not both: they name the module two ways.")
+            }
             guard let digest = SHA256Digest(hex: text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
                 throw AgentToolError("`module` is a SHA-256 of the module's bytes: 64 hex digits.")
             }
@@ -414,6 +419,9 @@ public final class CodeReadings {
                     + (recipe.map { " with recipe \($0)" } ?? "") + ".")
             }
             return Source(manifest: manifest, artifact: artifact, bytes: nil, document: nil, node: nil)
+        }
+        if arguments.has("recipe") {
+            throw AgentToolError("`recipe` picks an analysis of a `module`; a node or a Code panel reads the one it shows.")
         }
         let document = try documents.resolve(arguments.optionalString("document"))
         if let code = screen(document) { return try await whole(code) }
@@ -694,7 +702,14 @@ public final class CodeReadings {
         case "post_codes":
             // By value, the places that send one together, what could not
             // be told last — as the panel's POST list shows them.
-            let wanted = search.flatMap { UInt64($0.lowercased().replacingOccurrences(of: "0x", with: ""), radix: 16) }
+            var wanted: UInt64?
+            if let search {
+                let digits = search.trimmingCharacters(in: .whitespaces).lowercased()
+                guard let value = UInt64(digits.hasPrefix("0x") ? String(digits.dropFirst(2)) : digits, radix: 16) else {
+                    throw AgentToolError("With `post_codes`, `search` is the code's value in hex, such as \"0xB2\".")
+                }
+                wanted = value
+            }
             let codes = source.artifact.postCodes
                 .filter { wanted == nil || $0.value == wanted }
                 .sorted { ($0.value ?? .max, $0.address.value) < ($1.value ?? .max, $1.address.value) }

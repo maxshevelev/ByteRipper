@@ -79,9 +79,12 @@ final class AgentRefsTools {
     /// would match nearly everywhere.
     nonisolated static func forms(address: UInt64, relativeToRegion: Bool, bios: Range<UInt64>,
                                   names: Set<String>) -> (forms: [Form], skipped: [String]) {
-        let file = relativeToRegion ? bios.lowerBound + address : address
-        let region = file - bios.lowerBound
-        let bus = 0x1_0000_0000 - (bios.upperBound - file)
+        let file = relativeToRegion ? bios.lowerBound &+ address : address
+        // An address outside the region has no region or bus form: worked out
+        // only inside it, so an address below or past it never underflows.
+        let inside = bios.contains(file) && bios.upperBound - file <= 0x1_0000_0000
+        let region = inside ? file - bios.lowerBound : 0
+        let bus = inside ? 0x1_0000_0000 - (bios.upperBound - file) : 0
         var forms: [Form] = []
         var skipped: [String] = []
         func add(_ name: String, _ value: UInt64, width: Int) {
@@ -96,10 +99,12 @@ final class AgentRefsTools {
             guard !forms.contains(where: { $0.bytes == bytes }) else { return }
             forms.append(Form(name: name, bytes: bytes))
         }
-        add("bus", bus, width: 8)
-        add("bus", bus, width: 4)
+        if inside {
+            add("bus", bus, width: 8)
+            add("bus", bus, width: 4)
+        }
         add("file", file, width: 4)
-        add("region", region, width: 4)
+        if inside { add("region", region, width: 4) }
         return (forms, skipped)
     }
 
@@ -166,8 +171,9 @@ final class AgentRefsTools {
                 throw AgentToolError("`forms` takes \"bus\", \"file\" and \"region\"; not \"\(unknown)\".")
             }
             let bios = Self.biosRegion(in: image) ?? 0..<place.pane.fileSize
-            let file = relative ? bios.lowerBound + address : address
-            guard file < place.pane.fileSize else {
+            let (sum, overflow) = bios.lowerBound.addingReportingOverflow(address)
+            let file = relative ? sum : address
+            guard !(relative && overflow), file < place.pane.fileSize else {
                 throw AgentToolError("\(AgentHostTools.hexText(file)) is past the end of \(place.named).")
             }
             // An address outside the BIOS region has no bus or region form.

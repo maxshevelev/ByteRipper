@@ -13,12 +13,13 @@ enum GhidraRoutes {
 
     /// The owner's read calls a client may make (`Design/GHIDRA_SHARED_PLAN.md` §7.1).
     static let reads: [String] = ["hello", "functions", "gaps", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
-                                   "types", "description"]
+                                   "types", "description", "equates-on-memory"]
     /// The owner's write calls, each under the host's lease.
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "delete/function", "set/flow",
                                       "merge/functions", "clear/locals", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
                                       "set/data", "set/description", "set/code-mode", "redecode", "set/equate",
+                                      "function/extend",
                                       "type", "save"]
 
     /// `ghidra.use` for every route; publish and release write into the store
@@ -67,9 +68,7 @@ enum GhidraRoutes {
                     row["origin"] = source.hex
                     row["origin_name"] = await moduleName(source.hex)
                 }
-                var query = URLComponents()
-                query.queryItems = [URLQueryItem(name: "name", value: name)]
-                if let data = try? await host.read(digest, "/v1/type?" + (query.percentEncodedQuery ?? ""), holder: holder),
+                if let data = try? await host.read(digest, "/v1/type?" + FormQuery.encode(["name": name]), holder: holder),
                    let definition = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     row["module_c"] = (definition["program"] as? [String: Any])?["c"] ?? NSNull()
                     row["shared_c"] = (definition["shared"] as? [String: Any])?["c"] ?? NSNull()
@@ -240,9 +239,20 @@ enum GhidraRoutes {
                                       uefi: request.query["uefi"] != "0")
             }
             let module = SHA256Digest(data: request.body)
-            _ = try await answer { try await host.read(module, "/v1/hello") }
-            return .json(Opened(module: module.hex, name: state.module.name, kind: state.module.kind,
-                                phase: state.module.phase, reviewed: state.reviewed, published: state.published))
+            // The owner's hello, as a host on this Mac answers `ghidra_create`:
+            // the program, its functions, `changed`, `writes_lost`, the
+            // language patch. What the project adds goes beside it.
+            let hello = try await answer { try await host.read(module, "/v1/hello") }
+            let opened = try JSONEncoder().encode(Opened(module: module.hex, name: state.module.name, kind: state.module.kind,
+                                                         phase: state.module.phase, reviewed: state.reviewed,
+                                                         published: state.published))
+            var merged = (try? JSONSerialization.jsonObject(with: hello)) as? [String: Any] ?? [:]
+            for (key, value) in (try JSONSerialization.jsonObject(with: opened)) as? [String: Any] ?? [:]
+            where merged[key] == nil {
+                merged[key] = value
+            }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"],
+                                body: try JSONSerialization.data(withJSONObject: merged, options: [.sortedKeys]))
         }
 
         router.add("GET", "\(prefix)/modules/:module/*call", access: .rights([.ghidraUse])) { request in
@@ -470,9 +480,7 @@ enum GhidraRoutes {
 
     static func query(_ request: HTTPRequest) -> String {
         guard !request.query.isEmpty else { return "" }
-        var components = URLComponents()
-        components.queryItems = request.query.keys.sorted().map { URLQueryItem(name: $0, value: request.query[$0]) }
-        return "?" + (components.percentEncodedQuery ?? "")
+        return "?" + FormQuery.encode(request.query)
     }
 
     /// The host's refusal as the status a client acts on. The server's own

@@ -14,7 +14,7 @@ final class RenameVariableItemsTests: XCTestCase {
         func add(_ call: String, _ body: Data) { calls.append((call, body)) }
     }
 
-    private struct Recording: GhidraBackend {
+    private struct Recording: GhidraBackendWithoutServer {
         let writes: Writes
         func listModules() async throws -> Data { Data() }
         func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data { Data() }

@@ -839,11 +839,11 @@
           "type" : "string"
         },
         "recipe" : {
-          "description" : "With `module`: which analysis, when there are several. Default: the newest.",
+          "description" : "With `module` only: which analysis, when there are several. Default: the newest.",
           "type" : "string"
         },
         "search" : {
-          "description" : "A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.",
+          "description" : "A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written; with `what: \"post_codes\"`, the code's value in hex, such as \"0xB2\".",
           "type" : "string"
         },
         "what" : {
@@ -1016,7 +1016,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Opens a module for a review in Ghidra and answers its owner's `hello`: program, functions, unpublished changes. Give the PE32/TE image `node` of a dump (`uefi_find` with `name: \"PE32 image\"` or `\"TE image\"` lists them) and its `document`: its bytes go to Ghidra, whose project is made the first time — seconds for a PEIM, a minute for a large DXE driver. A module seen before opens by `module`, the SHA-256 the answer gives. Ghidra is the analysis server's when Settings ▸ Code Analysis names one, and this Mac's own otherwise. Then read, rename, type and comment with the other `ghidra_` tools and `ghidra_publish`: every ByteRipper reading shows the result. A review aims at C that reads like source — enums for constants, structures for pointer walks, comments a source would have; the MCP instructions spell the rules out.",
+    "description" : "Opens a module for a review in Ghidra and answers its owner's `hello`: program, functions, unpublished changes. Give the PE32/TE image `node` of a dump (`uefi_find` with `name: \"PE32 image\"` or `\"TE image\"` lists them) and its `document`: its bytes go to Ghidra, whose project is made the first time — seconds for a PEIM, a minute for a large DXE driver. A module seen before opens by `module`, the SHA-256 the answer gives. Ghidra is the analysis server's when Settings ▸ Code Analysis names one, and this Mac's own otherwise. Then read, rename, type and comment with the other `ghidra_` tools and `ghidra_publish`: every ByteRipper reading shows the result. A review aims at C that reads like source — enums for constants, structures for pointer walks, comments a source would have; the rules are the review kit's `ghidra-uefi/SKILL.md`, offered as the resource `byteripper://kit/ghidra-uefi/SKILL.md` when an analysis server is named.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2114,6 +2114,40 @@
         "items" : {
           "description" : "Several operands, each {address, operand or value, and optionally name, enum, comment}.",
           "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "address" : {
+                "description" : "The instruction's address.",
+                "type" : "string"
+              },
+              "comment" : {
+                "description" : "Its comment over the call's `comment`.",
+                "type" : "string"
+              },
+              "enum" : {
+                "description" : "Its enum over the call's `enum`.",
+                "type" : "string"
+              },
+              "enum_comment" : {
+                "description" : "Its enum's comment over the call's.",
+                "type" : "string"
+              },
+              "name" : {
+                "description" : "Its name over the call's `name`.",
+                "type" : "string"
+              },
+              "operand" : {
+                "description" : "The operand by its index, from 0.",
+                "type" : "integer"
+              },
+              "value" : {
+                "description" : "Or the constant, to pick the operand that holds it.",
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "address"
+            ],
             "type" : "object"
           },
           "type" : "array"

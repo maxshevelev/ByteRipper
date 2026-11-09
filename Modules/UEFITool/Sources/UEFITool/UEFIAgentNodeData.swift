@@ -218,7 +218,8 @@ public enum UEFIAgentNodeData {
         var total: UInt64 = 0
         let ranges = try texts.map { text -> (offset: UInt64, length: UInt64) in
             let (offset, length) = try parsed(range: text, argument: "ranges")
-            total += length
+            // Checked one by one, so the sum never passes what a UInt64 holds.
+            total += min(length, 4097)
             return (offset, length)
         }
         guard total <= 4096 else { throw AgentToolError("Argument `ranges`: at most 4096 bytes in one read, in all.") }
@@ -230,7 +231,8 @@ public enum UEFIAgentNodeData {
         let parts = text.split(separator: "+", omittingEmptySubsequences: false)
         guard parts.count == 2,
               let offset = try? AgentArguments(["n": .string(String(parts[0]))]).offset("n"),
-              let length = try? AgentArguments(["n": .string(String(parts[1]))]).offset("n"), length > 0 else {
+              let length = try? AgentArguments(["n": .string(String(parts[1]))]).offset("n"), length > 0,
+              !offset.addingReportingOverflow(length).overflow else {
             throw AgentToolError("Argument `\(argument)`: \"\(text)\" is not \"offset+length\", such as \"0x100+0x20\".")
         }
         return (offset, length)

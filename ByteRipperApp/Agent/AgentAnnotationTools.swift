@@ -432,11 +432,15 @@ final class AgentAnnotationTools {
         let offset = try arguments.optionalOffset("offset")
         let length = try arguments.optionalOffset("length") ?? 1
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
+        if let offset, offset.addingReportingOverflow(length).overflow {
+            throw AgentToolError("`offset` plus `length` is past any file: \(AgentHostTools.hexText(offset)) + "
+                + "\(AgentHostTools.hexText(length)).")
+        }
         var node = try arguments.optionalString("node")
         // Without `node`, `offset` is in the document; with it, in the node.
         var range = node == nil ? offset.map { $0..<($0 + length) } : nil
         let within = node == nil ? nil : offset.map { $0..<($0 + length) }
-        if node == nil, arguments.has("length"), offset == nil {
+        if arguments.has("length"), offset == nil {
             throw AgentToolError("Give `offset` with `length`.")
         }
         var decoded: AgentAnnotation.Decoded?

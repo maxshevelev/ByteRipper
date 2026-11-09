@@ -303,7 +303,14 @@ public enum UEFIAgentQueries {
         ]
     ) { host, arguments in
         let name = try arguments.optionalString("name")?.lowercased()
-        let guid = try arguments.optionalString("guid")?.uppercased()
+        let guid = try arguments.optionalString("guid").map { text -> String in
+            // Parsed, so a GUID written another way is refused rather than
+            // matching nothing and reading as "not in this image".
+            guard let parsed = EFIGUID(text.trimmingCharacters(in: .whitespaces)) else {
+                throw AgentToolError("`guid` is not a GUID: \"\(text)\". Write it as 8C8CE578-8A3D-4F1C-9935-896185C32DD3.")
+            }
+            return parsed.description.uppercased()
+        }
         let type = try arguments.optionalString("type")?.lowercased()
         let exact = try arguments.bool("exact", default: false)
         let dependsOn: EFIGUID?

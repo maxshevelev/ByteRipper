@@ -575,7 +575,7 @@ private final class Host: ToolReadHost {
     func snapshot() throws -> any ToolContentReader { throw AgentToolError("no bytes") }
 }
 
-private struct NoGhidra: GhidraBackend {
+private struct NoGhidra: GhidraBackendWithoutServer {
     func listModules() async throws -> Data { Data() }
     func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data { Data() }
     func openModule(_ module: SHA256Digest) async throws -> Data { Data() }

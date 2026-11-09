@@ -356,6 +356,9 @@ final class AgentEditToolsTests: XCTestCase {
                       "\(past.answer)")
         let odd = try await client.call("write", ["offset": 0, "bytes": "ABC", "label": "X"])
         XCTAssertEqual(odd.answer, "`bytes` is not hex bytes. Give pairs of hex digits, e.g. \"DE AD BE EF\".")
+        // Fullwidth digits are hex digits to Unicode, not to a byte parser.
+        let wide = try await client.call("write", ["offset": 0, "bytes": "\u{FF24}\u{FF25}", "label": "X"])
+        XCTAssertEqual(wide.answer, "`bytes` is not hex bytes. Give pairs of hex digits, e.g. \"DE AD BE EF\".")
         let unnamed = try await client.call("write", ["offset": 0, "bytes": "AA", "label": "  "])
         XCTAssertEqual(unnamed.answer, "`label` is empty; say what the change is.")
         XCTAssertEqual(try bytes(pane, 0..<4), [1, 2, 3, 4])

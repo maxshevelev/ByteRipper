@@ -165,10 +165,8 @@ extension GhidraHost {
     /// A type as the module's program and the shared archive's copy beside
     /// the projects hold it, as C; empty where one holds none.
     func typeDefinition(_ module: SHA256Digest, name: String) async throws -> (program: String, shared: String) {
-        var query = URLComponents()
-        query.queryItems = [URLQueryItem(name: "name", value: name)]
         let record = try await owner(of: module)
-        let data = try await Self.call(record.port, "GET", "/v1/type?" + (query.percentEncodedQuery ?? "")).data
+        let data = try await Self.call(record.port, "GET", "/v1/type?" + FormQuery.encode(["name": name])).data
         let answer = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
         return ((answer["program"] as? [String: Any])?["c"] as? String ?? "",
                 (answer["shared"] as? [String: Any])?["c"] as? String ?? "")

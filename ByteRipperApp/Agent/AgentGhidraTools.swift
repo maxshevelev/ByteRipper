@@ -44,7 +44,8 @@ final class AgentGhidraTools {
             otherwise. Then read, rename, type and comment with the other `ghidra_` tools and \
             `ghidra_publish`: every ByteRipper reading shows the result. A review aims at C that reads \
             like source — enums for constants, structures for pointer walks, comments a source would \
-            have; the MCP instructions spell the rules out.
+            have; the rules are the review kit's `ghidra-uefi/SKILL.md`, offered as the resource \
+            `byteripper://kit/ghidra-uefi/SKILL.md` when an analysis server is named.
             """
 }
 
@@ -91,9 +92,10 @@ struct CurrentGhidraBackend: GhidraBackend {
                        options: GhidraHost.PublishOptions) async throws -> Data {
         try await resolve().publishModule(module, by: by, options: options)
     }
-    // Every call of the protocol is passed on: one left to its default
-    // answers here as if the host had no store, no projects or no library
-    // decisions, which is what `ghidra_type_uses` and `ghidra_forget` did.
+    // Every call of the protocol is passed on. `GhidraBackend` has no
+    // defaults for them — those are `GhidraBackendWithoutServer`'s — so one
+    // left out fails to compile; before, `ghidra_type_uses`, `ghidra_forget`
+    // and the type proposals answered "no server" here while there was one.
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
                         takeLibrary: LibraryTake) async throws -> Data {
         try await resolve().publishPreview(module, takeTypeConflicts: takeTypeConflicts, takeLibrary: takeLibrary)
@@ -128,6 +130,10 @@ struct CurrentGhidraBackend: GhidraBackend {
 
     func tickets(_ request: TicketBook.Request) async throws -> Data {
         try await resolve().tickets(request)
+    }
+
+    func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data {
+        try await resolve().typeProposals(request)
     }
 }
 

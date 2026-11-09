@@ -83,6 +83,16 @@ final class AgentRefsToolsTests: XCTestCase {
         XCTAssertEqual(tiny.skipped, ["region"], "0x10 would match nearly everywhere")
     }
 
+    /// An address below or past the BIOS region has a file form only, and
+    /// working out the others does not underflow.
+    func testAnAddressOutsideTheRegionHasOnlyItsFileForm() {
+        for address: UInt64 in [0x3000, 0x1000000, 0x1_2000_0000] {
+            let made = AgentRefsTools.forms(address: address, relativeToRegion: false, bios: 0x800000..<0x1000000,
+                                            names: ["bus", "file", "region"])
+            XCTAssertEqual(made.forms.map(\.name), ["file"], AgentHostTools.hexText(address))
+        }
+    }
+
     /// The 32-bit bus form inside a 64-bit one is the same reference, once.
     func testAHitInsideALongerFormsHitIsLeftOut() {
         let forms = [AgentRefsTools.Form(name: "bus", bytes: [1, 2, 3, 4, 0, 0, 0, 0]),

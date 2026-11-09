@@ -57,6 +57,17 @@ public protocol GhidraBackend: Sendable {
 public extension GhidraBackend {
     /// A backend with no owner of its own to ask.
     func libraryShortfalls(_ module: SHA256Digest) async throws -> [GhidraHost.LibraryShortfall]? { nil }
+}
+
+/// A backend with no analysis server behind it — a test's stand-in. The calls
+/// only a server or a host answers say so here. They are defaults of this
+/// protocol and not of `GhidraBackend`, so a backend that passes calls on
+/// (the app's, which picks the server or this Mac's host per call) has to
+/// pass every one: a forgotten one fails to compile instead of answering
+/// "there is no analysis server" while there is one.
+public protocol GhidraBackendWithoutServer: GhidraBackend {}
+
+public extension GhidraBackendWithoutServer {
     func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? { nil }
     /// A backend that keeps no projects of its own.
     func forgetModule(_ module: SHA256Digest) async throws -> Data {
@@ -176,9 +187,7 @@ extension GhidraHost: GhidraBackend {
     }
 
     public func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data {
-        var components = URLComponents()
-        components.queryItems = query.keys.sorted().map { URLQueryItem(name: $0, value: query[$0]) }
-        let suffix = query.isEmpty ? "" : "?" + (components.percentEncodedQuery ?? "")
+        let suffix = query.isEmpty ? "" : "?" + FormQuery.encode(query)
         return await throughRegistry(try await read(module, "/v1/\(call)\(suffix)"), module: module, call: call)
     }
 
@@ -383,7 +392,7 @@ public struct GhidraRemote: GhidraBackend {
         components.path = (components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path)
             + "/ghidra/v1/" + path
         if !query.isEmpty {
-            components.queryItems = query.keys.sorted().map { URLQueryItem(name: $0, value: query[$0]) }
+            components.percentEncodedQuery = FormQuery.encode(query)
         }
         var request = URLRequest(url: components.url!, timeoutInterval: timeout)
         request.httpMethod = method

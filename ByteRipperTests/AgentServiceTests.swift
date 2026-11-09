@@ -222,6 +222,10 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertTrue(controller.canNavigateBack)
         controller.navigateBack()
         XCTAssertEqual(pane.caretOffset, 0x40)
+
+        // A length past any file means to the end, not an overflow.
+        let toEnd = try await answer("reveal", ["offset": "0xFFF0", "length": "0xFFFFFFFFFFFFFFFF"])
+        XCTAssertEqual(toEnd["shown"]?["end"], "0x10000")
     }
 
     /// A place in the comparison's other pane makes that pane the active one.

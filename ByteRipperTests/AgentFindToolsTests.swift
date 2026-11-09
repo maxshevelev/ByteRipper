@@ -273,7 +273,10 @@ final class AgentFindToolsTests: XCTestCase {
         let size = try XCTUnwrap(first["size"]?.stringValue)
         let past = try await client.call("uefi_node_data", ["node": "0", "part": "all", "ranges": .array([.string("\(size)+1")])])
         XCTAssertTrue(past.isError, "\(past.answer)")
-        for bad: [String] in [["10"], ["0x0+0"], ["0x0+0x1001"]] {
+        // Lengths that would overflow a sum, or an offset that would overflow
+        // with its length, are refused, not a trap.
+        for bad: [String] in [["10"], ["0x0+0"], ["0x0+0x1001"], ["0x0+0xFFFFFFFFFFFFFFFF", "0x0+0x1"],
+                              ["0xFFFFFFFFFFFFFFFF+0x2"]] {
             let answer = try await client.call("uefi_node_data", ["node": "0", "ranges": .array(bad.map { .string($0) })])
             XCTAssertTrue(answer.isError, "\(bad): \(answer.answer)")
         }

@@ -91,6 +91,44 @@ final class ServerMCPTests: XCTestCase {
         XCTAssertEqual(names.count, Set(names).count)
     }
 
+    /// Every owner call a Ghidra tool makes is a route of the bridge: the app
+    /// relays a tool to the server by its call name, and a name the server's
+    /// lists lack is refused there — `ghidra_flow_override`,
+    /// `ghidra_function_extend` and `ghidra_equates_on_memory` each were, for
+    /// every agent connected through the app. The calls are read from the
+    /// tools' source, where each is written once.
+    func testEveryCallAGhidraToolMakesIsARouteOfTheBridge() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("GhidraHost/Sources/GhidraHost")
+        let files = try FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("GhidraTools") && $0.pathExtension == "swift" }
+        XCTAssertFalse(files.isEmpty, sources.path)
+        var reads: Set<String> = [], writes: Set<String> = [], previews: Set<String> = []
+        func matches(_ pattern: String, _ text: String) throws -> [String] {
+            let regex = try NSRegularExpression(pattern: pattern)
+            return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
+                Range($0.range(at: 1), in: text).map { String(text[$0]) }
+            }
+        }
+        for file in files {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            reads.formUnion(try matches(#"readCall\(module, "([^"\\]*)"#, text))
+            reads.formUnion(try matches(#"paged\("ghidra_[a-z_]+", "([^"]+)""#, text))
+            writes.formUnion(try matches(#"writeCall\(module, "([^"]+)""#, text))
+            writes.formUnion(try matches(#"write\("ghidra_[a-z_]+", "([^"]+)""#, text))
+            previews.formUnion(try matches(#"previewCall\(module, "([^"]+)""#, text))
+        }
+        XCTAssertTrue(reads.contains("functions") && writes.contains("set/signature"), "the scan found the calls")
+        for call in reads.sorted() {
+            XCTAssertTrue(GhidraRoutes.reads.contains(call), "\(call) is a read no route takes")
+        }
+        for call in writes.sorted() {
+            XCTAssertTrue(GhidraRoutes.writes.contains(call), "\(call) is a write no route takes")
+        }
+        XCTAssertEqual(previews, ["preview/equate"], "the one preview the route takes")
+    }
+
     /// The keys `documents` answers with, as the plan pins them: no caller
     /// here sees a pane's `slot`, `tab` or `focused`.
     func testDocumentsCarriesTheServersKeys() async throws {
@@ -442,7 +480,7 @@ final class ServerMCPTests: XCTestCase {
 }
 
 /// A Ghidra that answers nothing: the list is what is under test.
-private struct NoGhidra: GhidraBackend {
+private struct NoGhidra: GhidraBackendWithoutServer {
     func listModules() async throws -> Data { Data() }
     func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data { Data() }
     func openModule(_ module: SHA256Digest) async throws -> Data { Data() }

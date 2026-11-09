@@ -40,6 +40,7 @@ public struct AgentTool: Sendable {
         // refusal and never a call that silently did something else.
         self.run = { [name, inputSchema] call in
             try Self.refuseUnknownArguments(call.arguments, of: name, schema: inputSchema)
+            try Self.refuseMalformedValues(call.arguments, of: name, schema: inputSchema)
             return try await run(call)
         }
     }
@@ -66,6 +67,73 @@ public struct AgentTool: Sendable {
             ? " It takes no arguments."
             : " It takes: \(taken.joined(separator: ", "))."
         throw AgentToolError(message)
+    }
+
+    /// Throws when a value inside an argument breaks what the schema says of
+    /// it: a key an item does not take or lacks, or a word outside an `enum`.
+    ///
+    /// The top-level check above sees only the arguments' names. Below them a
+    /// tool used to pass an item on as it came, and the reader took the keys
+    /// it knew: `ghidra_comment` with `comment` in place of `text` erased the
+    /// comment and answered ok, `ghidra_equate` with `op` for `operand` named
+    /// another operand. A schema that lists an object's `properties` with
+    /// `additionalProperties: false` is now held to it at every depth, and an
+    /// `enum` to its words, before the tool runs.
+    static func refuseMalformedValues(_ arguments: AgentArguments, of tool: String, schema: JSONValue) throws {
+        let properties = schema["properties"]?.objectValue ?? [:]
+        for name in arguments.values.keys.sorted() {
+            guard let property = properties[name], let value = arguments.values[name] else { continue }
+            try check(value, against: property, at: "`\(name)`", tool: tool, nested: false)
+        }
+    }
+
+    private static func check(_ value: JSONValue, against schema: JSONValue, at place: String, tool: String,
+                              nested: Bool = true) throws {
+        // Inside an argument, where no reader looks at a value's kind, the
+        // schema's type is the check: `assert_routine: "true"` read as no
+        // boolean at all. An argument itself is its reader's to check.
+        if nested, let kind = schema["type"]?.stringValue, !Self.value(value, isOf: kind) {
+            throw AgentToolError("`\(tool)`: \(place) is not \(kind == "integer" ? "an" : "a") \(kind). Nothing was done.")
+        }
+        if let choices = schema["enum"]?.arrayValue?.compactMap(\.stringValue), let word = value.stringValue,
+           !choices.contains(word) {
+            throw AgentToolError("`\(tool)`: \(place) is \"\(word)\"; it takes "
+                + choices.map { "\"\($0)\"" }.joined(separator: ", ") + ".")
+        }
+        if let items = schema["items"], let array = value.arrayValue {
+            for (index, element) in array.enumerated() {
+                try check(element, against: items, at: "Item \(index) of \(place)", tool: tool)
+            }
+        }
+        guard let fields = schema["properties"]?.objectValue, let object = value.objectValue else { return }
+        if schema["additionalProperties"] == .bool(false) {
+            let unknown = object.keys.filter { fields[$0] == nil }.sorted()
+            if let first = unknown.first {
+                var message = "`\(tool)`: \(place) has " + unknown.map { "`\($0)`" }.joined(separator: ", ")
+                    + ", which it does not take."
+                if let meant = meaning(of: first, in: fields) { message += " Perhaps \(meant)." }
+                message += " It takes: " + fields.keys.sorted().map { "`\($0)`" }.joined(separator: ", ") + ". Nothing was done."
+                throw AgentToolError(message)
+            }
+        }
+        let required = schema["required"]?.arrayValue?.compactMap(\.stringValue) ?? []
+        if let missing = required.first(where: { object[$0] == nil }) {
+            throw AgentToolError("`\(tool)`: \(place) has no `\(missing)`, which it needs. Nothing was done.")
+        }
+        for key in object.keys.sorted() {
+            guard let field = fields[key], let inner = object[key] else { continue }
+            try check(inner, against: field, at: "`\(key)` of \(place)", tool: tool)
+        }
+    }
+
+    private static func value(_ value: JSONValue, isOf kind: String) -> Bool {
+        switch (kind, value) {
+        case ("string", .string), ("boolean", .bool), ("array", .array), ("object", .object): return true
+        case ("integer", .int), ("number", .int), ("number", .double): return true
+        case ("integer", .double(let number)): return number.rounded() == number
+        case ("string", _), ("boolean", _), ("array", _), ("object", _), ("integer", _), ("number", _): return false
+        default: return true
+        }
     }
 
     /// What a model most likely meant by an argument the tool does not take:

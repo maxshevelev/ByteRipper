@@ -117,4 +117,44 @@ final class AgentArgumentsTests: XCTestCase {
         let message = await refusal(bare, ["limit": 5])
         XCTAssertEqual(message, "`documents` takes no argument `limit`. It takes no arguments.")
     }
+
+    // MARK: - Inside an argument
+
+    private let comments = AgentTool(
+        name: "comment",
+        description: "Comments.",
+        inputSchema: AgentSchema.object([
+            "kind": AgentSchema.choice(["pre", "eol"], "Which."),
+            "items": ["type": "array",
+                      "items": AgentSchema.object([
+                          "address": AgentSchema.string("Where."),
+                          "text": AgentSchema.string("What."),
+                          "kind": AgentSchema.choice(["pre", "eol"], "Which."),
+                          "keep": AgentSchema.boolean("Kept.")
+                      ], required: ["address", "text"])]
+        ])
+    ) { _ in .text("written") }
+
+    /// `comment` for `text` erased the comment and answered ok: an item is
+    /// held to its schema as the arguments are.
+    func testAnItemsKeyItDoesNotTakeOrLacksIsRefused() async {
+        let wrong = await refusal(comments, ["items": [["address": "0x10", "comment": "Step"]]])
+        XCTAssertEqual(wrong, "`comment`: Item 0 of `items` has `comment`, which it does not take. "
+            + "It takes: `address`, `keep`, `kind`, `text`. Nothing was done.")
+        let missing = await refusal(comments, ["items": [["address": "0x10", "text": "A"], ["address": "0x20"]]])
+        XCTAssertEqual(missing, "`comment`: Item 1 of `items` has no `text`, which it needs. Nothing was done.")
+    }
+
+    func testAWordOutsideAnEnumAndAValueOfTheWrongKindAreRefused() async {
+        let top = await refusal(comments, ["kind": "Pre"])
+        XCTAssertEqual(top, "`comment`: `kind` is \"Pre\"; it takes \"pre\", \"eol\".")
+        let inner = await refusal(comments, ["items": [["address": "0x10", "text": "A", "kind": "plate"]]])
+        XCTAssertEqual(inner, "`comment`: `kind` of Item 0 of `items` is \"plate\"; it takes \"pre\", \"eol\".")
+        let kind = await refusal(comments, ["items": [["address": "0x10", "text": "A", "keep": "true"]]])
+        XCTAssertEqual(kind, "`comment`: `keep` of Item 0 of `items` is not a boolean. Nothing was done.")
+        let notList = await refusal(comments, ["items": ["address": "0x10"]])
+        XCTAssertNil(notList, "an argument's own kind is its reader's to check")
+        let fine = await refusal(comments, ["kind": "eol", "items": [["address": "0x10", "text": "", "keep": true]]])
+        XCTAssertNil(fine)
+    }
 }

@@ -152,7 +152,8 @@ final class AgentDumpTools {
         guard offset <= size else {
             throw AgentToolError("Offset \(AgentHostTools.hexText(offset)) is past the end of \(onScreen.id).")
         }
-        let end = min(offset + length, size)
+        // Bounded before it is added: a length past the end means to the end.
+        let end = offset + min(length, size - offset)
         let controller = try onScreen.onScreen()
         desk.bringForward(onScreen)
         controller.recordJump(in: onScreen.pane)
