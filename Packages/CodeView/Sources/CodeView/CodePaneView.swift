@@ -127,6 +127,10 @@ import ToolModuleKit
     private let modeControl: NSSegmentedControl
     /// Shows and hides the description, at the head of the navigator.
     private let descriptionButton = CodeOrderButton()
+    /// New, on the book's corner, while the description reads otherwise than
+    /// when the reader last had it open.
+    private let descriptionBadge = PartBadgeView(text: "")
+    private let descriptionBadgeHolder = CodeClickThroughView()
     /// The panel's page in the book: whoever holds the pane sets it in its title
     /// bar, over the whole panel.
     public let titleBarHelp: NSView = HelpButton.greyCircle(for: .topic(.codePanel))
@@ -576,12 +580,17 @@ import ToolModuleKit
         public let hasCode: Bool
         /// The functions whose C this revision changed; nil when nobody knows.
         public let changed: Set<CodeAddress>?
+        /// Whether this revision changed the module's description; nil when
+        /// nobody knows.
+        public let changedDescription: Bool?
 
-        public init(revision: Int, title: String, hasCode: Bool, changed: Set<CodeAddress>? = nil) {
+        public init(revision: Int, title: String, hasCode: Bool, changed: Set<CodeAddress>? = nil,
+                    changedDescription: Bool? = nil) {
             self.revision = revision
             self.title = title
             self.hasCode = hasCode
             self.changed = changed
+            self.changedDescription = changedDescription
         }
     }
 
@@ -589,9 +598,11 @@ import ToolModuleKit
     /// the app reads the module's history and says so here. With nothing to
     /// offer the whole comparison stays out of the bar.
     public func setRevisionChoices(_ choices: [RevisionChoice], current: Int?,
-                                   knowsRevisions: Bool = false, currentChanged: Set<CodeAddress>? = nil) {
+                                   knowsRevisions: Bool = false, currentChanged: Set<CodeAddress>? = nil,
+                                   currentChangedDescription: Bool? = nil) {
         revisionChoices = choices
         changedByCurrentRevision = currentChanged
+        descriptionChangedByCurrentRevision = currentChangedDescription
         hasRevisionHistory = knowsRevisions || !choices.isEmpty
         compareLabel.stringValue = current.map { L("This revision (r%1$@)", String($0)) } ?? L("This revision")
         keepComparisonChoice()
@@ -807,9 +818,13 @@ import ToolModuleKit
     /// Picks a revision in the bar as the reader would.
     func chooseRevisionMenuTag(_ tag: Int) { chooseRevision(tag) }
 
-    @objc private func resetComparison() { onChooseRevision?(nil) }
+    @objc private func resetComparison() {
+        if showsDescription { return chooseDescriptionRevision(nil) }
+        onChooseRevision?(nil)
+    }
 
     private func chooseRevision(_ tag: Int) {
+        if showsDescription { return chooseDescriptionRevision(tag < 0 ? nil : tag) }
         // Reset is a choice too: a mark's comparison does not come back.
         if tag < 0, let entry = openFunctionEntry { functionComparisons[entry] = .noComparison }
         onChooseRevision?(tag < 0 ? nil : tag)
@@ -835,14 +850,31 @@ import ToolModuleKit
         }
     }
 
+    /// The revisions worth comparing the description with: those that changed
+    /// it, as the code's are those that changed the function. The newest of
+    /// them reads as the description on screen unless the revision on screen
+    /// changed it itself.
+    private func offeredDescriptionChoices() -> [RevisionChoice] {
+        var newestReadsAsShown = descriptionChangedByCurrentRevision.map { !$0 } ?? false
+        return revisionChoices.filter { choice in
+            var offered = true
+            if let changed = choice.changedDescription {
+                offered = changed && !newestReadsAsShown
+                if changed { newestReadsAsShown = false }
+            }
+            return offered || choice.revision == descriptionBaseline?.revision
+        }
+    }
+
     /// A revision the store has no code for is listed greyed.
     private func rebuildRevisionMenu() {
         var choices = [CodeMenuLine.Choice(title: L("No comparison"), tag: Self.noComparisonTag)]
-        for (index, choice) in offeredRevisionChoices().enumerated() {
-            choices.append(.init(title: choice.title, tag: choice.revision, isEnabled: choice.hasCode,
-                                 startsGroup: index == 0))
+        let offered = showsDescription ? offeredDescriptionChoices() : offeredRevisionChoices()
+        for (index, choice) in offered.enumerated() {
+            choices.append(.init(title: choice.title, tag: choice.revision,
+                                 isEnabled: showsDescription || choice.hasCode, startsGroup: index == 0))
         }
-        revisionLine.setChoices(choices, chosen: comparisonRevision ?? Self.noComparisonTag)
+        revisionLine.setChoices(choices, chosen: barRevision ?? Self.noComparisonTag)
         revisionLine.isEnabled = choices.count > 1
         selectRevisionItem(comparisonRevision)
     }
@@ -850,6 +882,8 @@ import ToolModuleKit
     /// A revision compared with reads plainly: it is what the diff is against.
     /// "No comparison" keeps the bar's grey, as Reset does then.
     private func selectRevisionItem(_ revision: Int?) {
+        // The bar speaks of what is on screen: the description has its own.
+        let revision = showsDescription ? descriptionBaseline?.revision : revision
         revisionLine.select(revision ?? Self.noComparisonTag)
         revisionLine.setTextColor(revision == nil ? .secondaryLabelColor : .labelColor)
     }
@@ -879,7 +913,7 @@ import ToolModuleKit
     /// Reset is blue while it can act and grey while it cannot: a borderless
     /// button keeps its tint through a disabled state unless it is told.
     private func updateResetButton() {
-        let enabled = comparisonRevision != nil
+        let enabled = barRevision != nil
         resetComparisonButton.isEnabled = enabled
         resetComparisonButton.contentTintColor = enabled ? .controlAccentColor : .secondaryLabelColor
     }
@@ -963,6 +997,139 @@ import ToolModuleKit
         guard shows != showsDescription else { return }
         mode = shows ? Self.descriptionSegment : (codeShowsC ? 1 : 0)
         applyMode()
+    }
+
+    // MARK: - The description against a revision
+
+    /// What the description is compared with once the reader has chosen:
+    /// nothing, or a revision. Nil until they choose; a New mark's revision
+    /// stands for it then.
+    private enum DescriptionChoice: Equatable {
+        case noComparison
+        case against(Int)
+    }
+    private var descriptionChoice: DescriptionChoice?
+    /// The revision the description is new against: it reads otherwise than
+    /// when the reader last had it open. Taken when they leave it, as a
+    /// function's mark is.
+    private var descriptionMark: Int?
+    /// The revision the description is compared with now, and its text then
+    /// ("" when it had none).
+    private var descriptionBaseline: (revision: Int, text: String)?
+    private var descriptionReads: [Int: String] = [:]
+    private var descriptionBeingRead: Int?
+    private var descriptionChangedByCurrentRevision: Bool?
+    /// The read a comparison waits on, for a test.
+    private(set) var descriptionRead: Task<Void, Never>?
+
+    /// Reads the module's description at a revision: "" when it had none,
+    /// nil when the store could not give it. The app's half of the seam.
+    public var onReadDescription: ((Int) async -> String?)?
+
+    /// The revision the bar shows as compared with: the description's while
+    /// it is on screen, the function's otherwise.
+    private var barRevision: Int? { showsDescription ? descriptionBaseline?.revision : comparisonRevision }
+
+    static let descriptionSeenKey = "description"
+    private var descriptionFingerprint: String { manifest.reading?.description?.hex ?? "" }
+
+    private func allSeenRecords(revision: Int) -> [String: SeenRecord] {
+        var records = Self.seenRecords(of: artifact, revision: revision)
+        records[Self.descriptionSeenKey] = SeenRecord(revision: revision, fingerprint: descriptionFingerprint)
+        return records
+    }
+
+    /// The reader has the description in front of them: the next launch must
+    /// not put it up as New for what they have just read.
+    private func noteDescriptionSeen() {
+        guard let revision = manifest.reading?.rev else { return }
+        seen[Self.descriptionSeenKey] = SeenRecord(revision: revision, fingerprint: descriptionFingerprint)
+        if seenLoaded { onSeenChanged?(seen) }
+    }
+
+    /// Leaving the description takes its mark; what the mark compared it with
+    /// stays, unless the reader has chosen since.
+    private func leaveDescriptionMark() {
+        guard let mark = descriptionMark else { return }
+        if descriptionChoice == nil { descriptionChoice = .against(mark) }
+        descriptionMark = nil
+        noteDescriptionSeen()
+        marksChanged()
+    }
+
+    /// The reader's pick in the bar while the description is on screen.
+    // help: panel.code.diff
+    private func chooseDescriptionRevision(_ revision: Int?) {
+        descriptionChoice = revision.map { .against($0) } ?? .noComparison
+        compareDescription(with: revision)
+    }
+
+    /// The comparison the description stands for: what the reader chose, or
+    /// the revision its New mark is against, or none.
+    private func applyDescriptionComparison() {
+        let wanted: Int?
+        switch descriptionChoice {
+        case .noComparison: wanted = nil
+        case .against(let revision): wanted = revision
+        case nil: wanted = descriptionMark
+        }
+        guard wanted != descriptionBaseline?.revision || (wanted != nil && descriptionBaseline == nil) else { return }
+        compareDescription(with: wanted)
+    }
+
+    private func compareDescription(with revision: Int?) {
+        guard let revision else {
+            descriptionBeingRead = nil
+            setDescriptionBaseline(nil)
+            return
+        }
+        if let held = descriptionReads[revision] {
+            descriptionBeingRead = nil
+            setDescriptionBaseline((revision, held))
+            return
+        }
+        guard let onReadDescription else { return }
+        descriptionBeingRead = revision
+        let work = beginRevisionWork(revision)
+        descriptionRead = Task { @MainActor [weak self] in
+            let text = await onReadDescription(revision)
+            guard let self else { return }
+            self.endWork(work)
+            guard self.descriptionBeingRead == revision else { return }
+            self.descriptionBeingRead = nil
+            if let text {
+                self.descriptionReads[revision] = text
+                self.setDescriptionBaseline((revision, text))
+            } else {
+                self.selectRevisionItem(nil)
+                self.unreadableFunction = self.openFunctionEntry
+                self.onRevisionUnreadable?(revision)
+            }
+        }
+    }
+
+    private func setDescriptionBaseline(_ baseline: (revision: Int, text: String)?) {
+        descriptionBaseline = baseline
+        descriptionView.compare(with: baseline?.text)
+        rebuildRevisionMenu()
+        updateResetButton()
+        updateHeaderForMode()
+    }
+
+    /// For a test: what the description is compared with, the diff it shows,
+    /// and whether it carries a New mark.
+    var descriptionComparisonRevision: Int? { descriptionBaseline?.revision }
+    var descriptionDiffCounts: (added: Int, removed: Int)? {
+        descriptionView.shownDiff.map { ($0.added, $0.removed) }
+    }
+    var descriptionTints: [DescriptionTextView.Tint] { descriptionView.tints }
+    public var descriptionIsNew: Bool { descriptionMark != nil }
+    var descriptionBadgeIsShown: Bool { !descriptionBadgeHolder.isHidden }
+    var descriptionBadgeFrame: NSRect { convert(descriptionBadgeHolder.bounds, from: descriptionBadgeHolder) }
+    var descriptionButtonFrame: NSRect { convert(descriptionButton.bounds, from: descriptionButton) }
+
+    private func drawDescriptionBadge() {
+        descriptionBadgeHolder.isHidden = descriptionMark == nil
     }
 
     /// Back to the code from the description, on the side it was left on.
@@ -1815,7 +1982,8 @@ import ToolModuleKit
     /// The marks changed: the button that takes them follows, and the app keeps
     /// them for the next launch.
     private func marksChanged() {
-        clearNewMarksButton.isEnabled = !unopenedChanges.isEmpty
+        clearNewMarksButton.isEnabled = !unopenedChanges.isEmpty || descriptionMark != nil
+        drawDescriptionBadge()
         onNewMarksChanged?(newMarks)
     }
 
@@ -1827,13 +1995,17 @@ import ToolModuleKit
     /// any function left does. Whatever the revision picker holds stays
     /// comparable.
     public func clearNewMarks() {
-        guard !unopenedChanges.isEmpty else { return }
+        guard !unopenedChanges.isEmpty || descriptionMark != nil else { return }
         if let index = state.function, let mark = unopenedChanges[index] {
             keepComparison(of: index, from: mark)
         }
         unopenedChanges.removeAll()
+        if let mark = descriptionMark {
+            if showsDescription, descriptionChoice == nil { descriptionChoice = .against(mark) }
+            descriptionMark = nil
+        }
         if let revision = manifest.reading?.rev {
-            seen = Self.seenRecords(of: artifact, revision: revision)
+            seen = allSeenRecords(revision: revision)
             // The last launch's records may still be on their way: they must
             // not put the marks up again when they come.
             marksWereCleared = true
@@ -1898,11 +2070,23 @@ import ToolModuleKit
         guard let revision = manifest.reading?.rev else { return }
         seenLoaded = true
         guard !records.isEmpty, !marksWereCleared else {
-            seen = Self.seenRecords(of: artifact, revision: revision)
+            seen = allSeenRecords(revision: revision)
             onSeenChanged?(seen)
             return
         }
         seen = records
+        // The description is new as a function is: it reads otherwise than
+        // when the reader last had it open. A record from before it was
+        // recorded at all has nothing to be new against.
+        let description = descriptionFingerprint
+        if let record = records[Self.descriptionSeenKey], record.fingerprint != description,
+           record.revision != revision, !description.isEmpty {
+            descriptionMark = record.revision
+            if showsDescription { applyDescriptionComparison() }
+            marksChanged()
+        } else {
+            seen[Self.descriptionSeenKey] = SeenRecord(revision: revision, fingerprint: description)
+        }
         let holds = available ?? Set(baselines.keys)
         var marks: [NewMark] = []
         unrecorded = []
@@ -3047,6 +3231,17 @@ import ToolModuleKit
         descriptionButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         ControlHelp.describe(descriptionButton, name: L("Description"),
                              tooltip: L("Show or hide the module's description"))
+        // help: panel.code.description
+        // «Новое»: the description, not a function, is new.
+        descriptionBadge.text = L("New", context: "description")
+        descriptionBadge.font = .systemFont(ofSize: 9, weight: .semibold)
+        descriptionBadge.ink = .controlAccentColor
+        descriptionBadge.translatesAutoresizingMaskIntoConstraints = false
+        descriptionBadgeHolder.translatesAutoresizingMaskIntoConstraints = false
+        descriptionBadgeHolder.wantsLayer = true
+        descriptionBadgeHolder.layer?.zPosition = 1
+        if descriptionBadge.superview == nil { descriptionBadgeHolder.addSubview(descriptionBadge) }
+        drawDescriptionBadge()
 
         listControl.target = self
         listControl.action = #selector(listChanged)
@@ -3079,6 +3274,7 @@ import ToolModuleKit
         functionPane.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(moduleBlock)
         functionPane.addSubview(descriptionButton)
+        functionPane.addSubview(descriptionBadgeHolder)
         functionPane.addSubview(listControl)
         functionPane.addSubview(readinessBar)
         functionPane.addSubview(functionScroll)
@@ -3196,8 +3392,18 @@ import ToolModuleKit
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
         constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12)
         constraints += margin(moduleBlock.trailingAnchor, descriptionButton.leadingAnchor, -6)
-        constraints += margin(descriptionButton.trailingAnchor, functionPane.trailingAnchor, -8)
+        // Room on the book's right for its New badge.
+        constraints += margin(descriptionButton.trailingAnchor, functionPane.trailingAnchor, -24)
         constraints.append(descriptionButton.centerYAnchor.constraint(equalTo: moduleLine.centerYAnchor))
+        // On the book's top right corner, over the book.
+        constraints += [
+            descriptionBadge.leadingAnchor.constraint(equalTo: descriptionBadgeHolder.leadingAnchor),
+            descriptionBadge.trailingAnchor.constraint(equalTo: descriptionBadgeHolder.trailingAnchor),
+            descriptionBadge.topAnchor.constraint(equalTo: descriptionBadgeHolder.topAnchor),
+            descriptionBadge.bottomAnchor.constraint(equalTo: descriptionBadgeHolder.bottomAnchor),
+            descriptionBadgeHolder.leadingAnchor.constraint(equalTo: descriptionButton.centerXAnchor, constant: 3),
+            descriptionBadgeHolder.bottomAnchor.constraint(equalTo: descriptionButton.topAnchor, constant: 5)
+        ]
         constraints += margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
@@ -4009,6 +4215,8 @@ import ToolModuleKit
     // help: panel.code.description
     private func applyMode() {
         let segment = mode
+        let wasDescription = lastAppliedMode == Self.descriptionSegment
+        lastAppliedMode = segment
         if segment <= 1 { codeShowsC = segment == 1 }
         tableScroll.isHidden = segment != 0
         descriptionView.isHidden = segment != Self.descriptionSegment
@@ -4017,8 +4225,19 @@ import ToolModuleKit
         updateNewMarkBanner()
         currentOccurrence = nil
         drawOccurrenceBar()
+        if showsDescription, !wasDescription {
+            noteDescriptionSeen()
+            applyDescriptionComparison()
+        } else if !showsDescription, wasDescription {
+            leaveDescriptionMark()
+        }
+        // The bar's picker and Reset speak of what is on screen.
+        rebuildRevisionMenu()
+        updateResetButton()
         updateHeaderForMode()
     }
+
+    private var lastAppliedMode: Int?
 
     /// The header over the description: it is about the whole module, so no
     /// function stands there. The column of sections stands beside it.
@@ -5728,6 +5947,11 @@ final class CodeNavigatorCell: NSTableCellView {
 /// The three layouts are three buttons, not the segments of one control: the
 /// bar reads as a row of separate buttons, and a segmented control would draw
 /// them as a single joined frame with dividers — chrome the bar does not have.
+/// A view that takes no click: what it shows lies over a control.
+final class CodeClickThroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 final class CodeOrderButton: NSButton {
     /// The tint while the button is not chosen.
     var idleTint: NSColor = .secondaryLabelColor {

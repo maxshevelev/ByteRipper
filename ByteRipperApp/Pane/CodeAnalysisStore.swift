@@ -49,20 +49,68 @@ enum CodeAnalysisStore {
     /// all — so the bar can stand where the reader expects it while nothing
     /// is comparable yet. A revision recorded before revisions kept their
     /// code names none and is left out, not listed greyed.
-    static func revisions(for manifest: AnalysisManifest, root: URL? = nil)
-        async -> (options: [RevisionOption], hasHistory: Bool, currentChanged: Set<CodeAddress>?) {
+    /// A module's history as the code panel reads it.
+    struct Revisions {
+        var options: [RevisionOption] = []
+        var hasHistory = false
+        var currentChanged: Set<CodeAddress>?
+        /// Each revision's description, by revision: nil where it had none.
+        var descriptions: [Int: SHA256Digest?] = [:]
+        /// Whether the revision on screen changed the description.
+        var currentChangedDescription: Bool?
+    }
+
+    static func revisions(for manifest: AnalysisManifest, root: URL? = nil) async -> Revisions {
         let root = root ?? self.root
         let module = manifest.module.sha256
         let current = manifest.reading?.rev
-        return await Task.detached(priority: .userInitiated) {
-            () -> (options: [RevisionOption], hasHistory: Bool, currentChanged: Set<CodeAddress>?) in
-            guard let store = try? ContentStore(root: root, create: false) else { return ([], false, nil) }
+        return await Task.detached(priority: .userInitiated) { () -> Revisions in
+            guard let store = try? ContentStore(root: root, create: false) else { return Revisions() }
             // A store of this machine's own has nobody else to work this out.
             _ = try? store.backfillChangedFunctions(module: module)
-            guard let history = try? store.reviewHistory(module: module) else { return ([], false, nil) }
-            let options = Self.revisionOptions(history, current: current)
+            guard let history = try? store.reviewHistory(module: module) else { return Revisions() }
+            let changedDescription = Self.descriptionChanges(history)
+            var options = Self.revisionOptions(history, current: current)
+            for (index, option) in options.enumerated() {
+                let choice = option.choice
+                options[index] = RevisionOption(
+                    choice: CodePaneView.RevisionChoice(revision: choice.revision, title: choice.title,
+                                                        hasCode: choice.hasCode, changed: choice.changed,
+                                                        changedDescription: changedDescription[choice.revision]),
+                    artifact: option.artifact)
+            }
             let shown = history.revisions.last { $0.rev == current }
-            return (options, !history.revisions.isEmpty, shown?.changedEntries)
+            var descriptions: [Int: SHA256Digest?] = [:]
+            for revision in history.revisions { descriptions[revision.rev] = .some(revision.description) }
+            return Revisions(options: options, hasHistory: !history.revisions.isEmpty,
+                             currentChanged: shown?.changedEntries, descriptions: descriptions,
+                             currentChangedDescription: current.flatMap { changedDescription[$0] })
+        }.value
+    }
+
+    /// Whether each revision changed the description: it holds another one
+    /// than the revision before it.
+    nonisolated static func descriptionChanges(_ history: ReviewHistory) -> [Int: Bool] {
+        var changed: [Int: Bool] = [:]
+        var before: SHA256Digest?
+        let ordered = history.revisions.sorted { left, right in
+            left.rev == right.rev ? left.recordedAt < right.recordedAt : left.rev < right.rev
+        }
+        for revision in ordered {
+            changed[revision.rev] = revision.description != before
+            before = revision.description
+        }
+        return changed
+    }
+
+    /// A description by its digest, read off the main actor; nil when the
+    /// store cannot give it.
+    static func description(_ digest: SHA256Digest, root: URL? = nil) async -> String? {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) { () -> String? in
+            guard let store = try? ContentStore(root: root, create: false),
+                  let data = try? store.object(digest) else { return nil }
+            return String(data: data, encoding: .utf8)
         }.value
     }
 

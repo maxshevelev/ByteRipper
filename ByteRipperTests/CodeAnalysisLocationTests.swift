@@ -13,6 +13,23 @@ import XCTest
 /// bundle goes to the server, and switching back reads this Mac again.
 @MainActor
 final class CodeAnalysisLocationTests: XCTestCase {
+    /// A revision changed the description when it holds another one than the
+    /// revision before it; the first revision with one changed it.
+    func testARevisionChangedTheDescriptionWhenItHoldsAnotherOne() {
+        let module = SHA256Digest(data: Data("module".utf8))
+        let first = SHA256Digest(data: Data("first".utf8))
+        let second = SHA256Digest(data: Data("second".utf8))
+        func revision(_ rev: Int, _ description: SHA256Digest?) -> ReviewRevision {
+            ReviewRevision(rev: rev, review: SHA256Digest(data: Data("review \(rev)".utf8)),
+                           description: description, recordedAt: "2026-11-0\(rev)T00:00:00Z")
+        }
+        let history = ReviewHistory(module: module, revisions: [
+            revision(3, second), revision(1, nil), revision(2, first), revision(4, second), revision(5, nil),
+        ])
+        XCTAssertEqual(CodeAnalysisStore.descriptionChanges(history),
+                       [1: false, 2: true, 3: true, 4: false, 5: true])
+    }
+
     private var directory: URL!
     private var served: ContentStore!
     private var service: CASService!

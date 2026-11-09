@@ -159,6 +159,13 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             await CodeAnalysisStore.revisions(for: manifest)
         }
     }
+    // The description at a revision, for the description's comparison and its
+    // New mark: "" for a revision that had none.
+    codePane.onReadDescription = { revision in
+        guard let held = await history.value.descriptions[revision] else { return nil }
+        guard let digest = held else { return "" }
+        return await CodeAnalysisStore.description(digest)
+    }
     // What a New mark compares with is read when a function asks for it, and
     // for that function: a revision's code is the size of the whole analysis.
     codePane.onReadRevision = { revision, function in
@@ -178,7 +185,8 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             if let at = choices.firstIndex(where: { $0.revision == previous.revision }) {
                 choices[at] = CodePaneView.RevisionChoice(revision: choices[at].revision,
                                                           title: choices[at].title, hasCode: true,
-                                                          changed: choices[at].changed)
+                                                          changed: choices[at].changed,
+                                                          changedDescription: choices[at].changedDescription)
             } else {
                 choices.insert(CodePaneView.RevisionChoice(revision: previous.revision,
                                                            title: "r\(previous.revision)", hasCode: true),
@@ -186,7 +194,8 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             }
         }
         codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory,
-                                    currentChanged: loaded.currentChanged)
+                                    currentChanged: loaded.currentChanged,
+                                    currentChangedDescription: loaded.currentChangedDescription)
 
         // The functions the last launch saw at another revision than the one
         // on screen are New against the revision their record names, and the

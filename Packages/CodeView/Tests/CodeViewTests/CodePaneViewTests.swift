@@ -2365,7 +2365,8 @@ final class CodePaneViewTests: XCTestCase {
         view.onSeenChanged = { saved.append($0) }
         view.restoreSeen([:], baselines: [:])
         XCTAssertTrue(view.newMarks.isEmpty, "nothing has been seen here, so nothing is new")
-        XCTAssertEqual(view.seenRecords.count, 2, "every function is seen now")
+        XCTAssertEqual(view.seenRecords.filter { $0.key != CodePaneView.descriptionSeenKey }.count, 2,
+                       "every function is seen now")
         XCTAssertEqual(Set(view.seenRecords.values.map(\.revision)), [54])
         XCTAssertEqual(saved.count, 1, "and what was seen is kept")
 
@@ -5130,6 +5131,167 @@ final class CodePaneViewTests: XCTestCase {
         view.setModuleDescription(nil)
         XCTAssertFalse(view.descriptionButtonIsEnabled)
         XCTAssertEqual(view.descriptionButtonSymbol, "book.closed")
+    }
+
+    // MARK: - The description against a revision
+
+    /// A pane at revision 5 whose reading names a description.
+    private func describedPane(revision: Int, description: String) throws -> CodePaneView {
+        var shown = manifest()
+        shown.reading = AnalysisReading(project: "p", rev: revision,
+                                        description: SHA256Digest(data: Data(description.utf8)))
+        let view = CodePaneView(manifest: shown, artifact: try longCallerArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 500)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        view.setModuleDescription(description)
+        return view
+    }
+
+    private let olderDescription = """
+        # CpuPei
+
+        Initialises the CPU in PEI.
+
+        ## Flow
+
+        1. [The caller](0x220) runs first.
+        """
+
+    /// The two descriptions as one text: the line only the old one had and
+    /// the line only the new one has each stand as a paragraph of their own,
+    /// marked, and the marks are gone once drawn.
+    func testTheMergedDescriptionMarksWhatEachSideAloneHas() {
+        let merged = CodeDescriptionView.merged("A.\n\nB.\n\n| a | b |\n|---|---|\n| 1 | 2 |",
+                                                "A.\n\nC.\n\n| a | b |\n|---|---|\n| 1 | 3 |")
+        XCTAssertEqual(merged.diff.added, 2)
+        XCTAssertEqual(merged.diff.removed, 2)
+        XCTAssertTrue(merged.markdown.contains("\n\(CodeDescriptionView.removedMark)B.\n"), merged.markdown)
+        XCTAssertTrue(merged.markdown.contains("\n\(CodeDescriptionView.addedMark)C.\n"), merged.markdown)
+        XCTAssertTrue(merged.markdown.contains("| \(CodeDescriptionView.addedMark)1 | \(CodeDescriptionView.addedMark)3 |"),
+                      "every cell of a table row")
+        let table = CodeDescriptionView.merged("A.", "A.\n\n| a | b |\n|---|:-:|\n| 1 | 2 |").markdown
+        XCTAssertTrue(table.contains("\n|---|:-:|\n"), "the row under the header stays: \(table)")
+        let drawn = NSAttributedString(string: "A.\n\(CodeDescriptionView.removedMark)B.\n\(CodeDescriptionView.addedMark)C.\nD.")
+        let (plain, tints) = CodeDescriptionView.tinted(drawn)
+        XCTAssertEqual(plain.string, "A.\nB.\nC.\nD.")
+        XCTAssertEqual(tints, [.init(range: NSRange(location: 3, length: 3), removed: true),
+                               .init(range: NSRange(location: 6, length: 3), removed: false)])
+    }
+
+    /// With the description on screen the bar compares the description, with
+    /// the revisions that changed it; the code keeps its own comparison. The
+    /// diff is drawn in the code diff's colours, its links still lead to the
+    /// code, and Reset shows the description as it is.
+    func testTheBarComparesTheDescriptionWithTheRevisionsThatChangedIt() async throws {
+        let view = try describedPane(revision: 5, description: sampleDescription)
+        var asked: [Int] = []
+        view.onReadDescription = { revision in
+            asked.append(revision)
+            return revision == 4 ? self.olderDescription : ""
+        }
+        view.setRevisionChoices([
+            .init(revision: 4, title: "r4", hasCode: true, changedDescription: true),
+            .init(revision: 3, title: "r3", hasCode: true, changedDescription: false),
+            .init(revision: 2, title: "r2", hasCode: true, changedDescription: true)
+        ], current: 5, currentChangedDescription: true)
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison", "r4", "r3", "r2"], "the code's")
+
+        view.showDescription(true)
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison", "r4", "r2"], "those that changed it")
+        view.chooseRevisionMenuTag(4)
+        await view.descriptionRead?.value
+        XCTAssertEqual(asked, [4])
+        XCTAssertEqual(view.descriptionComparisonRevision, 4)
+        XCTAssertEqual(view.selectedRevisionTitle, "r4")
+        XCTAssertTrue(view.comparisonResetIsEnabled)
+        let counts = try XCTUnwrap(view.descriptionDiffCounts)
+        XCTAssertGreaterThan(counts.added, 0)
+        XCTAssertGreaterThan(counts.removed, 0)
+        XCTAssertTrue(view.descriptionTints.contains { $0.removed })
+        XCTAssertTrue(view.descriptionTints.contains { !$0.removed })
+        XCTAssertTrue(view.descriptionText.contains("Initialises the CPU in PEI."), "what only r4 had")
+        XCTAssertFalse(view.descriptionText.contains(CodeDescriptionView.addedMark))
+        XCTAssertFalse(view.descriptionText.contains("+"), "the marks are drawn in the margin, not written in the text")
+
+        view.showDescription(false)
+        XCTAssertNil(view.comparisonRevisionForTest, "the code keeps its own")
+        XCTAssertEqual(view.selectedRevisionTitle, "No comparison")
+        view.showDescription(true)
+        XCTAssertEqual(view.selectedRevisionTitle, "r4")
+        XCTAssertEqual(asked, [4], "read once")
+
+        let at = (view.descriptionText as NSString).range(of: "The caller").location
+        XCTAssertTrue(view.followDescriptionLink(at: at), "a link in the diff leads to the code")
+        XCTAssertFalse(view.showsDescription)
+        view.showDescription(true)
+
+        view.chooseRevisionMenuTag(-1)
+        XCTAssertNil(view.descriptionComparisonRevision)
+        XCTAssertNil(view.descriptionDiffCounts)
+        XCTAssertTrue(view.descriptionTints.isEmpty)
+        XCTAssertFalse(view.comparisonResetIsEnabled)
+    }
+
+    /// A description that reads otherwise than when the reader last had it
+    /// open is New: the badge on the book's top right corner, the comparison
+    /// with the revision it was seen at when it opens, and the mark gone once
+    /// it is left — the comparison stays.
+    func testADescriptionChangedSinceItWasReadIsNew() async throws {
+        let view = try describedPane(revision: 5, description: sampleDescription)
+        let (shown, window) = (view, NSWindow(contentRect: view.frame, styleMask: [.titled],
+                                              backing: .buffered, defer: false))
+        window.contentView = shown
+        view.onReadDescription = { $0 == 3 ? self.olderDescription : nil }
+        XCTAssertFalse(view.descriptionBadgeIsShown)
+        let older = SHA256Digest(data: Data(olderDescription.utf8)).hex
+        view.restoreSeen([CodePaneView.descriptionSeenKey: SeenRecord(revision: 3, fingerprint: older)],
+                         baselines: [:])
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.descriptionIsNew)
+        XCTAssertTrue(view.descriptionBadgeIsShown)
+        let badge = view.descriptionBadgeFrame
+        let book = view.descriptionButtonFrame
+        XCTAssertEqual(badge.minX, book.midX + 3, accuracy: 1, "on the book's right corner")
+        XCTAssertGreaterThan(view.isFlipped ? book.minY - badge.minY : badge.maxY - book.maxY, 0, "at its top")
+        XCTAssertLessThanOrEqual(badge.maxX, view.convert(view.bounds, to: nil).maxX)
+
+        view.clickDescriptionButton()
+        await view.descriptionRead?.value
+        XCTAssertEqual(view.descriptionComparisonRevision, 3, "against the revision it was seen at")
+        XCTAssertTrue(view.descriptionIsNew, "until it is left")
+        XCTAssertEqual(view.seenRecords[CodePaneView.descriptionSeenKey]?.revision, 5)
+
+        view.clickDescriptionButton()
+        XCTAssertFalse(view.descriptionIsNew)
+        XCTAssertFalse(view.descriptionBadgeIsShown)
+        view.clickDescriptionButton()
+        XCTAssertEqual(view.descriptionComparisonRevision, 3, "the comparison stays")
+    }
+
+    /// A description that reads as it did, or a module the records knew
+    /// nothing of, is not New; Clear takes the description's mark with the
+    /// functions'.
+    func testADescriptionReadAsItIsIsNotNewAndClearTakesTheMark() throws {
+        let unchanged = try describedPane(revision: 5, description: sampleDescription)
+        let same = SHA256Digest(data: Data(sampleDescription.utf8)).hex
+        unchanged.restoreSeen([CodePaneView.descriptionSeenKey: SeenRecord(revision: 3, fingerprint: same)],
+                              baselines: [:])
+        XCTAssertFalse(unchanged.descriptionIsNew)
+
+        let fresh = try describedPane(revision: 5, description: sampleDescription)
+        fresh.restoreSeen([:], baselines: [:])
+        XCTAssertFalse(fresh.descriptionIsNew, "a first open has nothing to be new against")
+        XCTAssertEqual(fresh.seenRecords[CodePaneView.descriptionSeenKey]?.fingerprint, same)
+
+        let marked = try describedPane(revision: 5, description: sampleDescription)
+        marked.restoreSeen([CodePaneView.descriptionSeenKey: SeenRecord(revision: 3, fingerprint: "older")],
+                           baselines: [:])
+        XCTAssertTrue(marked.descriptionIsNew)
+        marked.clearNewMarks()
+        XCTAssertFalse(marked.descriptionIsNew)
+        XCTAssertEqual(marked.seenRecords[CodePaneView.descriptionSeenKey]?.fingerprint, same)
     }
 
     /// The menu lists every analysis newest first — the order the agent's

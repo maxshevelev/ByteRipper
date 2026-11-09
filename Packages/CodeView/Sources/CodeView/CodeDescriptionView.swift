@@ -55,6 +55,14 @@ import ToolModuleKit
     private let placeholder = NSTextField(wrappingLabelWithString: "")
     private var markdown: String?
     private var loaded = false
+    /// The description of the revision compared with, while there is one:
+    /// "" when it had none. The text is then drawn as the code's diff is, what
+    /// only that revision had on red and what only this one has on green.
+    private var baseline: String?
+    /// The diff as drawn, while the text differs from the baseline.
+    private(set) var shownDiff: LineDiff?
+    /// The paragraphs drawn on the diff's colours.
+    var tints: [DescriptionTextView.Tint] { text.tints }
 
     static let linkScheme = "code-address"
 
@@ -157,10 +165,27 @@ import ToolModuleKit
         redraw()
     }
 
+    /// The revision to compare with, by its description; nil shows the
+    /// description as it is.
+    func compare(with baseline: String?) {
+        guard baseline != self.baseline else { return }
+        self.baseline = baseline
+        redraw()
+    }
+
     /// Drawn again at the zoom's new size, or after the code's names changed.
     func redraw() {
         let origin = scroll.contentView.bounds.origin
-        if let markdown, !markdown.isEmpty {
+        text.tints = []
+        shownDiff = nil
+        if let markdown, !markdown.isEmpty, let baseline, baseline != markdown {
+            let merged = Self.merged(baseline, markdown)
+            let (drawn, tints) = Self.tinted(render(merged.markdown))
+            text.textStorage?.setAttributedString(drawn)
+            text.tints = tints
+            shownDiff = merged.diff
+            placeholder.isHidden = true
+        } else if let markdown, !markdown.isEmpty {
             text.textStorage?.setAttributedString(render(markdown))
             placeholder.isHidden = true
         } else {
@@ -241,7 +266,10 @@ import ToolModuleKit
             guard let level = value as? Int else { return }
             let title = drawn.attributedSubstring(from: range).string
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !title.isEmpty { found.append(Section(title: title, level: level, range: range)) }
+            // A heading the compared revision had and this one has not is
+            // not a section of the description.
+            let removed = text.tints.contains { $0.removed && NSIntersectionRange($0.range, range).length > 0 }
+            if !title.isEmpty, !removed { found.append(Section(title: title, level: level, range: range)) }
         }
         // A heading alone at the top of the document is its title, the module's
         // name: the sections are what stands under it.
@@ -332,6 +360,97 @@ import ToolModuleKit
     /// style comes from where the block stands (a heading, an item of a list
     /// inside a list, a cell of a table), each run's emphasis, code and link
     /// on top.
+    // MARK: - Against a revision
+
+    /// What marks a source line as one only the new text has, or only the old:
+    /// characters no description holds, taken out once drawn.
+    static let addedMark: Character = "\u{E000}"
+    static let removedMark: Character = "\u{E001}"
+
+    /// The two descriptions as one Markdown text, line by line in the order
+    /// of their diff, each line one of them lacks marked. A marked line of
+    /// running text stands as a paragraph of its own, so its colour does not
+    /// spread over the lines both share; a line of a table or of a code block
+    /// stays where it is, as the table or the block would end otherwise.
+    static func merged(_ old: String, _ new: String) -> (markdown: String, diff: LineDiff) {
+        let diff = LineDiff.between(old, new)
+        var lines: [String] = []
+        var inFence = false
+        for row in diff.rows {
+            let text: String
+            let mark: Character?
+            switch row {
+            case .same(_, _, let line): text = line; mark = nil
+            case .removed(_, let line): text = line; mark = removedMark
+            case .added(_, let line): text = line; mark = addedMark
+            }
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            let fence = trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
+            defer { if fence { inFence.toggle() } }
+            guard let mark, !trimmed.isEmpty, !fence else {
+                lines.append(text)
+                continue
+            }
+            if inFence {
+                lines.append(String(mark) + text)
+            } else if trimmed.hasPrefix("|") {
+                lines.append(markCells(text, mark))
+            } else {
+                lines.append(contentsOf: ["", marked(text, mark), ""])
+            }
+        }
+        return (lines.joined(separator: "\n"), diff)
+    }
+
+    /// The mark after what makes the line a heading, an item or a quote.
+    private static func marked(_ line: String, _ mark: Character) -> String {
+        let pattern = #"^\s*(?:>\s*)*(?:(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)?(?:#{1,6}\s+)?"#
+        let lead = line.range(of: pattern, options: .regularExpression).map { line[$0] } ?? ""
+        return String(lead) + String(mark) + String(line.dropFirst(lead.count))
+    }
+
+    /// The mark in every cell of a table row, so the whole row reads coloured.
+    private static func markCells(_ line: String, _ mark: Character) -> String {
+        var cells = line.components(separatedBy: "|")
+        guard cells.count > 2 else { return line }
+        // The row under the header says where the columns lie: a mark would
+        // make it a row of text, and the table would be no table.
+        let inner = cells[1..<(cells.count - 1)]
+        if inner.allSatisfy({ $0.range(of: #"^\s*:?-+:?\s*$"#, options: .regularExpression) != nil }) { return line }
+        for index in 1..<(cells.count - 1) {
+            let cell = cells[index]
+            let lead = cell.prefix { $0 == " " }
+            cells[index] = String(lead) + String(mark) + String(cell.dropFirst(lead.count))
+        }
+        return cells.joined(separator: "|")
+    }
+
+    /// Takes the marks out of the drawn text, and names the paragraphs they
+    /// stood in: the rows the view colours.
+    static func tinted(_ drawn: NSAttributedString) -> (NSAttributedString, [DescriptionTextView.Tint]) {
+        let out = NSMutableAttributedString(attributedString: drawn)
+        let string = out.string as NSString
+        var marks: [(location: Int, removed: Bool)] = []
+        let added = String(addedMark), removed = String(removedMark)
+        var index = 0
+        while index < string.length {
+            let character = string.substring(with: NSRange(location: index, length: 1))
+            if character == added || character == removed { marks.append((index, character == removed)) }
+            index += 1
+        }
+        for mark in marks.reversed() { out.deleteCharacters(in: NSRange(location: mark.location, length: 1)) }
+        let plain = out.string as NSString
+        var tints: [DescriptionTextView.Tint] = []
+        for (shift, mark) in marks.enumerated() {
+            let location = min(mark.location - shift, max(0, plain.length - 1))
+            guard plain.length > 0 else { break }
+            let range = plain.paragraphRange(for: NSRange(location: location, length: 0))
+            if tints.last?.range == range { continue }
+            tints.append(.init(range: range, removed: mark.removed))
+        }
+        return (out, tints)
+    }
+
     func render(_ markdown: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .full,
@@ -650,9 +769,58 @@ final class DescriptionTextView: NSTextView {
     /// row leaves out a cell whose lines lie outside it: its last line half
     /// drawn, its background and borders missing. Asking for whole rows
     /// draws every cell the tile crosses; the tile's clip keeps the rest off.
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(tableRows(crossing: dirtyRect))
+    /// A paragraph of the description drawn against a revision: what only
+    /// that revision had, or what only this one has.
+    struct Tint: Equatable {
+        let range: NSRange
+        let removed: Bool
     }
+
+    /// Coloured the width of the text, as the code's diff colours its rows.
+    var tints: [Tint] = [] {
+        didSet { if tints != oldValue { needsDisplay = true } }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = tableRows(crossing: dirtyRect)
+        drawTints(in: rect)
+        super.draw(rect)
+    }
+
+    private func drawTints(in rect: NSRect) {
+        guard !tints.isEmpty, let layout = layoutManager, let container = textContainer,
+              let storage = textStorage else { return }
+        for tint in tints where NSMaxRange(tint.range) <= storage.length {
+            (tint.removed ? CodeColors.diffRemoved : CodeColors.diffAdded).setFill()
+            let glyphs = layout.glyphRange(forCharacterRange: tint.range, actualCharacterRange: nil)
+            var first: NSRect?
+            layout.enumerateLineFragments(forGlyphRange: glyphs) { fragment, used, _, _, _ in
+                var row = fragment.offsetBy(dx: self.textContainerOrigin.x, dy: self.textContainerOrigin.y)
+                // A paragraph of running text is coloured the width of the
+                // view; a cell or a code block keeps to its own box.
+                if fragment.width >= container.size.width - 1 { row.origin.x = 0; row.size.width = self.bounds.width }
+                if row.intersects(rect) { row.fill() }
+                if first == nil {
+                    first = used.offsetBy(dx: self.textContainerOrigin.x, dy: self.textContainerOrigin.y)
+                }
+            }
+            // The mark the code's diff puts before a line, in the margin
+            // before the paragraph's first line: - what only the revision
+            // compared with had, + what only this one has, as the code's.
+            guard let line = first, line.intersects(rect.insetBy(dx: 0, dy: -line.height)) else { continue }
+            let mark = tint.removed ? "-" : "+"
+            let font = CodePaneView.codeFont()
+            let words = NSAttributedString(string: mark, attributes: [
+                .font: font,
+                .foregroundColor: tint.removed ? CodeColors.diffRemovedMark : CodeColors.diffAddedMark
+            ])
+            let size = words.size()
+            words.draw(at: NSPoint(x: Self.markInset, y: line.midY - size.height / 2))
+        }
+    }
+
+    /// Where the diff's + and − stand: in the text's left margin.
+    static let markInset: CGFloat = 6
 
     func tableRows(crossing rect: NSRect) -> NSRect {
         guard let storage = textStorage, let layout = layoutManager, storage.length > 0 else { return rect }
