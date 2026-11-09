@@ -436,6 +436,10 @@ import ToolModuleKit
     var shownSectionTitle: String? { showsSectionColumn ? descriptionView.selectedSectionTitle : nil }
     var showsSectionColumn: Bool { !descriptionView.sectionColumn.isHidden }
     var descriptionButtonIsOn: Bool { descriptionButton.state == .on }
+    var descriptionButtonTint: NSColor? { descriptionButton.contentTintColor }
+    var descriptionButtonImage: NSImage? { descriptionButton.image }
+    var descriptionButtonIsEnabled: Bool { descriptionButton.isEnabled }
+    private(set) var descriptionButtonSymbol = ""
     func clickDescriptionButton() { descriptionButton.performClick(nil) }
     func clickCloseDescription() { descriptionView.closeButton.performClick(nil) }
     var descriptionCloseFrame: NSRect { convert(descriptionView.closeButton.bounds, from: descriptionView.closeButton) }
@@ -927,11 +931,31 @@ import ToolModuleKit
     /// made, so the code is never kept waiting for it.
     public func setModuleDescription(_ markdown: String?) {
         descriptionView.show(markdown)
+        hasDescription = !(markdown ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if let origin = pendingDescriptionScroll {
             pendingDescriptionScroll = nil
             layoutSubtreeIfNeeded()
             descriptionView.scroll(to: origin)
         }
+    }
+
+    /// Whether the module has a description to read. The book says which of
+    /// three it is: closed and unavailable while there is none (or it is
+    /// still being read), closed with text on it once there is one, open
+    /// while it is on screen.
+    public private(set) var hasDescription = false {
+        didSet { if hasDescription != oldValue { drawDescriptionButton() } }
+    }
+
+    private func drawDescriptionButton() {
+        let symbol = showsDescription ? "book" : hasDescription ? "text.book.closed" : "book.closed"
+        descriptionButtonSymbol = symbol
+        let weight: NSFont.Weight = showsDescription || hasDescription ? .bold : .regular
+        descriptionButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: weight))
+        descriptionButton.idleTint = hasDescription ? .labelColor : .secondaryLabelColor
+        // Open, it is what closes the description, text or not.
+        descriptionButton.isEnabled = hasDescription || showsDescription
     }
 
     /// Shows the module's description in place of the code, or the code
@@ -3012,12 +3036,11 @@ import ToolModuleKit
         moduleBlock.alignment = .leading
         moduleBlock.spacing = 1
         moduleBlock.translatesAutoresizingMaskIntoConstraints = false
-        descriptionButton.image = NSImage(systemSymbolName: "book", accessibilityDescription: nil)
+        drawDescriptionButton()
         descriptionButton.imagePosition = .imageOnly
         descriptionButton.isBordered = false
         descriptionButton.bezelStyle = .inline
         descriptionButton.setButtonType(.pushOnPushOff)
-        descriptionButton.contentTintColor = .secondaryLabelColor
         descriptionButton.target = self
         descriptionButton.action = #selector(descriptionButtonClicked)
         descriptionButton.translatesAutoresizingMaskIntoConstraints = false
@@ -3977,6 +4000,7 @@ import ToolModuleKit
         if mode < Self.descriptionSegment { modeControl.selectedSegment = mode }
         descriptionButton.isChosen = showsDescription
         descriptionButton.state = showsDescription ? .on : .off
+        drawDescriptionButton()
     }
 
     // help: panel.code.description
@@ -5702,6 +5726,11 @@ final class CodeNavigatorCell: NSTableCellView {
 /// bar reads as a row of separate buttons, and a segmented control would draw
 /// them as a single joined frame with dividers — chrome the bar does not have.
 final class CodeOrderButton: NSButton {
+    /// The tint while the button is not chosen.
+    var idleTint: NSColor = .secondaryLabelColor {
+        didSet { if !isChosen { contentTintColor = idleTint } }
+    }
+
     /// Whether this button's layout is the one shown. The button's own state
     /// follows it, which is what a screen reader reads as selected.
     var isChosen: Bool = false {
@@ -5710,7 +5739,7 @@ final class CodeOrderButton: NSButton {
             // state, and it is chosen still.
             state = isChosen ? .on : .off
             guard isChosen != oldValue else { return }
-            contentTintColor = isChosen ? .controlAccentColor : .secondaryLabelColor
+            contentTintColor = isChosen ? .controlAccentColor : idleTint
             needsDisplay = true
         }
     }

@@ -5035,6 +5035,41 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.descriptionButtonIsOn)
     }
 
+    /// The book says which of three the description is: closed and
+    /// unavailable while there is none (or it is still being read), closed
+    /// with text on it and bold once there is one, open in the accent colour
+    /// while it is on screen.
+    func testTheBookSaysWhetherThereIsADescriptionAndWhetherItIsOpen() throws {
+        let view = try describedPane()
+        view.frame = NSRect(x: 0, y: 0, width: 1100, height: 420)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.hasDescription)
+        XCTAssertFalse(view.descriptionButtonIsEnabled)
+        XCTAssertEqual(view.descriptionButtonSymbol, "book.closed")
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(view.descriptionButtonImage).size.height, 15,
+                                    "larger than the default book")
+        view.clickDescriptionButton()
+        XCTAssertFalse(view.showsDescription, "nothing to open")
+
+        view.setModuleDescription("  \n")
+        XCTAssertFalse(view.descriptionButtonIsEnabled, "nothing to read")
+        view.setModuleDescription("# Module\n\nText.")
+        XCTAssertTrue(view.descriptionButtonIsEnabled)
+        XCTAssertEqual(view.descriptionButtonSymbol, "text.book.closed")
+        XCTAssertEqual(view.descriptionButtonTint, .labelColor)
+
+        view.clickDescriptionButton()
+        XCTAssertTrue(view.showsDescription)
+        XCTAssertEqual(view.descriptionButtonSymbol, "book")
+        XCTAssertEqual(view.descriptionButtonTint, .controlAccentColor)
+        view.clickDescriptionButton()
+        XCTAssertEqual(view.descriptionButtonSymbol, "text.book.closed")
+
+        view.setModuleDescription(nil)
+        XCTAssertFalse(view.descriptionButtonIsEnabled)
+        XCTAssertEqual(view.descriptionButtonSymbol, "book.closed")
+    }
+
     /// The menu lists every analysis newest first — the order the agent's
     /// `code_modules` gives them. The one shown keeps its place, so a line
     /// where it is not on top says a newer analysis exists.
