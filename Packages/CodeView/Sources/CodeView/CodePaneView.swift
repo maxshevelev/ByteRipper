@@ -950,9 +950,8 @@ import ToolModuleKit
     private func drawDescriptionButton() {
         let symbol = showsDescription ? "book" : hasDescription ? "text.book.closed" : "book.closed"
         descriptionButtonSymbol = symbol
-        let weight: NSFont.Weight = showsDescription || hasDescription ? .semibold : .regular
         descriptionButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: weight))
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular))
         descriptionButton.idleTint = hasDescription ? .linkColor : .secondaryLabelColor
         // Open, it is what closes the description, text or not.
         descriptionButton.isEnabled = hasDescription || showsDescription

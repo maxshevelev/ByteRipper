@@ -5099,7 +5099,7 @@ final class CodePaneViewTests: XCTestCase {
 
     /// The book says which of three the description is: closed and
     /// unavailable while there is none (or it is still being read), closed
-    /// with text on it, semibold, in the link colour once there is one, open
+    /// with text on it, in the link colour once there is one, open
     /// in the accent colour while it is on screen.
     func testTheBookSaysWhetherThereIsADescriptionAndWhetherItIsOpen() throws {
         let view = try describedPane()
