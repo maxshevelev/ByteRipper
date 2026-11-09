@@ -2054,7 +2054,7 @@ public class Owner {
             // replacement.
             if (replaceable(here, theirs) && onlyNamesGiven(here, theirs, new java.util.HashSet<>())) {
                 if (!merge.amended.contains(name)) merge.amended.add(name);
-                replaceShared(shared, theirs, here);
+                amendShared(shared, theirs, here);
                 merge.written = true;
                 recordOrigin(origins, name, module);
                 return true;
@@ -2502,6 +2502,46 @@ public class Owner {
      * type still holds — stops the publish with 409 rather than leaving half
      * of a correction behind.
      */
+    /**
+     * An amendment: the module's type takes the shared one's place, and what
+     * the shared one says that the module's does not is kept — a field's
+     * comment where the module's field at the same offset and length has
+     * none, and the description where the module gives none. An amendment
+     * only adds; a module that never wrote a comment does not erase one.
+     */
+    private static void amendShared(FileDataTypeManager shared, DataType theirs, DataType ours) throws Exception {
+        DataType theirBase = theirs instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+            ? def.getBaseDataType() : theirs;
+        java.util.Map<String, String> comments = new java.util.HashMap<>();
+        if (theirBase instanceof ghidra.program.model.data.Composite composite) {
+            for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+                String comment = component.getComment();
+                if (comment != null && !comment.isEmpty()) {
+                    comments.put(component.getOffset() + ":" + component.getLength(), comment);
+                }
+            }
+        }
+        String description = theirBase.getDescription();
+        ghidra.program.model.data.CategoryPath path = theirs.getCategoryPath();
+        String name = theirs.getName();
+        replaceShared(shared, theirs, ours);
+        DataType now = shared.getDataType(path, name);
+        if (now == null) return;
+        DataType base = now instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+            ? def.getBaseDataType() : now;
+        if (base instanceof ghidra.program.model.data.Composite composite) {
+            for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+                String kept = comments.get(component.getOffset() + ":" + component.getLength());
+                String comment = component.getComment();
+                if (kept != null && (comment == null || comment.isEmpty())) component.setComment(kept);
+            }
+        }
+        String said = base.getDescription();
+        if (description != null && !description.isEmpty() && (said == null || said.isEmpty())) {
+            try { base.setDescription(description); } catch (Exception refused) { /* a type that keeps none */ }
+        }
+    }
+
     private static void replaceShared(FileDataTypeManager shared, DataType theirs, DataType ours) throws Exception {
         try {
             shared.replaceDataType(theirs, ours, true);

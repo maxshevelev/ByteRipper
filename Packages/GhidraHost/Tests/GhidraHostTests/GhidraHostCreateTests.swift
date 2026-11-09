@@ -805,6 +805,26 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             XCTAssertTrue("\(error)".contains("CUT_PPI"), "\(error)")
         }
         XCTAssertEqual(try versions().count, 2, "nothing written")
+
+        // A cut from a module that never wrote the shared copy's comments
+        // keeps them: an amendment only adds. The refused move first goes back.
+        try await define("typedef struct _CUT_PPI { unsigned int Size; unsigned char Unknown04[8]; void *Function0C; "
+            + "unsigned char Unknown10[4]; void *Function14; void *Function18; void *Function1C; void *Function20; } CUT_PPI;")
+        try await define("typedef struct _SAID_PPI { unsigned int Size; unsigned char Unknown04[8]; void *Function0C; } SAID_PPI;")
+        _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
+            "name": "SAID_PPI", "comments": ["Size": "bytes the installer filled", "Function0C": "called at boot"]]))
+        _ = try await host.publish(module, by: "agent")
+        for name in ["SAID_PPI", "_SAID_PPI"] {
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["name": name, "delete": true]))
+        }
+        try await define("typedef struct _SAID_PPI { unsigned int Size; void *Function04; unsigned char Unknown08[4]; void *Function0C; } SAID_PPI;")
+        let said = try await host.publish(module, by: "agent")
+        XCTAssertEqual(said.typeConflicts, [])
+        let shared = try json(await host.read(module, "/v1/type?name=SAID_PPI"))["shared"] as? [String: Any]
+        let c = shared?["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("Function04"), c)
+        XCTAssertTrue(c.contains("bytes the installer filled"), c)
+        XCTAssertTrue(c.contains("called at boot"), c)
     }
 
     func testSharedTypesComeInVersionsAndAReplacementRefusesThePublish() async throws {
