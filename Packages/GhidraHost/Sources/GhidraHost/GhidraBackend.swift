@@ -222,7 +222,7 @@ extension GhidraHost: GhidraBackend {
     }
 
     public func forgetModule(_ module: SHA256Digest) async throws -> Data {
-        try Self.encode(["trashed": try await forget(module).path])
+        try Self.encode(try await forget(module).answer)
     }
 
     /// Reported by this host's own holder — the server's local MCP.

@@ -1012,8 +1012,22 @@ public actor GhidraHost {
     /// the analysis store touched. The revisions, their artifacts and the
     /// shared review types stay; the module opens again from its bytes and is
     /// analysed afresh. Answers where the folder went.
+    /// What `forget` moved to the Trash: the working folder, and the store's
+    /// copy of the project when the store kept one.
+    public struct Forgotten: Sendable {
+        public var folder: URL
+        public var storeCopy: URL?
+
+        /// The answer the tool and the route give.
+        public var answer: [String: String] {
+            var answer = ["trashed": folder.path]
+            if let storeCopy { answer["store_copy_trashed"] = storeCopy.path }
+            return answer
+        }
+    }
+
     @discardableResult
-    public func forget(_ module: SHA256Digest, holder: String? = nil) async throws -> URL {
+    public func forget(_ module: SHA256Digest, holder: String? = nil) async throws -> Forgotten {
         // Another holder's module is not let go under it; the holder's own
         // lease goes with the project.
         if let held = leaseBook.leases[module.hex], held.holder != holderName(holder) {
@@ -1030,10 +1044,14 @@ public actor GhidraHost {
         try FileManager.default.trashItem(at: project.folder, resultingItemURL: &trashed)
         // The store's copy goes with it, or the next open would bring the same
         // program back: to the Trash too, as recoverable as the folder.
+        var storeCopy: URL?
         if let kept = try await writer.readProject(module: module) {
-            try FileManager.default.trashItem(at: kept.file.deletingLastPathComponent(), resultingItemURL: nil)
+            var moved: NSURL?
+            let folder = kept.file.deletingLastPathComponent()
+            try FileManager.default.trashItem(at: folder, resultingItemURL: &moved)
+            storeCopy = (moved as URL?) ?? folder
         }
-        return (trashed as URL?) ?? project.folder
+        return Forgotten(folder: (trashed as URL?) ?? project.folder, storeCopy: storeCopy)
     }
 
     // MARK: - Owners

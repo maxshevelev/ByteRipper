@@ -4602,6 +4602,7 @@ public class Owner {
         Address at = address(required(body, "address"));
         Function function = program.getFunctionManager().getFunctionAt(at);
         boolean created = false;
+        java.util.Map<Address, Long> bodiesBefore = null;
         if (function == null) {
             // A function made inside another function's body splits it: the
             // jump the body already had into the address becomes a call of
@@ -4625,6 +4626,7 @@ public class Owner {
                     throw new Failure(400, "no instruction decodes at " + hex(at));
                 }
             }
+            bodiesBefore = bodySizes();
             ghidra.app.cmd.function.CreateFunctionCmd command = new ghidra.app.cmd.function.CreateFunctionCmd(at);
             if (!command.applyTo(program, TaskMonitor.DUMMY)) {
                 throw new Failure(400, "Ghidra made no function at " + hex(at)
@@ -4649,6 +4651,24 @@ public class Owner {
         answer.addProperty("created", created);
         answer.addProperty("size", function.getBody().getNumAddresses());
         if (tailCalls.size() > 0) answer.add("tail_calls", tailCalls);
+        if (bodiesBefore != null) {
+            // A neighbour whose body the new function took bytes from, or
+            // that lost its body to the tail-call marks, is said by name.
+            JsonArray shrunk = new JsonArray();
+            for (java.util.Map.Entry<Address, Long> was : bodiesBefore.entrySet()) {
+                Function other = program.getFunctionManager().getFunctionAt(was.getKey());
+                long now = other == null ? 0 : other.getBody().getNumAddresses();
+                if (now >= was.getValue() || was.getKey().equals(at)) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("entry", hex(was.getKey()));
+                item.addProperty("name", other == null ? null : other.getName());
+                item.addProperty("size_before", was.getValue());
+                item.addProperty("size", now);
+                if (other == null) item.addProperty("removed", true);
+                shrunk.add(item);
+            }
+            if (shrunk.size() > 0) answer.add("bodies_shrunk", shrunk);
+        }
         return answer;
     }
 
@@ -4742,6 +4762,7 @@ public class Owner {
         Address entry = function.getEntryPoint();
         String name = function.getName();
         long size = function.getBody().getNumAddresses();
+        java.util.Map<Address, String> thunks = thunksOf(function);
         program.getFunctionManager().removeFunction(entry);
         decompiled.remove(entry);
         JsonObject answer = identity();
@@ -4749,6 +4770,8 @@ public class Owner {
         answer.addProperty("name", name);
         answer.addProperty("size", size);
         answer.addProperty("deleted", true);
+        JsonArray thunksGone = thunksGone(thunks);
+        if (thunksGone.size() > 0) answer.add("thunks_removed", thunksGone);
         answer.addProperty("matched", at.equals(entry) ? "entry" : "containing");
         return answer;
     }
@@ -4840,6 +4863,7 @@ public class Owner {
         String goneName = from.getName();
         Address kept = into.getEntryPoint();
         String keptName = into.getName();
+        java.util.Map<Address, String> thunks = thunksOf(from);
         program.getFunctionManager().removeFunction(gone);
         // Removing a function can drop the object held for its neighbour: read
         // again, a stale one answers "Object has been deleted" to setBody.
@@ -4866,6 +4890,8 @@ public class Owner {
         answer.addProperty("name", into.getName());
         answer.addProperty("size", into.getBody().getNumAddresses());
         answer.addProperty("merged", hex(gone));
+        JsonArray thunksGone = thunksGone(thunks);
+        if (thunksGone.size() > 0) answer.add("thunks_removed", thunksGone);
         return answer;
     }
 
@@ -4954,6 +4980,7 @@ public class Owner {
             || program.getListing().getDefinedData(range, true).hasNext()) {
             throw new Failure(409, "defined data lies in " + hex(start) + ".." + hex(end) + ": clear it first");
         }
+        java.util.List<KeptMarks> kept = keepMarks(new ghidra.program.model.address.AddressSet(clearFrom, clearTo));
         program.getListing().clearCodeUnits(clearFrom, clearTo, false);
 
         java.math.BigInteger value = java.math.BigInteger.valueOf(bits == 16 ? 0 : 1);
@@ -4968,6 +4995,12 @@ public class Owner {
         if (clearFrom.compareTo(start) < 0) {
             new ghidra.app.cmd.disassemble.DisassembleCommand(clearFrom, null, true).applyTo(program, TaskMonitor.DUMMY);
         }
+        // The bytes an instruction past the range held are decoded again too,
+        // in the mode that is there, as `redecode` does.
+        if (clearTo.compareTo(last) > 0 && program.getListing().getInstructionContaining(end) == null) {
+            new ghidra.app.cmd.disassemble.DisassembleCommand(end, null, true).applyTo(program, TaskMonitor.DUMMY);
+        }
+        JsonArray marksLost = restoreMarks(kept);
 
         Function atStart = program.getFunctionManager().getFunctionAt(start);
         if (atStart != null) touched.add(start);
@@ -4989,6 +5022,7 @@ public class Owner {
         answer.addProperty("bits", bits);
         answer.addProperty("instructions", decoded);
         answer.add("functions", functions);
+        if (marksLost.size() > 0) answer.add("marks_lost", marksLost);
         return answer;
     }
 
@@ -5159,6 +5193,15 @@ public class Owner {
         }
         ghidra.program.model.symbol.Equate equate;
         if (owner != null) {
+            // A plain equate of this name moves to the member below — only
+            // when it stands for the same value, or its other operands would
+            // read as a value they do not hold.
+            ghidra.program.model.symbol.Equate same = table.getEquate(name);
+            if (same != null && same.getValue() != held && same.getValue() != signed) {
+                throw new Failure(409, name + " already stands for 0x" + Long.toHexString(same.getValue()).toUpperCase()
+                    + " on " + same.getReferenceCount() + " operand(s), not 0x" + Long.toHexString(held).toUpperCase()
+                    + "; nothing was changed");
+            }
             long member = member(owner, name, held, signed, comment);
             if (enumComment != null) owner.setDescription(enumComment.isBlank() ? null : enumComment);
             Harvest.recordType(program, owner.getName(), ExportCode.typeC(owner));
@@ -5315,6 +5358,7 @@ public class Owner {
             Function owner = program.getFunctionManager().getFunctionContaining(instruction.getMinAddress());
             if (owner != null) touched.add(owner.getEntryPoint());
         }
+        java.util.List<KeptMarks> kept = keepMarks(cleared);
         program.getListing().clearCodeUnits(clearFrom, clearTo, false);
         new ghidra.app.cmd.disassemble.DisassembleCommand(new ghidra.program.model.address.AddressSet(start), range, true)
             .applyTo(program, TaskMonitor.DUMMY);
@@ -5357,16 +5401,222 @@ public class Owner {
             ghidra.app.cmd.function.CreateFunctionCmd.fixupFunctionBody(program, function, TaskMonitor.DUMMY);
             functions.add(hex(entry));
         }
+        JsonArray marksLost = restoreMarks(kept);
         changeReason(Harvest.CODE_REASON, start, body);
 
         JsonObject answer = identity();
         answer.addProperty("start", hex(start));
         answer.addProperty("end", hex(end));
         answer.add("instructions", decoded);
+        if (marksLost.size() > 0) answer.add("marks_lost", marksLost);
         answer.add("functions", functions);
         if (removed.size() > 0) answer.add("functions_removed", removed);
         if (inside.size() > 0) answer.add("entries_inside_instructions", inside);
         return answer;
+    }
+
+    /**
+     * Where the program still uses `type`: another type built on it, a datum,
+     * a function's return, parameter or local. At most `limit` places, each
+     * said in a few words.
+     */
+    private java.util.List<String> typeUsedBy(DataType type, int limit) {
+        java.util.List<String> uses = new java.util.ArrayList<>();
+        java.util.Map<DataType, Boolean> memo = new java.util.IdentityHashMap<>();
+        java.util.Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
+        while (all.hasNext() && uses.size() < limit) {
+            DataType other = all.next();
+            if (other == type) continue;
+            if (!(other instanceof ghidra.program.model.data.Pointer) && !(other instanceof ghidra.program.model.data.Array)
+                && builtOn(other, type, memo)) uses.add("type " + other.getName());
+        }
+        for (Data datum : program.getListing().getDefinedData(true)) {
+            if (uses.size() >= limit) break;
+            if (builtOn(datum.getDataType(), type, memo)) uses.add("data at " + hex(datum.getMinAddress()));
+        }
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            if (uses.size() >= limit) break;
+            if (builtOn(function.getReturnType(), type, memo)) {
+                uses.add("return of " + function.getName());
+                continue;
+            }
+            for (ghidra.program.model.listing.Variable variable : function.getAllVariables()) {
+                if (builtOn(variable.getDataType(), type, memo)) {
+                    uses.add(variable.getName() + " in " + function.getName());
+                    break;
+                }
+            }
+        }
+        return uses;
+    }
+
+    /** Whether `type` is `target` or is made of it: pointer, array, typedef, field, signature. */
+    private static boolean builtOn(DataType type, DataType target, java.util.Map<DataType, Boolean> memo) {
+        if (type == null) return false;
+        if (type == target || type.isEquivalent(target) && type.getName().equals(target.getName())) return true;
+        Boolean known = memo.get(type);
+        if (known != null) return known;
+        memo.put(type, false);
+        boolean found = false;
+        if (type instanceof ghidra.program.model.data.Pointer pointer) found = builtOn(pointer.getDataType(), target, memo);
+        else if (type instanceof ghidra.program.model.data.Array array) found = builtOn(array.getDataType(), target, memo);
+        else if (type instanceof ghidra.program.model.data.TypeDef typedef) found = builtOn(typedef.getDataType(), target, memo);
+        else if (type instanceof ghidra.program.model.data.Composite composite) {
+            for (ghidra.program.model.data.DataTypeComponent field : composite.getDefinedComponents()) {
+                if (builtOn(field.getDataType(), target, memo)) { found = true; break; }
+            }
+        } else if (type instanceof ghidra.program.model.data.FunctionDefinition signature) {
+            found = builtOn(signature.getReturnType(), target, memo);
+            for (ghidra.program.model.data.ParameterDefinition parameter : signature.getArguments()) {
+                if (found) break;
+                found = builtOn(parameter.getDataType(), target, memo);
+            }
+        }
+        memo.put(type, found);
+        return found;
+    }
+
+    /** The thunks that point at `function`: Ghidra removes them with it. */
+    private java.util.Map<Address, String> thunksOf(Function function) {
+        java.util.Map<Address, String> thunks = new java.util.TreeMap<>();
+        Address[] addresses = function.getFunctionThunkAddresses(false);
+        if (addresses != null) {
+            for (Address address : addresses) {
+                Function thunk = program.getFunctionManager().getFunctionAt(address);
+                if (thunk != null) thunks.put(address, thunk.getName());
+            }
+        }
+        return thunks;
+    }
+
+    /** Of the thunks kept by `thunksOf`, those that are gone now. */
+    private JsonArray thunksGone(java.util.Map<Address, String> thunks) {
+        JsonArray gone = new JsonArray();
+        for (java.util.Map.Entry<Address, String> thunk : thunks.entrySet()) {
+            if (program.getFunctionManager().getFunctionAt(thunk.getKey()) != null) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("entry", hex(thunk.getKey()));
+            item.addProperty("name", thunk.getValue());
+            gone.add(item);
+        }
+        return gone;
+    }
+
+    /** Every function's body size, by entry. */
+    private java.util.Map<Address, Long> bodySizes() {
+        java.util.Map<Address, Long> sizes = new java.util.HashMap<>();
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            sizes.put(function.getEntryPoint(), function.getBody().getNumAddresses());
+        }
+        return sizes;
+    }
+
+    /** A function's stored locals, as `name@storage`. */
+    private java.util.Set<String> storedLocals(Function function) {
+        java.util.Set<String> locals = new java.util.LinkedHashSet<>();
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            locals.add(local.getName() + "@" + local.getVariableStorage());
+        }
+        return locals;
+    }
+
+    /**
+     * The stored locals a retype took away: a wider type takes the storage
+     * of the locals it now covers, and Ghidra removes them. Their names are
+     * the review's, so they are said.
+     */
+    private JsonArray localsRemoved(Function function, java.util.Set<String> before, String applied) {
+        java.util.Set<String> now = storedLocals(function);
+        JsonArray removed = new JsonArray();
+        for (String local : before) {
+            if (now.contains(local)) continue;
+            int at = local.indexOf('@');
+            String name = local.substring(0, at);
+            if (name.equals(applied)) continue;
+            boolean renamedOnly = false;
+            for (String other : now) if (other.startsWith(name + "@")) renamedOnly = true;
+            if (renamedOnly) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("name", name);
+            item.addProperty("storage", local.substring(at + 1));
+            removed.add(item);
+        }
+        return removed;
+    }
+
+    /**
+     * What a review set on one instruction that a clear of the listing takes
+     * with it: the equates on its operands, a flow override, a fall-through
+     * override. Kept before `redecode` and `code_mode` clear a range and put
+     * back on the instruction decoded again at the same address with the same
+     * mnemonic; what has no such instruction to go back on is reported, never
+     * dropped without a word.
+     */
+    private record KeptMarks(Address at, String mnemonic, java.util.List<Object[]> equates,
+                             ghidra.program.model.listing.FlowOverride flow, boolean fallThroughSet,
+                             Address fallThrough) {}
+
+    private java.util.List<KeptMarks> keepMarks(ghidra.program.model.address.AddressSetView cleared) {
+        java.util.List<KeptMarks> kept = new java.util.ArrayList<>();
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        for (Instruction instruction : program.getListing().getInstructions(cleared, true)) {
+            Address at = instruction.getMinAddress();
+            java.util.List<Object[]> equates = new java.util.ArrayList<>();
+            for (ghidra.program.model.symbol.Equate equate : table.getEquates(at)) {
+                for (ghidra.program.model.symbol.EquateReference reference : equate.getReferences(at)) {
+                    equates.add(new Object[] { equate.getName(), equate.getValue(), (int) reference.getOpIndex() });
+                }
+            }
+            ghidra.program.model.listing.FlowOverride flow = instruction.getFlowOverride();
+            boolean fallThroughSet = instruction.isFallThroughOverridden();
+            Address fallThrough = fallThroughSet ? instruction.getFallThrough() : null;
+            if (equates.isEmpty() && flow == ghidra.program.model.listing.FlowOverride.NONE && !fallThroughSet) continue;
+            kept.add(new KeptMarks(at, instruction.getMnemonicString(), equates, flow, fallThroughSet, fallThrough));
+        }
+        return kept;
+    }
+
+    /** Puts kept marks back; answers what found no instruction to go back on. */
+    private JsonArray restoreMarks(java.util.List<KeptMarks> kept) throws Exception {
+        JsonArray lost = new JsonArray();
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        for (KeptMarks marks : kept) {
+            Instruction now = program.getListing().getInstructionAt(marks.at());
+            boolean same = now != null && now.getMnemonicString().equals(marks.mnemonic());
+            JsonArray gone = new JsonArray();
+            for (Object[] equate : marks.equates()) {
+                String name = (String) equate[0];
+                long value = (Long) equate[1];
+                int operand = (Integer) equate[2];
+                if (!same || operand >= now.getNumOperands()) {
+                    gone.add("equate " + name + " on operand " + operand);
+                    continue;
+                }
+                ghidra.program.model.symbol.Equate target = table.getEquate(name);
+                if (target == null) target = table.createEquate(name, value);
+                boolean there = false;
+                for (ghidra.program.model.symbol.EquateReference reference : target.getReferences(marks.at())) {
+                    if (reference.getOpIndex() == operand) there = true;
+                }
+                if (!there) target.addReference(marks.at(), operand);
+            }
+            if (marks.flow() != ghidra.program.model.listing.FlowOverride.NONE) {
+                if (same) now.setFlowOverride(marks.flow());
+                else gone.add("flow override " + marks.flow());
+            }
+            if (marks.fallThroughSet()) {
+                if (same) now.setFallThrough(marks.fallThrough());
+                else gone.add("fall-through " + (marks.fallThrough() == null ? "none" : hex(marks.fallThrough())));
+            }
+            if (gone.size() == 0) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("address", hex(marks.at()));
+            item.addProperty("was", marks.mnemonic());
+            item.addProperty("now", now == null ? null : now.toString());
+            item.add("lost", gone);
+            lost.add(item);
+        }
+        return lost;
     }
 
     /** Why a change other than a name was made, kept apart from the name's reason. */
@@ -5466,6 +5716,7 @@ public class Owner {
             // one, the call is refused and the transaction rolls back: the
             // storage is named whole, or nothing changes.
             String where = storage;
+            java.util.Set<String> sharedBefore = type != null ? storedLocals(function) : null;
             for (int round = 0; round < 6; round++) {
                 HighFunction current = decompile(function).getHighFunction();
                 HighSymbol goal = null;
@@ -5531,6 +5782,10 @@ public class Owner {
             answer.addProperty("storage_unchanged", nowStorage.equals(storage));
             answer.add("symbols", reported);
             answer.addProperty("applied", true);
+            if (sharedBefore != null) {
+                JsonArray removed = localsRemoved(function, sharedBefore, applied);
+                if (removed.size() > 0) answer.add("locals_removed", removed);
+            }
             return answer;
         }
         HighSymbol match = null;
@@ -5639,6 +5894,7 @@ public class Owner {
         String applied = name != null ? name : match.getName();
         String asked = match.getName();
         String askedStorage = match.getStorage().toString();
+        java.util.Set<String> localsBefore = type != null ? storedLocals(function) : null;
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
@@ -5652,6 +5908,10 @@ public class Owner {
         answer.addProperty("function", hex(function.getEntryPoint()));
         answer.addProperty("name", applied);
         if (typeUnchanged != null) answer.addProperty("type_unchanged", typeUnchanged);
+        if (localsBefore != null) {
+            JsonArray removed = localsRemoved(function, localsBefore, applied);
+            if (removed.size() > 0) answer.add("locals_removed", removed);
+        }
         HighFunction after = decompile(function).getHighFunction();
         if (after != null) {
             // The decompiler can leave a name out again, as it does for an
@@ -6240,6 +6500,8 @@ public class Owner {
 
     private JsonObject setData(JsonObject body) throws Exception {
         JsonObject answerCleared = null;
+        JsonArray dataCleared = new JsonArray();
+        String replacedType = null;
         Address address = address(required(body, "address"));
         if (body.has("type") && !body.get("type").isJsonNull()) {
             // A datum needs bytes: outside the image there are none, so an
@@ -6251,6 +6513,29 @@ public class Owner {
             }
             DataType type = type(body.get("type").getAsString());
             answerCleared = clearCodeForDatum(address, type, body.has("clear_code") && body.get("clear_code").getAsBoolean());
+            // The data the new datum overlaps — one it sits inside included —
+            // is cleared by Ghidra; it is said, not dropped without a word.
+            int length = Math.max(1, type.getLength());
+            Address lastByte = address.add(length - 1);
+            java.util.Map<Address, Data> overlapped = new java.util.TreeMap<>();
+            Data enclosing = program.getListing().getDefinedDataContaining(address);
+            if (enclosing != null) overlapped.put(enclosing.getMinAddress(), enclosing);
+            for (Data each : program.getListing().getDefinedData(new AddressSet(address, lastByte), true)) {
+                overlapped.put(each.getMinAddress(), each);
+            }
+            for (Data each : overlapped.values()) {
+                if (each.getMinAddress().equals(address) && each.getLength() <= length) {
+                    replacedType = each.getDataType().getDisplayName();
+                    continue;
+                }
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(each.getMinAddress()));
+                item.addProperty("type", each.getDataType().getDisplayName());
+                item.addProperty("size", each.getLength());
+                Symbol label = program.getSymbolTable().getPrimarySymbol(each.getMinAddress());
+                if (label != null && !label.isDynamic()) item.addProperty("name", label.getName());
+                dataCleared.add(item);
+            }
             DataUtilities.createData(program, address, type, -1,
                                      DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
             if (program.getListing().getDefinedDataAt(address) == null) {
@@ -6271,6 +6556,10 @@ public class Owner {
             primary.delete();
         } else if (name != null) {
             Symbol primary = program.getSymbolTable().getPrimarySymbol(address);
+            if (primary != null && primary.getSymbolType() == ghidra.program.model.symbol.SymbolType.FUNCTION) {
+                throw new Failure(409, hex(address) + " is the entry of the function " + primary.getName()
+                    + ": a function is renamed with ghidra_rename; nothing was changed");
+            }
             try {
                 if (primary != null && !primary.isDynamic()) primary.setName(name, SourceType.USER_DEFINED);
                 else program.getSymbolTable().createLabel(address, name, SourceType.USER_DEFINED);
@@ -6288,6 +6577,10 @@ public class Owner {
         Symbol named = program.getSymbolTable().getPrimarySymbol(address);
         answer.addProperty("name", named == null ? null : named.getName());
         if (answerCleared != null) answer.add("code_cleared", answerCleared);
+        if (replacedType != null && datum != null && !replacedType.equals(datum.getDataType().getDisplayName())) {
+            answer.addProperty("replaced_type", replacedType);
+        }
+        if (dataCleared.size() > 0) answer.add("data_cleared", dataCleared);
         return answer;
     }
 
@@ -6339,6 +6632,13 @@ public class Owner {
             DataType found = find(program.getDataTypeManager(), name.trim());
             if (found == null || found.getDataTypeManager() != program.getDataTypeManager()) {
                 throw new Failure(404, "no type " + name + " of this program to delete; archives are read-only here");
+            }
+            // Ghidra removes a used type too, and every use turns to bytes
+            // under an ok: refused while anything still names it.
+            java.util.List<String> uses = typeUsedBy(found, 8);
+            if (!uses.isEmpty()) {
+                throw new Failure(409, found.getName() + " is still used — " + String.join("; ", uses)
+                    + " — retype those first; nothing was deleted");
             }
             try {
                 if (!program.getDataTypeManager().remove(found)) {

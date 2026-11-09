@@ -373,13 +373,13 @@ enum GhidraRoutes {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
-        // The kept project let go: the owner stopped and the folder moved to
-        // the Trash. Nothing of the store is touched — the revisions, their
+        // The kept project let go: the owner stopped, the folder and the
+        // store's copy of the project moved to the Trash. The revisions, their
         // artifacts and the shared review types stay.
         router.add("DELETE", "\(prefix)/modules/:module", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
-            let trashed = try await answer { try await host.forget(module, holder: holder(request)) }
-            return .json(["trashed": trashed.path])
+            let forgotten = try await answer { try await host.forget(module, holder: holder(request)) }
+            return .json(forgotten.answer)
         }
 
         // The module taken into work by the token's holder (stage 2.4): only

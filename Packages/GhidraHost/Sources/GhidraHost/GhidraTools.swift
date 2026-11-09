@@ -866,7 +866,8 @@ public enum GhidraTools {
                   + "there splits the body it belongs to. Undo a split with `ghidra_function_delete` or "
                   + "`ghidra_function_merge` first. A function made where another function ends by jumping "
                   + "(`JMP` to this entry) makes that jump a tail call, so the other function's C calls this one "
-                  + "instead of holding its body; `tail_calls` lists each jump marked.",
+                  + "instead of holding its body; `tail_calls` lists each jump marked. A neighbour whose body "
+                  + "lost bytes to the new function is listed in `bodies_shrunk` with its size before and now.",
                   ["address": AgentSchema.string("The entry address, e.g. the value in the table's slot."),
                    "name": AgentSchema.string("A name for it, optional."),
                    "reason": AgentSchema.string("Why this name, in a few words.")],
@@ -880,7 +881,8 @@ public enum GhidraTools {
                   + "disassembled; what the function said about them is gone, and the next publish drops it "
                   + "from the analysis. This is how a split is undone: `ghidra_function_create` refuses to make "
                   + "a function inside another function's body, and a body the analysis split on a conditional "
-                  + "jump is removed here and the right one made again.",
+                  + "jump is removed here and the right one made again. Ghidra removes the thunks that point "
+                  + "at the function with it; `thunks_removed` names them.",
                   ["address": AgentSchema.string("The function's entry, or any address inside it.")],
                   required: ["address"]) { arguments in
                 try optional(arguments, ["address"])
@@ -922,7 +924,8 @@ public enum GhidraTools {
                   + "analysis made, where a conditional jump inside a body it took for a function left half "
                   + "of it as a function of its own. Both are named by entry or any address inside them, as "
                   + "`ghidra_function` lists them; the answer gives the survivor's entry, name and size. "
-                  + "Merging a function into itself, or one that is already part of the other, is refused.",
+                  + "Merging a function into itself, or one that is already part of the other, is refused. "
+                  + "The thunks that pointed at `from` go with it; `thunks_removed` names them.",
                   ["into": AgentSchema.string("The function that keeps its entry and name."),
                    "from": AgentSchema.string("The function that becomes part of it.")],
                   required: ["into", "from"]) { arguments in
@@ -950,6 +953,8 @@ public enum GhidraTools {
                     address, `storage` and `first_use` — and those rename the holder, even one the \
                     decompiler no longer shows (the answer then says `stale: true`); freeing the name \
                     is what lets the local take it. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed. \
+                    A wider type takes the storage of the locals it now covers and Ghidra removes them: \
+                    `locals_removed` names each with its storage. \
                     The answer gives the `type` the local holds after the call. A type it holds already, by the \
                     same name, is not written again — the answer says `type_unchanged` — while a typedef over \
                     the same base (`UINT64` for `ulonglong`) is applied, since the C prints its name.
@@ -1136,8 +1141,10 @@ public enum GhidraTools {
                   + "function whose entry now falls inside an instruction was cut at a false boundary: one "
                   + "Ghidra named is removed (`functions_removed`), one a review named stays and is reported "
                   + "(`entries_inside_instructions`) for `ghidra_function_delete` or `ghidra_function_merge`. "
-                  + "Defined data in the range is refused: clear it first. For 16-bit code in a 32-bit module "
-                  + "use `ghidra_code_mode`.",
+                  + "Defined data in the range is refused: clear it first. The equates and the flow and "
+                  + "fall-through overrides on the instructions there are put back on each instruction decoded "
+                  + "again at the same address with the same mnemonic; `marks_lost` lists what had no such "
+                  + "instruction to go back on. For 16-bit code in a 32-bit module use `ghidra_code_mode`.",
                   ["start": AgentSchema.string("The address the true instruction starts at."),
                    "end": AgentSchema.string("The first address past the range: [start, end)."),
                    "reason": AgentSchema.string("What shows the boundary was wrong.")],
@@ -1149,7 +1156,10 @@ public enum GhidraTools {
                   + "16-bit code at its reset vector (real mode, before the switch to protected mode), "
                   + "which Ghidra decodes as 32-bit and so gets wrong: overlapping instructions, nonsense "
                   + "C. The instructions in the range are cleared and decoded again from `start` in the "
-                  + "given size, without leaving the range; functions there get their bodies fixed. "
+                  + "given size, without leaving the range; functions there get their bodies fixed, and the "
+                  + "bytes an instruction reaching past `end` held are decoded again in the mode there. "
+                  + "Equates and flow overrides come back as with `ghidra_redecode`; `marks_lost` lists "
+                  + "what could not. "
                   + "Addresses stay offsets: real-mode segments are not modelled, so a `cs:[F490h]` "
                   + "operand names F490h, not where it lands. `ghidra_disassembly` marks 16-bit "
                   + "instructions `bits: 16`. Defined data in the range is refused: clear it first.",
@@ -1221,7 +1231,10 @@ public enum GhidraTools {
                   + "holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as "
                   + "an MMIO register, takes a name without `type` (there are no bytes to type, and a type is refused) "
                   + "and `outside_memory` says so: the C prints it where the code uses "
-                  + "that address, and `ghidra_data` and the artifact's symbols do not list it.",
+                  + "that address, and `ghidra_data` and the artifact's symbols do not list it. Data the new "
+                  + "datum overlaps, or sits inside, is cleared and listed in `data_cleared`; a datum it replaces "
+                  + "at the same address is `replaced_type`. A name at a function's entry is refused: that is "
+                  + "`ghidra_rename`'s.",
                   ["address": AgentSchema.string("The address."),
                    "clear_code": AgentSchema.boolean("Remove instructions the type covers and shorten the body."),
                    "name": AgentSchema.string("Its name; empty removes the label."),
@@ -1273,7 +1286,8 @@ public enum GhidraTools {
                   + "unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is "
                   + "written, and `size` beside the field offsets is how a wrong layout shows. "
                   + "`delete: true` with `name` removes a type the program holds — a probe or a mistake — so a "
-                  + "publish cannot carry it; a type an archive holds is refused. With `shared: true` and a "
+                  + "publish cannot carry it; a type an archive holds is refused, and so is one still used by "
+                  + "another type, a datum or a function's signature or locals, naming where. With `shared: true` and a "
                   + "`reason` it takes a type out of the shared review archive instead: a name that turned out "
                   + "false. The typedef and its tag go together, and it is refused while another archive type "
                   + "uses them, naming those. Who and why are recorded and shown by `ghidra_type_definition` "
@@ -1466,10 +1480,11 @@ public enum GhidraTools {
             name: "ghidra_forget",
             title: "Let a module's kept project go",
             description: """
-                Stops the module's owner and moves its kept Ghidra project to the Trash, and answers \
-                where it went. Nothing of the analysis store is touched: the module's revisions, their \
-                artifacts and the shared review types stay, and the module opens again from its bytes \
-                and is analysed afresh. This is for a project whose program cannot be put right — an \
+                Stops the module's owner and moves its kept Ghidra project to the Trash — the working \
+                folder (`trashed`) and the store's copy of the project, which would otherwise bring the \
+                same program back (`store_copy_trashed`, when the store kept one) — and answers where \
+                they went. The module's revisions, their artifacts and the shared review types stay, and \
+                the module opens again from its bytes and is analysed afresh. This is for a project whose program cannot be put right — an \
                 analysis gone wrong that a re-run should replace. Publish what is worth keeping first: \
                 the store is the only part that survives.
                 """,

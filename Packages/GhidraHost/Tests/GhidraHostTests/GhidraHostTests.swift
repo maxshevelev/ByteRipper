@@ -259,8 +259,11 @@ final class GhidraHostOwnerTests: XCTestCase {
             }
         }
 
-        let trashed = try await host.forget(module)
+        let forgotten = try await host.forget(module)
+        let trashed = forgotten.folder
         addTeardownBlock { try? FileManager.default.removeItem(at: trashed) }
+        if let copy = forgotten.storeCopy { addTeardownBlock { try? FileManager.default.removeItem(at: copy) } }
+        XCTAssertEqual(forgotten.answer["store_copy_trashed"] != nil, forgotten.storeCopy != nil)
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path), "the project folder is gone")
         XCTAssertTrue(FileManager.default.fileExists(atPath: trashed.path), "and it is in the Trash")
         XCTAssertNil(try store.project(module: module), "the store keeps no copy of it")

@@ -473,7 +473,12 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         } catch let error as GhidraHostError {
             XCTAssertTrue("\(error)".contains("without `type`"), "\(error)")
         }
-        let inside = try await entries().first
+        // Inside the image, past a function's entry: the entry itself is
+        // the function's name, which set_data refuses.
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        let code = try await read("/v1/disassembly/\(entry)")["instructions"] as? [[String: Any]] ?? []
+        let inside = code.dropFirst().first?["address"] as? String
         let named = try await post("/v1/set/data", ["address": try XCTUnwrap(inside), "name": "ProbeInside"])
         XCTAssertNil(named["outside_memory"], "\(named)")
         let removed = try await post("/v1/set/data", ["address": "0xFED81730", "name": ""])
