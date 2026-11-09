@@ -6657,6 +6657,8 @@ public class Owner {
         String c = string(body, "c", null);
         DataType resolved;
         int commentsKept = 0;
+        int cComments = 0;
+        JsonArray cUnplaced = null;
         boolean unchanged = false;
         if (c != null) {
             // Read before the parser touches the manager: CParser adds a type
@@ -6695,8 +6697,22 @@ public class Owner {
             if (resolved == null) {
                 resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             }
+            resolved = keepCategories(resolved, previous);
             commentsKept = restoreComments(resolved, kept);
             restoreDescriptions(resolved, keptDescriptions);
+            // Ghidra's C parser drops comments: one written beside a member
+            // in the C is that member's comment, as `comments` would give it.
+            DataType commented = resolved instanceof ghidra.program.model.data.TypeDef def
+                && def.getBaseDataType() != null ? def.getBaseDataType() : resolved;
+            JsonArray unplaced = new JsonArray();
+            for (java.util.Map.Entry<String, String> member : memberComments(c).entrySet()) {
+                if (member.getKey().startsWith("\u0000") || !comment(commented, member.getKey(), member.getValue())) {
+                    unplaced.add(member.getValue());
+                } else {
+                    cComments++;
+                }
+            }
+            if (unplaced.size() > 0) cUnplaced = unplaced;
         } else {
             String name = required(body, "name");
             importTypes(name);
@@ -6735,8 +6751,124 @@ public class Owner {
         // Always present, zero included: a reader must be able to tell "nothing
         // came back" from "this build has no such field".
         answer.addProperty("comments_kept", commentsKept);
+        if (cComments > 0) answer.addProperty("comments_from_c", cComments);
+        if (cUnplaced != null) answer.add("comments_not_placed", cUnplaced);
         answer.addProperty("unchanged", unchanged);
         return answer;
+    }
+
+    /**
+     * A type defined again stays in the category it was in: the parser makes
+     * every type at the root, and the shared review types live in
+     * /ByteRipper, so a correction would otherwise move the program's copy
+     * away from the shared one it is (issue 0718ba54). Answers the type the
+     * program holds now under the declared name.
+     */
+    private DataType keepCategories(DataType resolved, java.util.TreeMap<String, DataType> previous) throws Exception {
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        java.util.List<DataType> moved = new java.util.ArrayList<>();
+        moved.add(resolved);
+        if (resolved instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
+            moved.add(def.getBaseDataType());
+        }
+        DataType answer = resolved;
+        for (DataType type : moved) {
+            DataType before = previous.get(type.getName());
+            if (before == null || type.getDataTypeManager() != manager) continue;
+            ghidra.program.model.data.CategoryPath was = before.getCategoryPath();
+            // Only the shared review types' category: an EDK2 type a review
+            // defines its own way stays a copy of its own beside the archive's.
+            if (!was.getPath().equals("/ByteRipper") && !was.getPath().startsWith("/ByteRipper/")) continue;
+            if (was.equals(type.getCategoryPath())) continue;
+            DataType there = manager.getDataType(was, type.getName());
+            if (there != null && there != type) {
+                // The old copy is still there: its uses go to the new one,
+                // which takes its place in that category.
+                DataType placed = manager.replaceDataType(there, type, true);
+                if (type == resolved) answer = placed;
+            } else {
+                type.setCategoryPath(was);
+            }
+        }
+        return answer;
+    }
+
+    /**
+     * The comments written beside the members of the types a C declares,
+     * by member: one after a member on the line that ends it, or one on the
+     * lines before a member. A comment no member takes is keyed by a NUL and
+     * its order, which no member name can be.
+     */
+    static java.util.LinkedHashMap<String, String> memberComments(String c) {
+        java.util.LinkedHashMap<String, String> found = new java.util.LinkedHashMap<>();
+        java.util.regex.Pattern pointer = java.util.regex.Pattern.compile("\\(\\s*\\*\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\)");
+        java.util.regex.Pattern last = java.util.regex.Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s*$");
+        int depth = 0;
+        int line = 0;
+        StringBuilder member = new StringBuilder();
+        String previous = null;     // the member last ended
+        int previousLine = -1;      // the line its separator is on
+        java.util.List<String> waiting = new java.util.ArrayList<>();
+        int unplaced = 0;
+        for (int i = 0; i < c.length(); i++) {
+            char ch = c.charAt(i);
+            if (ch == '\n') { line++; if (depth == 1) member.append(' '); continue; }
+            if (ch == '/' && i + 1 < c.length() && (c.charAt(i + 1) == '*' || c.charAt(i + 1) == '/')) {
+                boolean block = c.charAt(i + 1) == '*';
+                int end = block ? c.indexOf("*/", i + 2) : c.indexOf('\n', i + 2);
+                if (end < 0) end = c.length();
+                String text = c.substring(i + 2, end).trim();
+                int startLine = line;
+                for (int k = i; k < end; k++) if (c.charAt(k) == '\n') line++;
+                i = block ? end + 1 : end - 1;
+                if (depth != 1 || text.isEmpty()) continue;
+                if (previous != null && previousLine == startLine && member.toString().isBlank()) {
+                    found.merge(previous, text, (a, b) -> a + " " + b);
+                } else {
+                    waiting.add(text);
+                }
+                continue;
+            }
+            if (ch == '{') { depth++; if (depth == 1) { member.setLength(0); previous = null; } else member.append(ch); continue; }
+            if (ch == '}') {
+                depth--;
+                if (depth == 0) {
+                    String name = memberName(member.toString(), pointer, last);
+                    if (name != null) for (String text : waiting) found.merge(name, text, (a, b) -> a + " " + b);
+                    else for (String text : waiting) found.put("\u0000" + (unplaced++), text);
+                    waiting.clear();
+                    member.setLength(0);
+                    previous = null;
+                } else member.append(ch);
+                continue;
+            }
+            if (depth == 1 && (ch == ',' || ch == ';')) {
+                String name = memberName(member.toString(), pointer, last);
+                if (name != null) {
+                    for (String text : waiting) found.merge(name, text, (a, b) -> a + " " + b);
+                    waiting.clear();
+                    previous = name;
+                    previousLine = line;
+                }
+                member.setLength(0);
+                continue;
+            }
+            if (depth >= 1) member.append(ch);
+        }
+        for (String text : waiting) found.put("\u0000" + (unplaced++), text);
+        return found;
+    }
+
+    private static String memberName(String text, java.util.regex.Pattern pointer, java.util.regex.Pattern last) {
+        String member = text.trim();
+        if (member.isEmpty()) return null;
+        java.util.regex.Matcher function = pointer.matcher(member);
+        if (function.find()) return function.group(1);
+        int equals = member.indexOf('=');
+        if (equals >= 0) member = member.substring(0, equals);
+        member = member.replaceAll("\\[[^\\]]*\\]", "").replaceAll(":\\s*\\d+\\s*$", "").trim();
+        java.util.regex.Matcher name = last.matcher(member);
+        return name.find() ? name.group(1) : null;
     }
 
     /**

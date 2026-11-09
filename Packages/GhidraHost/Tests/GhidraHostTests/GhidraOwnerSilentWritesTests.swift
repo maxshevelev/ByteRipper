@@ -138,6 +138,30 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
         throw XCTSkip("no datum takes a UINT8[8]")
     }
 
+    /// Issue 0718ba54: an enum defined again keeps its category, and a
+    /// comment written beside a member in the C is that member's comment.
+    func testATypeDefinedAgainKeepsItsCategoryAndTheCommentsInItsC() async throws {
+        let place = try await immediates(1)[0]
+        let value = try XCTUnwrap(UInt64(place.value.dropFirst(2), radix: 16))
+        _ = try await post("/v1/set/equate", ["address": place.at, "operand": 1, "name": "SILENT_FIRST",
+                                              "enum": "SILENT_KIND", "comment": "kept from before"])
+        let c = """
+            typedef enum _SILENT_KIND {
+                SILENT_FIRST = \(value),
+                SILENT_NEXT = \(value + 1), /* added beside the member */
+                // on the line before
+                SILENT_LAST = \(value + 2)
+            } SILENT_KIND;
+            """
+        let answer = try await post("/v1/type", ["c": c])
+        XCTAssertEqual(answer["path"] as? String, "/ByteRipper/SILENT_KIND", "\(answer)")
+        XCTAssertEqual(answer["comments_from_c"] as? Int, 2, "\(answer)")
+        XCTAssertNil(answer["comments_not_placed"], "\(answer)")
+        let text = answer["c"] as? String ?? ""
+        XCTAssertTrue(text.contains("added beside the member") && text.contains("on the line before")
+                      && text.contains("kept from before"), text)
+    }
+
     func testATypeStillUsedIsNotDeleted() async throws {
         _ = try await post("/v1/type", ["c": "typedef struct _SILENT_INNER { unsigned int A; } SILENT_INNER;"])
         _ = try await post("/v1/type", ["c": "typedef struct _SILENT_OUTER { SILENT_INNER Inner; unsigned int B; } SILENT_OUTER;"])
