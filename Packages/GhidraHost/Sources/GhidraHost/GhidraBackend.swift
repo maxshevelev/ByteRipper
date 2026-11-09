@@ -50,6 +50,8 @@ public protocol GhidraBackend: Sendable {
     func myIssues(limit: Int) async throws -> Data
     /// A call on the review board (`TicketBook`).
     func tickets(_ request: TicketBook.Request) async throws -> Data
+    /// A call on the shared types' proposals (`TypeProposalBook`).
+    func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -72,6 +74,9 @@ public extension GhidraBackend {
     }
     func tickets(_ request: TicketBook.Request) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no review board: there is no analysis server to keep it.")
+    }
+    func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data {
+        throw GhidraHostError(.install, "this backend keeps no type proposals: there is no analysis server to keep them.")
     }
 }
 
@@ -233,6 +238,10 @@ extension GhidraHost: GhidraBackend {
         try await ticketCall(request, holder: configuration.holder)
     }
 
+    public func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data {
+        try await typeProposalCall(request, holder: configuration.holder)
+    }
+
     public nonisolated func myIssues(by reporter: String, limit: Int) async throws -> Data {
         guard let issues else {
             throw GhidraHostError(.install, "this host keeps no reports: there is no analysis server to read them from.")
@@ -344,6 +353,11 @@ public struct GhidraRemote: GhidraBackend {
 
     public func tickets(_ request: TicketBook.Request) async throws -> Data {
         try await call("POST", "tickets", body: try JSONEncoder().encode(request), timeout: 30)
+    }
+
+    /// A proposal reads the module's publish first: as long as a dry run.
+    public func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data {
+        try await call("POST", "type-proposals", body: try JSONEncoder().encode(request), timeout: 3600)
     }
 
     /// The server's answer: nil when no owner has the module open. A server

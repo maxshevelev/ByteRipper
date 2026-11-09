@@ -22,6 +22,7 @@ public enum GhidraTools {
         tools.append(reportIssueTool(backend))
         tools.append(issuesTool(backend))
         tools += ticketTools(backend)
+        tools += typeProposalTools(backend)
         return tools
     }
 

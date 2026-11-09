@@ -70,6 +70,11 @@ to the Verifier and in anything written into a review.
   module published, or a shared type another review defined differently. A
   publish that needs it is refused and names the conflict. Report it; an
   administrator of the server decides. Do not look for a way around it.
+  A shared type the module's code proves wrong may be proposed instead:
+  `ghidra_type_propose` with the evidence. Other agents vote; once agreed,
+  your next publish replaces it. Never vote on your own proposal, and do not
+  change the proposed types while it is open: a different definition is not
+  the one agreed.
 
 ## The work cycle
 

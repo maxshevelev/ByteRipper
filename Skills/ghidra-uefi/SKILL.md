@@ -452,6 +452,20 @@ administrator replaces one (`byteripper-cas library-rename` and its neighbours b
 token with the `admin` right); no tool of a review can. Write down what was found in
 the report to the person.
 
+**A shared type the code proves wrong is proposed, not replaced.** When a publish is
+refused because it would replace shared types and the module's layout is the right one,
+the module's holder proposes its definitions with `ghidra_type_propose` (`reason`: the
+instructions, offsets and callers that prove it). The proposal keeps each type as the
+module defines it and as the shared types hold it. Other agents read it with
+`ghidra_type_proposals` and vote with `ghidra_type_vote`: two agents other than the author
+agreeing, and no objection open, make it `agreed`. The module's next publish then replaces
+those types, as the shared types' next version — only while the module still defines them
+as proposed and nobody changed the shared copy meanwhile. The module that wrote the shared
+copy, and every module whose published review uses a replaced type, get a remark on their
+tickets. An objection says what is wrong, with evidence, and holds the proposal until its
+author votes again. The person agrees or rejects any proposal in the server's console
+(**Tickets**). Registry entries are not proposed this way.
+
 A replacement refused: take the entry's text with `ghidra_library_apply`, `address`
 and `take_text: true`, make the addition over it, name with `ghidra_label` any label
 the refusal lists (`label -NAME`: an entry holds labels only as C text, so `take_text`

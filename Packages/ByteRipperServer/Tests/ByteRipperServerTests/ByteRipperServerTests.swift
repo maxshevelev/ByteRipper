@@ -408,6 +408,14 @@ final class ServerTests: XCTestCase {
         configuration.documentsFile = directory.appendingPathComponent("documents.json")
         configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
         configuration.clientTokenFile = directory.appendingPathComponent("token")
+        // A shared-type proposal already on the board: making one needs a
+        // module in work whose publish would replace a shared type, which is
+        // GhidraHostTypeProposalTests' — here, the votes and the console.
+        let seeded = String(repeating: "ef", count: 32)
+        let proposalID = try await TypeProposalBook(file: configuration.store.appendingPathComponent("private/type-proposals.json"))
+            .propose(.init(module: seeded, name: "Proposer", bits: "Ia32", names: ["VOTE_PPI"],
+                           moduleC: ["VOTE_PPI": "ours"], sharedC: ["VOTE_PPI": "theirs"], origins: [:]),
+                     reason: "Run is called through +0x08", by: .init(author: "Reviewer", holder: "local MCP")).id
         let server = Server(configuration: configuration, log: { _ in })
         let port = try await server.start()
         defer { server.stop() }
@@ -520,6 +528,36 @@ final class ServerTests: XCTestCase {
         XCTAssertEqual(consoleRefused, 403)
         let (ticketsPage, _) = try await call("GET", "admin/tickets", admin)
         XCTAssertEqual(ticketsPage, 200, "the console's page")
+
+        // Shared-type proposals over HTTP: a vote under the token's name, the
+        // holder's proposal refused for a module not in work, the console
+        // lists them and decides one, a client token is refused the console.
+        let openProposals = try JSONSerialization.jsonObject(with: try await remote.typeProposals(.init(action: .list, state: "open")))
+            as? [[String: Any]]
+        XCTAssertEqual(openProposals?.map { $0["id"] as? String }, [proposalID])
+        let voted = try ticket(try await remote.typeProposals(.init(action: .vote, agent: "Verifier · bench-mac",
+                                                                    id: proposalID, choice: .agree)))
+        XCTAssertEqual(voted["agrees"] as? [String], ["Verifier · bench-mac"])
+        XCTAssertEqual(voted["state"] as? String, "open")
+        do {
+            _ = try await remote.typeProposals(.init(action: .propose, agent: "Reviewer · bench-mac", module: seeded,
+                                                     reason: "evidence"))
+            XCTFail("a module not in work proposed")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409, "\(error)")
+        }
+        let (proposalsRefused, _) = try await call("GET", "admin/api/type-proposals", app)
+        XCTAssertEqual(proposalsRefused, 403)
+        let (_, consoleProposals) = try await call("GET", "admin/api/type-proposals", admin)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: consoleProposals) as? [[String: Any]])?.first?["id"] as? String,
+                       proposalID)
+        let (decided, decidedBody) = try await call("POST", "admin/api/type-proposals/\(proposalID)/decide", admin,
+                                                    body: Data(#"{"agree":false,"note":"the shared one is right"}"#.utf8))
+        XCTAssertEqual(decided, 200, String(decoding: decidedBody, as: UTF8.self))
+        XCTAssertEqual(try ticket(decidedBody)["state"] as? String, "rejected")
+        let (unknown, _) = try await call("POST", "admin/api/type-proposals/nope/decide", admin,
+                                          body: Data(#"{"agree":true}"#.utf8))
+        XCTAssertEqual(unknown, 404)
     }
 
     /// The review kit goes to a client that may use Ghidra, as the app's cache

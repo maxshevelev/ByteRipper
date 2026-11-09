@@ -207,7 +207,13 @@ public actor GhidraHost {
         self.leaseBook = Self.loadLeaseBook(configuration.leasesFile)
         self.issues = configuration.issuesFile.map { IssueBook(file: $0) }
         self.tickets = configuration.ticketsFile.map { TicketBook(file: $0) }
+        self.typeProposals = configuration.ticketsFile.map {
+            TypeProposalBook(file: $0.deletingLastPathComponent().appendingPathComponent("type-proposals.json"))
+        }
     }
+
+    /// Agents' proposals to replace shared types, kept beside the review board.
+    public nonisolated let typeProposals: TypeProposalBook?
 
     /// The review board, when the host keeps one.
     public nonisolated let tickets: TicketBook?
@@ -566,12 +572,15 @@ public actor GhidraHost {
         if let types {
             journal.typesBits = types.bits
             journal.typesVersion = types.version
+            if !types.proposals.isEmpty { journal.typeProposals = types.proposals }
             for object in types.version?.files.values.sorted() ?? [] { journal.keep(object) }
         }
         try await writeDown(journal)
         try await applyStoreSteps(&journal)
         try await applyOwnerSteps(&journal, record: record)
         try await writer.removeJournal(id: journal.id)
+        await noteProposalsApplied(journal.typeProposals ?? [], module: module, revision: journal.rev,
+                                   version: journal.typesVersion?.version)
         guard let manifest = journal.manifest else { throw GhidraHostError(.owner, "the publish stored no analysis") }
         var publication = Publication(manifest: manifest, typeConflicts: journal.typeConflicts,
                                       typeConflictsTaken: journal.typeConflictsTaken,

@@ -144,6 +144,13 @@ enum GhidraRoutes {
             let ticket = try await answer { try await book.force(module: module, remark: remark, status: value,
                                                                   close: close, note: note, by: by) }
             return try TicketBook.encoder.encode(TicketBook.Listed(ticket))
+        }, proposals: host.typeProposals.map { proposals in
+            { (try? TicketBook.encoder.encode(await proposals.list().map(TypeProposalBook.Listed.init))) ?? Data("[]".utf8) }
+        }, decide: host.typeProposals.map { proposals in
+            { id, agree, note, by in
+                let proposal = try await answer { try await proposals.force(id, agree: agree, note: note, by: by) }
+                return try TicketBook.encoder.encode(TypeProposalBook.Listed(proposal))
+            }
         })
     }
 
@@ -172,6 +179,13 @@ enum GhidraRoutes {
         router.add("POST", "\(prefix)/tickets", maxBodyBytes: 256 << 10, access: .rights([.ghidraUse])) { request in
             let call = try request.json(TicketBook.Request.self)
             let data = try await answer { try await host.ticketCall(call, holder: holder(request)) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+        // Agents' proposals to replace shared types, and their votes
+        // (`TypeProposalBook`): the holder is the token's name.
+        router.add("POST", "\(prefix)/type-proposals", maxBodyBytes: 256 << 10, access: .rights([.ghidraUse])) { request in
+            let call = try request.json(TypeProposalBook.Request.self)
+            let data = try await answer { try await host.typeProposalCall(call, holder: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
         router.add("GET", "\(prefix)/issues", access: .rights([.admin])) { request in

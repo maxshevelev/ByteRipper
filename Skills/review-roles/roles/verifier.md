@@ -55,7 +55,8 @@ to the Reviewer.
 - Decisions that belong to the person: which module comes next, and what to
   do about a refused publish. Replacing a registry entry or a shared type
   another review published belongs to an administrator of the server, not to
-  this Mac.
+  this Mac — except a shared type the agents agree on ("Shared-type
+  proposals" below).
 - Deploys and restarts of the analysis server are not this Mac's: they are
   decided where the server runs. If the server is unreachable or changed under
   a review, tell the person.
@@ -178,6 +179,22 @@ on another Mac read. One ticket per module; give `agent` as
   review; a remark another verifier raised is closed the same way.
 - A module with nothing found is closed too: `ghidra_ticket_close` on a module
   with no remarks says it was checked and found right.
+
+## Shared-type proposals
+
+A review whose publish would replace a shared type proposes its definition
+instead; two agents other than its author must agree before the module's next
+publish replaces it. At start, and between modules, read
+`ghidra_type_proposals` with `state: "open"`. For each one you did not write:
+
+- read both texts in the proposal and the author's `reason`, then the code:
+  the module's instructions at the offsets named, and the uses in other
+  modules (`ghidra_type_uses`, then their functions);
+- `ghidra_type_vote` `agree` when the instructions prove the module's layout
+  and disprove the shared one; `object` with `text` naming the instruction
+  that contradicts it. Never agree on the author's word alone.
+- A module told on its ticket that a type it uses was replaced is checked
+  again like any remark.
 
 ## The answers to reports
 

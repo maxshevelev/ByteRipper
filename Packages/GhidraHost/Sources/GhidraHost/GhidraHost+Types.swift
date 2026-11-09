@@ -127,23 +127,35 @@ extension GhidraHost {
     /// copy of the current version, refused when one would replace a type the
     /// archive holds, and the next version when the copy changed.
     func decideTypes(_ module: SHA256Digest, language: String, take: Bool,
-                     by: String?) async throws -> (merged: TypesMerged, bits: String, version: TypeArchiveVersion?) {
+                     by: String?) async throws
+        -> (merged: TypesMerged, bits: String, version: TypeArchiveVersion?, proposals: [String]) {
         let bits = Self.archiveBits(language: language)
-        let (folder, current) = try await archiveWorkingCopy(bits: bits)
+        var (folder, current) = try await archiveWorkingCopy(bits: bits)
         defer { try? FileManager.default.removeItem(at: folder) }
         let path = take ? "/v1/types/merge?take_type_conflicts=1" : "/v1/types/merge"
-        let body = try JSONSerialization.data(withJSONObject: ["archive": folder.path])
-        let merged = TypesMerged(try await typesCall(module, path, body: body))
+        var merged = TypesMerged(try await typesCall(module, path, body: try JSONSerialization.data(
+            withJSONObject: ["archive": folder.path])))
+        var proposals: [String] = []
         let replacements = merged.replacements
-        if !replacements.isEmpty {
+        if !replacements.isEmpty, !take,
+           let agreed = try await agreedReplacement(module, replacements: replacements) {
+            // What the agents agreed is taken, on a fresh copy of the version
+            // the refused merge read.
+            try? FileManager.default.removeItem(at: folder)
+            (folder, current) = try await archiveWorkingCopy(bits: bits)
+            merged = TypesMerged(try await typesCall(module, "/v1/types/merge?take_type_conflicts=1",
+                                                     body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
+            proposals = agreed
+        }
+        if !merged.replacements.isEmpty {
             let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
                                    uniquingKeysWith: { first, _ in first })
-            throw GhidraHostError(.refused, Self.typeRefusal(replacements, origins: merged.origins, names: names,
+            throw GhidraHostError(.refused, Self.typeRefusal(merged.replacements, origins: merged.origins, names: names,
                                                              version: current?.version, bits: bits), status: 409)
         }
         let version = try await nextTypeVersion(bits: bits, folder: folder, after: current, answer: merged,
                                                 by: by, module: module)
-        return (merged, bits, version)
+        return (merged, bits, version, proposals)
     }
 
     static func typeRefusal(_ names: [String], origins: [String: String], names modules: [String: String],
@@ -156,8 +168,9 @@ extension GhidraHost {
         return "the shared \(bits) types" + (version.map { " (version \($0))" } ?? "")
             + " hold these differently, and this publish would replace them: " + listed.joined(separator: ", ")
             + ". Nothing was written. Make the module's type the shared one (`ghidra_type_definition` shows both), "
-            + "or, when the shared one is wrong, tell the person with the evidence: only they replace a shared type, "
-            + "in the server's console (Activity, the module in work, its conflicts button). An agent cannot."
+            + "or, when the shared one is wrong, propose this module's definitions with the evidence "
+            + "(`ghidra_type_propose`): two other agents agreeing and none objecting, this module's next publish "
+            + "replaces them. The person may also decide it in the server's console."
     }
 
     /// A type taken out of the shared archive, as a version of its own.

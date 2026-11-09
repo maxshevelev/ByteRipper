@@ -1355,7 +1355,8 @@
         onclick: () => { state.ticketState = id; refresh(); } }, label)));
     append(actions, seg);
     const board = card("Review board", "one ticket per module; a verifier other than the reviewer closes it");
-    const root = h("div", { class: "stack" }, board.root);
+    const proposals = card("Shared-type proposals", "a replacement applies once two agents other than its author agree and none objects");
+    const root = h("div", { class: "stack" }, proposals.root, board.root);
 
     function update(tickets) {
       [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.state === state.ticketState));
@@ -1363,8 +1364,88 @@
       fill(board.body, shown.length ? ticketTable(shown)
         : empty("reviewFindings", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
           "A verifying agent writes a remark on a module's review with ghidra_ticket_remark; the module's ticket is listed here."));
+      call("GET", "/admin/api/type-proposals").then((rows) => {
+        const live = rows.filter((p) => p.state === "open" || p.state === "agreed");
+        const recent = rows.filter((p) => !(p.state === "open" || p.state === "agreed")).slice(0, 10);
+        const all = live.concat(recent);
+        fill(proposals.body, all.length ? proposalTable(all)
+          : empty("layers", "No proposal", "When a module's publish would replace a shared type, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
+      }, () => fill(proposals.body, h("div", { class: "muted", text: "This server keeps no type proposals." })));
     }
     return { root, update };
+  }
+
+  function proposalPill(stateName) {
+    const kind = stateName === "open" ? "warn" : stateName === "agreed" || stateName === "applied" ? "ok"
+      : stateName === "rejected" ? "danger" : "plain";
+    return h("span", { class: `pill ${kind}`, text: stateName });
+  }
+
+  function proposalTable(rows) {
+    return h("table", { class: "lines" },
+      h("thead", {}, h("tr", {},
+        h("th", { class: "w-who", text: "Module" }), h("th", { text: "Types" }), h("th", { class: "w-state", text: "State" }),
+        h("th", { text: "Votes" }), h("th", { text: "Author" }), h("th", { class: "w-open" }))),
+      h("tbody", {}, rows.flatMap((p) => {
+        const key = `proposal:${p.id}`;
+        const opened = state.openTickets.has(key);
+        const flip = () => { if (opened) state.openTickets.delete(key); else state.openTickets.add(key); refresh(); };
+        const names = p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
+        const row = h("tr", { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
+          whoCell("layers", p.name || "module", p.module),
+          h("td", { class: "mono", text: names.join(", ") }),
+          h("td", {}, proposalPill(p.state)),
+          h("td", {}, h("span", { class: "ok-text", text: `${p.agrees.length}/${p.agrees_needed} agree` }),
+            p.objections.length ? h("span", { class: "danger-text", text: ` · ${p.objections.length} object` }) : null),
+          h("td", {}, h("div", { class: "line-who-title", title: p.author, text: p.author })),
+          h("td", { class: "actions" },
+            h("button", { class: "btn small", type: "button", onclick: flip }, icon(opened ? "up" : "down", 15), opened ? "Hide" : "Open")));
+        if (!opened) return [row];
+        return [row, h("tr", { class: "issue-detail" }, h("td", { colspan: "6" }, proposalDetail(p, names)))];
+      })));
+  }
+
+  function proposalDetail(p, names) {
+    const live = p.state === "open" || p.state === "agreed";
+    const decided = p.decided ? h("div", { class: "muted" },
+      `${p.state === "withdrawn" ? "Withdrawn" : p.state === "rejected" ? "Rejected" : "Decided"} by ${p.decided.by}${p.decided.forced ? " from the console" : ""}, ${when(p.decided.at)}`,
+      p.decided.note ? ` — ${p.decided.note}` : "") : null;
+    const applied = p.applied ? h("div", { class: "muted",
+      text: `Applied ${when(p.applied.at)}${p.applied.revision ? ` by revision ${p.applied.revision}` : ""}${p.applied.version ? `, shared types version ${p.applied.version}` : ""}` }) : null;
+    const buttons = live ? [
+      h("button", { class: "btn small", type: "button", onclick: () => decideProposal(p, true) }, icon("check", 14), "Agree"),
+      h("button", { class: "btn small danger", type: "button", onclick: () => decideProposal(p, false) }, icon("ban", 14), "Reject")] : [];
+    return h("div", { class: "stack" },
+      h("div", { class: "row" }, h("span", { class: "muted", text: `Proposed ${when(p.at)}` }), h("span", { class: "grow" }), buttons),
+      decided, applied,
+      h("div", { class: "remark" }, h("div", { class: "row" }, h("b", { text: p.author }), h("span", { class: "muted", text: "why" })),
+        h("div", { class: "remark-text", text: p.reason })),
+      names.map((name) => h("div", { class: "type-conflict" },
+        h("div", { class: "doc-title mono", text: name }),
+        h("div", { class: "muted", text: `Shared copy written by ${(p.origins || {})[name] ? String(p.origins[name]).slice(0, 12) : "a module not known here"}` }),
+        h("div", { class: "type-pair" },
+          h("div", {}, h("div", { class: "codebar-title", text: `${p.name || "module"} (proposed)` }), h("pre", { class: "code", text: p.module_c[name] || "—" })),
+          h("div", {}, h("div", { class: "codebar-title", text: "Shared now" }), h("pre", { class: "code", text: p.shared_c[name] || "—" }))))),
+      (p.votes || []).map((vote) => h("div", { class: "reply" },
+        h("div", { class: "row" }, h("b", { text: vote.agent }),
+          h("span", { class: `pill ${vote.choice === "agree" ? "ok" : "danger"}`, text: vote.choice }),
+          h("span", { class: "muted", text: when(vote.at) })),
+        vote.text ? h("div", { class: "remark-text", text: vote.text }) : null)));
+  }
+
+  async function decideProposal(p, agree) {
+    const note = h("input", { class: "field", placeholder: agree ? "Why it is agreed, whatever the votes" : "Why it is rejected", autocomplete: "off" });
+    const done = await dialog({
+      icon: agree ? "check" : "ban", tone: agree ? "ok" : "danger",
+      title: agree ? `Agree the proposal of ${p.name || "this module"}?` : `Reject the proposal of ${p.name || "this module"}?`,
+      text: agree ? "The module's next publish replaces the shared types with its definitions, as their next version, provided it still defines them as proposed."
+        : "The proposal is closed; the module's publish stays refused until its types match the shared ones.",
+      body: note,
+      actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: agree ? "Agree" : "Reject", kind: agree ? "primary" : "danger", value: true, focus: true }],
+    });
+    if (!done) return;
+    await act(() => call("POST", `/admin/api/type-proposals/${p.id}/decide`, { agree, note: note.value.trim() || null }),
+      agree ? "Proposal agreed" : "Proposal rejected");
   }
 
   function ticketPill(stateName) {

@@ -55,6 +55,8 @@ struct PublishJournal: Codable, Sendable {
     /// Merged by the owner after the registry's decision, into the archive
     /// beside the projects: a store that keeps no versions.
     var typesInOwner: Bool?
+    /// The agreed type proposals this publish applies (`TypeProposalBook`).
+    var typeProposals: [String]?
     /// Every object the journal names, for `gc` to keep while it is there.
     var objects: [SHA256Digest] = []
 
@@ -369,6 +371,8 @@ extension GhidraHost {
                 try await applyStoreSteps(&journal)
                 try await applyOwnerSteps(&journal, record: record)
                 try await writer.removeJournal(id: journal.id)
+                await noteProposalsApplied(journal.typeProposals ?? [], module: module, revision: journal.rev,
+                                           version: journal.typesVersion?.version)
             }
             unfinished.remove(module)
         } catch {

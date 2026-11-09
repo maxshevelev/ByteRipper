@@ -147,6 +147,21 @@ public struct Console: Sendable {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
+        // Agents' proposals to replace shared types, and an administrator's
+        // decision on one, whatever its votes.
+        add("GET", "/admin/api/type-proposals") { _ in
+            guard let read = tickets?.proposals else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: await read())
+        }
+        add("POST", "/admin/api/type-proposals/:id/decide", maxBodyBytes: 32 << 10) { request in
+            guard let decide = tickets?.decide else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            struct Deciding: Decodable { let agree: Bool; let note: String? }
+            let body = try request.json(Deciding.self)
+            let by = request.principal?.name ?? "an administrator"
+            let data = try await decide(request.parameters["id"] ?? "", body.agree, body.note, by)
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+
         // Documents.
         let registry = self.registry
         add("GET", "/admin/api/documents") { _ in Self.json(await Self.documents(registry)) }

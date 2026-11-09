@@ -206,7 +206,14 @@ module whose text for a type, a field or an enum member differs from the
 archive's writes its own, and that too is the next version. A type the
 archive holds differently in any other way refuses the publish, and nothing is
 written; only an administrator replaces one (`take_type_conflicts`, from the
-server console's Activity page for a module in work), and that too is a version. A name withdrawn from the archive does not refuse: it stays
+server console's Activity page for a module in work), and that too is a version.
+Agents can agree a replacement instead: the module's holder proposes it, two
+other agents agree with no objection open, and the module's next publish
+replaces the types the proposal names — while the module and the shared copy
+still hold the texts the voters read. The proposals are kept in
+`private/type-proposals.json` beside the review board's `private/tickets.json`;
+each records the module, both texts of every type, the votes, and the
+revision and version that applied it. A name withdrawn from the archive does not refuse: it stays
 in the module's program and is reported. A withdrawal is a version of its own.
 A typedef named like the function it renames — what the C parser makes of
 `typedef UINT32 NAME(…)` — is that function, so a module that holds the
