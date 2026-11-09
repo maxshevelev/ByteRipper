@@ -995,6 +995,9 @@ public class Owner {
         String nameReason = nameReasons == null ? null : nameReasons.getString(function.getEntryPoint());
         if (nameReason != null) answer.addProperty("name_reason", nameReason);
         answer.addProperty("calling_convention", function.getCallingConventionName());
+        // The bytes it takes off the stack as it returns, which every
+        // caller's C is built from: said when there are any.
+        if (function.getStackPurgeSize() != 0) answer.addProperty("stack_purge", function.getStackPurgeSize());
         JsonArray keptRegisters = keptRegisters(function);
         if (keptRegisters != null) answer.add("unaffected_kept", keptRegisters);
         String plate = function.getComment();
@@ -6012,7 +6015,8 @@ public class Owner {
         // names the target and its prototype before, so the change is not silent.
         Function target = function.isThunk() ? function.getThunkedFunction(true) : null;
         String targetBefore = target == null ? null : target.getPrototypeString(false, false);
-        String text = edk2(required(body, "signature"));
+        String written = required(body, "signature");
+        String text = edk2(written);
         // Ghidra's signature parser misreads the pointers of the return type
         // when the function's name is already a symbol of the program (`T *`
         // came back as `T`, or as `T **`). The text is parsed under a name
@@ -6033,6 +6037,15 @@ public class Owner {
         }
         if (signature == null) throw new Failure(400, "the signature does not parse");
         signature.setName(name);
+        // EDK2 defines EFIAPI as `__cdecl` on IA32 (ProcessorBind.h): the
+        // caller takes the arguments off the stack. Erased as a macro, it left
+        // the function with whatever convention analysis guessed — `__stdcall`
+        // for SetJump, which ends in `JMP ECX` (issue 4d07e597).
+        if (written.matches("(?s).*\\bEFIAPI\\b.*") && program.getDefaultPointerSize() == 4
+                && program.getCompilerSpec().getCallingConvention("__cdecl") != null
+                && !text.matches("(?s).*\\b__(cdecl|stdcall|fastcall|thiscall|vectorcall)\\b.*")) {
+            signature.setCallingConvention("__cdecl");
+        }
         ApplyFunctionSignatureCmd command =
             new ApplyFunctionSignatureCmd(function.getEntryPoint(), signature, SourceType.USER_DEFINED);
         if (!command.applyTo(program)) {
@@ -6060,6 +6073,7 @@ public class Owner {
         if (body.has("storage") || body.has("return_storage")) applyStorage(function, body);
         String unsettled = settleConvention(function);
         if (body.has("unaffected")) keepRegisters(function, body.getAsJsonArray("unaffected"));
+        Integer purgeBefore = settlePurge(function);
         // Why the signature is what it is has a place of its own: the name's
         // reason says where the name came from, and a signature is not that. A
         // signature that changes the name says so there, and what it replaced.
@@ -6076,6 +6090,10 @@ public class Owner {
         if (aligned.size() > 0) answer.add("aligned", aligned);
         if (unsettled != null) answer.addProperty("convention_stays_unknown", unsettled);
         answer.addProperty("calling_convention", function.getCallingConventionName());
+        if (purgeBefore != null) {
+            answer.addProperty("stack_purge", function.getStackPurgeSize());
+            answer.addProperty("stack_purge_was", purgeBefore);
+        }
         JsonArray kept = keptRegisters(function);
         if (kept != null) answer.add("unaffected_kept", kept);
         if (function.hasCustomVariableStorage()) {
@@ -6283,6 +6301,25 @@ public class Owner {
         if (before.equals(after)) return null;
         function.setCallingConvention(Function.UNKNOWN_CALLING_CONVENTION_STRING);
         return "the default convention would move it: " + before + " to " + after;
+    }
+
+    /**
+     * The bytes a function takes off the stack as it returns are kept apart
+     * from its convention, as analysis read them, and every caller's C is
+     * built from them. A convention whose model fixes them — `__cdecl` takes
+     * none — sets them; one that leaves them to the function (`__stdcall`)
+     * keeps what analysis found. Answers the size before, or null if unchanged.
+     */
+    private static Integer settlePurge(Function function) throws Exception {
+        ghidra.program.model.lang.PrototypeModel model = function.getCallingConvention();
+        if (model == null) return null;
+        int extrapop = model.getExtrapop();
+        if (extrapop == ghidra.program.model.lang.PrototypeModel.UNKNOWN_EXTRAPOP) return null;
+        int purge = extrapop - model.getStackshift();
+        int before = function.getStackPurgeSize();
+        if (before == purge) return null;
+        function.setStackPurgeSize(purge);
+        return before;
     }
 
     private static String placesOf(Function function) {

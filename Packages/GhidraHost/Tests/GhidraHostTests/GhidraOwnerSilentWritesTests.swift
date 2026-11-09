@@ -192,6 +192,25 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
                        printed)
     }
 
+    /// Issue 4d07e597: EFIAPI on IA32 is EDK2's `__cdecl`, not the convention
+    /// analysis guessed; `stack_purge` is said only where a function has one.
+    /// (A purge analysis left, which `__cdecl` now resets, needs a module whose
+    /// helper returns by `JMP ECX`; none of the test images has one.)
+    func testEFIAPIIsCdeclAndACdeclFunctionPurgesNothing() async throws {
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.last)
+        let stdcall = try await post("/v1/set/signature", ["address": entry,
+                                                       "signature": "UINTN __stdcall PurgedHelper (UINTN Value)"])
+        XCTAssertEqual(stdcall["calling_convention"] as? String, "__stdcall", "\(stdcall)")
+        let before = try await read("/v1/function/\(entry)")
+        XCTAssertNil(before["stack_purge"], "\(before)")
+        let efiapi = try await post("/v1/set/signature", ["address": entry,
+                                                      "signature": "UINTN EFIAPI PurgedHelper (IN UINTN Value)"])
+        XCTAssertEqual(efiapi["calling_convention"] as? String, "__cdecl", "\(efiapi)")
+        let after = try await read("/v1/function/\(entry)")
+        XCTAssertNil(after["stack_purge"], "\(after)")
+    }
+
     func testATypeStillUsedIsNotDeleted() async throws {
         _ = try await post("/v1/type", ["c": "typedef struct _SILENT_INNER { unsigned int A; } SILENT_INNER;"])
         _ = try await post("/v1/type", ["c": "typedef struct _SILENT_OUTER { SILENT_INNER Inner; unsigned int B; } SILENT_OUTER;"])
