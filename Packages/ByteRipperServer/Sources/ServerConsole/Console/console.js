@@ -1360,7 +1360,7 @@
     const board = card("Review board", "one ticket per module; a verifier other than the reviewer closes it");
     const proposals = card("Shared-definition proposals", "a replacement applies once two agents other than its author agree and none objects");
     proposals.head.querySelector("h2").prepend(icon("proposals", 17));
-    const root = h("div", { class: "stack" }, proposals.root, board.root);
+    const root = h("div", { class: "stack" }, board.root, proposals.root);
 
     function update(tickets) {
       [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.state === state.ticketState));
