@@ -873,7 +873,14 @@ public actor GhidraHost {
         // A type the shared archive holds differently refuses the publish; a
         // withdrawn name only stays in this module.
         let replacing = conflicts.filter { !(typeOrigins[$0] ?? "").hasPrefix("withdrawn ") }
+        // An agreed proposal that covers every replacement is what the
+        // publish would apply: the preview says so, as the publish decides it.
+        var agreedProposals: [String]?
         if writer.keepsTypeArchives, !replacing.isEmpty, !takeTypeConflicts {
+            agreedProposals = try? await agreedReplacement(module, replacements: replacing)
+            if let agreedProposals { preview["types_agreed"] = agreedProposals }
+        }
+        if writer.keepsTypeArchives, !replacing.isEmpty, !takeTypeConflicts, agreedProposals == nil {
             let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
                                    uniquingKeysWith: { first, _ in first })
             preview["types_refused"] = Self.typeRefusal(replacing, origins: typeOrigins, names: names, version: nil,

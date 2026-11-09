@@ -71,6 +71,10 @@ final class GhidraHostTypeProposalTests: XCTestCase {
         }
 
         try await define(proposer, proposed)
+        // The dry run decides as the publish does: the agreed proposal, not a refusal.
+        let preview = try json(await host.preview(proposer))
+        XCTAssertEqual(preview["types_agreed"] as? [String], [id], "\(preview)")
+        XCTAssertNil(preview["types_refused"], "\(preview)")
         let published = try await host.publish(proposer, by: "agent")
         XCTAssertTrue(published.typeConflictsTaken.contains("VOTE_PPI"), "\(published.typeConflictsTaken)")
         let shared = try json(await host.read(writer, "/v1/type?name=VOTE_PPI"))["shared"] as? [String: Any]
