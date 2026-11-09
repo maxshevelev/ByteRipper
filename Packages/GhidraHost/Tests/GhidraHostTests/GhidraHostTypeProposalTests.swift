@@ -29,8 +29,8 @@ final class GhidraHostTypeProposalTests: XCTestCase {
         let first = try Data(contentsOf: URL(fileURLWithPath: String(paths[0])))
         let second = try Data(contentsOf: URL(fileURLWithPath: String(paths[1])))
         let writer = SHA256Digest(data: first), proposer = SHA256Digest(data: second)
-        _ = try await host.create(module: first, name: "Writer")
-        _ = try await host.create(module: second, name: "Proposer")
+        _ = try await host.createCached(module: first, name: "Writer")
+        _ = try await host.createCached(module: second, name: "Proposer")
         defer { Task { await host.stop(writer); await host.stop(proposer) } }
         func define(_ module: SHA256Digest, _ c: String) async throws {
             try await host.take(module)

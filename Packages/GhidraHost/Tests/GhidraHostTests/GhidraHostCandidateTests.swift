@@ -23,7 +23,7 @@ final class GhidraHostCandidateTests: XCTestCase {
                                                    idle: 300, holder: "GhidraHostCandidateTests"),
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         return (host, store, SHA256Digest(data: image), directory)
     }
@@ -200,9 +200,9 @@ final class GhidraHostCandidateTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(reviewed); await host.stop(other) } }
         let ours = try await functions(host, reviewed), theirs = try await functions(host, other)
@@ -306,9 +306,9 @@ final class GhidraHostCandidateTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(reviewed); await host.stop(other) } }
 
@@ -417,7 +417,7 @@ final class GhidraHostCandidateTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Thunks")
+        _ = try await host.createCached(module: image, name: "Thunks")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         let list = try await functions(host, module)
@@ -450,7 +450,7 @@ final class GhidraHostCandidateTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Thunks")
+        _ = try await host.createCached(module: image, name: "Thunks")
         try await host.take(module)
         defer { Task { await host.stop(module) } }
         let exported = try json(await host.write(module, "/v1/export", body: Data()))
@@ -497,9 +497,9 @@ final class GhidraHostCandidateTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(reviewed); await host.stop(other) } }
 
@@ -557,9 +557,9 @@ final class GhidraHostCandidateTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         let ours = try await functions(host, reviewed), theirs = try await functions(host, other)
         let source = try XCTUnwrap(ours.first { $0["name"] as? String == "__aullshr" }?["entry"] as? String)

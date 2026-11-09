@@ -19,7 +19,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                                                idle: 300, holder: "GhidraOwnerReadBackTests"),
                           writer: store)
         module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
     }
 
@@ -732,7 +732,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         host = GhidraHost(configuration: .init(projectsRoot: projects, ghidraHome: URL(fileURLWithPath: patched),
                                                idle: 300, holder: "GhidraOwnerReadBackTests"), writer: store)
         module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         let hello = try await read("/v1/hello")
         XCTAssertEqual(hello["language_patch"] as? String, "descriptor-tables-1")
@@ -850,7 +850,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 10,
                                                holder: "GhidraOwnerReadBackTests"), writer: store)
         module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         let all = try await entries()
         let entry = try XCTUnwrap(all.first)

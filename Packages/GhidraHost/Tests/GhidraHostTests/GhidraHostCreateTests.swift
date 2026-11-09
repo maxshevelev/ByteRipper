@@ -79,9 +79,9 @@ final class GhidraHostLibraryTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(reviewed); await host.stop(other) } }
 
@@ -170,9 +170,9 @@ final class GhidraHostLibraryTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(source); await host.stop(other) } }
         // GetHobList in both Fp6 modules: 43 bytes, with temporaries.
@@ -282,9 +282,9 @@ final class GhidraHostLibraryTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(source)
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(other)
         defer { Task { await host.stop(source); await host.stop(other) } }
         let at = try await function(of: 43, in: source, host: host)
@@ -385,9 +385,9 @@ final class GhidraHostLibraryTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(source); await host.stop(other) } }
         let at = try await function(of: 43, in: source, host: host)
@@ -508,9 +508,9 @@ final class GhidraHostLibraryTests: XCTestCase {
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
         try await host.take(SHA256Digest(data: images[0]))
-        _ = try await host.create(module: images[1], name: "Other")
+        _ = try await host.createCached(module: images[1], name: "Other")
         try await host.take(SHA256Digest(data: images[1]))
         defer { Task { await host.stop(reviewed); await host.stop(other) } }
 
@@ -645,7 +645,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         let first = try await host.publish(module, by: "test")
         let functions = try store.artifact(for: first.manifest).functions
@@ -679,7 +679,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         let answer = try json(await host.read(module, "/v1/types?contains=HOB_HANDOFF"))
         await host.stop(module)
@@ -700,7 +700,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
@@ -736,7 +736,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func define(_ c: String) async throws {
@@ -768,7 +768,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func define(_ object: [String: Any]) async throws {
@@ -831,7 +831,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                                   writer: store)
             let image = try Data(contentsOf: URL(fileURLWithPath: path))
             let module = SHA256Digest(data: image)
-            _ = try await host.create(module: image, name: "Module")
+            _ = try await host.createCached(module: image, name: "Module")
             try await host.take(SHA256Digest(data: image))
             let language = try json(await host.read(module, "/v1/hello"))["language"] as? String ?? ""
             let bits = GhidraHost.archiveBits(language: language)
@@ -878,7 +878,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(module)
         defer { Task { await host.stop(module) } }
         let bits = GhidraHost.archiveBits(language: try json(await host.read(module, "/v1/hello"))["language"] as? String ?? "")
@@ -947,7 +947,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         let language = try json(await host.read(module, "/v1/hello"))["language"] as? String ?? ""
@@ -1035,7 +1035,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func post(_ object: [String: Any]) async throws -> [String: Any] {
@@ -1095,7 +1095,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func post(_ object: [String: Any]) async throws -> [String: Any] {
@@ -1167,7 +1167,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func rename(_ object: [String: Any]) async throws -> [String: Any] {
@@ -1225,7 +1225,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
@@ -1263,7 +1263,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func post(_ route: String, _ object: [String: Any]) async throws {
@@ -1321,7 +1321,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func post(_ route: String, _ object: [String: Any]) async throws -> Data {
@@ -1363,7 +1363,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         defer { Task { await host.stop(module) } }
         func post(_ object: [String: Any]) async throws -> [String: Any] {
@@ -1435,7 +1435,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
         let function = try XCTUnwrap(functions.first { ($0["size"] as? Int ?? 0) >= 32 })
@@ -1487,7 +1487,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(SHA256Digest(data: image))
         let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
         var refused = 0, taken = 0

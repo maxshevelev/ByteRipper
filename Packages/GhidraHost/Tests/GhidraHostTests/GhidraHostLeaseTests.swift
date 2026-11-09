@@ -75,7 +75,7 @@ final class GhidraHostLeaseTests: XCTestCase {
         let image = try image()
         let host = try host()
         module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
 
         await refused("a write before the take", contains: "not in work") {
             try await self.comment(host, "before the take")
@@ -143,7 +143,7 @@ final class GhidraHostLeaseTests: XCTestCase {
         let image = try image()
         let first = try host()
         module = SHA256Digest(data: image)
-        _ = try await first.create(module: image, name: "Module")
+        _ = try await first.createCached(module: image, name: "Module")
         let lease = try await first.take(module)
         await first.stop(module)
 
@@ -162,7 +162,7 @@ final class GhidraHostLeaseTests: XCTestCase {
         let image = try image()
         let host = try host()
         module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(module)
         try await comment(host, "published")
         _ = try await host.publish(module, by: "agent")
@@ -205,7 +205,7 @@ final class GhidraHostLeaseTests: XCTestCase {
         let image = try image()
         let host = try host()
         module = SHA256Digest(data: image)
-        _ = try await host.create(module: image, name: "Module")
+        _ = try await host.createCached(module: image, name: "Module")
         try await host.take(module)
         try await comment(host, "published")
         _ = try await host.publish(module, by: "agent")
