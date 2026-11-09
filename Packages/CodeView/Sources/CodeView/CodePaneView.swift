@@ -3505,6 +3505,7 @@ import ToolModuleKit
         // A drag is the reader's own fold. The bar stays in the code pane, so
         // it cannot be dragged out of sight; the button follows whether the
         // dump has any height left.
+        hexDumpBar.split = rightSplit
         rightSplit.onDividerMoved = { [weak self] _, _ in
             guard let self, !self.rightSplit.isAnimatingDivider else { return }
             self.hexDumpVisible = self.moduleHexView.frame.height > 0.5
@@ -3665,6 +3666,9 @@ import ToolModuleKit
     // MARK: - The hex dump
 
     public var isHexDumpVisible: Bool { hexDumpVisible }
+    /// The bar over the module's bytes and how tall the bytes are, for a test.
+    var dumpBar: CodeDumpBar { hexDumpBar }
+    var hexDumpPaneHeight: CGFloat { moduleHexView.frame.height }
 
     /// Folds the hex view away under its bar, or brings it back, growing the
     /// code on the split's own animation.
@@ -5764,7 +5768,58 @@ private final class CodeNavigatorBar: NSView {
     }
 }
 
-private final class CodeDumpBar: NSView {
+/// The bar under the code, on the divider above the module's bytes. Its
+/// empty part is a handle of that divider, as Xcode's debug bar is: a drag
+/// there moves the divider, and pulls the bytes up when they are hidden.
+/// Its buttons and menus keep their own clicks, and only the rest shows the
+/// resize cursor.
+final class CodeDumpBar: NSView {
+    weak var split: ALSplitView?
+    var dividerIndex = 0
+
+    override func mouseDown(with event: NSEvent) {
+        guard let split else { return super.mouseDown(with: event) }
+        split.beginDividerDrag(at: dividerIndex, with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let split else { return super.mouseDragged(with: event) }
+        split.mouseDragged(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let split else { return super.mouseUp(with: event) }
+        split.mouseUp(with: event)
+    }
+
+    /// The bar less what takes a click of its own: the resize cursor where
+    /// a drag starts. Words and the progress bar pass the click on.
+    var handleRects: [NSRect] {
+        let taken = subviews
+            .filter { !$0.isHidden && !($0 is NSTextField) && !($0 is NSProgressIndicator) }
+            .map { $0.frame.insetBy(dx: -2, dy: 0) }
+            .sorted { $0.minX < $1.minX }
+        var rects: [NSRect] = []
+        var x = bounds.minX
+        for frame in taken {
+            if frame.minX > x { rects.append(NSRect(x: x, y: bounds.minY, width: frame.minX - x, height: bounds.height)) }
+            x = max(x, frame.maxX)
+        }
+        if x < bounds.maxX { rects.append(NSRect(x: x, y: bounds.minY, width: bounds.maxX - x, height: bounds.height)) }
+        return rects
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard split != nil else { return }
+        for rect in handleRects { addCursorRect(rect, cursor: .resizeUpDown) }
+    }
+
+    override func layout() {
+        super.layout()
+        window?.invalidateCursorRects(for: self)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
         bounds.fill()

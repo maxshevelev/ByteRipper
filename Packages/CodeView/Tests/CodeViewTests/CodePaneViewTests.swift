@@ -60,6 +60,68 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(name.isEditable)
     }
 
+    /// Presses the mouse at `point` of `view` and drags it `rise` points up
+    /// the window, as a hand would; mouse-up included.
+    private func drag(_ view: NSView, at point: NSPoint, rise: CGFloat, in window: NSWindow) {
+        let start = view.convert(point, to: nil)
+        func event(_ type: NSEvent.EventType, _ location: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: 0,
+                               windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+                               clickCount: 1, pressure: 1)!
+        }
+        view.mouseDown(with: event(.leftMouseDown, start))
+        view.mouseDragged(with: event(.leftMouseDragged, NSPoint(x: start.x, y: start.y + rise / 2)))
+        view.mouseDragged(with: event(.leftMouseDragged, NSPoint(x: start.x, y: start.y + rise)))
+        view.mouseUp(with: event(.leftMouseUp, NSPoint(x: start.x, y: start.y + rise)))
+    }
+
+    private func paneInWindow() throws -> (CodePaneView, NSWindow) {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        return (view, window)
+    }
+
+    /// The bar under the code is a handle of the divider above the bytes, as
+    /// Xcode's debug bar is: a drag on its empty part moves the divider, and
+    /// pulls the bytes up when they were hidden.
+    func testTheDumpBarDragsTheDividerAndPullsHiddenBytesUp() throws {
+        let (view, window) = try paneInWindow()
+        let bar = view.dumpBar
+        let handle = try XCTUnwrap(bar.handleRects.max { $0.width < $1.width })
+        let before = view.hexDumpPaneHeight
+        XCTAssertGreaterThan(before, 0)
+        drag(bar, at: NSPoint(x: handle.midX, y: handle.midY), rise: 40, in: window)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.hexDumpPaneHeight, before + 40, accuracy: 1)
+
+        view.setHexDumpVisible(false, animated: false)
+        XCTAssertEqual(view.hexDumpPaneHeight, 0, accuracy: 0.5)
+        drag(bar, at: NSPoint(x: handle.midX, y: handle.midY), rise: 120, in: window)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.hexDumpPaneHeight, 120, accuracy: 2)
+        XCTAssertTrue(view.isHexDumpVisible, "the button follows")
+    }
+
+    /// The bar's buttons keep their clicks: a click there reaches the button,
+    /// and the resize cursor is only where a drag starts.
+    func testTheDumpBarsButtonsAreNotPartOfTheHandle() throws {
+        let (view, _) = try paneInWindow()
+        let bar = view.dumpBar
+        let buttons = bar.subviews.filter { $0 is NSButton && !$0.isHidden }
+        XCTAssertFalse(buttons.isEmpty)
+        for button in buttons {
+            let centre = NSPoint(x: button.frame.midX, y: button.frame.midY)
+            XCTAssertFalse(bar.handleRects.contains { $0.contains(centre) }, "\(button)")
+            let hit = view.window?.contentView?.hitTest(view.window!.contentView!.convert(centre, from: bar))
+            XCTAssertTrue(hit === button || hit?.isDescendant(of: button) == true, "\(String(describing: hit))")
+        }
+        XCTAssertFalse(bar.handleRects.isEmpty)
+    }
+
     /// ⌘C with the list of functions in focus copies the selected
     /// function's name; with anything else in focus it is not offered here.
     func testCopyTakesTheSelectedFunctionsName() throws {

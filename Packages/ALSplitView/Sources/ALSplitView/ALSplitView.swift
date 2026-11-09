@@ -743,6 +743,22 @@ public final class ALSplitView: NSView {
         (isVertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
     }
 
+    /// Starts a drag of the divider at `index` from a view other than the
+    /// divider — a bar that runs along it and is grabbed anywhere on its
+    /// empty part, as in Xcode. The view forwards its `mouseDragged` and
+    /// `mouseUp` here. A collapsed trailing pane's divider can be dragged
+    /// this way: there is something to grab, so the pane opens.
+    public func beginDividerDrag(at index: Int, with event: NSEvent) {
+        guard index >= 0, index < panes.count - 1, event.clickCount == 1 else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        stopAnimation()
+        isDraggingDivider = true
+        draggedDividerIndex = index
+        dragStartMouseAxis = isVertical ? point.x : point.y
+        dragStartPosition = dividerPosition(at: index)
+        (isVertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+    }
+
     override public func mouseDragged(with event: NSEvent) {
         guard isDraggingDivider else {
             super.mouseDragged(with: event)
