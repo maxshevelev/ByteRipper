@@ -260,6 +260,112 @@ final class GhidraHostLibraryTests: XCTestCase {
                       "the source reads the holder's addition")
     }
 
+    /// A registry entry the code proves wrong is replaced by agents' votes:
+    /// the module's holder proposes its review of the function, two other
+    /// agents agree, and the module's next publish makes it the entry's next
+    /// version, the proposal's reason in the history — not while the review
+    /// differs from what was voted on. The module that wrote the entry is told
+    /// on its ticket.
+    func testAnAgreedProposalReplacesARegistryEntryAtTheNextPublish() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let holder = "GhidraHostLibraryTests"
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: holder,
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.create(module: images[0], name: "Reviewed")
+        try await host.take(source)
+        _ = try await host.create(module: images[1], name: "Other")
+        try await host.take(other)
+        defer { Task { await host.stop(source); await host.stop(other) } }
+        let at = try await function(of: 43, in: source, host: host)
+        let there = try await function(of: 43, in: other, host: host)
+        _ = try await host.write(source, "/v1/set/signature", body: body([
+            "address": at, "signature": "void * GetHobList(void)", "by": "agent", "reason": "EDK2 HobLib GetHobList"]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "plate", "text": "EDK2 HobLib GetHobList: the plate."]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "eol", "text": "the first step."]))
+        var ordinal = 0
+        let locals = try json(await host.readCall(source, "function/\(at)", query: [:]))["locals"] as? [[String: Any]]
+        for local in locals ?? [] where (local["storage"] as? String)?.hasPrefix("HASH") != true {
+            ordinal += 1
+            var change: [String: Any] = ["function": at, "storage": local["storage"] ?? "", "name": "Named\(ordinal)",
+                                         "type": "ushort", "by": "agent"]
+            if let use = local["first_use"] { change["first_use"] = use }
+            _ = try await host.write(source, "/v1/rename/variable", body: body(change))
+        }
+        let first = try await moved(at, of: source, host: host)
+        let id = try XCTUnwrap(first.added.first { $0.name == "GetHobList" }).id
+        _ = try await host.library(other, .init(action: .apply))
+        _ = try await host.publish(other, by: "agent")
+        _ = try await host.library(other, .init(action: .apply, address: there, takeText: true))
+
+        // The other module's review says something else of it.
+        let proposed = "GetHobList: the HOB list pointer the PEI services hold, read through the IDT."
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "plate", "text": proposed]))
+        func call(_ request: TypeProposalBook.Request) async throws -> [String: Any] {
+            try json(await host.typeProposalCall(request, holder: holder))
+        }
+        let proposal = try await call(.init(action: .propose, agent: "Reviewer", module: other.hex,
+                                            reason: "the plate the entry holds names the wrong source"))
+        let proposalID = try XCTUnwrap(proposal["id"] as? String, "\(proposal)")
+        let entry = try XCTUnwrap((proposal["entries"] as? [String: Any])?[id] as? [String: Any], "\(proposal)")
+        XCTAssertEqual(entry["held_by"] as? String, source.hex)
+        let fields = entry["fields"] as? [[String: Any]] ?? []
+        XCTAssertTrue(fields.contains { ($0["offered"] as? String ?? "").contains(proposed)
+            && ($0["held"] as? String ?? "").contains("the plate.") }, "\(fields)")
+        XCTAssertEqual(proposal["names"] as? [String], [], "no type")
+        _ = try await call(.init(action: .vote, agent: "Verifier", id: proposalID, choice: .agree))
+        let agreed = try await call(.init(action: .vote, agent: "Analyzis", id: proposalID, choice: .agree))
+        XCTAssertEqual(agreed["state"] as? String, "agreed")
+
+        // Not what was voted on: refused as before.
+        let version = try store.libraryIndex().entries[id]?.version
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "plate", "text": proposed + " Changed after the vote."]))
+        do {
+            _ = try await host.publish(other, by: "agent")
+            XCTFail("a review other than the agreed one replaced the entry")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409, "\(error)")
+        }
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.version, version)
+
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "plate", "text": proposed]))
+        let published = try await host.publish(other, by: "agent")
+        XCTAssertEqual(published.library?.updated.map(\.id), [id], "\(String(describing: published.library))")
+        let last = try XCTUnwrap(try store.libraryHistory(id: id)?.versions.last)
+        XCTAssertEqual(last.source.module, other)
+        XCTAssertTrue((last.reason ?? "").contains(proposalID) && (last.reason ?? "").contains("names the wrong source"),
+                      last.reason ?? "no reason")
+        let held = try store.libraryIndex().entries[id]
+        let text = String(decoding: try store.object(try XCTUnwrap(held?.entry)), as: UTF8.self)
+        XCTAssertTrue(text.contains("PEI services hold"), text)
+        let applied = try await call(.init(action: .read, id: proposalID))
+        XCTAssertEqual(applied["state"] as? String, "applied")
+
+        var remark: TicketBook.Remark?
+        for _ in 0..<60 {
+            remark = await host.tickets?.ticket(source.hex)?.remarks.first
+            if remark != nil { break }
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+        let told = try XCTUnwrap(remark, "the entry's writer has no remark")
+        XCTAssertTrue(told.text.contains(id) && told.text.contains(proposalID), told.text)
+    }
+
     /// What the registry says is replaced by nobody here. Replacing it refuses the
     /// whole publish, from the entry's source and from a holder, in the dry run
     /// and in a done: nothing is stored and the function stays dirty. Over the

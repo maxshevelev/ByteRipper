@@ -372,7 +372,8 @@ extension GhidraHost {
                 try await applyOwnerSteps(&journal, record: record)
                 try await writer.removeJournal(id: journal.id)
                 await noteProposalsApplied(journal.typeProposals ?? [], module: module, revision: journal.rev,
-                                           version: journal.typesVersion?.version)
+                                           version: journal.typesVersion?.version,
+                                           relinked: journal.library?.relinked ?? [])
             }
             unfinished.remove(module)
         } catch {

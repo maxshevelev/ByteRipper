@@ -1,9 +1,10 @@
 import CodeAnalysis
 import Foundation
 
-/// Agents agreeing a replacement of shared types (`TypeProposalBook`): the
-/// host finds what the module's publish would replace, keeps both texts in
-/// the proposal, and applies an agreed proposal at the module's next publish.
+/// Agents agreeing a replacement of shared definitions (`TypeProposalBook`) —
+/// shared types and library registry entries: the host finds what the
+/// module's publish would replace, keeps both texts in the proposal, and
+/// applies an agreed proposal at the module's next publish.
 extension GhidraHost {
     public func typeProposalCall(_ request: TypeProposalBook.Request, holder: String) async throws -> Data {
         guard let book = typeProposals else {
@@ -50,13 +51,16 @@ extension GhidraHost {
     /// publish will apply it.
     func proposalDraft(_ module: SHA256Digest, holder: String) async throws -> TypeProposalBook.Draft {
         guard let held = workLease(module), held.holder == holderName(holder) else {
-            throw GhidraHostError(.refused, "take the module into work first (`ghidra_take`): only its holder proposes "
-                + "the types its publish would replace", status: 409)
+            throw GhidraHostError(.refused, "take the module into work first (`ghidra_take`): only its holder proposes what "
+                + "its publish would replace", status: 409)
         }
-        let preview = (try JSONSerialization.jsonObject(with: try await self.preview(module, holder: holder))
-            as? [String: Any]) ?? [:]
-        let origins = preview["type_conflict_origins"] as? [String: String] ?? [:]
-        let names = (preview["type_conflicts"] as? [String] ?? []).filter { !(origins[$0] ?? "").hasPrefix("withdrawn ") }
+        // One dry export answers both: the type conflicts in its headers, the
+        // registry's offer in the artifact.
+        let record = try await owner(of: module)
+        let (raw, headers) = try await Self.call(record.port, "POST", "/v1/publish?dry_run=1", timeout: 3600)
+        let origins = Self.typeOrigins(headers["x-owner-type-origins"])
+        let names = (headers["x-owner-type-conflicts"] ?? "").split(separator: ",").map(String.init)
+            .filter { !(origins[$0] ?? "").hasPrefix("withdrawn ") }
         var moduleC: [String: String] = [:]
         var sharedC: [String: String] = [:]
         for name in names {
@@ -66,9 +70,96 @@ extension GhidraHost {
         }
         let language = ((try? JSONSerialization.jsonObject(with: try await read(module, "/v1/hello", holder: holder)))
             as? [String: Any])?["language"] as? String ?? ""
+        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: raw)
+        let entries = try await libraryReplacements(module, raw: raw, offer: offer.proposals,
+                                                    reviewed: headers["x-owner-reviewed"] == "true")
         return TypeProposalBook.Draft(module: module.hex, name: try? project(module).state().module.name,
                                       bits: Self.archiveBits(language: language), names: names, moduleC: moduleC,
-                                      sharedC: sharedC, origins: origins.filter { names.contains($0.key) })
+                                      sharedC: sharedC, origins: origins.filter { names.contains($0.key) },
+                                      entries: entries)
+    }
+
+    /// The registry entries the module's publish would replace, each with
+    /// every field its review changes, as the entry holds it and as the module
+    /// offers it: those the registry refuses as a replacement, and those a
+    /// link would have to record over a differing review. Read from an export
+    /// of the module as it is now; nothing is written.
+    func libraryReplacements(_ module: SHA256Digest, raw: Data, offer: [LibraryProposal],
+                             reviewed: Bool) async throws -> [String: TypeProposalBook.Entry] {
+        var offered = try await Self.withoutLinked(offer, writer: writer)
+        guard !offered.isEmpty || !offer.isEmpty else { return [:] }
+        let first = try await Self.completions(raw, offer: offer, offered: offered, reviewed: reviewed, take: .none,
+                                               writer: writer)
+        let linkIDs = first.refused.compactMap(\.entry)
+        // Those links taken, to see what the registry says of the rest.
+        let probe = LibraryTake.these(Dictionary(linkIDs.map { ($0, "probe") }, uniquingKeysWith: { a, _ in a }))
+        let completion = linkIDs.isEmpty ? first
+            : try await Self.completions(raw, offer: offer, offered: offered, reviewed: reviewed, take: probe,
+                                         writer: writer)
+        offered += completion.proposals
+        let rev = (try await writer.latestRevision(module: module))?.rev ?? 0
+        let would = offered.isEmpty ? nil : try await writer.previewLibraryEntries(
+            module: module, rev: rev, by: nil, proposals: offered, take: probe)
+        let index = try await writer.readLibraryIndex()
+        var found: [String: TypeProposalBook.Entry] = [:]
+        if let would, !would.conflicts.isEmpty {
+            let fields = try await Self.conflictFields(would.conflicts, offered: offered, writer: writer)
+            for conflict in would.conflicts {
+                found[conflict.id] = .init(name: conflict.name, proposedName: conflict.proposedName,
+                                           heldBy: conflict.heldBy.module.hex, version: conflict.version,
+                                           fields: Self.entryFields(fields[conflict.id]))
+            }
+        }
+        for id in linkIDs where found[id] == nil {
+            guard let held = index.entries[id],
+                  let own = completion.proposals.first(where: { $0.basedOn == id }) else { continue }
+            let object = try await writer.readObject(held.entry)
+            func fields(_ data: Data) -> [String: Any] {
+                ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any]) ?? [:]
+            }
+            let (before, after) = (fields(object), fields(own.entry))
+            let changed = LibraryProposal.changedFields(from: object, to: own.entry)
+            found[id] = .init(name: held.name, proposedName: own.name, heldBy: held.source.module.hex,
+                              version: held.version,
+                              fields: changed.map { .init(field: $0, held: Self.fieldText($0, before[$0]),
+                                                           offered: Self.fieldText($0, after[$0])) })
+        }
+        return found
+    }
+
+    static func entryFields(_ rows: [[String: String]]?) -> [TypeProposalBook.Entry.Field] {
+        (rows ?? []).map { .init(field: $0["field"] ?? "", held: $0["held"] ?? "", offered: $0["offered"] ?? "") }
+    }
+
+    /// The decision an agreed proposal makes for the registry: every entry the
+    /// publish would replace is in one of the module's agreed proposals, with
+    /// the same fields as the voters read. Nil when there is nothing to
+    /// replace, or when any is not covered: then the publish is refused as
+    /// before.
+    func agreedLibraryTake(_ module: SHA256Digest, raw: Data, offer: [LibraryProposal],
+                           reviewed: Bool) async throws -> (reasons: [String: String], proposals: [String])? {
+        guard let book = typeProposals else { return nil }
+        let agreed = await book.agreed(module: module.hex).filter { !($0.entries ?? [:]).isEmpty }
+        guard !agreed.isEmpty else { return nil }
+        let now = try await libraryReplacements(module, raw: raw, offer: offer, reviewed: reviewed)
+        guard !now.isEmpty else { return nil }
+        var reasons: [String: String] = [:]
+        var ids: Set<String> = []
+        for (id, entry) in now {
+            guard let proposal = agreed.first(where: { $0.entries?[id] != nil }),
+                  proposal.entries?[id]?.fields == entry.fields else { return nil }
+            reasons[id] = Self.takenReason(proposal)
+            ids.insert(proposal.id)
+        }
+        return (reasons, ids.sorted())
+    }
+
+    /// The reason an entry's history keeps for a replacement agents agreed.
+    static func takenReason(_ proposal: TypeProposalBook.Proposal) -> String {
+        let agreed = proposal.decided?.forced == true
+            ? "decided by \(proposal.decided?.by ?? "an administrator")"
+            : "agreed by " + proposal.agrees.joined(separator: " and ")
+        return "\(proposal.reason) (proposal \(proposal.id) by \(proposal.author), \(agreed))"
     }
 
     /// A type as the module's program and the shared archive's copy beside
@@ -101,55 +192,73 @@ extension GhidraHost {
         return ids.sorted()
     }
 
-    /// What a module that uses a replaced type reads on its ticket.
+    /// What a module that uses a replaced definition reads on its ticket.
     static func appliedRemark(_ proposal: TypeProposalBook.Proposal, names: [String], version: Int?) -> String {
-        let types = names.joined(separator: ", ")
         let author = proposal.name ?? proposal.module
-        let number = version.map(String.init) ?? "?"
         let agreed = proposal.decided?.forced == true
             ? "decided by \(proposal.decided?.by ?? "an administrator")"
             : "agreed by " + proposal.agrees.joined(separator: " and ")
-        return "The shared type \(types) was replaced by \(author)'s definition, as the shared types' version "
-            + "\(number) (type proposal \(proposal.id), \(agreed)). Read this module's uses of it again "
-            + "(`ghidra_type_definition`, `ghidra_type_uses`): a field may have moved or been renamed."
+        var what: [String] = []
+        if !names.isEmpty {
+            what.append("the shared type \(names.joined(separator: ", ")), as the shared types' version "
+                + (version.map(String.init) ?? "?"))
+        }
+        let entries = (proposal.entries ?? [:]).sorted { $0.key < $1.key }
+        if !entries.isEmpty {
+            what.append("the library registry entry " + entries.map { "\($0.value.name) (\($0.key))" }
+                .joined(separator: ", "))
+        }
+        return "Replaced by \(author)'s definition: " + what.joined(separator: "; and ")
+            + " (proposal \(proposal.id), \(agreed)). Read this module's uses of it again "
+            + "(`ghidra_type_definition`, `ghidra_type_uses`, `library_registry`): a field, a name or a "
+            + "parameter may have changed."
     }
 
     /// The proposals a finished publish applied marked so, and told on its
-    /// ticket every other module that wrote the shared copy or whose last
-    /// published analysis names a replaced type. The second reads every module's artifact: it runs on its own.
-    func noteProposalsApplied(_ ids: [String], module: SHA256Digest, revision: Int?, version: Int?) async {
+    /// ticket every other module that wrote a replaced definition, whose last
+    /// published analysis names a replaced type, or whose links the registry
+    /// moved to a replaced entry's new version.
+    func noteProposalsApplied(_ ids: [String], module: SHA256Digest, revision: Int?, version: Int?,
+                              relinked: [ContentStore.Relinked] = []) async {
         guard let book = typeProposals, !ids.isEmpty else { return }
         try? await book.markApplied(ids, revision: revision, version: version)
         var proposals: [TypeProposalBook.Proposal] = []
         for id in ids { if let proposal = await book.proposal(id) { proposals.append(proposal) } }
         guard let tickets else { return }
         Task.detached { [self] in
+            let server = TicketBook.Caller(author: "byteripper-server", holder: "server")
             for proposal in proposals {
                 let names = proposal.names.filter { name in
                     !(name.hasPrefix("_") && proposal.names.contains(String(name.dropFirst())))
                 }
                 var told: Set<String> = [module.hex]
                 let text = Self.appliedRemark(proposal, names: names, version: version)
-                let server = TicketBook.Caller(author: "byteripper-server", holder: "server")
-                // The module that wrote the shared copy, whether or not its
-                // code uses the type: its definition is the one replaced.
-                for origin in Set(proposal.origins.values).sorted() {
-                    guard let writer = SHA256Digest(hex: origin.lowercased()), told.insert(writer.hex).inserted else {
-                        continue
+                func tell(_ other: SHA256Digest, revision: Int?, name: String?) async {
+                    guard told.insert(other.hex).inserted else { return }
+                    var revision = revision, name = name
+                    if revision == nil || name == nil, let state = try? await project(other).state() {
+                        revision = revision ?? state.published?.rev
+                        name = name ?? state.module.name
                     }
-                    let state = try? await project(writer).state()
                     _ = try? await tickets.add(
-                        TicketBook.NewRemark(severity: .misleading, text: text, revision: state?.published?.rev),
-                        module: writer.hex, name: state?.module.name, reviewer: nil, by: server)
+                        TicketBook.NewRemark(severity: .misleading, text: text, revision: revision),
+                        module: other.hex, name: name, reviewer: nil, by: server)
+                }
+                // The modules that wrote the shared copies, whether or not
+                // their code uses them: their definitions are the ones replaced.
+                let writers = Set(proposal.origins.values).union((proposal.entries ?? [:]).values.compactMap(\.heldBy))
+                for origin in writers.sorted() {
+                    if let other = SHA256Digest(hex: origin.lowercased()) { await tell(other, revision: nil, name: nil) }
+                }
+                if !(proposal.entries ?? [:]).isEmpty {
+                    for row in relinked { await tell(row.module, revision: nil, name: nil) }
                 }
                 for name in names {
                     guard let data = try? await typeUses(name: name, limit: 1),
                           let answer = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
                     for row in answer["modules"] as? [[String: Any]] ?? [] {
-                        guard let other = row["module"] as? String, told.insert(other).inserted else { continue }
-                        _ = try? await tickets.add(
-                            TicketBook.NewRemark(severity: .misleading, text: text, revision: row["revision"] as? Int),
-                            module: other, name: row["name"] as? String, reviewer: nil, by: server)
+                        guard let text = row["module"] as? String, let other = SHA256Digest(hex: text) else { continue }
+                        await tell(other, revision: row["revision"] as? Int, name: row["name"] as? String)
                     }
                 }
             }

@@ -1,16 +1,19 @@
 import Foundation
 
-/// Agents agreeing a change to a shared type without the person.
+/// Agents agreeing a change to a shared definition without the person: a
+/// shared type, or an entry of the library registry.
 ///
-/// A publish whose type differs from the shared one in more than an addition
-/// is refused. The module's holder may then propose its definitions as the
-/// shared ones: the proposal keeps both texts, the module's and the shared
-/// one's, and why. Other agents vote. It is agreed once two agents agree —
+/// A publish whose type differs from the shared one, or whose review of a
+/// library function differs from the registry entry's, in more than an
+/// addition is refused. The module's holder may then propose its definitions
+/// as the shared ones: the proposal keeps both texts — the module's and the
+/// shared one's, for an entry each changed field — and why. Other agents vote. It is agreed once two agents agree —
 /// two different names, neither of them the author — and no agent objects;
 /// an objection holds it until its author changes the vote. An agreed
 /// proposal is applied by the module's next publish, as the shared types'
-/// next version, provided the module still defines the types as proposed and
-/// the shared ones are still what the proposal saw. An administrator may
+/// next version and each entry's next version, provided the module still
+/// defines them as proposed and the shared ones are still what the proposal
+/// saw. An administrator may
 /// agree or reject one from the console, whatever the votes.
 ///
 /// Agents are told apart by the name they give, as on the review board: there
@@ -57,6 +60,44 @@ public actor TypeProposalBook {
         public let forced: Bool?
     }
 
+    /// A registry entry the module's publish would replace: every field its
+    /// review changes, as the entry holds it and as the module offers it.
+    public struct Entry: Codable, Equatable, Sendable {
+        public struct Field: Codable, Equatable, Sendable {
+            public let field: String
+            public let held: String
+            public let offered: String
+
+            public init(field: String, held: String, offered: String) {
+                self.field = field
+                self.held = held
+                self.offered = offered
+            }
+        }
+
+        /// The entry's name, and the one the module's review gives it.
+        public let name: String
+        public let proposedName: String?
+        /// The module whose review the entry's current version is.
+        public let heldBy: String?
+        public let version: Int?
+        public let fields: [Field]
+
+        public init(name: String, proposedName: String?, heldBy: String?, version: Int?, fields: [Field]) {
+            self.name = name
+            self.proposedName = proposedName
+            self.heldBy = heldBy
+            self.version = version
+            self.fields = fields
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name, version, fields
+            case proposedName = "proposed_name"
+            case heldBy = "held_by"
+        }
+    }
+
     public struct Applied: Codable, Equatable, Sendable {
         public let revision: Int?
         public let version: Int?
@@ -77,6 +118,8 @@ public actor TypeProposalBook {
         public let sharedC: [String: String]
         /// The module that wrote each shared copy, as the archive says.
         public let origins: [String: String]
+        /// The registry entries the module's publish would replace, by id.
+        public let entries: [String: Entry]?
         public let author: String
         public let holder: String
         public let reason: String
@@ -96,7 +139,8 @@ public actor TypeProposalBook {
         public var objections: [String] { current.filter { $0.choice == .object }.map(\.agent) }
 
         enum CodingKeys: String, CodingKey {
-            case id, at, module, name, bits, names, origins, author, holder, reason, votes, state, decided, applied
+            case id, at, module, name, bits, names, origins, entries, author, holder, reason, votes, state, decided
+            case applied
             case moduleC = "module_c"
             case sharedC = "shared_c"
         }
@@ -161,9 +205,10 @@ public actor TypeProposalBook {
         public var moduleC: [String: String]
         public var sharedC: [String: String]
         public var origins: [String: String]
+        public var entries: [String: Entry]
 
         public init(module: String, name: String?, bits: String, names: [String], moduleC: [String: String],
-                    sharedC: [String: String], origins: [String: String]) {
+                    sharedC: [String: String], origins: [String: String], entries: [String: Entry] = [:]) {
             self.module = module
             self.name = name
             self.bits = bits
@@ -171,6 +216,7 @@ public actor TypeProposalBook {
             self.moduleC = moduleC
             self.sharedC = sharedC
             self.origins = origins
+            self.entries = entries
         }
     }
 
@@ -214,8 +260,9 @@ public actor TypeProposalBook {
         guard !reason.isEmpty else {
             throw refused("say why the shared definition is wrong, with the evidence: the voters read it")
         }
-        guard !draft.names.isEmpty else {
-            throw refused("this module's publish replaces no shared type: there is nothing to propose", status: 409)
+        guard !draft.names.isEmpty || !draft.entries.isEmpty else {
+            throw refused("this module's publish replaces no shared type and no registry entry: there is nothing to "
+                + "propose", status: 409)
         }
         let module = draft.module.lowercased()
         if let live = proposals.values.first(where: { $0.module == module && $0.state.isLive }) {
@@ -229,10 +276,18 @@ public actor TypeProposalBook {
             throw refused("proposal \(other.id) of \(other.name ?? other.module) already proposes \(shared): "
                 + "vote on it, or wait until it is decided", status: 409)
         }
+        let entries = Set(draft.entries.keys)
+        if let other = proposals.values.first(where: { $0.state.isLive
+            && !entries.isDisjoint(with: ($0.entries ?? [:]).keys) }) {
+            let shared = entries.intersection((other.entries ?? [:]).keys).sorted().joined(separator: ", ")
+            throw refused("proposal \(other.id) of \(other.name ?? other.module) already proposes the registry "
+                + "entries \(shared): vote on it, or wait until it is decided", status: 409)
+        }
         let proposal = Proposal(
             id: String(UUID().uuidString.prefix(8)).lowercased(), at: Self.second(now), module: module,
             name: draft.name, bits: draft.bits, names: draft.names.sorted(), moduleC: draft.moduleC,
-            sharedC: draft.sharedC, origins: draft.origins, author: author, holder: caller.holder,
+            sharedC: draft.sharedC, origins: draft.origins,
+            entries: draft.entries.isEmpty ? nil : draft.entries, author: author, holder: caller.holder,
             reason: Self.cut(reason) ?? reason, votes: [], state: .open, decided: nil, applied: nil)
         proposals[proposal.id] = proposal
         try save()

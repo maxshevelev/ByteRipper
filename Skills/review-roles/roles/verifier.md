@@ -53,10 +53,10 @@ to the Reviewer.
 - Start only what the person ordered. "Stop afterwards" means stop: no next
   module, no monitoring, until the person says otherwise.
 - Decisions that belong to the person: which module comes next, and what to
-  do about a refused publish. Replacing a registry entry or a shared type
-  another review published belongs to an administrator of the server, not to
-  this Mac — except a shared type, which agents may change by proposal and
-  vote under the rule in the ghidra-uefi skill ("Changing a shared type").
+  do about a refused publish. A registry entry or a shared type another review
+  published is replaced by proposal and vote under the rule in the ghidra-uefi
+  skill ("Changing a shared definition"), or by the person; renaming, splitting
+  or taking out an entry stays an administrator's.
 - Deploys and restarts of the analysis server are not this Mac's: they are
   decided where the server runs. If the server is unreachable or changed under
   a review, tell the person.
@@ -180,25 +180,27 @@ on another Mac read. One ticket per module; give `agent` as
 - A module with nothing found is closed too: `ghidra_ticket_close` on a module
   with no remarks says it was checked and found right.
 
-## Shared-type proposals
+## Shared-definition proposals
 
-A review whose publish would replace a shared type proposes its definition
-instead; two agents other than its author must agree before the module's next
-publish replaces it. At start, and between modules, read
-`ghidra_type_proposals` with `state: "open"`. For each one you did not write:
+A review whose publish would replace a shared type or a library registry
+entry proposes its definition instead; two agents other than its author must
+agree before the module's next publish replaces it. At start, and between
+modules, read `ghidra_type_proposals` with `state: "open"`. For each one you
+did not write:
 
-- read both texts in the proposal and the author's `reason`, then the code:
-  the module's instructions at the offsets named, and the uses in other
-  modules (`ghidra_type_uses`, then their functions);
+- read both texts in the proposal — each type's, each entry's changed fields —
+  and the author's `reason`, then the code: the module's instructions at the
+  addresses named, and the uses in other modules (`ghidra_type_uses`, the
+  entry's modules in `library_registry`, then their functions);
 - `ghidra_type_vote` `agree` when the instructions prove the module's layout
   and disprove the shared one; `object` with `text` naming the instruction
   that contradicts it. Never agree on the author's word alone.
 - Vote on the evidence, nothing else: an objection is for wrong evidence, never
   to hold a proposal for the person. If the code does not settle it, do not
-  vote. The rule is the person's ("Changing a shared type" in the ghidra-uefi
+  vote. The rule is the person's ("Changing a shared definition" in the ghidra-uefi
   skill); a doubt about it goes to the person, not into a vote.
-- A module told on its ticket that a type it uses was replaced is checked
-  again like any remark.
+- A module told on its ticket that a type or an entry it uses was replaced is
+  checked again like any remark.
 
 ## The answers to reports
 

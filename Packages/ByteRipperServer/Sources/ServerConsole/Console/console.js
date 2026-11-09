@@ -69,6 +69,9 @@
     terminal: "M4 17l6-6-6-6 M12 19h8",
     search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.3-4.3",
     // SF Symbols' exclamationmark.magnifyingglass: a review's findings.
+    // slider.horizontal.2.arrow.trianglehead.counterclockwise: two sliders in a
+    // counterclockwise arrow — a proposal to change a shared definition.
+    proposals: "M3.6 12a8.4 8.4 0 1 0 2.46-5.94 M6.06 2.9v3.16h3.16 M8 9.5h1.6 M12.6 9.5H16 M9.6 9.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0 M8 14.5h3.4 M14.4 14.5H16 M11.4 14.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0",
     reviewFindings: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15z M21 21l-5.2-5.2 M10.5 6.8v4.4 M10.5 14.2h.01",
     pause: "M8 5v14 M16 5v14",
     play: "M7 4l13 8-13 8z",
@@ -1355,7 +1358,8 @@
         onclick: () => { state.ticketState = id; refresh(); } }, label)));
     append(actions, seg);
     const board = card("Review board", "one ticket per module; a verifier other than the reviewer closes it");
-    const proposals = card("Shared-type proposals", "a replacement applies once two agents other than its author agree and none objects");
+    const proposals = card("Shared-definition proposals", "a replacement applies once two agents other than its author agree and none objects");
+    proposals.head.querySelector("h2").prepend(icon("proposals", 17));
     const root = h("div", { class: "stack" }, proposals.root, board.root);
 
     function update(tickets) {
@@ -1369,7 +1373,7 @@
         const recent = rows.filter((p) => !(p.state === "open" || p.state === "agreed")).slice(0, 10);
         const all = live.concat(recent);
         fill(proposals.body, all.length ? proposalTable(all)
-          : empty("layers", "No proposal", "When a module's publish would replace a shared type, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
+          : empty("proposals", "No proposal", "When a module's publish would replace a shared type or a library registry entry, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
       }, () => fill(proposals.body, h("div", { class: "muted", text: "This server keeps no type proposals." })));
     }
     return { root, update };
@@ -1384,7 +1388,7 @@
   function proposalTable(rows) {
     return h("table", { class: "lines" },
       h("thead", {}, h("tr", {},
-        h("th", { class: "w-who", text: "Module" }), h("th", { text: "Types" }), h("th", { class: "w-state", text: "State" }),
+        h("th", { class: "w-who", text: "Module" }), h("th", { text: "Types and entries" }), h("th", { class: "w-state", text: "State" }),
         h("th", { text: "Votes" }), h("th", { text: "Author" }), h("th", { class: "w-open" }))),
       h("tbody", {}, rows.flatMap((p) => {
         const key = `proposal:${p.id}`;
@@ -1392,8 +1396,8 @@
         const flip = () => { if (opened) state.openTickets.delete(key); else state.openTickets.add(key); refresh(); };
         const names = p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
         const row = h("tr", { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
-          whoCell("layers", p.name || "module", p.module),
-          h("td", { class: "mono", text: names.join(", ") }),
+          whoCell("proposals", p.name || "module", p.module),
+          h("td", { class: "mono", text: names.concat(Object.values(p.entries || {}).map((e) => e.name)).join(", ") }),
           h("td", {}, proposalPill(p.state)),
           h("td", {}, h("span", { class: "ok-text", text: `${p.agrees.length}/${p.agrees_needed} agree` }),
             p.objections.length ? h("span", { class: "danger-text", text: ` · ${p.objections.length} object` }) : null),
@@ -1426,6 +1430,14 @@
         h("div", { class: "type-pair" },
           h("div", {}, h("div", { class: "codebar-title", text: `${p.name || "module"} (proposed)` }), h("pre", { class: "code", text: p.module_c[name] || "—" })),
           h("div", {}, h("div", { class: "codebar-title", text: "Shared now" }), h("pre", { class: "code", text: p.shared_c[name] || "—" }))))),
+      Object.entries(p.entries || {}).sort(([a], [b]) => a.localeCompare(b)).map(([id, entry]) => h("div", { class: "type-conflict" },
+        h("div", { class: "doc-title mono", text: `${entry.name} · registry entry ${id}` }),
+        h("div", { class: "muted", text: `Version ${entry.version ?? "?"}, the review of ${entry.held_by ? String(entry.held_by).slice(0, 12) : "a module not known here"}${entry.proposed_name && entry.proposed_name !== entry.name ? `; this module names it ${entry.proposed_name}` : ""}` }),
+        (entry.fields || []).map((f) => h("div", {},
+          h("div", { class: "codebar-title mono", text: f.field }),
+          h("div", { class: "type-pair" },
+            h("div", {}, h("div", { class: "codebar-title", text: `${p.name || "module"} (proposed)` }), h("pre", { class: "code", text: f.offered || "—" })),
+            h("div", {}, h("div", { class: "codebar-title", text: "Entry now" }), h("pre", { class: "code", text: f.held || "—" }))))))),
       (p.votes || []).map((vote) => h("div", { class: "reply" },
         h("div", { class: "row" }, h("b", { text: vote.agent }),
           h("span", { class: `pill ${vote.choice === "agree" ? "ok" : "danger"}`, text: vote.choice }),

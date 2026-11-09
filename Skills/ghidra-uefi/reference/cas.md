@@ -213,7 +213,10 @@ replaces the types the proposal names — while the module and the shared copy
 still hold the texts the voters read. The proposals are kept in
 `private/type-proposals.json` beside the review board's `private/tickets.json`;
 each records the module, both texts of every type, the votes, and the
-revision and version that applied it. A name withdrawn from the archive does not refuse: it stays
+revision and version that applied it. The same proposal carries the library
+registry entries the publish would replace — each changed field as the entry
+holds it and as the module offers it — and an agreed one makes each entry's
+next version, the proposal's reason, id and voters in the entry's history. A name withdrawn from the archive does not refuse: it stays
 in the module's program and is reported. A withdrawal is a version of its own.
 A typedef named like the function it renames — what the C parser makes of
 `typedef UINT32 NAME(…)` — is that function, so a module that holds the

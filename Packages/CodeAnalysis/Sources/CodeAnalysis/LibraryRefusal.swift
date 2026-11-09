@@ -8,11 +8,15 @@ public enum LibraryRefusal {
         public var address: String?
         public var name: String
         public var why: String
+        /// The registry entry this row would replace, when that is why it is
+        /// refused: what a proposal of the replacement names.
+        public var entry: String?
 
-        public init(address: String?, name: String, why: String) {
+        public init(address: String?, name: String, why: String, entry: String? = nil) {
             self.address = address
             self.name = name
             self.why = why
+            self.entry = entry
         }
 
         var said: String {

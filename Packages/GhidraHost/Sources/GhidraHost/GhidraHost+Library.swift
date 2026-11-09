@@ -575,8 +575,8 @@ extension GhidraHost {
                 .filter { !["body", "constants", "function", "equates"].contains($0) }
             refused.append(.init(address: address, name: name, why: lacks
                 + ", and its review here differs from the entry's (" + changed.joined(separator: ", ") + "): "
-                + "take the entry's text with `ghidra_library_apply` and `take_text`, or an administrator "
-                + "takes this module's review with `take_library_conflicts`"))
+                + "take the entry's text with `ghidra_library_apply` and `take_text`, or, if the entry is the "
+                + "wrong one, propose this module's review with `ghidra_type_propose`", entry: id))
         }
         return (proposals, refused)
     }
@@ -774,7 +774,7 @@ extension GhidraHost {
         return found
     }
 
-    private static func fieldText(_ field: String, _ value: Any?) -> String {
+    static func fieldText(_ field: String, _ value: Any?) -> String {
         guard let value, !(value is NSNull) else { return "" }
         if field == "function", let c = (value as? [String: Any])?["c"] as? String { return c }
         if let text = value as? String { return text }

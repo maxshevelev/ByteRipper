@@ -447,13 +447,11 @@ function's name, its return type, its convention, a parameter's type or written 
 and any text already written are the entry's: changing one is a replacement. Everything
 the entry says must still be there, word for word.
 
-**Avoid replacing a shared definition unless the code proves it wrong.** Only an
-administrator replaces one (`byteripper-cas library-rename` and its neighbours below, or a
-token with the `admin` right); no tool of a review can. Write down what was found in
-the report to the person.
-
-**A shared type the code proves wrong is proposed, not replaced** — see "Changing a shared
-type" below. Registry entries are not proposed: they stay the administrator's.
+**Avoid replacing a shared definition unless the code proves it wrong.** When it does,
+propose the replacement: two other agents agreeing apply it at the module's next publish
+(see "Changing a shared definition" below). Renaming, splitting or taking out an entry
+stays an administrator's (`byteripper-cas library-rename` and its neighbours below). Write
+down what was found in the report to the person.
 
 A replacement refused: take the entry's text with `ghidra_library_apply`, `address`
 and `take_text: true`, make the addition over it, name with `ghidra_label` any label
@@ -642,51 +640,62 @@ match is by body: the same code, with the addresses a relocation moves masked.
   `ghidra_library_apply`, `address` and a `reason` only when the values are shown
   to make no difference, or refuse it with `decline: true`.
 
-### Changing a shared type
+### Changing a shared definition
 
-This is the rule for a change to a shared type, set by the person (2026-11-09). It is
-not a peer's or a role's to narrow or widen: an agent that disagrees with it asks the
-person and meanwhile follows it.
+This is the rule for a change to a shared definition — a shared type, or an entry of the
+library registry — set by the person (2026-11-09). It is not a peer's or a role's to
+narrow or widen: an agent that disagrees with it asks the person and meanwhile follows
+it. It binds every agent that reaches the review tools — on the server's own MCP, or
+through ByteRipper on any Mac (the app's MCP serves the same tools, and this skill in its
+review kit) — and every such agent's vote counts the same.
 
 | the change | who accepts it | how |
 |---|---|---|
-| a new type, the same type | nobody needs to | the publish takes it |
-| an addition — an enum member, a comment or description, a real name for a placeholder, a placeholder (`Unknown…[N]`, `field_0x…`, untyped bytes) cut into fields that stay inside its bytes, named fields at their place and size, the size unchanged | nobody needs to | the publish makes the shared types' next version |
-| a replacement — anything else: a named field moved, resized, retyped or renamed, the size changed | two agents, by vote, or the person | a proposal on the board; or the person in the console |
+| a new type or entry, the same one | nobody needs to | the publish takes it |
+| a type's addition — an enum member, a comment or description, a real name for a placeholder, a placeholder (`Unknown…[N]`, `field_0x…`, untyped bytes) cut into fields that stay inside its bytes, named fields at their place and size, the size unchanged | nobody needs to | the publish makes the shared types' next version |
+| an entry's addition — a comment or a plate where it had none, a name or a type for a Ghidra placeholder, an equate or a label it did not name | nobody needs to | the publish makes the entry's next version |
+| a replacement — anything else: a type's named field moved, resized, retyped or renamed, its size changed; an entry's name, signature, convention, a parameter, or any text it holds | two agents, by vote, or the person | a proposal; or the person in the console |
 
 **A proposal.** Only the module's holder proposes, with the module in work and its publish
 refused for the replacement: `ghidra_type_propose`, `reason` giving the evidence — the
-instructions and offsets in this module that prove its layout, and what disproves the
-shared one. The proposal keeps each type's two texts, the module's and the shared one, as
-they were when it was made. One live proposal per module and per type.
+instructions and offsets in this module that prove its layout or its review, and what
+disproves the shared one. One proposal carries every type and every registry entry the
+publish would replace. It keeps each type's two texts, the module's and the shared one,
+and each entry's changed fields as the entry holds them and as the module offers them, as
+they were when it was made. One live proposal per module, per type and per entry. A
+proposal is made only with evidence; one the code does not support is not made.
 
 **The vote.** `ghidra_type_vote`, by agents other than the author, each under its own
-name (`agent`); a later vote of the same agent replaces its earlier one.
+name (`agent`), wherever it runs: an agent working through ByteRipper on another Mac
+votes like one on the server. Agents are told apart by that name alone, case aside — a
+name is one agent whichever token or Mac it comes from, so an agent never votes under
+a second name. A later vote of the same agent replaces its earlier one.
 - `agree` — the voter read both texts, the author's evidence, and the instructions
-  themselves: this module's at the offsets named and those of the modules that use the
-  type (`ghidra_type_uses`). Never on the author's word alone.
+  themselves: this module's at the addresses named, and those of the modules that use
+  the type (`ghidra_type_uses`) or link to the entry (`library_registry`). Never on the
+  author's word alone.
 - `object` — with `text` naming what the code contradicts, with addresses. An objection
-  is for wrong evidence only. Objecting to hold a proposal for someone, or declining to
-  vote `agree` on a proposal the code proves, is not the rule: say nothing instead, or
-  ask the person.
+  is for wrong evidence only, never to hold a proposal back for someone.
 - A voter who cannot settle it from the code does not vote.
 
 **When it applies.** The proposal is `agreed` when two agents other than the author
 agree and no objection stands. An objection stands until the agent that made it votes
 `agree`; nobody else lifts it. An objection made after the agreement takes the
 proposal back to `open`. The module's next publish (`ghidra_publish`, `ghidra_done`)
-then replaces the types as the shared types' next version — only if the module still
-defines them as proposed and the shared copy is still the one voted on. Otherwise the
-publish is refused as before, and the holder proposes again.
+then replaces them: the types as the shared types' next version, each entry as its next
+version with the proposal's reason, id and voters in the entry's history. Only if the
+module still defines them as proposed and the shared ones are still those voted on;
+otherwise the publish is refused as before, and the holder proposes again.
 
-**After it.** The module that wrote the shared copy and every module whose published
-review uses a replaced type get a remark on their tickets; their reviews are checked
+**After it.** The modules that wrote the replaced definitions, every module whose
+published review uses a replaced type, and every module whose links the registry moved to
+a replaced entry's new version get a remark on their tickets; their reviews are checked
 again like any remark. Nobody waits for them before the replacement.
 
 **The person** can agree or reject any proposal in the server's console (**Review
-Tickets**, "Shared-type proposals"), whatever the votes, and can still replace a shared
-type directly (**Activity**, the module in work's conflicts). The author `withdraw`s its
-own proposal.
+Tickets**, "Shared-definition proposals"), whatever the votes, and can still replace a
+shared definition directly (**Activity**, the module in work's conflicts). The author
+`withdraw`s its own proposal.
 
 ### On an analysis server
 

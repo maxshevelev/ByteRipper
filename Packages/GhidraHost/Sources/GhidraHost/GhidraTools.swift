@@ -1306,8 +1306,9 @@ public enum GhidraTools {
                 replaces the shared one, and that is a version too. A type the archive holds differently in any other way \
                 refuses the whole publish before anything is stored, naming each type and the module that \
                 wrote the shared copy: `ghidra_type_definition` shows both; bring the module's type in line \
-                with the shared one. A shared definition is replaced only by an administrator: avoid \
-                changing what another review wrote unless the code proves it wrong. A name withdrawn from \
+                with the shared one. Avoid changing what another review wrote unless the code proves it \
+                wrong; when it does, propose the replacement with `ghidra_type_propose`: two other agents \
+                agreeing apply it at the next publish, and the person can decide it in the console. A name withdrawn from \
                 the archive does not refuse: it is listed in `type_conflicts`, its `type_conflict_origins` \
                 saying `withdrawn`, and stays in this module only. \
                 A function of the registry that became dirty — written on since it was bound — offers \
@@ -1319,7 +1320,9 @@ public enum GhidraTools {
                 any text the entry holds replaces it: the whole publish is refused, nothing is stored, the \
                 function stays dirty, and `conflicts` names the entry, its version, what would change and \
                 the module that wrote it. Take the entry's text with `ghidra_library_apply` and \
-                `take_text`, make the addition over it, and publish again. A dirty function short of the \
+                `take_text`, make the addition over it, and publish again — or, if the code proves the entry \
+                wrong, propose this module's review with `ghidra_type_propose`, as for a shared type. A \
+                dirty function short of the \
                 bar of a finished function is refused the same way. Each version names its `module` and \
                 `reason` in the entry's history; `entry_reasons`, an object of entry id to why, says it \
                 in the review's words, and an addition without one says what was added. \

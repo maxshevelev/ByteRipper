@@ -523,19 +523,29 @@ public actor GhidraHost {
         }
         // The revision this publish would be, as the store numbers them.
         let next = ((try await writer.latestRevision(module: module))?.rev ?? 0) + 1
+        // A replacement of registry entries agents agreed is this publish's
+        // decision, as an administrator's take would be — when the person
+        // made none, and only for what the voters read.
+        var take = options.takeLibrary
+        var libraryProposals: [String] = []
+        if !take.all, take.reasons.isEmpty,
+           let agreed = try await agreedLibraryTake(module, raw: exported, offer: offer.proposals, reviewed: reviewed) {
+            take = LibraryTake.these(agreed.reasons).with(entryReasons: options.takeLibrary.entryReasons)
+            libraryProposals = agreed.proposals
+        }
         // The registry decides first, on everything this publish offers: the
         // review's candidates, and the changes to entries its functions link to.
         // A refusal leaves all of it as it was, and stores nothing.
         var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
         // A link reads its entry's text: an entry with none learns it from here.
         let completion = try await Self.completions(exported, offer: offer.proposals, offered: offered,
-                                                    reviewed: reviewed, take: options.takeLibrary, writer: writer)
+                                                    reviewed: reviewed, take: take, writer: writer)
         if let refusal = LibraryRefusal.refusal(completion.refused) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
         offered += completion.proposals
         let would = offered.isEmpty ? nil : try await writer.previewLibraryEntries(
-            module: module, rev: next - 1, by: by, proposals: offered, take: options.takeLibrary)
+            module: module, rev: next - 1, by: by, proposals: offered, take: take)
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
@@ -561,7 +571,7 @@ public actor GhidraHost {
         var journal = PublishJournal(
             id: "\(Self.journalStamp())-\(module.hex.prefix(16))", module: module, by: by, startedAt: Self.now(),
             planned: next, reviewed: reviewed, takeTypeConflicts: options.takeTypeConflicts,
-            take: options.takeLibrary, offered: offered,
+            take: take, offered: offered,
             exported: try await writer.writeObject(exported), document: try await writer.writeObject(document),
             description: try await writer.writeObject(description), identity: identity, recipe: recipe,
             source: SourceIdentity(path: state.source?.path, document: state.source?.document, node: state.source?.node),
@@ -575,12 +585,14 @@ public actor GhidraHost {
             if !types.proposals.isEmpty { journal.typeProposals = types.proposals }
             for object in types.version?.files.values.sorted() ?? [] { journal.keep(object) }
         }
+        let applying = Set(journal.typeProposals ?? []).union(libraryProposals)
+        if !applying.isEmpty { journal.typeProposals = applying.sorted() }
         try await writeDown(journal)
         try await applyStoreSteps(&journal)
         try await applyOwnerSteps(&journal, record: record)
         try await writer.removeJournal(id: journal.id)
         await noteProposalsApplied(journal.typeProposals ?? [], module: module, revision: journal.rev,
-                                   version: journal.typesVersion?.version)
+                                   version: journal.typesVersion?.version, relinked: journal.library?.relinked ?? [])
         guard let manifest = journal.manifest else { throw GhidraHostError(.owner, "the publish stored no analysis") }
         var publication = Publication(manifest: manifest, typeConflicts: journal.typeConflicts,
                                       typeConflictsTaken: journal.typeConflictsTaken,
