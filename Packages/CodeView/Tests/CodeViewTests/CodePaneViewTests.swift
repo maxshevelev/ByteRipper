@@ -5037,8 +5037,8 @@ final class CodePaneViewTests: XCTestCase {
 
     /// The book says which of three the description is: closed and
     /// unavailable while there is none (or it is still being read), closed
-    /// with text on it and bold once there is one, open in the accent colour
-    /// while it is on screen.
+    /// with text on it, semibold, in the link colour once there is one, open
+    /// in the accent colour while it is on screen.
     func testTheBookSaysWhetherThereIsADescriptionAndWhetherItIsOpen() throws {
         let view = try describedPane()
         view.frame = NSRect(x: 0, y: 0, width: 1100, height: 420)
@@ -5056,7 +5056,7 @@ final class CodePaneViewTests: XCTestCase {
         view.setModuleDescription("# Module\n\nText.")
         XCTAssertTrue(view.descriptionButtonIsEnabled)
         XCTAssertEqual(view.descriptionButtonSymbol, "text.book.closed")
-        XCTAssertEqual(view.descriptionButtonTint, .labelColor)
+        XCTAssertEqual(view.descriptionButtonTint, .linkColor)
 
         view.clickDescriptionButton()
         XCTAssertTrue(view.showsDescription)

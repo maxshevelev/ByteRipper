@@ -941,8 +941,8 @@ import ToolModuleKit
 
     /// Whether the module has a description to read. The book says which of
     /// three it is: closed and unavailable while there is none (or it is
-    /// still being read), closed with text on it once there is one, open
-    /// while it is on screen.
+    /// still being read), closed with text on it in the link colour once
+    /// there is one, open while it is on screen.
     public private(set) var hasDescription = false {
         didSet { if hasDescription != oldValue { drawDescriptionButton() } }
     }
@@ -950,10 +950,10 @@ import ToolModuleKit
     private func drawDescriptionButton() {
         let symbol = showsDescription ? "book" : hasDescription ? "text.book.closed" : "book.closed"
         descriptionButtonSymbol = symbol
-        let weight: NSFont.Weight = showsDescription || hasDescription ? .bold : .regular
+        let weight: NSFont.Weight = showsDescription || hasDescription ? .semibold : .regular
         descriptionButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: weight))
-        descriptionButton.idleTint = hasDescription ? .labelColor : .secondaryLabelColor
+        descriptionButton.idleTint = hasDescription ? .linkColor : .secondaryLabelColor
         // Open, it is what closes the description, text or not.
         descriptionButton.isEnabled = hasDescription || showsDescription
     }
