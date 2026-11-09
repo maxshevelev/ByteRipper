@@ -407,6 +407,34 @@ final class AgentEditToolsTests: XCTestCase {
         XCTAssertEqual(again.answer, "The checksums of 0 already check out; nothing to write.")
     }
 
+    /// A file inside a volume another file holds: fixing it alone changes
+    /// the outer file's body, and the answer names the outer file whose data
+    /// checksum is wrong now.
+    func testFixingOneNodeNamesTheOuterChecksumItBreaks() async throws {
+        let pane = try open(UEFITestImage.nested())
+        service.editsAllowed = true
+        _ = try await client.answer("uefi_fix_checksum", ["all": true])
+        let clean = try await client.answer("uefi_checksums")
+        XCTAssertEqual(clean["wrong"], 0, "\(clean)")
+        let found = try await client.answer("uefi_find", ["name": "MyDriver"])
+        let inner = try XCTUnwrap(found["matches"]?.arrayValue?.first?["id"]?.stringValue, "\(found)")
+        let path = inner.split(separator: ".")
+        let outer = path.prefix(path.count - 3).joined(separator: ".")
+        // The inner file's header checksum broken, and the outer file's data
+        // checksum then made to fit it: the state the scenario starts from.
+        let at = try XCTUnwrap(UInt64((found["matches"]?.arrayValue?.first?["start"]?.stringValue ?? "").dropFirst(2), radix: 16))
+        let byte = try bytes(pane, (at + 0x10)..<(at + 0x11))[0]
+        _ = try await client.answer("write", ["offset": .string(String(format: "0x%llX", at + 0x10)),
+                                              "bytes": .string(String(format: "%02X", byte ^ 0x01)), "label": "t"])
+        _ = try await client.answer("uefi_fix_checksum", ["node": .string(outer)])
+
+        let fixed = try await client.answer("uefi_fix_checksum", ["node": .string(inner)])
+        let broken = try XCTUnwrap(fixed["outer_now_wrong"]?.arrayValue, "\(fixed)")
+        XCTAssertEqual(broken.compactMap { $0["id"]?.stringValue }, [outer], "\(fixed)")
+        let after = try await client.answer("uefi_checksums")
+        XCTAssertEqual(after["wrong"], 1, "the outer file, as the answer said: \(after)")
+    }
+
     /// Every checksum checked at once, and every wrong one put right at once.
     func testEveryWrongChecksumIsListedAndFixedAtOnce() async throws {
         let good = UEFITestImage.make()

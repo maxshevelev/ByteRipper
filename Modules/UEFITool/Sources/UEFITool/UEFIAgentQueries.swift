@@ -525,9 +525,12 @@ public enum UEFIAgentQueries {
     }
 
     public static func nodeID(_ text: String?) throws -> NodeID {
-        guard let text, !text.isEmpty, text != "root" else { return .root }
-        let parts = text.split(separator: ".").map { Int($0) }
-        guard !parts.isEmpty, parts.allSatisfy({ ($0 ?? -1) >= 0 }) else {
+        guard let text, text != "root" else { return .root }
+        // Digits between single dots and nothing else: "0..2.5", "0.2.5." or
+        // "0.+2" read as another node, and a fix written there was answered ok.
+        let pieces = text.split(separator: ".", omittingEmptySubsequences: false)
+        let parts = pieces.map { piece in piece.allSatisfy(\.isASCII) && piece.allSatisfy(\.isNumber) ? Int(piece) : nil }
+        guard !text.isEmpty, parts.allSatisfy({ ($0 ?? -1) >= 0 }) else {
             throw AgentToolError("`\(text)` is not a node id. Ids look like \"0.2.5\" and come from `uefi_tree`, `uefi_find` or `uefi_at`.")
         }
         return NodeID(parts.compactMap { $0 })

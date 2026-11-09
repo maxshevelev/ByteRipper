@@ -129,6 +129,16 @@ final class UEFIPresenterTests: XCTestCase {
         XCTAssertEqual(UEFIPresenter.nodeID(ofZone: "0#body"), NodeID([0]))
     }
 
+    /// An agent's node id is digits between single dots: a slip never reads
+    /// as another node — "0..2.5" was 0.2.5, and a fix was written there.
+    @MainActor func testAnAgentsNodeIdThatIsNotAPathIsRefused() throws {
+        XCTAssertEqual(try UEFIAgentQueries.nodeID("0.2.5"), NodeID([0, 2, 5]))
+        XCTAssertEqual(try UEFIAgentQueries.nodeID(nil), .root)
+        for text in ["0..2.5", "0.2.5.", ".5", "0.+2", "", "0.2a", "0.\u{0662}"] {
+            XCTAssertThrowsError(try UEFIAgentQueries.nodeID(text), text)
+        }
+    }
+
     func testAZoneIdThatIsNotAPathIsRejected() {
         XCTAssertNil(UEFIPresenter.nodeID(ofZone: ""))
         XCTAssertNil(UEFIPresenter.nodeID(ofZone: "root"))

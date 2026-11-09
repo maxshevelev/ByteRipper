@@ -331,9 +331,11 @@ public enum MEAAgentQueries {
     static func id(_ path: [Int]) -> String { path.map(String.init).joined(separator: ".") }
 
     static func path(_ text: String?) throws -> [Int] {
-        guard let text, !text.isEmpty, text != "root" else { return [] }
-        let parts = text.split(separator: ".").map { Int($0) }
-        guard parts.allSatisfy({ ($0 ?? -1) >= 0 }) else {
+        guard let text, text != "root" else { return [] }
+        // Digits between single dots and nothing else, as the UEFI ids.
+        let pieces = text.split(separator: ".", omittingEmptySubsequences: false)
+        let parts = pieces.map { piece in piece.allSatisfy(\.isASCII) && piece.allSatisfy(\.isNumber) ? Int(piece) : nil }
+        guard !text.isEmpty, parts.allSatisfy({ ($0 ?? -1) >= 0 }) else {
             throw AgentToolError("`\(text)` is not an ME node id. Ids look like \"2.0.3\" and come from `me_tree`.")
         }
         return parts.compactMap { $0 }

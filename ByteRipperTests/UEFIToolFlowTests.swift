@@ -2991,6 +2991,29 @@ enum UEFITestImage {
         make() + [UInt8](repeating: 0xFF, count: 0x1000)
     }
 
+    /// A volume whose one file (a firmware volume image, with a data
+    /// checksum) holds the volume `make()` builds. Every checksum is left
+    /// zero: `uefi_fix_checksum` with `all: true` puts them right.
+    static func nested() -> [UInt8] {
+        let inner = make()
+        var header = Array(inner[0..<0x48])
+        header.replaceSubrange(0x20..<0x28, with: u32(0x2000) + u32(0))   // length
+        header.replaceSubrange(0x3C..<0x40, with: u32(0x2000))            // block size
+        header[0x32] = 0
+        header[0x33] = 0
+        var file = EFIGUID(low: 0x0000_0000_0000_0003, high: 0x0000_0000_0000_0004).bytes
+        file += [0, 0, 0x0B, 0x40]             // checksums, a volume image, a data checksum
+        file += u24(UInt32(24 + 4 + inner.count))
+        file += [0xF8]
+        file += u24(UInt32(4 + inner.count))
+        file += [0x17]                         // a firmware volume image section
+        file += inner
+        var image = [UInt8](repeating: 0xFF, count: 0x2000)
+        image.replaceSubrange(0..<0x48, with: header)
+        image.replaceSubrange(0x48..<(0x48 + file.count), with: file)
+        return image
+    }
+
     /// Two volumes back to back: two branches a reader can open at once.
     static func withTwoVolumes() -> [UInt8] {
         make() + make()

@@ -351,6 +351,10 @@ final class AgentDumpToolsTests: XCTestCase {
         try openWindow()
         let refused = try await client.call("survey", ["folder": .string(folder.path), "tool": "documents"])
         XCTAssertEqual(refused.answer, "`documents` is not a tool that answers about one document.")
+        // A read's name over a folder of dumps: never an edit.
+        let edit = try await client.call("survey", ["folder": .string(folder.path), "tool": "write",
+                                                    "arguments": ["offset": 0, "bytes": "00", "label": "x"]])
+        XCTAssertEqual(edit.answer, "`write` changes something; `survey` runs only tools that read.")
     }
 
     // MARK: - show

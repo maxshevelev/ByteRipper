@@ -170,7 +170,8 @@ final class AgentDumpTools {
             name: "survey",
             title: "Ask one question of many dumps",
             description: """
-                Runs one tool that takes `document` (`uefi_find`, `uefi_node`, `uefi_at`, `read`…) on every \
+                Runs one tool that reads and takes `document` (`uefi_find`, `uefi_node`, `uefi_at`, `read`…; \
+                never one that changes something) on every \
                 file in `folder` (or in `paths`), opening each in the background, and returns the answers \
                 grouped by the value at `group_by` — a dotted path into the tool's answer, e.g. "total", \
                 "matches.0.start", "values.0", "chain.-1.name" (a negative index counts from the end). Each \
@@ -206,6 +207,11 @@ final class AgentDumpTools {
         guard let tool = toolNamed(toolName),
               tool.inputSchema["properties"]?["document"] != nil, toolName != "survey" else {
             throw AgentToolError("`\(toolName)` is not a tool that answers about one document.")
+        }
+        // `survey` is a read: an edit, a tab put on screen or a file closed
+        // over a folder of dumps would be done under a read's name.
+        guard tool.annotations.readOnly else {
+            throw AgentToolError("`\(toolName)` changes something; `survey` runs only tools that read.")
         }
         let toolArguments = arguments["arguments"]?.objectValue ?? [:]
         if arguments["arguments"] != nil, arguments["arguments"]?.objectValue == nil {
