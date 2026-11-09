@@ -210,7 +210,9 @@ final class AgentDiffToolsTests: XCTestCase {
             let call = try await client.call("diff", .object(arguments))
             XCTAssertFalse(call.isError, "\(call.answer)")
             let page = call.answer
-            XCTAssertLessThanOrEqual(page.encoded().count, 24 << 10)
+            // The app's own bound, not a number of its own: written as 24 KiB,
+            // the test failed every page once d2ad6665 raised the bound to 96.
+            XCTAssertLessThanOrEqual(page.encoded().count, service.server.limits.maxAnswerBytes)
             XCTAssertEqual(page["totals"]?["runs"], 0x1000)
             let got = runs(page)
             XCTAssertLessThan(got.count, 1000)
