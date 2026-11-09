@@ -1104,6 +1104,35 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertTrue(c.contains("Status = PlatformStage2PeiEntryPoint("), c)
     }
 
+    /// A typedef over the type a local already has is a change the C prints:
+    /// UINT32 over Ghidra's `uint` is applied, and the answer says the type
+    /// the local holds. Sent again, the type is said to be unchanged rather
+    /// than dropped under a plain ok (issue 57972088).
+    func testATypedefOverTheSameBaseTypeIsAppliedAndAnUnchangedTypeIsSaid() async throws {
+        try await open(try image())
+        let functions = (try await read("/v1/functions?limit=200")["functions"] as? [[String: Any]]) ?? []
+        var found: (function: String, local: [String: Any])?
+        for function in functions {
+            guard let entry = function["entry"] as? String else { continue }
+            let locals = (try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]]) ?? []
+            if let local = locals.first(where: { ($0["type"] as? String) == "uint" && $0["first_use"] is String }) {
+                found = (entry, local)
+                break
+            }
+        }
+        let (function, local) = try XCTUnwrap(found, "no local typed uint in the test module")
+        let typed = try await post("/v1/rename/variable", ["function": function, "storage": local["storage"] as Any,
+                                                           "first_use": local["first_use"] as Any, "name": "Counted",
+                                                           "type": "UINT32"])
+        XCTAssertEqual(typed["type"] as? String, "UINT32", "\(typed)")
+        XCTAssertNil(typed["type_unchanged"], "\(typed)")
+        let again = try await post("/v1/rename/variable", ["function": function, "storage": typed["storage"] as Any,
+                                                           "first_use": typed["first_use"] as Any, "name": "CountedAgain",
+                                                           "type": "UINT32"])
+        XCTAssertEqual(again["type_unchanged"] as? String, "UINT32", "\(again)")
+        XCTAssertEqual(again["name"] as? String, "CountedAgain")
+    }
+
     /// An owner left with no record — its host stopped before it wrote
     /// `owner.json` — keeps the project's lock; the next open stops it and
     /// opens (issues f9bb8693, d3b03c04).

@@ -5617,7 +5617,12 @@ public class Owner {
         // the type on one piece of a register the decompiler had merged: with
         // a tail call's status also in EAX, the name then lands on the status
         // (issue 537ef101). The name alone keeps the pieces together.
-        if (type != null && match.getDataType() != null && sameType(match.getDataType(), type)) {
+        // The same type means the same name too: UINT64 over Ghidra's own
+        // ulonglong is a change the C prints, and was dropped under an ok
+        // (issue 57972088). What is dropped is said: `type_unchanged`.
+        String typeUnchanged = null;
+        if (type != null && match.getDataType() != null && sameNamedType(match.getDataType(), type)) {
+            typeUnchanged = match.getDataType().getDisplayName();
             type = null;
             if (name == null) {
                 JsonObject answer = identity();
@@ -5646,6 +5651,7 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("function", hex(function.getEntryPoint()));
         answer.addProperty("name", applied);
+        if (typeUnchanged != null) answer.addProperty("type_unchanged", typeUnchanged);
         HighFunction after = decompile(function).getHighFunction();
         if (after != null) {
             // The decompiler can leave a name out again, as it does for an
@@ -5683,6 +5689,8 @@ public class Owner {
                 Address first = symbol.getPCAddress();
                 answer.addProperty("first_use", first == null ? null : hex(first));
                 answer.addProperty("parameter", symbol.isParameter());
+                // The type it holds now, so an ok can be read back in the answer itself.
+                if (symbol.getDataType() != null) answer.addProperty("type", symbol.getDataType().getDisplayName());
             }
         }
         return answer;
@@ -5721,6 +5729,11 @@ public class Owner {
                 + (now == null ? "" : ": it still reads as " + now.getDisplayName())
                 + " — nothing was changed; type the value it comes from, or say in a comment what it is");
         }
+    }
+
+    /** The same type by the name the C prints as well as by its layout. */
+    private static boolean sameNamedType(DataType a, DataType b) {
+        return a.isEquivalent(b) && a.getDisplayName().equals(b.getDisplayName());
     }
 
     private static boolean sameType(DataType a, DataType b) {

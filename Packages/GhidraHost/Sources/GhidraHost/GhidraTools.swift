@@ -949,7 +949,10 @@ public enum GhidraTools {
                     an entry did not. A name already held is answered with the holder — its kind, \
                     address, `storage` and `first_use` — and those rename the holder, even one the \
                     decompiler no longer shows (the answer then says `stale: true`); freeing the name \
-                    is what lets the local take it. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed.
+                    is what lets the local take it. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed. \
+                    The answer gives the `type` the local holds after the call. A type it holds already, by the \
+                    same name, is not written again — the answer says `type_unchanged` — while a typedef over \
+                    the same base (`UINT64` for `ulonglong`) is applied, since the C prints its name.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
