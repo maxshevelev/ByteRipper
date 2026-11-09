@@ -65,6 +65,22 @@ final class UEFIContentSearchTests: XCTestCase {
         XCTAssertTrue(result.unreadSections.isEmpty)
     }
 
+    /// A search from a node, on a tree nothing has opened yet, reaches the
+    /// compressed sections under it the first time: the node read before the
+    /// branch was opened held none of them (issue 4fba4adc).
+    func testASearchFromANodeReachesItsCompressedSectionsTheFirstTime() async throws {
+        let built = image()
+        let tree = await tree(built.bytes)
+        let volume = try XCTUnwrap(tree.rootNodes.first { $0.kind == .volume })
+        let pattern = [try MaskedPattern.ascii(hidden, ignoringCase: false)]
+        let first = try await UEFIContentSearch.run(pattern, from: volume.id, in: tree)
+        XCTAssertEqual(first.total, 1, "found on the first call")
+        XCTAssertEqual(first.buffers, 1)
+        let again = try await UEFIContentSearch.run([try MaskedPattern.utf16LE(hidden, ignoringCase: false)],
+                                                    from: volume.id, in: tree)
+        XCTAssertEqual(again.buffers, first.buffers, "the same buffers every call")
+    }
+
     /// A compressed stream holds nothing to look for: its bytes as stored are
     /// not searched, only what they decompress to.
     func testTheBytesOfACompressedStreamAreNotSearched() async throws {

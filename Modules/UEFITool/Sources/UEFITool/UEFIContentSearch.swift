@@ -183,7 +183,11 @@ public enum UEFIContentSearch {
             progress(share / 2)
         }
         try Task.checkCancellation()
-        let (scopes, unread) = scopes(from: top, in: tree)
+        // A node is a value: the one read before the branch was opened holds
+        // the children it had then, none of the compressed sections' inside.
+        // Read again, it holds what the opening found (issue 4fba4adc).
+        let opened = start == .root ? nil : (tree.node(start) ?? top)
+        let (scopes, unread) = scopes(from: opened, in: tree)
 
         let readers = tree.spaceReaders
         let total = scopes.reduce(UInt64(0)) { $0 + UInt64($1.range.count) }
