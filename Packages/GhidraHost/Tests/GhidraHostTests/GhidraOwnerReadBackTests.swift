@@ -336,6 +336,32 @@ final class GhidraOwnerReadBackTests: XCTestCase {
     /// A pointer that is zero reads `NULL` in the C of a read and of a publish,
     /// which agree, and the artifact still calls it a constant. A zero that is
     /// no pointer stays a number.
+    /// A function typedef for a name the program holds as a function
+    /// definition — the one a field's pointer was named into — redefines that
+    /// definition. No second, self-naming typedef at the root shadows it.
+    func testAFunctionTypedefRedefinesTheDefinitionItNames() async throws {
+        try await open(try image())
+        let made = try await post("/v1/type", ["c": "typedef struct _PROBE_PPI { EFI_STATUS (*Run)(void *Arg0); } PROBE_PPI;"])
+        XCTAssertTrue((made["c"] as? String ?? "").contains("PROBE_PPI_Run * Run"), "\(made)")
+        let redefined = try await post("/v1/type", ["c": "typedef EFI_STATUS PROBE_PPI_Run(void *Arg0, void *Arg1);"])
+        let said = redefined["c"] as? String ?? ""
+        XCTAssertFalse(said.contains("typedef PROBE_PPI_Run PROBE_PPI_Run"), "\(redefined)")
+        XCTAssertTrue(said.contains("Arg1"), "the definition itself, with its new parameters: \(redefined)")
+        let definition = try await read("/v1/type?name=PROBE_PPI_Run")
+        let program = try XCTUnwrap(definition["program"] as? [String: Any], "\(definition)")
+        XCTAssertTrue((program["c"] as? String ?? "").contains("Arg1"), "\(definition)")
+        XCTAssertFalse((program["c"] as? String ?? "").contains("typedef PROBE_PPI_Run PROBE_PPI_Run"), "\(definition)")
+        // A structure defined afterwards binds its field to the definition —
+        // the new signature, under the field's own name — not to a shadow.
+        let again = try await post("/v1/type", ["c": "typedef struct _PROBE2_PPI { PROBE_PPI_Run *Run; } PROBE2_PPI;"])
+        XCTAssertTrue((again["c"] as? String ?? "").contains("PROBE2_PPI_Run * Run"), "\(again)")
+        let bound = try await read("/v1/type?name=PROBE2_PPI_Run")
+        XCTAssertTrue(((bound["program"] as? [String: Any])?["c"] as? String ?? "").contains("Arg1"), "\(bound)")
+        let field = try await read("/v1/type?name=PROBE_PPI")
+        XCTAssertFalse("\(field)".contains("BAD"), "\(field)")
+        _ = try await release()
+    }
+
     func testAPointerThatIsZeroReadsNull() async throws {
         try await open(try image())
         let exported = try await host.preview(module, "/v1/publish?dry_run=1", body: Data())

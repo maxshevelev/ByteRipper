@@ -6319,7 +6319,10 @@ public class Owner {
                 declared.add(def.getBaseDataType().getName());
             }
             kept.keySet().retainAll(declared);
-            resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
+            resolved = functionTypedef(parsed);
+            if (resolved == null) {
+                resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
+            }
             commentsKept = restoreComments(resolved, kept);
             restoreDescriptions(resolved, keptDescriptions);
         } else {
@@ -6362,6 +6365,46 @@ public class Owner {
         answer.addProperty("comments_kept", commentsKept);
         answer.addProperty("unchanged", unchanged);
         return answer;
+    }
+
+    /**
+     * `typedef RET NAME(…)` is the function definition NAME: the parser makes a
+     * typedef of that name over a function of the same name, and resolved as
+     * it is, that typedef lands at the root beside the definition the program
+     * already holds — a field's pointer named into `/functions` — and shadows
+     * it. The definition the program holds takes the new signature instead,
+     * and every self-naming typedef over it, the parser's or an earlier
+     * call's, is replaced by it wherever it is used. Null for any other C.
+     */
+    private DataType functionTypedef(DataType parsed) throws Exception {
+        if (!(parsed instanceof ghidra.program.model.data.TypeDef def)
+            || !(def.getBaseDataType() instanceof ghidra.program.model.data.FunctionDefinition function)
+            || !def.getName().equals(function.getName())) return null;
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        java.util.List<DataType> named = new java.util.ArrayList<>();
+        manager.findDataTypes(def.getName(), named);
+        ghidra.program.model.data.FunctionDefinition target = null;
+        for (DataType type : named) {
+            if (type.getDataTypeManager() != manager
+                || !(type instanceof ghidra.program.model.data.FunctionDefinition held)) continue;
+            // The one a field was named into before the parser's copy.
+            if (target == null || held.getCategoryPath().getPath().equals("/functions")) target = held;
+        }
+        if (target == null) {
+            target = (ghidra.program.model.data.FunctionDefinition) manager.resolve(function,
+                DataTypeConflictHandler.REPLACE_HANDLER);
+        } else if (!target.isEquivalent(function)) {
+            target.replaceWith(function);
+        }
+        for (DataType type : named) {
+            if (type == target || type.getDataTypeManager() != manager) continue;
+            boolean selfNaming = type instanceof ghidra.program.model.data.TypeDef shadow
+                && shadow.getBaseDataType() instanceof ghidra.program.model.data.FunctionDefinition;
+            if (selfNaming || type instanceof ghidra.program.model.data.FunctionDefinition) {
+                manager.replaceDataType(type, target, false);
+            }
+        }
+        return target;
     }
 
     /**
