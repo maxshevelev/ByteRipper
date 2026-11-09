@@ -55,8 +55,8 @@ to the Reviewer.
 - Decisions that belong to the person: which module comes next, and what to
   do about a refused publish. Replacing a registry entry or a shared type
   another review published belongs to an administrator of the server, not to
-  this Mac — except a shared type the agents agree on ("Shared-type
-  proposals" below).
+  this Mac — except a shared type, which agents may change by proposal and
+  vote under the rule in the ghidra-uefi skill ("Changing a shared type").
 - Deploys and restarts of the analysis server are not this Mac's: they are
   decided where the server runs. If the server is unreachable or changed under
   a review, tell the person.
@@ -193,6 +193,10 @@ publish replaces it. At start, and between modules, read
 - `ghidra_type_vote` `agree` when the instructions prove the module's layout
   and disprove the shared one; `object` with `text` naming the instruction
   that contradicts it. Never agree on the author's word alone.
+- Vote on the evidence, nothing else: an objection is for wrong evidence, never
+  to hold a proposal for the person. If the code does not settle it, do not
+  vote. The rule is the person's ("Changing a shared type" in the ghidra-uefi
+  skill); a doubt about it goes to the person, not into a vote.
 - A module told on its ticket that a type it uses was replaced is checked
   again like any remark.
 

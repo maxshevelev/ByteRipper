@@ -74,7 +74,8 @@ to the Verifier and in anything written into a review.
   `ghidra_type_propose` with the evidence. Other agents vote; once agreed,
   your next publish replaces it. Never vote on your own proposal, and do not
   change the proposed types while it is open: a different definition is not
-  the one agreed.
+  the one agreed. The whole rule is "Changing a shared type" in the
+  ghidra-uefi skill.
 
 ## The work cycle
 
