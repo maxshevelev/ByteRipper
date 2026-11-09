@@ -42,11 +42,15 @@ enum GhidraRoutes {
             let digest = try digest(module)
             let closed = try await answer { try await host.closeLease(digest, by: by) }
             return try JSONEncoder().encode(closed)
-        }, localHolder: localHolder, typeConflicts: { module in
+        }, localHolder: localHolder, conflicts: { module in
             let digest = try digest(module)
             let holder = try await holder(of: digest)
-            let raw = try await answer { try await host.preview(digest, holder: holder) }
+            let raw = try await answer { try await host.preview(digest, holder: holder, conflictTexts: true) }
             let preview = (try JSONSerialization.jsonObject(with: raw)) as? [String: Any] ?? [:]
+            @Sendable func moduleName(_ hex: String?) async -> Any {
+                guard let hex, let source = SHA256Digest(hex: hex) else { return NSNull() }
+                return (try? await host.project(source).state().module.name) ?? NSNull()
+            }
             let origins = preview["type_conflict_origins"] as? [String: String] ?? [:]
             var rows: [[String: Any]] = []
             let names = preview["type_conflicts"] as? [String] ?? []
@@ -61,7 +65,7 @@ enum GhidraRoutes {
                 if names.contains("_" + name) { row["tag"] = "_" + name }
                 if let source = SHA256Digest(hex: origin) {
                     row["origin"] = source.hex
-                    row["origin_name"] = (try? await host.project(source).state().module.name) ?? NSNull()
+                    row["origin_name"] = await moduleName(source.hex)
                 }
                 var query = URLComponents()
                 query.queryItems = [URLQueryItem(name: "name", value: name)]
@@ -72,16 +76,41 @@ enum GhidraRoutes {
                 }
                 rows.append(row)
             }
-            var answer: [String: Any] = ["module": digest.hex, "holder": holder, "conflicts": rows]
+            // The registry's entries the review replaces: who wrote each, and
+            // every field it changes, as the entry says it and as it would.
+            let texts = preview["conflict_fields"] as? [String: Any] ?? [:]
+            var entries: [[String: Any]] = []
+            for conflict in (preview["library"] as? [String: Any])?["conflicts"] as? [[String: Any]] ?? [] {
+                guard let id = conflict["id"] as? String else { continue }
+                var row = conflict
+                if var heldBy = conflict["held_by"] as? [String: Any] {
+                    heldBy["module_name"] = await moduleName(heldBy["module"] as? String)
+                    row["held_by"] = heldBy
+                }
+                row["fields"] = texts[id] ?? []
+                entries.append(row)
+            }
+            var answer: [String: Any] = ["module": digest.hex, "holder": holder, "conflicts": rows, "library": entries]
             answer["revision"] = preview["revision"]
-            answer["library_refused"] = (preview["library"] as? [String: Any])?["conflicts"]
+            // A refusal a decision here does not lift — a function the
+            // registry does not take — is said as the publish would say it.
+            if entries.isEmpty { answer["library_refused"] = preview["library_refused"] }
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
-        }, publishTakingTypes: { module, by in
+        }, publishTaking: { module, by, decision in
             let digest = try digest(module)
+            var take = LibraryTake.none
+            if !decision.entries.isEmpty {
+                guard let reason = decision.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
+                    throw HTTPError(.badRequest, "a registry entry is taken with a reason: its history keeps why it changed")
+                }
+                take = .these(Dictionary(decision.entries.map { ($0, reason) }, uniquingKeysWith: { first, _ in first }))
+            }
             let holder = try await holder(of: digest)
+            let what = decision.entries.isEmpty ? "replaces the shared types" : "replaces the shared types and registry entries"
             let publication = try await answer {
-                try await host.publish(digest, by: "\(by) (console: replaces the shared types)",
-                                       options: GhidraHost.PublishOptions(takeTypeConflicts: true), holder: holder)
+                try await host.publish(digest, by: "\(by) (console: \(what))",
+                                       options: GhidraHost.PublishOptions(takeTypeConflicts: true, takeLibrary: take),
+                                       holder: holder)
             }
             await published()
             return try JSONEncoder().encode(PublishAnswer(publication))

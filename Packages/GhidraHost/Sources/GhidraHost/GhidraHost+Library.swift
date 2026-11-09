@@ -745,6 +745,46 @@ extension GhidraHost {
     }
 
     /// A Codable value as plain JSON objects, to put beside the owner's own.
+    /// For each conflicting entry, by id: every field the module's review
+    /// changes, as the entry holds it and as the module offers it. The
+    /// function is its C — the rest of it is the body's own; any other field
+    /// is its JSON, a text field its text.
+    static func conflictFields(_ conflicts: [LibraryWriteResult.Conflict], offered: [LibraryProposal],
+                               writer: AnalysisWriter) async throws -> [String: [[String: String]]] {
+        let index = try await writer.readLibraryIndex()
+        let wanted = Set(conflicts.map(\.id))
+        var found: [String: [[String: String]]] = [:]
+        for proposal in offered {
+            let candidates = [index.bodies[proposal.body.key], proposal.variantOf,
+                              proposal.body.isShort ? proposal.basedOn : nil].compactMap { $0 }
+            guard let id = candidates.first(where: wanted.contains), found[id] == nil,
+                  let held = index.entries[id] else { continue }
+            let heldObject = try await writer.readObject(held.entry)
+            func fields(_ data: Data) -> [String: Any] {
+                ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any]) ?? [:]
+            }
+            let (before, after) = (fields(heldObject), fields(proposal.entry))
+            let changed = conflicts.first(where: { $0.id == id })?.changed
+                ?? LibraryProposal.changedFields(from: heldObject, to: proposal.entry)
+            found[id] = changed.map { field in
+                ["field": field, "held": Self.fieldText(field, before[field]),
+                 "offered": Self.fieldText(field, after[field])]
+            }
+        }
+        return found
+    }
+
+    private static func fieldText(_ field: String, _ value: Any?) -> String {
+        guard let value, !(value is NSNull) else { return "" }
+        if field == "function", let c = (value as? [String: Any])?["c"] as? String { return c }
+        if let text = value as? String { return text }
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value,
+                                                      options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        else { return "\(value)" }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     static func plain<T: Encodable>(_ value: T) throws -> Any {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

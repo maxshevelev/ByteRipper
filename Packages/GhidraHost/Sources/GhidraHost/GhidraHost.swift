@@ -798,8 +798,13 @@ public actor GhidraHost {
     /// merging into the shared archive, and the counts, the revision it would
     /// become and those conflicts come back. The export is the cost a publish
     /// already pays; this one pays it to look first.
+    ///
+    /// With `conflictTexts`, each library conflict also carries what the entry
+    /// says now and what this module would make it say, field by field — what
+    /// an administrator reads before taking it (`conflict_fields`).
     public func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false,
-                 takeLibrary: LibraryTake = .none, holder: String? = nil) async throws -> Data {
+                 takeLibrary: LibraryTake = .none, holder: String? = nil,
+                 conflictTexts: Bool = false) async throws -> Data {
         try tellClosed(module, holder: holder)
         let project = self.project(module)
         let record = try await owner(of: module)
@@ -886,6 +891,10 @@ public actor GhidraHost {
                     module: module, rev: revision, by: nil, proposals: offered,
                     take: takeLibrary)
                 preview["library"] = try Self.plain(would)
+                if conflictTexts, !would.conflicts.isEmpty {
+                    preview["conflict_fields"] = try await Self.conflictFields(would.conflicts, offered: offered,
+                                                                               writer: writer)
+                }
                 if let refusal = would.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
                     preview["library_refused"] = refusal
                 } else if reviewed {

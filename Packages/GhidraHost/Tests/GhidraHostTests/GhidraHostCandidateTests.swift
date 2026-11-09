@@ -379,6 +379,18 @@ final class GhidraHostCandidateTests: XCTestCase {
         _ = try await host.publish(other, by: "agent")
         _ = try await host.write(reviewed, "/v1/rename/function", body: body([
             "address": pair.0, "name": "ShortBodyRenamed", "by": "agent", "reason": "the review knows better"]))
+        // What an administrator reads before deciding: the entry's field as it
+        // is and as the review would make it.
+        let asked = try json(await host.preview(reviewed, conflictTexts: true))
+        let fields = try XCTUnwrap((asked["conflict_fields"] as? [String: Any])?[id] as? [[String: String]], "\(asked)")
+        let named = try XCTUnwrap(fields.first { $0["field"] == "name" }, "\(fields)")
+        XCTAssertEqual(named["held"], "ShortBodyForTheTest")
+        XCTAssertEqual(named["offered"], "ShortBodyRenamed")
+        if let c = fields.first(where: { $0["field"] == "function" }) {
+            XCTAssertTrue(c["offered"]?.contains("ShortBodyRenamed(") == true, "the function is shown as its C: \(c)")
+        }
+        let unasked = try json(await host.preview(reviewed))
+        XCTAssertNil(unasked["conflict_fields"], "only when asked")
         let renamed = try await host.publish(reviewed, by: "agent", options: .init(
             takeLibrary: .these([id: "the review knows better"])))
         XCTAssertEqual(renamed.library?.updated.map(\.id), [id], "\(String(describing: renamed.library))")

@@ -1647,7 +1647,7 @@
         h("td", { class: "num", text: String(row.publishes || 0) }),
         h("td", { class: "muted", text: row.revision ? `rev ${row.revision}` : "—" }),
         h("td", { class: "actions" },
-          iconButton("layers", "Shared types this module would replace — and publish replacing them", () => typeConflicts(row)),
+          iconButton("layers", "Shared types and registry entries this module would replace — and publish replacing them", () => takeConflicts(row)),
           iconButton("ban", "Close the lease — the holder's unpublished changes are dropped", () => closeLease(row), "danger")))))));
   }
 
@@ -1688,40 +1688,67 @@
     await act(() => call("POST", `/admin/api/leases/${row.module}/close`), `${name}: lease closed`);
   }
 
-  // The shared types a module in work would replace at its publish. Only an
-  // administrator decides that: the agent's publish is refused and names
-  // them; here the two definitions stand side by side, and the publish runs
-  // as the lease's holder with the module's versions taken.
-  async function typeConflicts(row) {
+  // The shared types and library registry entries a module in work would
+  // replace at its publish. Only an administrator decides that: the agent's
+  // publish is refused and names them; here what is shared now and what the
+  // module would make it stand side by side, and the publish runs as the
+  // lease's holder with the module's versions taken. An entry's history keeps
+  // why it changed: taking one asks for the reason.
+  async function takeConflicts(row) {
     const name = row.name || row.module;
     toast(`${name}: asking the owner what a publish would replace…`, "ok");
     let data;
     try {
-      data = await call("GET", `/admin/api/leases/${row.module}/type-conflicts`);
+      data = await call("GET", `/admin/api/leases/${row.module}/conflicts`);
     } catch (error) {
       if (error.status !== 401) toast(error.message, "error");
       return;
     }
-    if (!data.conflicts.length) {
-      toast(`${name}: its publish replaces no shared type`, "ok");
+    const types = data.conflicts || [];
+    const entries = data.library || [];
+    if (!types.length && !entries.length) {
+      toast(`${name}: its publish replaces no shared type and no registry entry`
+        + (data.library_refused ? ` — but the registry refuses it: ${data.library_refused}` : ""),
+        data.library_refused ? "error" : "ok");
       return;
     }
-    const body = h("div", { class: "type-conflicts" }, data.conflicts.map((c) => h("div", { class: "type-conflict" },
+    const pair = (left, leftText, right, rightText) => h("div", { class: "type-pair" },
+      h("div", {}, h("div", { class: "codebar-title", text: left }), h("pre", { class: "code", text: leftText || "—" })),
+      h("div", {}, h("div", { class: "codebar-title", text: right }), h("pre", { class: "code", text: rightText || "—" })));
+    const typeRows = types.map((c) => h("div", { class: "type-conflict" },
       h("div", { class: "doc-title mono", text: c.tag ? `${c.name} (and its tag ${c.tag})` : c.name }),
       h("div", { class: "muted", text: `Shared copy written by ${c.origin_name || c.origin || "a module not known here"}` }),
-      h("div", { class: "type-pair" },
-        h("div", {}, h("div", { class: "codebar-title", text: `${name} (would be shared)` }), h("pre", { class: "code", text: c.module_c || "—" })),
-        h("div", {}, h("div", { class: "codebar-title", text: "Shared now" }), h("pre", { class: "code", text: c.shared_c || "—" }))))));
+      pair(`${name} (would be shared)`, c.module_c, "Shared now", c.shared_c)));
+    const writer = (by) => by ? `${by.module_name || (by.module || "").slice(0, 12) || "a module not known here"}`
+      + (by.rev ? ` rev ${by.rev}` : "") + (by.by ? `, by ${by.by}` : "") : "a module not known here";
+    const entryRows = entries.map((e) => h("div", { class: "type-conflict" },
+      h("div", { class: "doc-title mono", text: e.proposed_name && e.proposed_name !== e.name ? `${e.name} → ${e.proposed_name}` : e.name }),
+      h("div", { class: "muted", text: `Registry entry, version ${e.version}, written by ${writer(e.held_by)}`
+        + (e.base ? `; this review was made on version ${e.base}` : "; this review was not made on the entry") }),
+      (e.fields || []).map((f) => h("div", {},
+        h("div", { class: "muted mono", text: f.field }),
+        pair(`${name} (would be the entry)`, f.offered, "Entry now", f.held)))));
+    const reason = entries.length ? h("input", { class: "field", autocomplete: "off",
+      placeholder: "Why the entries change — their history keeps it (required)" }) : null;
+    const parts = [];
+    if (types.length) parts.push(types.length === 1 ? "a shared type" : `${types.length} shared types`);
+    if (entries.length) parts.push(entries.length === 1 ? "a registry entry" : `${entries.length} registry entries`);
+    const section = (title, rows) => rows.length ? [h("h4", { class: "conflict-section", text: title }), rows] : [];
     await dialog({
       icon: "layers", tone: "danger", wide: true,
-      title: `${name} would replace ${data.conflicts.length === 1 ? "a shared type" : `${data.conflicts.length} shared types`}`,
-      text: `The publish runs as ${data.holder}, the module's holder. Each type below becomes the shared one, as the shared types' next version. `
-        + "The programs of other modules do not change.",
-      body,
+      title: `${name} would replace ${parts.join(" and ")}`,
+      text: `The publish runs as ${data.holder}, the module's holder. Each type below becomes the shared one, as the shared types' next version; `
+        + "each entry takes this module's review as its next version. The programs of other modules do not change.",
+      body: h("div", {},
+        h("div", { class: "type-conflicts" }, section("Shared types", typeRows), section("Registry entries", entryRows)),
+        reason ? h("div", { class: "conflict-reason" }, reason) : null),
       actions: [
         { label: "Cancel", value: false, focus: true },
         { label: "Publish, replacing them", kind: "danger", run: async () => {
-          const done = await act(() => call("POST", `/admin/api/leases/${row.module}/publish-taking-types`),
+          const why = reason ? reason.value.trim() : "";
+          if (reason && !why) { toast("Say why the entries change: their history keeps it", "error"); reason.focus(); return false; }
+          const decision = { entries: entries.map((e) => e.id), reason: why || null };
+          const done = await act(() => call("POST", `/admin/api/leases/${row.module}/publish-taking-conflicts`, decision),
             (a) => `${name}: published` + (a && a.manifest && a.manifest.reading && a.manifest.reading.rev ? ` as revision ${a.manifest.reading.rev}` : ""));
           return done !== undefined;
         } },

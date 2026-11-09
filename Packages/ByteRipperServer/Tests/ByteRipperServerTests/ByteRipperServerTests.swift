@@ -464,15 +464,20 @@ final class ServerTests: XCTestCase {
         let (page, _) = try await call("GET", "admin/issues", admin)
         XCTAssertEqual(page, 200, "the console's page")
 
-        // An administrator's decision on shared types: only for a module in
-        // work, whose holder the publish runs as; no client token reaches it.
-        for (method, path) in [("GET", "type-conflicts"), ("POST", "publish-taking-types")] {
+        // An administrator's decision on shared types and registry entries:
+        // only for a module in work, whose holder the publish runs as; no
+        // client token reaches it; an entry is taken only with a reason.
+        for (method, path) in [("GET", "conflicts"), ("POST", "publish-taking-conflicts")] {
             let (notInWork, why) = try await call(method, "admin/api/leases/\(closed.hex)/\(path)", admin)
             XCTAssertEqual(notInWork, 409, String(decoding: why, as: UTF8.self))
             XCTAssertTrue(String(decoding: why, as: UTF8.self).contains("not in work"), String(decoding: why, as: UTF8.self))
             let (client, _) = try await call(method, "admin/api/leases/\(closed.hex)/\(path)", app)
             XCTAssertNotEqual(client, 200, "a client token is no administrator")
         }
+        let (noReason, said) = try await call("POST", "admin/api/leases/\(closed.hex)/publish-taking-conflicts", admin,
+                                              body: Data(#"{"entries":["c-1"]}"#.utf8))
+        XCTAssertEqual(noReason, 400, String(decoding: said, as: UTF8.self))
+        XCTAssertTrue(String(decoding: said, as: UTF8.self).contains("reason"), String(decoding: said, as: UTF8.self))
 
         // The review board over HTTP: a verifier's remark, the reviewer's fix,
         // the reviewer refused the closing, another agent closes; the console
