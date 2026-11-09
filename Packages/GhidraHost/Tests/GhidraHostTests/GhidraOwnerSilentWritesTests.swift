@@ -162,6 +162,36 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
                       && text.contains("kept from before"), text)
     }
 
+    /// Issue 2e20705f: the C `ghidra_type_definition` prints marks each
+    /// member with its offset, `/* 0x04 */`. Sent back as it is, that mark is
+    /// not taken for the member's comment, and the comments stay as they were.
+    func testTheCATypeIsPrintedAsIsSentBackUnchanged() async throws {
+        let c = """
+            typedef struct _SILENT_RECORD {
+                UINT32 Signature; /* the record's tag */
+                UINT32 Size;
+                // what follows the header
+                UINT16 Count;
+            } SILENT_RECORD;
+            """
+        _ = try await post("/v1/type", ["c": c])
+        func fields() async throws -> [[String: Any]] {
+            let program = try await read("/v1/type?name=SILENT_RECORD")["program"] as? [String: Any]
+            return try XCTUnwrap(program?["fields"] as? [[String: Any]])
+        }
+        let before = try await fields()
+        XCTAssertEqual(before.map { $0["comment"] as? String },
+                       ["the record's tag", nil, "what follows the header"])
+        let shown = try await read("/v1/type?name=SILENT_RECORD")
+        let printed = try XCTUnwrap((shown["program"] as? [String: Any])?["c"] as? String)
+        XCTAssertTrue(printed.contains("/* 0x04 */"), printed)
+        let answer = try await post("/v1/type", ["c": printed])
+        XCTAssertNil(answer["comments_not_placed"], "\(answer)")
+        let after = try await fields()
+        XCTAssertEqual(after.map { $0["comment"] as? String }, before.map { $0["comment"] as? String },
+                       printed)
+    }
+
     func testATypeStillUsedIsNotDeleted() async throws {
         _ = try await post("/v1/type", ["c": "typedef struct _SILENT_INNER { unsigned int A; } SILENT_INNER;"])
         _ = try await post("/v1/type", ["c": "typedef struct _SILENT_OUTER { SILENT_INNER Inner; unsigned int B; } SILENT_OUTER;"])

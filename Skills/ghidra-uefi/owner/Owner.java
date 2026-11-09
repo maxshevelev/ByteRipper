@@ -6866,7 +6866,10 @@ public class Owner {
                 int startLine = line;
                 for (int k = i; k < end; k++) if (c.charAt(k) == '\n') line++;
                 i = block ? end + 1 : end - 1;
-                if (depth != 1 || text.isEmpty()) continue;
+                // `/* 0x08 */` before a member is the offset the printed C
+                // marks it with, not its comment: C read back from
+                // ghidra_type_definition is sent as it is (issue 2e20705f).
+                if (depth != 1 || text.isEmpty() || text.matches("\\+?0[xX][0-9A-Fa-f]+")) continue;
                 if (previous != null && previousLine == startLine && member.toString().isBlank()) {
                     found.merge(previous, text, (a, b) -> a + " " + b);
                 } else {

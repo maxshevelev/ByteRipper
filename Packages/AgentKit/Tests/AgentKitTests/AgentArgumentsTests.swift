@@ -65,6 +65,14 @@ final class AgentArgumentsTests: XCTestCase {
         XCTAssertNotNil(message { _ = try AgentArguments(["select": "no"]).bool("select", default: true) })
     }
 
+    /// Issue a66b9aee: a client holding an older schema sends a new flag as
+    /// the string "true" or "false"; the word is taken, anything else is not.
+    func testABooleanSentAsItsWordIsTaken() throws {
+        XCTAssertTrue(try AgentArguments(["select": "true"]).bool("select", default: false))
+        XCTAssertFalse(try AgentArguments(["select": "False"]).bool("select", default: true))
+        XCTAssertNotNil(message { _ = try AgentArguments(["select": "1"]).bool("select", default: true) })
+    }
+
     func testTheSchemaOfAnObjectAllowsNothingElse() {
         let schema = AgentSchema.object(["path": AgentSchema.string("A file.")], required: ["path"])
         XCTAssertEqual(schema["additionalProperties"], false)

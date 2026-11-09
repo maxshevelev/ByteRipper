@@ -70,8 +70,15 @@ public struct AgentArguments: Equatable, Sendable {
 
     public func bool(_ name: String, default fallback: Bool) throws -> Bool {
         guard let value = self[name] else { return fallback }
-        guard let flag = value.boolValue else { throw wrong(name, "true or false") }
-        return flag
+        if let flag = value.boolValue { return flag }
+        // A client holding a schema older than the server's — connected before
+        // a flag was added — sends it as a string (issue a66b9aee). The words
+        // are not ambiguous, so they are taken.
+        switch value.stringValue?.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "true": return true
+        case "false": return false
+        default: throw wrong(name, "true or false")
+        }
     }
 
     /// An address or a length in the file.
