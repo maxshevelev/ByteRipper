@@ -6659,6 +6659,7 @@ public class Owner {
         int commentsKept = 0;
         int cComments = 0;
         JsonArray cUnplaced = null;
+        boolean tookShared = false;
         boolean unchanged = false;
         if (c != null) {
             // Read before the parser touches the manager: CParser adds a type
@@ -6713,6 +6714,9 @@ public class Owner {
                 }
             }
             if (unplaced.size() > 0) cUnplaced = unplaced;
+        } else if (body.has("take_shared") && body.get("take_shared").getAsBoolean()) {
+            resolved = takeShared(required(body, "name").trim());
+            tookShared = true;
         } else {
             String name = required(body, "name");
             importTypes(name);
@@ -6752,9 +6756,50 @@ public class Owner {
         // came back" from "this build has no such field".
         answer.addProperty("comments_kept", commentsKept);
         if (cComments > 0) answer.addProperty("comments_from_c", cComments);
+        if (tookShared) answer.addProperty("taken_from_shared", true);
         if (cUnplaced != null) answer.add("comments_not_placed", cUnplaced);
         answer.addProperty("unchanged", unchanged);
         return answer;
+    }
+
+    /**
+     * The shared review types' copy of `name` into the program, in place of
+     * the program's own wherever that is used: how a module takes a shared
+     * type another module's publish replaced (an applied proposal), since a
+     * program that holds a type never takes the shared one by name. The
+     * typedef and the type it names go together.
+     */
+    private DataType takeShared(String name) throws Exception {
+        if (reviewArchive == null) throw new Failure(409, "this owner has no shared review types");
+        DataType theirs = find(reviewArchive, name);
+        if (theirs == null) throw new Failure(404, "the shared review types hold no " + name);
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        DataType own = ownCopy(manager, theirs.getName());
+        if (own == null) return manager.resolve(theirs, DataTypeConflictHandler.DEFAULT_HANDLER);
+        // The content is replaced in place, not resolved beside it: a copy
+        // taken from the shared types keeps their identity, and Ghidra then
+        // reads the shared one as held already. In place, every use and the
+        // category stay.
+        DataType target = theirs instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+            ? def.getBaseDataType() : theirs;
+        DataType ownTarget = own instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+            && def.getBaseDataType().getDataTypeManager() == manager ? def.getBaseDataType() : own;
+        try {
+            ownTarget.replaceWith(target);
+        } catch (IllegalArgumentException error) {
+            throw new Failure(409, "the program's " + own.getName() + " is a " + TypeText.kind(ownTarget)
+                + " and the shared one a " + TypeText.kind(target) + "; nothing was changed");
+        }
+        ownTarget.setDescription(target.getDescription());
+        return own;
+    }
+
+    /** The program's own type of that name, in any category; null when it holds none. */
+    private DataType ownCopy(ghidra.program.model.data.DataTypeManager manager, String name) {
+        java.util.List<DataType> held = new java.util.ArrayList<>();
+        manager.findDataTypes(name, held);
+        for (DataType type : held) if (type.getDataTypeManager() == manager) return type;
+        return null;
     }
 
     /**
@@ -7140,14 +7185,15 @@ public class Owner {
                     inShared = findAny(shared, name, alternate);
                     answer.add("shared", TypeText.describe(inShared));
                     if (here != null && inShared != null) {
-                        // `isEquivalent` reads past `.conflict`, so a member's
-                        // type name is compared as well.
                         // The same as the publish's merge reads it — a typedef
-                        // that only renames its function is that function —
-                        // and with the same texts.
-                        answer.addProperty("same", (inShared.isEquivalent(here)
-                                || (sameShape(here, inShared, new java.util.HashSet<>()) && sameTexts(here, inShared)))
-                            && !memberTypesRenamed(here, inShared));
+                        // that only renames its function is that function, a
+                        // member's type name is compared as well — and with
+                        // the same texts. Not Ghidra's `isEquivalent` first: a
+                        // copy taken from the shared types keeps their
+                        // identity, and it answered true for that copy laid
+                        // out again (0x28 against 0x18).
+                        answer.addProperty("same", sameShape(here, inShared, new java.util.HashSet<>())
+                            && sameTexts(here, inShared) && !memberTypesRenamed(here, inShared));
                     }
                 } finally {
                     shared.close();

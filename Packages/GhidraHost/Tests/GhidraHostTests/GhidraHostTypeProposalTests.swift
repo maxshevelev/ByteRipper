@@ -92,6 +92,7 @@ final class GhidraHostTypeProposalTests: XCTestCase {
         }
         let told = try XCTUnwrap(remark, "the writer's ticket has no remark")
         XCTAssertTrue(told.text.contains("VOTE_PPI") && told.text.contains(id), told.text)
+        XCTAssertTrue(told.text.contains("take_shared"), "the remark names how to take the new definition: \(told.text)")
         let own = await host.tickets?.ticket(proposer.hex)?.remarks.first
         XCTAssertNil(own, "the proposer is not told of its own")
     }

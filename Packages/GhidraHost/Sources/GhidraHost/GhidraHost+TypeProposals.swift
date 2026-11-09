@@ -206,10 +206,18 @@ extension GhidraHost {
             what.append("the library registry entry " + entries.map { "\($0.value.name) (\($0.key))" }
                 .joined(separator: ", "))
         }
-        return "Replaced by \(author)'s definition: " + what.joined(separator: "; and ")
-            + " (proposal \(proposal.id), \(agreed)). Read this module's uses of it again "
-            + "(`ghidra_type_definition`, `ghidra_type_uses`, `library_registry`): a field, a name or a "
-            + "parameter may have changed."
+        var text = "Replaced by \(author)'s definition: " + what.joined(separator: "; and ")
+            + " (proposal \(proposal.id), \(agreed))."
+        if !names.isEmpty {
+            text += " This module's program still holds its own old copy, and its stored C was exported with it. "
+                + "Before this module's next publish, take the new definition into the program: "
+                + "`ghidra_type` with `name` and `take_shared: true`, for each of "
+                + names.joined(separator: ", ") + ". Without it the publish reads the old copy as a replacement "
+                + "of the shared type and is refused. Then republish (`ghidra_publish`) so the stored C reads the "
+                + "new layout."
+        }
+        return text + " Read this module's uses again (`ghidra_type_definition`, `ghidra_type_uses`, "
+            + "`library_registry`): a field, a name or a parameter may have changed."
     }
 
     /// The proposals a finished publish applied marked so, and told on its

@@ -1298,17 +1298,29 @@ public enum GhidraTools {
                   + "gets it, and a publish cannot bring it back — it reads as a `type_conflicts` entry whose "
                   + "origin says `withdrawn`, and `take_type_conflicts` does not override that. Owners already "
                   + "running hold their copy of the archive until they restart. `ghidra_type_uses` lists what "
-                  + "still names it, to walk and correct.",
+                  + "still names it, to walk and correct. A program that holds a type keeps its own copy: `name` "
+                  + "alone answers that one, never the shared one. After a shared type was replaced — an applied "
+                  + "proposal, said on the ticket — `take_shared: true` with `name` puts the shared types' copy "
+                  + "in place of the program's own wherever it is used (`taken_from_shared`); do that before the "
+                  + "module's next publish, which otherwise reads the old copy as a replacement and is refused.",
                   ["c": AgentSchema.string("The C text."),
                    "name": AgentSchema.string("Without `c`: the type to describe, comment or delete."),
                    "description": AgentSchema.string("What the type is, and its source."),
                    "delete": AgentSchema.boolean("Remove the type `name` from the program. No `c` with it."),
                    "shared": AgentSchema.boolean("With `delete`: from the shared review archive, not the program."),
+                   "take_shared": AgentSchema.boolean("With `name` alone: the shared review types' copy replaces the program's own wherever it is used."),
                    "reason": AgentSchema.string("With `shared`: why the name is withdrawn. Required, and recorded."),
                    "comments": ["type": "object", "additionalProperties": ["type": "string"],
                                 "description": "A comment per field or enum member, by its name."]],
                   required: []) { arguments in
                 var body = try optional(arguments, ["c", "name", "description"])
+                if try arguments.bool("take_shared", default: false) {
+                    guard body["c"] == nil, body["name"] != nil, !(try arguments.bool("delete", default: false)),
+                          !(try arguments.bool("shared", default: false)) else {
+                        throw AgentToolError("`take_shared` takes `name` alone: no `c`, `delete` or `shared`.")
+                    }
+                    body["take_shared"] = .bool(true)
+                }
                 if try arguments.bool("delete", default: false) {
                     guard body["c"] == nil, body["name"] != nil else {
                         throw AgentToolError("`delete` takes `name` and no `c`.")
