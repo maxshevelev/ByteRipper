@@ -433,6 +433,39 @@ final class GhidraHostCandidateTests: XCTestCase {
         XCTAssertTrue(try store.libraryIndex().entries.isEmpty)
     }
 
+    /// A thunk shares its target's prototype, so signing the thunk signs the
+    /// target: the answer says so, naming the target with its signature
+    /// before and after, rather than changing another function silently
+    /// (issue 78d77e3f). `PeiVariable` holds a thunk.
+    func testSigningAThunkSaysItSignedItsTarget() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_THUNK_MODULE"] else {
+            throw XCTSkip("GHIDRA_THUNK_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostCandidateTests-thunksig-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Thunks")
+        try await host.take(module)
+        defer { Task { await host.stop(module) } }
+        let exported = try json(await host.write(module, "/v1/export", body: Data()))
+        let thunk = try XCTUnwrap((exported["functions"] as? [[String: Any]])?
+            .first { $0["thunk"] as? Bool == true }?["entry"] as? String)
+        let signed = try json(await host.write(module, "/v1/set/signature", body: JSONSerialization.data(withJSONObject: [
+            "address": thunk, "signature": "UINT32 ThunkSigned(UINT32 First, UINT32 Second)", "by": "agent"])))
+        let target = try XCTUnwrap(signed["thunk_of"] as? [String: Any], "\(signed)")
+        XCTAssertNotEqual(target["entry"] as? String, thunk)
+        XCTAssertTrue((target["signature"] as? String ?? "").contains("Second"), "\(target)")
+        XCTAssertFalse((target["signature_before"] as? String ?? "").contains("Second"), "\(target)")
+        let note = try XCTUnwrap(signed["note"] as? String, "\(signed)")
+        XCTAssertTrue(note.contains(target["name"] as? String ?? "?") && note.contains("sign the target"), note)
+    }
+
     func testANameOnTheOldListDoesNotMakeALibraryFunction() async throws {
         let (host, store, module, directory) = try await setUp("name")
         defer { try? FileManager.default.removeItem(at: directory) }

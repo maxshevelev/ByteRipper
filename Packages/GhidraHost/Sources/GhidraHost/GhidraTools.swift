@@ -978,9 +978,19 @@ public enum GhidraTools {
                         throw AgentToolError("`items` is a list of variables.")
                     }
                     var requests: [JSONValue] = []
-                    for item in list {
+                    let taken = ["name", "storage", "first_use", "ordinal", "type", "shared"]
+                    for (index, item) in list.enumerated() {
                         guard case .object(var fields) = item else {
                             throw AgentToolError("An item of `items` is an object.")
+                        }
+                        // A key the call does not take would be dropped without
+                        // a word — the name sent never written, and an ok answer.
+                        let unknown = fields.keys.filter { !taken.contains($0) }.sorted()
+                        guard unknown.isEmpty else {
+                            throw AgentToolError("Item \(index) of `items` has "
+                                + unknown.map { "`\($0)`" }.joined(separator: ", ")
+                                + ", which this tool does not take; an item takes "
+                                + taken.map { "`\($0)`" }.joined(separator: ", ") + ". Nothing was written.")
                         }
                         fields["function"] = .string(function)
                         requests.append(.object(fields))
@@ -1009,7 +1019,10 @@ public enum GhidraTools {
                   + "through a pointer in ECX — give `storage`, one place per parameter as `ghidra_function` "
                   + "lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is "
                   + "not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). "
-                  + "Then no dummy parameter is needed for a register the function does not read. A convention "
+                  + "Then no dummy parameter is needed for a register the function does not read. A thunk — a "
+                  + "function that is one jump to another — shares its target's prototype: signing it signs "
+                  + "the target too, and the answer's `thunk_of` names the target with its signature before "
+                  + "and after. Sign the target, not the thunk. A convention "
                   + "that does not give that storage is dropped, so the C prints none against it. "
                   + "A function analysis left at `unknown`, for which the decompiler writes a warning into its C, moves to "
                   + "`default`, which names no convention and does not say the function follows one; "

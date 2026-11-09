@@ -5734,6 +5734,11 @@ public class Owner {
     private JsonObject setSignature(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
         String nameBefore = function.getName();
+        // A thunk has no prototype of its own: Ghidra keeps one, the target's,
+        // so a signature given to the thunk is the target's too. The answer
+        // names the target and its prototype before, so the change is not silent.
+        Function target = function.isThunk() ? function.getThunkedFunction(true) : null;
+        String targetBefore = target == null ? null : target.getPrototypeString(false, false);
         String text = edk2(required(body, "signature"));
         // Ghidra's signature parser misreads the pointers of the return type
         // when the function's name is already a symbol of the program (`T *`
@@ -5805,6 +5810,20 @@ public class Owner {
             for (Parameter parameter : function.getParameters()) storage.add(parameter.getVariableStorage().toString());
             answer.add("storage", storage);
             answer.addProperty("return_storage", function.getReturn().getVariableStorage().toString());
+        }
+        if (target != null) {
+            JsonObject thunk = new JsonObject();
+            thunk.addProperty("entry", hex(target.getEntryPoint()));
+            thunk.addProperty("name", target.getName());
+            thunk.addProperty("signature_before", targetBefore);
+            thunk.addProperty("signature", target.getPrototypeString(false, false));
+            answer.add("thunk_of", thunk);
+            if (!target.getPrototypeString(false, false).equals(targetBefore)) {
+                answer.addProperty("note", "this function is a thunk of " + target.getName() + " at "
+                    + hex(target.getEntryPoint()) + ", and a thunk shares its target's prototype: the target's "
+                    + "signature changed too (was `" + targetBefore + "`). Read its callers again; to keep the "
+                    + "target's own signature, sign the target, not the thunk.");
+            }
         }
         return answer;
     }
