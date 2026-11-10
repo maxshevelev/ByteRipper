@@ -99,6 +99,11 @@ public extension DifferenceColors.Sets {
 }
 
 public extension RowMarks.Sets {
+    static let codeReviewed = PaletteColor(
+        name: "RowCodeReviewed",
+        light: (0.196, 0.427, 0.455, 1.000),
+        dark: (0.404, 0.718, 0.643, 1.000))
+
     static let decompressed = PaletteColor(
         name: "RowDecompressed",
         light: (0.345, 0.337, 0.839, 1.000),
@@ -115,7 +120,7 @@ public extension RowMarks.Sets {
         dark: (1.000, 0.216, 0.373, 0.240))
 
     /// Every row colour set in the catalogue, in its own order.
-    static let all = [decompressed, protectedFirmware, protectedIBB]
+    static let all = [codeReviewed, decompressed, protectedFirmware, protectedIBB]
 }
 
 public extension NoticeColors.Sets {

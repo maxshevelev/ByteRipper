@@ -447,9 +447,10 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         case Self.codeAnalysisItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
-            // The mark a module with a stored analysis wears in the UEFI tree,
-            // read from the mark's own style so the two never drift apart.
-            item.image = NSImage(systemSymbolName: ToolRowMark.codeAnalysis.symbol ?? "ellipsis.curlybraces",
+            // The code glyph the Code panel's capsule wears. Not the UEFI tree's
+            // mark: that is a circle filled as far as a review has got, and a
+            // half circle says nothing about a settings page.
+            item.image = NSImage(systemSymbolName: "ellipsis.curlybraces",
                                  accessibilityDescription: item.label)
             item.target = self
             item.action = #selector(tabTapped(_:))

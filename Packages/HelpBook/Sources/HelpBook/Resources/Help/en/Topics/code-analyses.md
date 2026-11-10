@@ -9,6 +9,8 @@
 
 An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes; the panel is described on [[topic:code-panel|Code Panel]]. While the module's file is collapsed, the badge stands after the file's name, so a list of collapsed files shows which modules have an analysis; expanding the file moves it to the section that holds the module. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
 
+The badge is a circle that shows how far the module's review has got. An empty circle is Ghidra's automatic analysis alone: nobody has reviewed the module yet. A half-filled circle is a review that is not finished: some function is below the full level, or the module has no description. A filled circle is a finished review: every function is reviewed in full, linked to the registry of library functions or has no body, and the module is described. An analysis published before the review levels were counted shows a half-filled circle until it is published again. A collapsed file that holds several analysed modules shows the badge of the least reviewed one.
+
 ## Where the analyses are kept
 
 **Settings ▸ Code Analysis** chooses the store.

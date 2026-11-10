@@ -107,8 +107,13 @@
 "64 bytes (4 rows)" = "64 Bytes (4 Zeilen)";
 "8 Bytes" = "8 Bytes";
 "A code analysis is a snapshot; edit the dump and analyze the module again." = "Eine Codeanalyse ist eine Momentaufnahme; ändern Sie den Dump und analysieren Sie das Modul erneut.";
-"A code analysis is stored for this module; Open with Code opens it" = "Für dieses Modul ist eine Codeanalyse gespeichert; „Mit Code öffnen“ öffnet sie.";
-"A module inside has a stored code analysis; open the row to reach it" = "Darin liegt ein Modul mit gespeicherter Codeanalyse; die Zeile aufklappen, um es zu erreichen.";
+"A code analysis is stored for this module: an empty circle is Ghidra's analysis alone, half filled a review in progress, filled a full review with a description. Open with Code opens it" = "Für dieses Modul ist eine Codeanalyse gespeichert: Ein leerer Kreis steht für die automatische Analyse von Ghidra allein, ein halb gefüllter für eine unvollständige Analyse, ein gefüllter für eine vollständige Analyse mit Modulbeschreibung. „Mit Code öffnen“ öffnet sie.";
+"Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it" = "Codeanalyse gespeichert: nur die automatische Analyse von Ghidra, die Funktionen sind nicht analysiert. „Mit Code öffnen“ öffnet sie.";
+"Code analysis stored: the review is not finished. Open with Code opens it" = "Codeanalyse gespeichert: Die Analyse ist nicht abgeschlossen. „Mit Code öffnen“ öffnet sie.";
+"Code analysis stored: every function reviewed and the module described. Open with Code opens it" = "Codeanalyse gespeichert: Alle Funktionen sind analysiert, das Modul ist beschrieben. „Mit Code öffnen“ öffnet sie.";
+"A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Darin liegt ein Modul mit gespeicherter automatischer Analyse von Ghidra, noch nicht analysiert; die Zeile aufklappen, um es zu erreichen.";
+"A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Darin liegt ein Modul, dessen Analyse nicht abgeschlossen ist; die Zeile aufklappen, um es zu erreichen.";
+"A module inside has a fully reviewed code analysis; open the row to reach it" = "Darin liegt ein vollständig analysiertes Modul; die Zeile aufklappen, um es zu erreichen.";
 "A FIT needs at least one microcode entry." = "Eine FIT braucht mindestens einen Microcode-Eintrag.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Eine Datei ist immer nur an einer Stelle geöffnet, hier also nicht zusätzlich. Zeigen Sie sie dort, wo sie ist, oder bewegen Sie jenen Bereich in diesen Tab.";
 "A second header entry, where there may be only one" = "Ein zweiter Kopfeintrag, obwohl es nur einen geben darf";

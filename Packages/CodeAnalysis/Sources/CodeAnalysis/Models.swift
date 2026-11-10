@@ -201,20 +201,27 @@ public struct AnalysisStats: Codable, Equatable, Sendable {
     public var strings: Int
     public var postCodeWrites: Int
     public var statusCodeCandidates: Int
+    /// How many functions stand at each review level (`ReviewLevel`'s raw
+    /// values; a link to a registry entry counts as `library`): how far the
+    /// module's review has got, for a list that cannot read every artifact.
+    /// Nil in a manifest written before it was counted.
+    public var reviewLevels: [String: Int]?
 
     public init(functions: Int = 0, instructions: Int = 0, strings: Int = 0,
-                postCodeWrites: Int = 0, statusCodeCandidates: Int = 0) {
+                postCodeWrites: Int = 0, statusCodeCandidates: Int = 0, reviewLevels: [String: Int]? = nil) {
         self.functions = functions
         self.instructions = instructions
         self.strings = strings
         self.postCodeWrites = postCodeWrites
         self.statusCodeCandidates = statusCodeCandidates
+        self.reviewLevels = reviewLevels
     }
 
     private enum CodingKeys: String, CodingKey {
         case functions, instructions, strings
         case postCodeWrites = "post_code_writes"
         case statusCodeCandidates = "status_code_candidates"
+        case reviewLevels = "review_levels"
     }
 }
 
@@ -521,5 +528,33 @@ enum Timestamps {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'+00:00'"
         return formatter.string(from: Date())
+    }
+}
+
+/// How far a module's review has got, by its stored analysis alone: what a
+/// list of modules shows without reading every artifact.
+public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
+    /// Ghidra's analysis and the UEFI pass: nobody's review.
+    case mechanical
+    /// A review is published, and something is still short: a function below
+    /// the bar, no description, or levels not counted (a manifest written
+    /// before they were).
+    case partial
+    /// Every function full, linked to the registry or bodiless, and the
+    /// module described.
+    case complete
+
+    public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    /// The levels that leave nothing to review.
+    static let done: Set<String> = [ReviewLevel.full.rawValue, ReviewLevel.library.rawValue, ReviewLevel.noBody.rawValue]
+}
+
+public extension AnalysisManifest {
+    var reviewProgress: ReviewProgress {
+        guard let reading else { return .mechanical }
+        guard let levels = stats.reviewLevels, reading.description != nil else { return .partial }
+        let short = levels.contains { level, count in count > 0 && !ReviewProgress.done.contains(level) }
+        return short ? .partial : .complete
     }
 }

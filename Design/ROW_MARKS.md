@@ -115,7 +115,7 @@ which is drawn in the dump and not in a panel.
 | `shield.lefthalf.filled` | badge | partly covered by protected ranges | `secondaryLabelColor` |
 | `lock` | badge | stored encoded: its bytes are not what it holds (a Lenovo LENV block, XORed with its key) | `secondaryLabelColor` |
 | `lock.open` | badge | encoded where it is stored and in the clear here — a LENV block opened decoded | `secondaryLabelColor` |
-| `ellipsis.curlybraces` | badge | a usable code analysis is stored for this TE/PE32 module; drawn after the name, not in the leading badge slots | `secondaryLabelColor` |
+| `circle` / `circle.lefthalf.filled` / `circle.fill` | badge | a usable code analysis is stored for this TE/PE32 module, filled as far as its review has got: Ghidra's analysis alone, a review not finished, every function full/library/no_body and a description (`AnalysisManifest.reviewProgress`, from the manifest's `review_levels`; a manifest without them reads as half); drawn after the name, not in the leading badge slots; a collapsed file shows its least reviewed module | `RowMarks.codeReviewed` (the Code panel's reviewed-function colour) |
 | `checkmark.seal.fill` | verdict | the newest revision the catalogue lists for this board | `SemanticColors.good` |
 | `arrow.down.circle` | verdict | a newer revision serves this board — one to bring down into the image | `SemanticColors.caution` |
 | `questionmark.circle` | verdict | a newer revision may or may not serve this board | `SemanticColors.caution` |
@@ -141,7 +141,7 @@ follows the word "Microcode", since it is about the microcode.
 | Rail | the node's `space` is not `.file`, or it is a compressed section whose row is open on its decompressed children |
 | Verdict | none |
 | Problem | a wrong checksum (error) — today; a protected range whose hash does not match (error), a compressed section that did not decompress (caution) — with that work |
-| Badges | `zipper.page` on a compressed section; `lock.shield` on an AMI or Phoenix hash file and an Insyde Flash Device Map; `shield.lefthalf.filled` on a partly covered node; `lock` on a LENV block stored encoded, `lock.open` on one in the clear in a part opened decoded; `ellipsis.curlybraces` after the name of a TE/PE32 image node whose bytes have a stored code analysis (`Design/CODE_PANEL_PLAN.md`) |
+| Badges | `zipper.page` on a compressed section; `lock.shield` on an AMI or Phoenix hash file and an Insyde Flash Device Map; `shield.lefthalf.filled` on a partly covered node; `lock` on a LENV block stored encoded, `lock.open` on one in the clear in a part opened decoded; a readiness circle (`circle`, `circle.lefthalf.filled`, `circle.fill`) after the name of a TE/PE32 image node whose bytes have a stored code analysis (`Design/CODE_PANEL_PLAN.md`) |
 
 ### 5.2. FIT — the table
 

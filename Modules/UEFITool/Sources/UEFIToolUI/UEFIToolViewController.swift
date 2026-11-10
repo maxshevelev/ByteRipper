@@ -198,7 +198,8 @@ import UEFITool
     /// The image nodes whose bytes have a usable stored code analysis
     /// (`Design/CODE_PANEL_PLAN.md`). The session fills it in the background;
     /// the tree only reads it while dressing a row.
-    private var codeAnalysis: Set<NodeID> = []
+    /// The image nodes with a stored code analysis, and how far each one's review has got.
+    private var codeAnalysis: [NodeID: ToolRowMarks.CodeReadiness] = [:]
     /// Whether the file is open for writing. Without it the Fix Checksum menu
     /// item stands down — the module would refuse anyway, but a greyed item
     /// says so before the click.
@@ -773,7 +774,7 @@ import UEFITool
         helpTerm: HelpTermID? = nil,
         catalogue: GuidsCatalogue,
         badChecksums: [NodeID: Set<UEFIChecksumField>],
-        codeAnalysis: Set<NodeID> = [],
+        codeAnalysis: [NodeID: ToolRowMarks.CodeReadiness] = [:],
         canWrite: Bool,
         isBuilding: Bool,
         rowsChanged: Bool,
@@ -2742,9 +2743,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         let isOpen = outline.isItemExpanded(row(node.id))
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
                                    isOpen: isOpen, reader: reader,
-                                   hasCode: codeAnalysis.contains(node.id),
-                                   hidesCode: UEFITreeMarks.hidesCode(node, isOpen: isOpen,
-                                                                      analyzed: codeAnalysis),
+                                   code: codeAnalysis[node.id],
+                                   codeInside: UEFITreeMarks.codeInside(node, isOpen: isOpen,
+                                                                        analyzed: codeAnalysis),
                                    in: Localization.appLanguage)
     }
 
@@ -2955,7 +2956,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             }
         }
         let encoded = lenv?.block.encoding == .encoded
-        let hasCode = codeAnalysis.contains(node.id)
+        let hasCode = (codeAnalysis[node.id] != nil)
         // Every node can be taken out and read as a file of its own, and a
         // node with a header can have its body taken out without it. An
         // analyzed image is the one exception: Open with Code holds the body
@@ -3080,7 +3081,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// content is (`UEFIPresenter.content(of:)`).
     private func opensAsDoubleClick(_ item: NSMenuItem, node: UEFINode, decodable: Bool) -> Bool {
         if decodable { return item.action == #selector(openDecodedBlockClicked(_:)) }
-        switch UEFIPresenter.openChoice(for: node, hasCode: codeAnalysis.contains(node.id)) {
+        switch UEFIPresenter.openChoice(for: node, hasCode: (codeAnalysis[node.id] != nil)) {
         case .code:
             return item.action == #selector(openWithCodeClicked(_:))
         case .decompressedBody:
@@ -3214,7 +3215,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             return
         }
         guard let node = node(of: item) else { return }
-        if UEFIPresenter.openChoice(for: node, hasCode: codeAnalysis.contains(node.id)) == .code {
+        if UEFIPresenter.openChoice(for: node, hasCode: (codeAnalysis[node.id] != nil)) == .code {
             onOpenCode?(node.id)
         } else {
             onOpenContent?(node.id)

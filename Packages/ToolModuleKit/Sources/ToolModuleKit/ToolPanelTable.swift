@@ -265,8 +265,8 @@ import Localization
         }
         let mark = ToolRowMark.codeAnalysis
         let toolTip = role.toolTip
-        badge.image = NSImage(systemSymbolName: mark.symbol ?? "",
-                              accessibilityDescription: toolTip)
+        let symbol = role.codeReadiness?.symbol ?? mark.symbol ?? ""
+        badge.image = NSImage(systemSymbolName: symbol, accessibilityDescription: toolTip)
         badge.image?.isTemplate = true
         badge.contentTintColor = mark.tint
         badge.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)

@@ -120,7 +120,7 @@ final class ToolRowMarksTests: XCTestCase {
         let cell = ToolPanelTable.makeCell(identifier: .init("name"),
                                            warning: true, badges: true)
         cell.textField?.stringValue = "CpuPei"
-        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis]))
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis(.complete)]))
 
         let leading = ToolPanelTable.badgeTags.compactMap {
             cell.viewWithTag($0) as? NSImageView
@@ -130,7 +130,9 @@ final class ToolRowMarksTests: XCTestCase {
         let code = try XCTUnwrap(
             cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
         XCTAssertFalse(code.isHidden)
-        XCTAssertEqual(code.toolTip, ToolRowMark.codeAnalysis.meaning)
+        XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysis(.complete).toolTip)
+        XCTAssertEqual(code.contentTintColor, ToolRowMark.codeAnalysis.tint, "the reviewed function's colour")
+        XCTAssertEqual(code.image?.accessibilityDescription, ToolRowMarks.Role.codeAnalysis(.complete).toolTip)
 
         let stack = try XCTUnwrap(cell.subviews.compactMap { $0 as? NSStackView }.first)
         let field = try XCTUnwrap(cell.textField)
@@ -148,7 +150,7 @@ final class ToolRowMarksTests: XCTestCase {
     func testTheBadgeOnAShutFileSaysTheCodeIsInside() throws {
         let cell = ToolPanelTable.makeCell(identifier: .init("name"),
                                            warning: true, badges: true)
-        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisInside]))
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisInside(.partial)]))
 
         let leading = ToolPanelTable.badgeTags.compactMap {
             cell.viewWithTag($0) as? NSImageView
@@ -157,8 +159,8 @@ final class ToolRowMarksTests: XCTestCase {
         let code = try XCTUnwrap(
             cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
         XCTAssertFalse(code.isHidden)
-        XCTAssertNotEqual(code.toolTip, ToolRowMark.codeAnalysis.meaning)
-        XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisInside.toolTip)
+        XCTAssertNotEqual(code.toolTip, ToolRowMarks.Role.codeAnalysis(.partial).toolTip)
+        XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisInside(.partial).toolTip)
     }
 
     /// The FIT panel's existing call still shows the red octagon, even on a

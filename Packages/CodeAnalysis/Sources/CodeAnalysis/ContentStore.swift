@@ -920,11 +920,18 @@ enum ArtifactStats {
         let instructions = functions.reduce(0) { total, function in
             total + ((function["instructions"] as? [Any])?.count ?? 0)
         }
+        var levels: [String: Int] = [:]
+        for function in functions {
+            // A link's row holds no level of its own: it is the registry's.
+            let level = function["registry"] != nil ? "library" : function["review_level"] as? String
+            if let level { levels[level, default: 0] += 1 }
+        }
         return AnalysisStats(
             functions: functions.count,
             instructions: instructions,
             strings: (root["strings"] as? [Any])?.count ?? 0,
             postCodeWrites: (root["post_codes"] as? [Any])?.count ?? 0,
-            statusCodeCandidates: (root["status_code_calls"] as? [Any])?.count ?? 0)
+            statusCodeCandidates: (root["status_code_calls"] as? [Any])?.count ?? 0,
+            reviewLevels: levels.isEmpty ? nil : levels)
     }
 }

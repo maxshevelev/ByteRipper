@@ -236,6 +236,17 @@ private struct ChecksumPass: Sendable {
     /// last scan. The tree draws only the ids; the menu and the panel need the
     /// manifest.
     private var codeAnalysisManifests: [NodeID: AnalysisManifest] = [:]
+    /// How far each analyzed node's review has got, as the tree's badge draws it.
+    private var codeReadiness: [NodeID: ToolRowMarks.CodeReadiness] {
+        Dictionary(uniqueKeysWithValues: codeAnalysisNodes.map { node in
+            let readiness: ToolRowMarks.CodeReadiness = switch codeAnalysisManifests[node]?.reviewProgress {
+            case .complete: .complete
+            case .partial: .partial
+            case .mechanical, nil: .mechanical
+            }
+            return (node, readiness)
+        })
+    }
     private var codeAnalysisRequest: Task<Void, Never>?
     /// Which scan is current; a result from an older reading is dropped.
     private var codeAnalysisGeneration = 0
@@ -1173,7 +1184,7 @@ private struct ChecksumPass: Sendable {
         guard let tree, tree.isReady else {
             controller.show(
                 image: nil, tree: tree, focus: nil, detail: .empty, catalogue: guids,
-                badChecksums: checksumProblems, codeAnalysis: codeAnalysisNodes,
+                badChecksums: checksumProblems, codeAnalysis: codeReadiness,
                 canWrite: !host.isReadOnly,
                 isBuilding: tree != nil, rowsChanged: true,
                 meRoots: meRoots, meFocus: meFocus
@@ -1239,7 +1250,7 @@ private struct ChecksumPass: Sendable {
                 image: image, tree: tree, focus: focus, detail: detail,
                 helpTerm: helpTerm,
                 catalogue: guids,
-                badChecksums: checksumProblems, codeAnalysis: codeAnalysisNodes,
+                badChecksums: checksumProblems, codeAnalysis: codeReadiness,
                 canWrite: !host.isReadOnly, isBuilding: false,
                 rowsChanged: rowsChanged,
                 meRoots: meRoots, meFocus: meFocus

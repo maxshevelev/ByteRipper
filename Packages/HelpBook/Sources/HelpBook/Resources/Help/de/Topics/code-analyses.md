@@ -1,9 +1,11 @@
-@source-sha 9271738cf6f94a6c2a7c3db207453cb6f0e354e398b1638e36f02807ffccfd03
+@source-sha 8d9b74e6cd498837b8353441e5ddc26fdd9c73c0cc55e55788fd0f310a601229
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
 
 Eine Analyse erstellt der Ghidra-Skill außerhalb von ByteRipper. ByteRipper liest, was der Skill gespeichert hat: Ein Modul des UEFI-Baums, zu dem eine Analyse vorliegt, trägt ein Code-Symbol, und **Mit Code öffnen** zeigt seinen Code neben seinen Bytes; der Bereich ist auf [[topic:code-panel|Code-Bereich]] beschrieben. Solange die Datei des Moduls zugeklappt ist, steht das Symbol hinter dem Namen der Datei; eine Liste zugeklappter Dateien zeigt so, für welche Module eine Analyse vorliegt. Beim Aufklappen der Datei wandert das Symbol zu dem Abschnitt, der das Modul enthält. Eine Analyse ist den Bytes des Moduls zugeordnet, nicht dem Dump; dasselbe Modul in einem anderen Dump öffnet daher dieselbe Analyse.
+
+Das Symbol ist ein Kreis, der den Stand der Analyse des Moduls anzeigt. Ein leerer Kreis steht für die automatische Analyse von Ghidra allein: Das Modul wurde noch nicht analysiert. Ein halb gefüllter Kreis steht für eine nicht abgeschlossene Analyse: Eine Funktion ist nicht vollständig analysiert, oder das Modul hat keine Beschreibung. Ein gefüllter Kreis steht für eine abgeschlossene Analyse: Jede Funktion ist vollständig analysiert, mit dem Register der Bibliotheksfunktionen verknüpft oder hat keinen Rumpf, und das Modul ist beschrieben. Eine Analyse, die veröffentlicht wurde, bevor der Analysestand der Funktionen gezählt wurde, zeigt bis zur nächsten Veröffentlichung einen halb gefüllten Kreis. Eine zugeklappte Datei mit mehreren analysierten Modulen zeigt das Symbol des am wenigsten analysierten.
 
 ## Wo die Analysen liegen
 

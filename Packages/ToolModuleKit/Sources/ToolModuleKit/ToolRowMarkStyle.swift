@@ -19,7 +19,8 @@ public extension ToolRowMark {
         case .newerMaybe: return "questionmark.circle"
         case .error: return "exclamationmark.octagon.fill"
         case .caution: return "exclamationmark.circle.fill"
-        case .codeAnalysis: return "ellipsis.curlybraces"
+        // Half filled: the legend shows the middle of the three.
+        case .codeAnalysis: return ToolRowMarks.CodeReadiness.partial.symbol
         case .compressed, .compressedUndecoded: return "zipper.page"
         case .holdsChecks: return "lock.shield"
         case .partlyProtected: return "shield.lefthalf.filled"
@@ -39,7 +40,8 @@ public extension ToolRowMark {
         case .newerListed, .newerMaybe: return SemanticColors.caution
         case .error: return SemanticColors.bad
         case .caution: return SemanticColors.caution
-        case .codeAnalysis, .compressedUndecoded, .holdsChecks, .partlyProtected,
+        case .codeAnalysis: return RowMarks.codeReviewed
+        case .compressedUndecoded, .holdsChecks, .partlyProtected,
              .encoded, .decoded:
             return .secondaryLabelColor
         }
@@ -48,7 +50,15 @@ public extension ToolRowMark {
 
 extension ToolRowMarks.Role {
     /// Drawn in the badge after the name rather than in the leading slots.
-    var isCode: Bool { self == .codeAnalysis || self == .codeAnalysisInside }
+    var isCode: Bool { codeReadiness != nil }
+
+    /// How far the module's review has got, for a code badge; nil for any other.
+    var codeReadiness: ToolRowMarks.CodeReadiness? {
+        switch self {
+        case .codeAnalysis(let readiness), .codeAnalysisInside(let readiness): return readiness
+        default: return nil
+        }
+    }
 
     var mark: ToolRowMark {
         switch self {
@@ -63,9 +73,18 @@ extension ToolRowMarks.Role {
     /// What the pointer reads on the badge.
     var toolTip: String {
         switch self {
-        case .codeAnalysis: return ToolRowMark.codeAnalysis.meaning
-        case .codeAnalysisInside:
-            return L("A module inside has a stored code analysis; open the row to reach it")
+        case .codeAnalysis(let readiness):
+            switch readiness {
+            case .mechanical: return L("Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it")
+            case .partial: return L("Code analysis stored: the review is not finished. Open with Code opens it")
+            case .complete: return L("Code analysis stored: every function reviewed and the module described. Open with Code opens it")
+            }
+        case .codeAnalysisInside(let readiness):
+            switch readiness {
+            case .mechanical: return L("A module inside has a stored code analysis, not reviewed; open the row to reach it")
+            case .partial: return L("A module inside has a stored code analysis, its review not finished; open the row to reach it")
+            case .complete: return L("A module inside has a fully reviewed code analysis; open the row to reach it")
+            }
         case .compressed(let algorithm, let decoded):
             return decoded
                 ? L("%1$@ compressed data that opens here", algorithm)

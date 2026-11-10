@@ -135,6 +135,10 @@ public enum RowMarks {
 
     /// The rail: the row's bytes came out of a decompressed buffer.
     public static let decompressed = Sets.decompressed.color
+
+    /// A module's code review readiness, beside its name: the colour the Code
+    /// panel gives a reviewed function, so the two say one thing.
+    public static let codeReviewed = Sets.codeReviewed.color
 }
 
 /// What a transient notice draws with — the plate over the window that reports

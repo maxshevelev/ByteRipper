@@ -37,7 +37,9 @@ enum CodeColors {
     // Xcode's Default (Light) and Default (Dark) source colours.
     static let keyword = themed(light: 0x9B2393, dark: 0xFC5FA3)
     static let type = themed(light: 0x3900A0, dark: 0xD0A8FF)
-    static let function = themed(light: 0x326D74, dark: 0x67B7A4)
+    /// Xcode's function colour, kept in the palette: a module's readiness
+    /// badge in the firmware panels wears it too.
+    static let function = RowMarks.codeReviewed
     static let global = themed(light: 0x0F68A0, dark: 0x41A1C0)
     static let number = themed(light: 0x1C00CF, dark: 0xD0BF69)
     static let string = themed(light: 0xC41A16, dark: 0xFC6A5D)

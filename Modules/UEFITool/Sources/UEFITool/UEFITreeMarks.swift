@@ -27,18 +27,18 @@ public enum UEFITreeMarks {
     ///     not of the tree, which keeps a branch it has read after the row shuts.
     ///   - reader: the bytes of the node's space, for the marks read off them —
     ///     whether a LENV block is stored encoded. Without it those are left off.
-    ///   - hasCode: a usable code analysis is stored for this image node
-    ///     (`Design/CODE_PANEL_PLAN.md`).
-    ///   - hidesCode: the row is shut on an image that has one
-    ///     (`hidesCode(_:isOpen:analyzed:)`).
+    ///   - code: how far the review of this image node's stored code
+    ///     analysis has got; nil when none is stored (`Design/CODE_PANEL_PLAN.md`).
+    ///   - codeInside: the row is shut on images that have one: the least
+    ///     reviewed of them (`codeInside(_:isOpen:analyzed:)`).
     public static func marks(
         for node: UEFINode,
         in image: UEFIImage,
         badChecksums: Set<UEFIChecksumField> = [],
         isOpen: Bool = false,
         reader: ImageReader? = nil,
-        hasCode: Bool = false,
-        hidesCode: Bool = false,
+        code: ToolRowMarks.CodeReadiness? = nil,
+        codeInside: ToolRowMarks.CodeReadiness? = nil,
         in language: AppLanguage
     ) -> ToolRowMarks {
         var errors: [String] = []
@@ -90,10 +90,10 @@ public enum UEFITreeMarks {
 
         // The badge the reader can act on leads. An image node normally wears
         // no other role badge, so this only matters if a future mark joins one.
-        if hasCode {
-            roles.insert(.codeAnalysis, at: 0)
-        } else if hidesCode {
-            roles.insert(.codeAnalysisInside, at: 0)
+        if let code {
+            roles.insert(.codeAnalysis(code), at: 0)
+        } else if let codeInside {
+            roles.insert(.codeAnalysisInside(codeInside), at: 0)
         }
 
         return ToolRowMarks(
@@ -109,10 +109,13 @@ public enum UEFITreeMarks {
     /// section in one, so a list of shut files says which modules are
     /// analyzed. A volume or a region does not wear it — every one of them
     /// would. Open, the row hands the badge down to what it shows.
-    public static func hidesCode(_ node: UEFINode, isOpen: Bool, analyzed: Set<NodeID>) -> Bool {
-        guard !isOpen, node.kind == .file || node.kind == .section else { return false }
+    /// It says the least reviewed of them, so a shut file is not shown done
+    /// while a module in it is not.
+    public static func codeInside(_ node: UEFINode, isOpen: Bool,
+                                  analyzed: [NodeID: ToolRowMarks.CodeReadiness]) -> ToolRowMarks.CodeReadiness? {
+        guard !isOpen, node.kind == .file || node.kind == .section else { return nil }
         let path = node.id.path
-        return analyzed.contains { $0.path.count > path.count && $0.path.starts(with: path) }
+        return analyzed.filter { $0.key.path.count > path.count && $0.key.path.starts(with: path) }.values.min()
     }
 
     /// Which of a node's checksums is wrong, since "invalid" alone leaves the

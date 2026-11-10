@@ -107,8 +107,13 @@
 "64 bytes (4 rows)" = "64 байта (4 строки)";
 "8 Bytes" = "8 байт";
 "A code analysis is a snapshot; edit the dump and analyze the module again." = "Разбор кода — это снимок; измените дамп и разберите модуль заново.";
-"A code analysis is stored for this module; Open with Code opens it" = "Для этого модуля сохранён разбор кода; «Открыть с кодом» открывает его.";
-"A module inside has a stored code analysis; open the row to reach it" = "Внутри есть модуль с сохранённым разбором кода; разверните строку, чтобы перейти к нему.";
+"A code analysis is stored for this module: an empty circle is Ghidra's analysis alone, half filled a review in progress, filled a full review with a description. Open with Code opens it" = "Для этого модуля сохранён разбор кода: пустой круг — только автоматический анализ Ghidra, наполовину залитый — разбор не завершён, залитый — полный разбор с описанием модуля. «Открыть с кодом» открывает его.";
+"Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it" = "Сохранён разбор кода: только автоматический анализ Ghidra, функции не разобраны. «Открыть с кодом» открывает его.";
+"Code analysis stored: the review is not finished. Open with Code opens it" = "Сохранён разбор кода: разбор не завершён. «Открыть с кодом» открывает его.";
+"Code analysis stored: every function reviewed and the module described. Open with Code opens it" = "Сохранён разбор кода: все функции разобраны, модуль описан. «Открыть с кодом» открывает его.";
+"A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Внутри есть модуль с сохранённым анализом Ghidra, ещё не разобранный; разверните строку, чтобы перейти к нему.";
+"A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Внутри есть модуль, разбор которого не завершён; разверните строку, чтобы перейти к нему.";
+"A module inside has a fully reviewed code analysis; open the row to reach it" = "Внутри есть полностью разобранный модуль; разверните строку, чтобы перейти к нему.";
 "A FIT needs at least one microcode entry." = "В FIT должна быть хотя бы одна запись микрокода.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Файл открыт в одном месте за раз, поэтому открыть его ещё и здесь нельзя. Покажите его там, где он есть, или перенесите ту файловую панель в эту вкладку.";
 "A second header entry, where there may be only one" = "Вторая запись-заголовок, хотя она может быть только одна";

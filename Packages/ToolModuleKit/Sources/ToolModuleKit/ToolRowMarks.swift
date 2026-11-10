@@ -43,15 +43,40 @@ public struct ToolRowMarks: Hashable, Sendable {
         }
     }
 
+    /// How far a module's code review has got, as its badge draws it: an
+    /// empty circle, half filled, filled.
+    public enum CodeReadiness: Int, Hashable, Sendable, Comparable, CaseIterable {
+        /// Only Ghidra's own analysis: nobody has reviewed the module.
+        case mechanical
+        /// A review is published, but a function is short of the bar or the
+        /// module has no description.
+        case partial
+        /// Every function reviewed, linked to the registry or bodiless, and
+        /// the module described.
+        case complete
+
+        public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+
+        /// The SF Symbol the badge is drawn with.
+        public var symbol: String {
+            switch self {
+            case .mechanical: return "circle"
+            case .partial: return "circle.lefthalf.filled"
+            case .complete: return "circle.fill"
+            }
+        }
+    }
+
     /// A badge: what the row is to the others.
     public enum Role: Hashable, Sendable {
         /// A usable code analysis is stored for this module
-        /// (`Design/CODE_PANEL_PLAN.md`).
-        case codeAnalysis
+        /// (`Design/CODE_PANEL_PLAN.md`), reviewed this far.
+        case codeAnalysis(CodeReadiness)
         /// A shut row a module with a stored code analysis lies under — a
         /// file, or a section in it, so a list of shut files says which are
-        /// analyzed. The badge moves down to the module as the rows open.
-        case codeAnalysisInside
+        /// analyzed. The badge moves down to the module as the rows open; it
+        /// shows the least reviewed module below.
+        case codeAnalysisInside(CodeReadiness)
         /// Holds compressed data — `decoded` when this project opens it.
         case compressed(algorithm: String, decoded: Bool)
         /// Holds what other structures are checked against: protected ranges,
@@ -173,7 +198,7 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
         case .caution:
             return L("Could not be checked, or wants a second look")
         case .codeAnalysis:
-            return L("A code analysis is stored for this module; Open with Code opens it")
+            return L("A code analysis is stored for this module: an empty circle is Ghidra's analysis alone, half filled a review in progress, filled a full review with a description. Open with Code opens it")
         case .compressed:
             return L("Holds compressed data that opens here")
         case .compressedUndecoded:
