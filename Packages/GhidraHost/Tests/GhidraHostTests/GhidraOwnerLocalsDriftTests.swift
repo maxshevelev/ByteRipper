@@ -147,6 +147,44 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
         XCTAssertFalse(now.contains { ($0["name"] as? String) == "EntryName" }, "\(now)")
     }
 
+    /// Issue 24c094eb: an entry's register local recorded on a storage the
+    /// program no longer uses lands on the local of its first use, and
+    /// nothing is added on the entry's storage; one whose first use no local
+    /// starts at is reported.
+    func testAnEntrysLocalLandsByFirstUseNotOnItsOldStorage() async throws {
+        let (entry, locals) = try await function()
+        let shown = try await read("/v1/function/\(entry)")
+        let offset = { (local: [String: Any]) -> String in
+            let at = UInt64((local["first_use"] as! String).dropFirst(2), radix: 16)!
+            return String(format: "0x%llX", at - UInt64(entry.dropFirst(2), radix: 16)!)
+        }
+        let parameters = (shown["parameters"] as? [[String: Any]] ?? [])
+            .map { ["name": $0["name"] ?? "", "type": $0["type"] ?? "", "storage": $0["storage"] ?? "", "ordinal": $0["ordinal"] ?? 0] }
+        let item: [String: Any] = [
+            "address": entry, "id": "1a-landing", "version": 1, "mode": "whole",
+            "entry": ["name": shown["name"] ?? "", "signature": shown["signature"] ?? "",
+                      "calling_convention": shown["calling_convention"] ?? "unknown", "params": parameters,
+                      "locals": [
+                        ["name": "LandedValue", "storage": "EDI:4", "first_use": offset(locals[0]),
+                         "type": locals[0]["type"] as? String ?? "undefined4"],
+                        ["name": "NowhereValue", "storage": "ESI:4", "first_use": "0x1", "type": "undefined4"]
+                      ]] as [String: Any]]
+        try await host.take(module)
+        let applied = try json(await host.write(module, "/v1/library/apply",
+                                                body: try JSONSerialization.data(withJSONObject: ["items": [item]]),
+                                                byHost: true))
+        let result = try XCTUnwrap((applied["items"] as? [[String: Any]])?.first, "\(applied)")
+        let unplaced = (result["unplaced"] as? [String] ?? []).joined(separator: "\n")
+        XCTAssertTrue(unplaced.contains("NowhereValue"), "\(result)")
+        XCTAssertFalse(unplaced.contains("LandedValue"), "\(result)")
+        let now = try await read("/v1/function/\(entry)?summary=1")["locals"] as? [[String: Any]] ?? []
+        let landed = now.filter { ($0["name"] as? String) == "LandedValue" }
+        XCTAssertEqual(landed.count, 1, "\(now)")
+        XCTAssertEqual(landed.first?["first_use"] as? String, locals[0]["first_use"] as? String, "\(now)")
+        XCTAssertFalse(now.contains { ($0["name"] as? String) == "NowhereValue" }, "never added: \(now)")
+        XCTAssertFalse(now.contains { ($0["storage"] as? String) == "ESI:4" && ($0["named"] as? Bool) == true }, "\(now)")
+    }
+
     func testTheReferenceIsTheRecipeBeforeRevision3() {
         XCTAssertEqual(GhidraHost.recipeBeforeEFIAPI("code-v10-types3-ghidra-12.2-lang-descriptor-tables-1"),
                        "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1")

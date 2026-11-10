@@ -3778,10 +3778,42 @@ public class Owner {
                 function.removeVariable(local);
             }
         }
+        // A register local is found by its first use, never by its storage:
+        // a frame laid out again (issue 4a9a4484 — EFIAPI as __cdecl, a
+        // callee's prototype) moves the value to another register pair while
+        // the instruction that first sets it stays, and a name added on the
+        // entry's storage would sit on a slot the program no longer uses.
+        // What no local starts at now is reported, never added. A stack
+        // local's first use is the whole function (0), and its slot is the
+        // frame's, which a convention does not move: it keeps its storage.
+        java.util.List<JsonObject> byFirstUse = new java.util.ArrayList<>();
         for (JsonElement element : locals) {
             JsonObject theirs = element.getAsJsonObject();
             String place = theirs.get("storage").getAsString(), name = theirs.get("name").getAsString();
             int firstUse = (int) relative(theirs.get("first_use").getAsString());
+            if (firstUse != 0) {
+                if (!whole) {
+                    // A review's own locals stay; only a placeholder takes the entry's name.
+                    boolean exact = false;
+                    for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+                        if (local.getVariableStorage().toString().equals(place) && local.getFirstUseOffset() == firstUse) {
+                            exact = true;
+                        }
+                    }
+                    if (!exact) {
+                        unplaced.add("local " + name + " at " + place + ": not set — a review's own locals stay");
+                        continue;
+                    }
+                } else {
+                    JsonObject move = new JsonObject();
+                    move.addProperty("name", name);
+                    move.addProperty("storage", place);
+                    move.addProperty("first_use", hex(function.getEntryPoint().add(firstUse)));
+                    if (theirs.has("type")) move.addProperty("type", theirs.get("type").getAsString());
+                    byFirstUse.add(move);
+                    continue;
+                }
+            }
             DataType type;
             try {
                 type = type(theirs.get("type").getAsString());
@@ -3815,6 +3847,19 @@ public class Owner {
                 unplaced.add("local " + name + " at " + place + ": " + failure.getMessage());
             } catch (Exception error) {
                 unplaced.add("local " + name + " at " + place + ": " + error.getMessage());
+            }
+        }
+        if (byFirstUse.isEmpty()) return;
+        applyMoves(function, byFirstUse);
+        for (JsonObject move : byFirstUse) {
+            String name = move.get("name").getAsString(), place = move.get("storage").getAsString();
+            if (move.has("refused")) {
+                unplaced.add("local " + name + " at " + place + ": " + move.get("refused").getAsString());
+                continue;
+            }
+            filled.add("local " + name);
+            if (move.has("type_refused")) {
+                unplaced.add("local " + name + " type: " + move.get("type_refused").getAsString());
             }
         }
     }
