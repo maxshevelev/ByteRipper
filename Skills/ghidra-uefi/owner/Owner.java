@@ -5892,6 +5892,16 @@ public class Owner {
                 continue;
             }
             report.addProperty("name", function.getName());
+            // A function linked to a registry entry has the entry's names: a
+            // rename here would edit the entry and drop its text, so its
+            // drift is reported and never applied.
+            JsonObject mark = libraryMark(function);
+            if (mark != null) {
+                JsonObject link = new JsonObject();
+                if (mark.has("id")) link.add("id", mark.get("id"));
+                if (mark.has("version")) link.add("version", mark.get("version"));
+                report.add("library_link", link);
+            }
             java.util.List<LiveLocal> live = liveLocals(function);
             if (live == null) {
                 report.addProperty("decompile_error", true);
@@ -5981,7 +5991,14 @@ public class Owner {
                 }
             }
             for (JsonElement element : items) {
-                if (element.getAsJsonObject().get("status").getAsString().equals("moved")) moves.add(element.getAsJsonObject());
+                JsonObject item = element.getAsJsonObject();
+                String status = item.get("status").getAsString();
+                if (mark != null && !status.equals("intact")) {
+                    item.addProperty("drift", status);
+                    item.addProperty("status", "library_link");
+                } else if (status.equals("moved")) {
+                    moves.add(item);
+                }
             }
             if (apply && !moves.isEmpty()) {
                 int cleared = applyMoves(function, moves);

@@ -128,6 +128,25 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
         XCTAssertFalse(there.contains("OtherHalf"), "\(now)")
     }
 
+    /// A function linked to a registry entry keeps the entry's names: its
+    /// drift is `library_link`, with what it would be, and an apply renames
+    /// nothing there.
+    func testALinkedFunctionIsReportedAndNeverRenamed() async throws {
+        let (entry, locals) = try await function()
+        try await host.take(module)
+        _ = try await host.write(module, "/v1/library/mark", body: try JSONSerialization.data(withJSONObject: [
+            "items": [["address": entry, "id": "test-entry", "version": 1, "kind": "edk2"]]]), byHost: true)
+        let document: [String: Any] = [entry: ["locals": [recorded("EntryName", locals[0], storage: "Stack[-0x7c]:4")]]]
+        let applied = try await drift(document, apply: true)
+        let function = (applied["functions"] as? [[String: Any]])?.first ?? [:]
+        XCTAssertEqual((function["library_link"] as? [String: Any])?["id"] as? String, "test-entry", "\(applied)")
+        let item = items(applied)["EntryName"]
+        XCTAssertEqual(item?["status"] as? String, "library_link", "\(applied)")
+        XCTAssertEqual(item?["drift"] as? String, "moved", "\(applied)")
+        let now = try await read("/v1/function/\(entry)?summary=1")["locals"] as? [[String: Any]] ?? []
+        XCTAssertFalse(now.contains { ($0["name"] as? String) == "EntryName" }, "\(now)")
+    }
+
     func testTheReferenceIsTheRecipeBeforeRevision3() {
         XCTAssertEqual(GhidraHost.recipeBeforeEFIAPI("code-v10-types3-ghidra-12.2-lang-descriptor-tables-1"),
                        "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1")
