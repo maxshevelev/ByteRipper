@@ -355,9 +355,18 @@ public actor GhidraHost {
     func typesCall(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
         let record = try await owner(of: module)
         let held = leases[module] != nil
-        let token = try await lease(module, record)
+        var token = try await lease(module, record)
         do {
-            let answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            let answer: Data
+            do {
+                answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            } catch let error as GhidraHostError where error.status == 403 {
+                // The owner's lease lapsed after an hour with no write while the
+                // host kept its token (issue ce3740de): take it again, once.
+                leases[module] = nil
+                token = try await lease(module, record)
+                answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            }
             if !held {
                 leases[module] = nil
                 _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
@@ -491,6 +500,13 @@ public actor GhidraHost {
         }
         leases[module] = token
         return token
+    }
+
+    /// The owner's lease lapsed as an hour without a write lapses it, while
+    /// this host keeps its token: for the tests of a stale token.
+    func lapseOwnerLease(_ module: SHA256Digest) async {
+        guard let token = leases[module], let record = await runningOwner(project(module)) else { return }
+        _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
     }
 
     // MARK: - Publish

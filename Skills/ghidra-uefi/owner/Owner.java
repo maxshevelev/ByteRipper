@@ -6706,6 +6706,7 @@ public class Owner {
             java.util.TreeMap<String, DataType> previous = namedTypes(c);
             java.util.Map<String, java.util.Map<String, String>> kept = keptComments(previous);
             java.util.Map<String, String> keptDescriptions = keptDescriptions(previous);
+            java.util.Map<DataType, DataType> referenced = onlyReferenced(previous, c);
             // The fields may name what only an archive holds — `CHAR8`, a PI
             // structure, another review's type — as a signature may.
             importTypes(c);
@@ -6736,6 +6737,7 @@ public class Owner {
                 resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             }
             resolved = keepCategories(resolved, previous);
+            restoreReferenced(referenced);
             commentsKept = restoreComments(resolved, kept);
             restoreDescriptions(resolved, keptDescriptions);
             // Ghidra's C parser drops comments: one written beside a member
@@ -7017,6 +7019,40 @@ public class Owner {
             }
         }
         return found;
+    }
+
+    /**
+     * The program's structures and unions with fields that the C names but
+     * gives no body — `struct _NAME *This` in a prototype — each with a copy
+     * of what it holds now (issue 9a4b1fa7). The parser makes an empty
+     * structure of such a reference, and resolving it empties the program's.
+     */
+    private java.util.Map<DataType, DataType> onlyReferenced(java.util.TreeMap<String, DataType> previous, String c) {
+        java.util.Map<DataType, DataType> found = new java.util.LinkedHashMap<>();
+        String text = c.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\\n]*", " ");
+        for (DataType copy : previous.values()) {
+            if (!(copy instanceof ghidra.program.model.data.Composite composite) || composite.getNumComponents() == 0) continue;
+            String name = java.util.regex.Pattern.quote(copy.getName());
+            if (java.util.regex.Pattern.compile("\\b(?:struct|union)\\s+" + name + "\\s*\\{").matcher(text).find()) continue;
+            DataType live = find(program.getDataTypeManager(), copy.getName());
+            if (live instanceof ghidra.program.model.data.TypeDef def) live = def.getBaseDataType();
+            if (live instanceof ghidra.program.model.data.Composite held && held.getName().equals(copy.getName())
+                && live.getDataTypeManager() == program.getDataTypeManager()) {
+                found.put(live, copy);
+            }
+        }
+        return found;
+    }
+
+    /** A referenced structure the parse left empty gets its fields back, in place. */
+    private void restoreReferenced(java.util.Map<DataType, DataType> referenced) {
+        for (java.util.Map.Entry<DataType, DataType> entry : referenced.entrySet()) {
+            DataType live = entry.getKey();
+            if (live.isDeleted() || !(live instanceof ghidra.program.model.data.Composite held)
+                || held.getNumComponents() > 0) continue;
+            live.replaceWith(entry.getValue());
+            live.setDescription(entry.getValue().getDescription());
+        }
     }
 
     /**

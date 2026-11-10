@@ -362,6 +362,45 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 9a4b1fa7: a prototype that names a structure only as
+    /// `struct _NAME *` takes the structure the program holds; it is not
+    /// replaced by the empty one the parser makes of the reference.
+    func testAStructureAPrototypeOnlyPointsAtKeepsItsFields() async throws {
+        try await open(try image())
+        _ = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_LOG_PPI { EFI_STATUS (*AddLog)(struct _PROBE_LOG_PPI *This, UINT32 Event); \
+            UINT32 Count; UINT32 Mode; UINT32 Last; } PROBE_LOG_PPI;
+            """])
+        let before = try await read("/v1/type?name=PROBE_LOG_PPI")
+        XCTAssertEqual((before["program"] as? [String: Any])?["size"] as? Int, 0x10, "\(before)")
+        let redefined = try await post("/v1/type", ["c": """
+            typedef EFI_STATUS PROBE_LOG_PPI_AddLog(struct _PROBE_LOG_PPI *This, UINT32 Event, UINT32 Data);
+            """])
+        XCTAssertTrue((redefined["c"] as? String ?? "").contains("Data"), "\(redefined)")
+        for name in ["PROBE_LOG_PPI", "_PROBE_LOG_PPI"] {
+            let after = try await read("/v1/type?name=\(name)")
+            let program = try XCTUnwrap(after["program"] as? [String: Any], "\(after)")
+            XCTAssertEqual(program["size"] as? Int, 0x10, "\(name): \(after)")
+            XCTAssertTrue((program["c"] as? String ?? "").contains("Count"), "\(name): \(after)")
+        }
+        _ = try await release()
+    }
+
+    /// Issue ce3740de: the owner's lease lapsed after an hour with no write
+    /// and the host kept its token. A publish takes it again for its type
+    /// step, as a write does, instead of failing with "take the write lease first".
+    func testAPublishTakesALapsedOwnerLeaseAgain() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        try await post("/v1/set/comment", ["address": entry, "kind": "plate", "text": "Before the lease lapsed."])
+        await host.lapseOwnerLease(module)
+        try await host.take(module)
+        let published = try await host.publish(module, by: "agent")
+        XCTAssertNil(published.libraryError, "\(String(describing: published.libraryError))")
+        _ = try await release()
+    }
+
     func testAPointerThatIsZeroReadsNull() async throws {
         try await open(try image())
         let exported = try await host.preview(module, "/v1/publish?dry_run=1", body: Data())
