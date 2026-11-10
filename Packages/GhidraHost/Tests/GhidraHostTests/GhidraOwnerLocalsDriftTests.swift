@@ -107,6 +107,27 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
         }
     }
 
+    /// Two recorded names whose slots became one local: the one that holds
+    /// it keeps it, the other is `merged` and goes nowhere.
+    func testTwoNamesOnOneLocalNowAreMergedNotMoved() async throws {
+        let (entry, locals) = try await function()
+        try await host.take(module)
+        _ = try await host.write(module, "/v1/rename/variable", body: try JSONSerialization.data(withJSONObject: [
+            "function": entry, "storage": locals[0]["storage"]!, "first_use": locals[0]["first_use"]!,
+            "name": "HeldName"]))
+        let document: [String: Any] = [entry: ["locals": [
+            recorded("HeldName", locals[0]),
+            recorded("OtherHalf", locals[0], storage: "HASH:1234:4")
+        ]]]
+        let applied = try await drift(document, apply: true)
+        XCTAssertEqual(items(applied)["OtherHalf"]?["status"] as? String, "merged", "\(applied)")
+        let now = try await read("/v1/function/\(entry)?summary=1")["locals"] as? [[String: Any]] ?? []
+        let there = now.filter { ($0["first_use"] as? String) == (locals[0]["first_use"] as? String) }
+            .compactMap { $0["name"] as? String }
+        XCTAssertTrue(there.contains("HeldName"), "\(now)")
+        XCTAssertFalse(there.contains("OtherHalf"), "\(now)")
+    }
+
     func testTheReferenceIsTheRecipeBeforeRevision3() {
         XCTAssertEqual(GhidraHost.recipeBeforeEFIAPI("code-v10-types3-ghidra-12.2-lang-descriptor-tables-1"),
                        "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1")

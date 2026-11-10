@@ -1518,7 +1518,7 @@ public enum GhidraTools {
                 `review`; `recipe` picks another. Each function lists the locals that are not intact, by \
                 `status`: `moved` (another local starts at that first use now: `now`), `conflict` (that \
                 local holds a name the document does not have, one given after it: never overwritten), \
-                `lost` (no local starts there) or `ambiguous` (several do). `name_now_on` says where \
+                `lost` (no local starts there), `merged` (another recorded name holds that local: two slots became one) or `ambiguous` (several locals start there, or several names want one). `name_now_on` says where \
                 the name sits now. `counts` per function and `totals` count each status. With \
                 `apply: true`, on a module you have in work, every moved name goes to its local with its \
                 recorded type, and each write is read back: `restored`, `refused` (with why), \

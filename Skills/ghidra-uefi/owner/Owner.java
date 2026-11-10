@@ -5851,7 +5851,8 @@ public class Owner {
      * does not move. Each recorded local is `intact` (its name on its first
      * use), `moved` (another local holds its first use now: the target),
      * `conflict` (that local holds a name the document does not have — one
-     * given after it), `lost` (no local starts there) or `ambiguous`.
+     * given after it), `lost` (no local starts there), `merged` (another
+     * recorded name holds that local) or `ambiguous`.
      *
      * With `apply`, under the lease, the moved names go to their targets with
      * their recorded types: the names first put aside, so a name still on
@@ -5911,6 +5912,9 @@ public class Owner {
             }
             JsonArray items = new JsonArray();
             java.util.List<JsonObject> moves = new java.util.ArrayList<>();
+            // Which recorded locals came to one local now: a frame laid out
+            // again can merge two slots, and one name cannot go to both.
+            java.util.Map<LiveLocal, java.util.List<JsonObject>> claims = new java.util.IdentityHashMap<>();
             for (JsonElement element : decisions.getAsJsonArray("locals")) {
                 JsonObject local = element.getAsJsonObject();
                 String name = local.get("name").getAsString();
@@ -5964,8 +5968,20 @@ public class Owner {
                     }
                 }
                 item.addProperty("status", status);
-                if (status.equals("moved")) moves.add(item);
+                if (target != null) claims.computeIfAbsent(target, key -> new java.util.ArrayList<>()).add(item);
                 items.add(item);
+            }
+            for (java.util.List<JsonObject> claim : claims.values()) {
+                if (claim.size() < 2) continue;
+                boolean held = claim.stream().anyMatch(item -> item.get("status").getAsString().equals("intact"));
+                for (JsonObject item : claim) {
+                    if (!item.get("status").getAsString().equals("moved")) continue;
+                    // `merged`: another recorded name holds that local; `ambiguous`: several want it.
+                    item.addProperty("status", held ? "merged" : "ambiguous");
+                }
+            }
+            for (JsonElement element : items) {
+                if (element.getAsJsonObject().get("status").getAsString().equals("moved")) moves.add(element.getAsJsonObject());
             }
             if (apply && !moves.isEmpty()) {
                 int cleared = applyMoves(function, moves);
