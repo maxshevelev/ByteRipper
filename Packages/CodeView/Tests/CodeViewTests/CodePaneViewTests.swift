@@ -5235,7 +5235,7 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     /// A description that reads otherwise than when the reader last had it
-    /// open is New: the badge on the book's top right corner, the comparison
+    /// open is New: the badge on the book's left, the book where it was, the comparison
     /// with the revision it was seen at when it opens, and the mark gone once
     /// it is left — the comparison stays.
     func testADescriptionChangedSinceItWasReadIsNew() async throws {
@@ -5255,10 +5255,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.descriptionBadgeIsShown)
         let badge = view.descriptionBadgeFrame
         let book = view.descriptionButtonFrame
-        XCTAssertEqual(badge.minX, book.midX + 3, accuracy: 1, "on the book's right corner")
-        XCTAssertGreaterThan(view.isFlipped ? book.minY - badge.minY : badge.maxY - book.maxY, 0, "at its top")
-        XCTAssertLessThanOrEqual(badge.maxX, view.convert(view.bounds, to: nil).maxX)
-        XCTAssertEqual(bare.maxX - book.maxX, 16, accuracy: 0.5, "the badge takes room on the book's right")
+        XCTAssertEqual(book.minX - badge.maxX, CodePaneView.badgeToBook, accuracy: 0.5, "on the book's left")
+        XCTAssertEqual(badge.midY, book.midY, accuracy: 1, "on the book's line")
+        XCTAssertEqual(book.maxX, bare.maxX, accuracy: 0.5, "the book stays against the padding")
 
         view.clickDescriptionButton()
         await view.descriptionRead?.value

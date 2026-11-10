@@ -131,7 +131,8 @@ import ToolModuleKit
     /// when the reader last had it open.
     private let descriptionBadge = PartBadgeView(text: "")
     private let descriptionBadgeHolder = CodeClickThroughView()
-    private var descriptionButtonTrailing: NSLayoutConstraint?
+    /// The module line's end before the New badge, active while it shows.
+    private var moduleBeforeBadge: NSLayoutConstraint?
     /// The panel's page in the book: whoever holds the pane sets it in its title
     /// bar, over the whole panel.
     public let titleBarHelp: NSView = HelpButton.greyCircle(for: .topic(.codePanel))
@@ -1131,12 +1132,14 @@ import ToolModuleKit
 
     private func drawDescriptionBadge() {
         descriptionBadgeHolder.isHidden = descriptionMark == nil
-        descriptionButtonTrailing?.constant = Self.bookTrailing(badge: descriptionMark != nil)
+        moduleBeforeBadge?.isActive = descriptionMark != nil
     }
 
-    /// The book's trailing margin: the pane's padding, and room for the New
-    /// badge on its right while that shows.
-    static func bookTrailing(badge: Bool) -> CGFloat { badge ? -24 : -8 }
+    /// The book's trailing margin: the pane's padding, badge or none.
+    static let bookTrailing: CGFloat = -8
+
+    /// The room between the New badge and the book on its right.
+    static let badgeToBook: CGFloat = 4
 
     /// Back to the code from the description, on the side it was left on.
     private func leaveDescription() {
@@ -3398,23 +3401,26 @@ import ToolModuleKit
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
         constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12)
         constraints += margin(moduleBlock.trailingAnchor, descriptionButton.leadingAnchor, -6)
-        // Against the pane's padding, as the list below it; the New badge,
-        // while it shows, takes room on the book's right.
+        // Against the pane's padding, as the list below it, whether the New
+        // badge shows or not: the book does not move.
         let bookTrailing = descriptionButton.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor,
-                                                                       constant: Self.bookTrailing(badge: false))
+                                                                       constant: Self.bookTrailing)
         bookTrailing.priority = NSLayoutConstraint.Priority(999)
-        descriptionButtonTrailing = bookTrailing
         constraints.append(bookTrailing)
         constraints.append(descriptionButton.centerYAnchor.constraint(equalTo: moduleLine.centerYAnchor))
-        // On the book's top right corner, over the book.
+        // On the book's left, on its line; the module line ends before it
+        // while it shows.
         constraints += [
             descriptionBadge.leadingAnchor.constraint(equalTo: descriptionBadgeHolder.leadingAnchor),
             descriptionBadge.trailingAnchor.constraint(equalTo: descriptionBadgeHolder.trailingAnchor),
             descriptionBadge.topAnchor.constraint(equalTo: descriptionBadgeHolder.topAnchor),
             descriptionBadge.bottomAnchor.constraint(equalTo: descriptionBadgeHolder.bottomAnchor),
-            descriptionBadgeHolder.leadingAnchor.constraint(equalTo: descriptionButton.centerXAnchor, constant: 3),
-            descriptionBadgeHolder.bottomAnchor.constraint(equalTo: descriptionButton.topAnchor, constant: 5)
+            descriptionBadgeHolder.trailingAnchor.constraint(equalTo: descriptionButton.leadingAnchor,
+                                                             constant: -Self.badgeToBook),
+            descriptionBadgeHolder.centerYAnchor.constraint(equalTo: descriptionButton.centerYAnchor)
         ]
+        moduleBeforeBadge = moduleBlock.trailingAnchor.constraint(lessThanOrEqualTo: descriptionBadgeHolder.leadingAnchor,
+                                                                  constant: -6)
         constraints += margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
@@ -3424,6 +3430,7 @@ import ToolModuleKit
         constraints += margin(searchField.leadingAnchor, navigatorBar.leadingAnchor, 8)
         constraints += margin(orderButtons.trailingAnchor, navigatorBar.trailingAnchor, -6)
         NSLayoutConstraint.activate(constraints)
+        moduleBeforeBadge?.isActive = descriptionMark != nil
         searchToOrder.priority = NSLayoutConstraint.Priority(999)
         searchToEdge.priority = NSLayoutConstraint.Priority(999)
 
