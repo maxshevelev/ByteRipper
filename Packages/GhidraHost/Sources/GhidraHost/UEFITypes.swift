@@ -11,7 +11,8 @@ public enum UEFITypes {
     public static let edk2Tag = "edk2-stable202608"
     /// What `BuildUefiTypes.java` makes of the headers, the recipe's
     /// `TYPES_REVISION`. 2: `EFI_STATUS` and `EFI_STATUS_CODE_TYPE` are enums.
-    public static let typesRevision = 2
+    /// 3: every Ia32 function type is EFIAPI, `__cdecl` (issue 4a9a4484).
+    public static let typesRevision = 3
     /// The archives' name and the recipe's `types`: the tag and the revision.
     public static let types = "\(edk2Tag)-r\(typesRevision)"
     static let edk2Tarball = URL(string: "https://codeload.github.com/tianocore/edk2/tar.gz/refs/tags/\(edk2Tag)")!

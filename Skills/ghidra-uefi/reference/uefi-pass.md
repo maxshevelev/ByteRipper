@@ -32,10 +32,24 @@ of the integer typedefs, so every prototype that names them carries them:
   `EFI_ERROR_MAJOR|EFI_ERROR_CODE`.
 
 `EFI_STATUS_CODE_VALUE` stays an integer: its operation codes repeat between
-subclasses, so a composition of members would be a guess. `-r2` is
-`TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
-(`code-v4-types2-ghidra-…`), so a module typed by the new archive is a recipe
-beside the old one. A project keeps the archive it was made with.
+subclasses, so a composition of members would be a guess.
+
+Revision 3 gives every Ia32 function type EFIAPI's convention, `__cdecl`. The
+parser defines neither `_MSC_EXTENSIONS` nor `__GNUC__`, so `ProcessorBind.h`
+leaves `EFIAPI` empty and the types came out with none, which a 32-bit
+program of the windows spec reads as `__stdcall`: an indirect call through a
+PEI service or a PPI member then took its arguments off the stack, and the
+caller's stack locals moved by their size after every such call (issue
+4a9a4484). X64 has one convention, and its types are as they were.
+
+`-r3` is `TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
+(`code-v4-types3-ghidra-…`), so a module typed by the new archive is a recipe
+beside the old one. A project keeps the archive it was made with — except a
+32-bit one made before revision 3, which the server moves to the current
+archive when it next starts its owner. The owner gives the program's function
+types with no convention `__cdecl` at open and after every change, the UEFI
+pass does at the end, and the server gives the shared 32-bit review types the
+same once, in a version of their own.
 
 Each step says what it is when it starts and how long it took, with a limit —
 the download and the unpacking, the archives, a Ghidra analysis — so an

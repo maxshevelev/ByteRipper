@@ -215,6 +215,9 @@ public actor GhidraHost {
     var edk2Fetch: Task<Void, Never>?
     /// Why the last fetch failed; the next publish tries again.
     var edk2FetchError: String?
+    /// Whether this process has given the shared 32-bit review types EFIAPI's
+    /// convention, or found they need none (`migrateSharedEFIAPI`).
+    var sharedEFIAPIDone = false
     /// The step a test stops a publish after.
     var publishStop: PublishStop?
     func setPublishStop(_ stop: PublishStop?) { publishStop = stop }
@@ -1138,6 +1141,7 @@ public actor GhidraHost {
         defer { starting[module] = nil }
         let record = try await task.value
         await finishPublishes(module, record: record)
+        await migrateSharedEFIAPI(module)
         return record
     }
 
@@ -1189,7 +1193,7 @@ public actor GhidraHost {
     private func startOnce(_ project: GhidraProject) async throws -> OwnerRecord {
         let install = try ghidra()
         let jar = try OwnerBuild.jar(for: install, sources: configuration.sources)
-        let state = try project.state()
+        let state = try await retypedForEFIAPI(project, try project.state())
         var arguments = ["-Xmx4G", "-Djava.awt.headless=true",
                          "-cp", (install.classpath() + [jar.path]).joined(separator: ":"), "Owner",
                          "--project-dir", project.folder.path, "--project-name", GhidraProject.name,

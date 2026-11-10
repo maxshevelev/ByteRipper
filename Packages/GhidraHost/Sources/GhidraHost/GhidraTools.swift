@@ -745,7 +745,9 @@ public enum GhidraTools {
                     shared review archive holds it now (`shared`, what another review published), and as \
                     the EDK2 archive holds it (`edk2`); each is null where that place has no such type. \
                     Each has its C, `size`, and for a structure or union every field's `offset`, `size`, \
-                    `name`, `type` and `comment`, with `packing` and `packing_value`. `same` says whether \
+                    `name`, `type` and `comment`, with `packing` and `packing_value`; for a function type, \
+                    or a pointer typedef of one, its calling `convention` (`__cdecl` is EFIAPI on IA32; \
+                    `unknown` reads as the program's default). `same` says whether \
                     the program's and the shared one agree. A name and its tag find each other — `NAME` \
                     finds `_NAME` and the other way round; `resolved` gives the name that answered. \
                     `found` says whether any of the three has the type, and `near` lists close names when \

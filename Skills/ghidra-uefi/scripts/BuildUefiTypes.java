@@ -17,7 +17,8 @@
 // After the parse, two integer types become enums, so the decompiler prints
 // `EFI_INVALID_PARAMETER` where it printed `0x80000002`. EDK2 spells their
 // values as `#define`s, which the parser keeps — each as a one-value enum
-// `define_<NAME>` under `/<header>/defines` — but ties to no type. A change
+// `define_<NAME>` under `/<header>/defines` — but ties to no type. On Ia32
+// every function type then gets EFIAPI's `__cdecl` (revision 3). A change
 // here is a change of every typed analysis: raise `TYPES_REVISION` in
 // `UEFITypes.swift` with it.
 // @category ByteRipper
@@ -33,6 +34,7 @@ import ghidra.program.model.data.CategoryPath;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.EnumDataType;
 import ghidra.program.model.data.FileDataTypeManager;
+import ghidra.program.model.data.FunctionDefinition;
 
 public class BuildUefiTypes extends GhidraScript {
 
@@ -79,12 +81,33 @@ public class BuildUefiTypes extends GhidraScript {
         try {
             statusEnum(types);
             statusCodeTypeEnum(types);
+            if (processor.equals("Ia32")) efiApi(types);
         } finally {
             types.endTransaction(transaction, true);
         }
         println("wrote " + types.getDataTypeCount(true) + " types to " + archive);
         types.save();
         types.close();
+    }
+
+    /**
+     * EFIAPI is `__cdecl` on IA32 (ProcessorBind.h), but the parser defines
+     * neither `_MSC_EXTENSIONS` nor `__GNUC__`, so the macro is empty and every
+     * function type comes out with no convention — which a 32-bit program of
+     * the windows spec reads as its default, `__stdcall`: each indirect call
+     * through a PEI service or a PPI member then took its arguments off the
+     * stack, and the caller's stack locals moved after it (issue 4a9a4484).
+     * X64 has one convention, and its types stay as they are.
+     */
+    private void efiApi(FileDataTypeManager types) throws Exception {
+        List<FunctionDefinition> unknown = new ArrayList<>();
+        java.util.Iterator<DataType> all = types.getAllDataTypes();
+        while (all.hasNext()) {
+            if (all.next() instanceof FunctionDefinition function
+                && "unknown".equals(function.getCallingConventionName())) unknown.add(function);
+        }
+        for (FunctionDefinition function : unknown) function.setCallingConvention("__cdecl");
+        println("EFIAPI (__cdecl) on " + unknown.size() + " function types");
     }
 
     /** The value of `#define name`, as the parser kept it, or null. */

@@ -151,6 +151,7 @@ public class ApplyUefi extends GhidraScript {
             nameGlobals();
             followServiceCalls();
             nameFromDebugStrings();
+            efiApiFunctionTypes();
         } finally {
             if (decompiler != null) decompiler.dispose();
             archive.close();
@@ -419,6 +420,31 @@ public class ApplyUefi extends GhidraScript {
         typedParameters += 2;
         name(entry, "_ModuleEntryPoint",
             "the image's entry point; EDK2 calls it _ModuleEntryPoint");
+    }
+
+    /// The archive's function types carry no convention — EFIAPI is a macro
+    /// the parser drops — and a 32-bit program's default is the windows
+    /// spec's __stdcall: an indirect call through a PEI service or a PPI
+    /// member then read as taking its arguments off the stack, and the stack
+    /// locals after it moved (issue 4a9a4484). EFIAPI is cdecl on IA32. The
+    /// owner does the same at open and after each change.
+    private void efiApiFunctionTypes() {
+        if (currentProgram.getDefaultPointerSize() != 4
+            || currentProgram.getCompilerSpec().getCallingConvention("__cdecl") == null) return;
+        java.util.List<FunctionDefinition> unknown = new java.util.ArrayList<>();
+        Iterator<DataType> types = currentProgram.getDataTypeManager().getAllDataTypes();
+        while (types.hasNext()) {
+            if (types.next() instanceof FunctionDefinition function
+                && "unknown".equals(function.getCallingConventionName())) unknown.add(function);
+        }
+        for (FunctionDefinition function : unknown) {
+            try {
+                function.setCallingConvention("__cdecl");
+            } catch (Exception error) {
+                println("ApplyUefi: no cdecl for " + function.getPathName() + ": " + error);
+            }
+        }
+        println("ApplyUefi: " + unknown.size() + " function types given EFIAPI (cdecl)");
     }
 
     /// Firmware is C: no function has a `this`. Ghidra guesses __thiscall

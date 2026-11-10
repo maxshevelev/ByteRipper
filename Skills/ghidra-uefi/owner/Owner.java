@@ -198,6 +198,16 @@ public class Owner {
             program.endTransaction(transaction, recorded);
         }
         if (recorded) saveProgram("baseline");
+        // Before the count starts: the program's function types get EFIAPI's
+        // convention, which no review wrote (issue 4a9a4484).
+        transaction = program.startTransaction("EFIAPI function types");
+        int efiApi = 0;
+        try {
+            efiApi = efiApiFunctionTypes(program);
+        } finally {
+            program.endTransaction(transaction, efiApi > 0);
+        }
+        if (efiApi > 0) saveProgram("EFIAPI on " + efiApi + " function types");
         ExportCode.analysisComments = Harvest.baselineComments(program);
         // From here a change counts; the count goes on from the last session's.
         writesFile = new File(options.get("project-dir"), "writes");
@@ -315,6 +325,7 @@ public class Owner {
                 if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 if (path.equals("/v1/types/merge")) { json(exchange, 200, typesMerge(exchange)); return; }
+                if (path.equals("/v1/types/efiapi")) { json(exchange, 200, typesEfiApi(exchange)); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
@@ -1768,6 +1779,37 @@ public class Owner {
         answer.add("conflicts", conflicts);
         answer.add("taken", taken);
         answer.add("origins", origins);
+        return answer;
+    }
+
+    /**
+     * `POST /v1/types/efiapi`: the shared 32-bit archive a call names with
+     * `archive` given EFIAPI's convention on every function type that has none
+     * (issue 4a9a4484), as the program's are at open. Answers how many changed;
+     * nothing for a 64-bit program or an archive not there yet.
+     */
+    private JsonObject typesEfiApi(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        File target = archiveNamed(body(exchange));
+        int changed = 0;
+        if (program.getDefaultPointerSize() == 4 && target.isFile()) {
+            try (FileChannel channel = lockChannel(target); FileLock lock = channel.lock()) {
+                FileDataTypeManager shared = FileDataTypeManager.openFileArchive(target, true);
+                try {
+                    int transaction = shared.startTransaction("EFIAPI function types");
+                    try {
+                        changed = efiApiFunctionTypes(shared);
+                    } finally {
+                        shared.endTransaction(transaction, changed > 0);
+                    }
+                    if (changed > 0) shared.save();
+                } finally {
+                    shared.close();
+                }
+            }
+        }
+        JsonObject answer = new JsonObject();
+        answer.addProperty("changed", changed);
         return answer;
     }
 
@@ -4234,9 +4276,50 @@ public class Owner {
      * what it moved is counted aside: a refused call is not a write.
      */
     private void endTransaction(int transaction, boolean commit, long before) {
+        // A function type the change brought in from an archive is EFIAPI too.
+        if (commit) efiApiFunctionTypes(program);
         program.endTransaction(transaction, commit);
         if (commit) keepWrites();
         else rolledBack += program.getModificationNumber() - before;
+    }
+
+    /**
+     * EDK2's function types carry no convention in the archives — EFIAPI is a
+     * macro the parser drops — and a 32-bit program's default is the windows
+     * spec's `__stdcall`: every indirect call through a PEI service or a PPI
+     * member then read as one that takes its arguments off the stack, and the
+     * stack locals after it moved by the arguments' size (issue 4a9a4484).
+     * EFIAPI is `__cdecl` on IA32 (ProcessorBind.h). Only a type with no
+     * convention is changed; one a review or the image set stays. Answers how
+     * many it changed. Inside a transaction.
+     */
+    static int efiApiFunctionTypes(Program program) {
+        if (program.getDefaultPointerSize() != 4
+            || program.getCompilerSpec().getCallingConvention("__cdecl") == null) return 0;
+        return efiApiFunctionTypes(program.getDataTypeManager());
+    }
+
+    /** The same over any manager of 32-bit types: the program's, a shared archive's. */
+    static int efiApiFunctionTypes(ghidra.program.model.data.DataTypeManager manager) {
+        int changed = 0;
+        java.util.Iterator<DataType> types = manager.getAllDataTypes();
+        java.util.List<ghidra.program.model.data.FunctionDefinition> unknown = new java.util.ArrayList<>();
+        while (types.hasNext()) {
+            if (types.next() instanceof ghidra.program.model.data.FunctionDefinition function
+                && ghidra.program.model.lang.CompilerSpec.CALLING_CONVENTION_unknown
+                    .equals(function.getCallingConventionName())) {
+                unknown.add(function);
+            }
+        }
+        for (ghidra.program.model.data.FunctionDefinition function : unknown) {
+            try {
+                function.setCallingConvention("__cdecl");
+                changed++;
+            } catch (Exception error) {
+                System.err.println("OWNER EFIAPI " + function.getPathName() + ": " + error);
+            }
+        }
+        return changed;
     }
 
     /**
@@ -6786,6 +6869,8 @@ public class Owner {
         // definitions must leave the review document byte-identical, or a
         // redefinition for a check reads as a new revision.
         nameFunctionPointerMembers(resolved);
+        // Its function types are EFIAPI before its C is recorded, not after.
+        efiApiFunctionTypes(program);
         Harvest.recordType(program, resolved.getName(), ExportCode.typeC(resolved));
         answer.addProperty("name", resolved.getName());
         answer.addProperty("path", resolved.getPathName());

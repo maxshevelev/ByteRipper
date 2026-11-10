@@ -186,6 +186,12 @@ open:
 - **EDK2's `VOID`, `CONST`, `IN`, `OUT`, `OPTIONAL`, `EFIAPI` are macros**, not
   types; no archive has them. Expand them before handing EDK2-spelled C to
   Ghidra's parser.
+- **A function type with no convention is the program's default**, and the
+  32-bit windows spec's default is `__stdcall`: every indirect call through it
+  takes its arguments off the stack, so the caller's own `ADD ESP` makes the
+  decompiler's stack depth wrong after each call and one stack slot prints as
+  several locals. EFIAPI is `__cdecl` on IA32; the archives from revision 3 and
+  every 32-bit program's function types say so (issue 4a9a4484).
 - **A type the program does not hold yet** is not found by `DataTypeParser`
   even when the EDK2 archive has it; resolve it from the archive first.
 - **An anonymous `typedef enum { … } NAME;` is named by where it starts.**

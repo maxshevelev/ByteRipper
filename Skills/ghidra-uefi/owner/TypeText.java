@@ -83,6 +83,11 @@ final class TypeText {
             }
             answer.add("values", members);
             if (comments.size() > 0) answer.add("comments", comments);
+        } else if ((base instanceof Pointer pointer ? pointer.getDataType() : base) instanceof FunctionDefinition function) {
+            // Also through EDK2's pointer typedef (`EFI_PEI_LOCATE_PPI`), which is what a field holds.
+            // Who takes the arguments off the stack: `unknown` reads as the
+            // program's default, which a 32-bit windows spec makes `__stdcall`.
+            answer.addProperty("convention", function.getCallingConventionName());
         }
         return answer;
     }
