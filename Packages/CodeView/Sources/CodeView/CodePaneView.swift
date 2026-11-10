@@ -3246,6 +3246,9 @@ import ToolModuleKit
         descriptionBadge.font = .systemFont(ofSize: 9, weight: .semibold)
         descriptionBadge.ink = .controlAccentColor
         descriptionBadge.translatesAutoresizingMaskIntoConstraints = false
+        // Its width is its words: the module line, tied to the book at 999,
+        // ends before it, and must not squeeze it to nothing over the book.
+        descriptionBadge.setContentCompressionResistancePriority(.required, for: .horizontal)
         descriptionBadgeHolder.translatesAutoresizingMaskIntoConstraints = false
         descriptionBadgeHolder.wantsLayer = true
         descriptionBadgeHolder.layer?.zPosition = 1

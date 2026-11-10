@@ -5255,6 +5255,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.descriptionBadgeIsShown)
         let badge = view.descriptionBadgeFrame
         let book = view.descriptionButtonFrame
+        XCTAssertGreaterThan(badge.width, 10, "as wide as its words")
         XCTAssertEqual(book.minX - badge.maxX, CodePaneView.badgeToBook, accuracy: 0.5, "on the book's left")
         XCTAssertEqual(badge.midY, book.midY, accuracy: 1, "on the book's line")
         XCTAssertEqual(book.maxX, bare.maxX, accuracy: 0.5, "the book stays against the padding")
