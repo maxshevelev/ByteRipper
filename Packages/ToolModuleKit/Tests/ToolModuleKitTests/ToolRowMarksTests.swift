@@ -133,6 +133,16 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysis(.complete).toolTip)
         XCTAssertEqual(code.contentTintColor, ToolRowMark.codeAnalysis.tint, "the reviewed function's colour")
         XCTAssertEqual(code.image?.accessibilityDescription, ToolRowMarks.Role.codeAnalysis(.complete).toolTip)
+        // A circle four fifths of the text's size, and the view as large as that picture.
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 24),
+                              styleMask: [.borderless], backing: .buffered, defer: true)
+        cell.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        window.contentView?.addSubview(cell)
+        cell.layoutSubtreeIfNeeded()
+        let picture = try XCTUnwrap(code.image?.size)
+        // Constraints place the alignment rect; a symbol image view pads its frame around it.
+        XCTAssertEqual(code.alignmentRect(forFrame: code.frame).size, picture)
+        XCTAssertLessThan(picture.height, ToolPanelFont.size, "smaller than the name beside it")
 
         let stack = try XCTUnwrap(cell.subviews.compactMap { $0 as? NSStackView }.first)
         let field = try XCTUnwrap(cell.textField)

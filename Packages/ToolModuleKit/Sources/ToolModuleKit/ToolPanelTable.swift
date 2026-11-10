@@ -136,6 +136,11 @@ import Localization
             let row: NSStackView
             if badges {
                 let codeBadge = makeBadge(tag: codeBadgeTag)
+                for anchor in [codeBadge.widthAnchor, codeBadge.heightAnchor] {
+                    let constraint = anchor.constraint(equalToConstant: 0)
+                    constraint.identifier = codeBadgeSizeID
+                    constraint.isActive = true
+                }
                 // An empty view that takes the slack so the code badge stands
                 // immediately after the name rather than at the column's edge.
                 // The field hugs its text (unlike the leading-only layout,
@@ -229,6 +234,9 @@ import Localization
     /// The badge after the name: the code-analysis mark, which belongs to the
     /// module the name denotes rather than to the leading run of storage marks.
     public static let codeBadgeTag = 6_004
+    /// The readiness circle's size: four fifths of the panel's text.
+    static var codeBadgePointSize: CGFloat { (ToolPanelFont.size * 0.8).rounded() }
+    private static let codeBadgeSizeID = "ToolPanelTable.codeBadgeSize"
 
     /// Draws `roles` into `cell`'s badge slots, hiding the slots it does not
     /// need. Set per row, like the warning: cells are recycled. The code badge
@@ -266,10 +274,20 @@ import Localization
         let mark = ToolRowMark.codeAnalysis
         let toolTip = role.toolTip
         let symbol = role.codeReadiness?.symbol ?? mark.symbol ?? ""
-        badge.image = NSImage(systemSymbolName: symbol, accessibilityDescription: toolTip)
-        badge.image?.isTemplate = true
+        // A dot beside the name rather than a glyph of the text's size: the
+        // circle says how far a review got, and at full size it outweighed
+        // the name it belongs to.
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: toolTip)?
+            .withSymbolConfiguration(.init(pointSize: codeBadgePointSize, weight: .regular))
+        image?.isTemplate = true
+        badge.image = image
         badge.contentTintColor = mark.tint
-        badge.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)
+        // NSImageView's intrinsic size does not match a configured symbol's
+        // picture: the view is sized from the image itself.
+        let size = image?.size ?? .zero
+        for constraint in badge.constraints where constraint.identifier == codeBadgeSizeID {
+            constraint.constant = constraint.firstAttribute == .width ? size.width : size.height
+        }
         ControlHelp.describe(badge, toolTip)
         badge.isHidden = false
     }
