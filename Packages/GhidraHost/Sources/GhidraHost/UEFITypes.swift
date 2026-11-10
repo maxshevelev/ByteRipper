@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Foundation
 
 /// The EDK2 type archives and the GUID table `ApplyUefi.java` names a module
@@ -24,7 +25,12 @@ public enum UEFITypes {
 
     public struct Paths: Sendable {
         public let root: URL
+
+        public init(root: URL) { self.root = root }
         public var edk2: URL { root.appendingPathComponent(edk2Tag, isDirectory: true) }
+        /// The tag's library sources, which `EDK2Evidence` checks a plate's
+        /// citation against, with the tag's whole file list beside them.
+        public var edk2Library: URL { root.appendingPathComponent("\(edk2Tag)-library", isDirectory: true) }
         public var gdtX64: URL { root.appendingPathComponent("uefi_X64-\(types).gdt") }
         public var gdtIa32: URL { root.appendingPathComponent("uefi_Ia32-\(types).gdt") }
         public var guidsCSV: URL { root.appendingPathComponent("guids.csv") }
@@ -82,6 +88,46 @@ public enum UEFITypes {
             throw GhidraHostError(.install, "unpacking \(edk2Tag) failed: "
                                   + ((try? String(contentsOf: log, encoding: .utf8)) ?? ""))
         }
+        try? FileManager.default.removeItem(at: target)
+        try FileManager.default.moveItem(at: partial, to: target)
+    }
+
+    /// Every package's `Library` folder of the tag but CryptoPkg's, whose
+    /// sources are OpenSSL's glue and larger than all the rest, and `files.txt`:
+    /// every path the tag has. About 26 MB.
+    public static func fetchLibrarySources(into target: URL) async throws {
+        let (file, response) = try await URLSession.shared.download(from: edk2Tarball)
+        defer { try? FileManager.default.removeItem(at: file) }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw GhidraHostError(.install, "\(edk2Tarball) could not be downloaded; is GitHub reachable?")
+        }
+        let partial = target.appendingPathExtension("part")
+        try? FileManager.default.removeItem(at: partial)
+        try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: true)
+        let log = partial.appendingPathExtension("log")
+        defer { try? FileManager.default.removeItem(at: log) }
+        let tar = URL(fileURLWithPath: "/usr/bin/tar")
+        let status = try Subprocess.run(
+            tar, ["-xzf", file.path, "-C", partial.path, "--strip-components", "1",
+                  "--include", "*/*Pkg/Library/*", "--exclude", "*/CryptoPkg/*"],
+            log: log, timeout: 900)
+        let listing = partial.appendingPathExtension("list")
+        defer { try? FileManager.default.removeItem(at: listing) }
+        let listed = try Subprocess.run(tar, ["-tzf", file.path], log: listing, timeout: 900)
+        guard status == 0, listed == 0,
+              FileManager.default.fileExists(atPath: partial.appendingPathComponent("MdePkg/Library").path) else {
+            throw GhidraHostError(.install, "unpacking \(edk2Tag)'s libraries failed: "
+                                  + ((try? String(contentsOf: log, encoding: .utf8)) ?? ""))
+        }
+        // `edk2-edk2-stable202608/MdePkg/…` → `MdePkg/…`; folders are not files.
+        let paths = String(decoding: try Data(contentsOf: listing), as: UTF8.self)
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line -> String? in
+                guard !line.hasSuffix("/"), let slash = line.firstIndex(of: "/") else { return nil }
+                return String(line[line.index(after: slash)...])
+            }
+        try Data((paths.joined(separator: "\n") + "\n").utf8)
+            .write(to: partial.appendingPathComponent(EDK2Evidence.listingName))
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: partial, to: target)
     }

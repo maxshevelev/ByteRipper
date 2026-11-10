@@ -136,6 +136,9 @@ public struct PublishAnswer: Codable, Sendable {
     public var typesError: String?
     /// The shared types' version the publish made, when it changed the archive.
     public var typesVersion: Int?
+    /// EDK2 functions whose `Evidence:` line does not hold at the pinned tag.
+    public var evidence: [GhidraHost.EvidenceWarning]?
+    public var evidenceUnchecked: String?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -149,6 +152,8 @@ public struct PublishAnswer: Codable, Sendable {
         projectError = publication?.projectError
         typesError = publication?.typesError
         typesVersion = publication?.typesVersion
+        evidence = publication.map(\.evidence).flatMap { $0.isEmpty ? nil : $0 }
+        evidenceUnchecked = publication?.evidenceUnchecked
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -163,6 +168,8 @@ public struct PublishAnswer: Codable, Sendable {
         case projectError = "project_error"
         case typesError = "types_error"
         case typesVersion = "types_version"
+        case evidence
+        case evidenceUnchecked = "evidence_unchecked"
     }
 }
 

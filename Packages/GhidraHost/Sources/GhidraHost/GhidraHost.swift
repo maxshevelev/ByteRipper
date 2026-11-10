@@ -29,12 +29,17 @@ public actor GhidraHost {
         /// Where the review board's tickets are kept (`TicketBook`); nil
         /// keeps none.
         public var ticketsFile: URL?
+        /// The pinned tag's library sources an EDK2 plate's `Evidence:` line is
+        /// checked against at publish; fetched there once when missing. Nil
+        /// checks nothing.
+        public var edk2Sources: URL?
 
         public init(projectsRoot: URL = GhidraHost.defaultProjectsRoot, ghidraHome: URL? = nil,
                     sources: OwnerSources = .checkout, idle: Int = 1800,
                     holder: String = "\(NSUserName()) via byteripper-server",
                     startTimeout: TimeInterval = 300, leasesFile: URL? = nil, issuesFile: URL? = nil,
-                    ticketsFile: URL? = nil) {
+                    ticketsFile: URL? = nil,
+                    edk2Sources: URL? = UEFITypes.Paths(root: UEFITypes.cacheRoot).edk2Library) {
             self.projectsRoot = projectsRoot
             self.ghidraHome = ghidraHome
             self.sources = sources
@@ -44,6 +49,7 @@ public actor GhidraHost {
             self.leasesFile = leasesFile
             self.issuesFile = issuesFile
             self.ticketsFile = ticketsFile
+            self.edk2Sources = edk2Sources
         }
     }
 
@@ -90,6 +96,11 @@ public actor GhidraHost {
         /// Why the project could not be kept: the revision is stored either way,
         /// and the next publish keeps it.
         public var projectError: String?
+        /// EDK2 functions offered whose plate's citation of the pinned tag
+        /// does not hold: a warning, the publish is stored either way.
+        public var evidence: [EvidenceWarning] = []
+        /// Why the citations could not be checked, when they could not.
+        public var evidenceUnchecked: String?
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
@@ -197,6 +208,10 @@ public actor GhidraHost {
     /// Publishes holding the store now: an owner opened inside one finishes
     /// nothing, since finishing waits for the same hold.
     var publishing = 0
+    /// The fetch of the pinned tag's library sources, while it runs.
+    var edk2Fetch: Task<Void, Never>?
+    /// Why the last fetch failed; the next publish tries again.
+    var edk2FetchError: String?
     /// The step a test stops a publish after.
     var publishStop: PublishStop?
     func setPublishStop(_ stop: PublishStop?) { publishStop = stop }
@@ -549,6 +564,7 @@ public actor GhidraHost {
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
+        let evidence = evidenceCheck(offered)
         let program = artifact["program"] as? [String: Any] ?? [:]
         // Then the shared types: merged into a copy of the archive's current
         // version; one the archive holds differently refuses the publish, here,
@@ -602,6 +618,8 @@ public actor GhidraHost {
         publication.typesVersion = journal.typesVersion?.version
         publication.project = journal.project
         publication.projectError = journal.projectError
+        publication.evidence = evidence.warnings
+        publication.evidenceUnchecked = evidence.unchecked
         if !byHost { noteActivity(module, holder: holder, call: "publish", kind: .publish, revision: journal.rev) }
         return publication
     }
@@ -912,6 +930,9 @@ public actor GhidraHost {
             let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
                                                         take: takeLibrary, writer: writer)
             offered += completion.proposals
+            let evidence = evidenceCheck(offered)
+            if !evidence.warnings.isEmpty { preview["evidence"] = try Self.plain(evidence.warnings) }
+            if let unchecked = evidence.unchecked { preview["evidence_unchecked"] = unchecked }
             if let refusal = LibraryRefusal.refusal(completion.refused) {
                 preview["library_refused"] = refusal
             } else if !offered.isEmpty {

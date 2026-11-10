@@ -400,12 +400,41 @@ module's own work and is reviewed like any other function.
      (PCH private-register access by port ID and offset); or the same body in
      another Intel module of the image — FSP-M, FSP-S or a Pch/Sa/Cpu PEIM.
 3. **The evidence is written down**: one line in the function's plate or name
-   reason — "EDK2 BaseMemoryLib CopyMem: returns Destination when Length is 0
-   or the pointers are equal", "AGESA LibAmdIoWrite: assert 0x10195, S3 widths
-   0x81–0x83".
+   reason — "AGESA LibAmdIoWrite: assert 0x10195, S3 widths 0x81–0x83". An
+   EDK2 function's is its `Evidence:` line, in the form below.
 
 An EDK2 routine inside an AMD or Intel module is EDK2. Evidence short of
 point 2 is not enough: such a function is no candidate, and the review reads it.
+
+**An EDK2 function takes its text from the source.** Read the source at the
+pinned tag, `edk2-stable202608` (`~/Projects/edk2-stable202608`), never
+master: line numbers move between versions. Finding the function and judging
+that the body is it stay yours — the PEI, DXE and MM variants of a library
+differ, and some functions exist in C and in assembly. Once it is identified:
+
+- its name, its parameters' names and types (`IN`, `OUT`, `CONST` included)
+  and its return type are the source's prototype;
+- a local that stands for a source local takes that local's name;
+- the plate is the source's doc comment (`@param`, `@retval`, the
+  description) in the plate's own words, plus what this body does
+  differently;
+- you name only what the source has no name for — a local inlining created,
+  a constant folded in from the module, a variable split or merged — and say
+  in a step comment where the compiler changed the code: the callee it
+  inlined, the test it dropped;
+- the plate ends with the citation, in exactly this form:
+  `Evidence: <Function>, <path>:<line>` — the path from the tree's root,
+  the line the one that holds the function's name in its definition (for an
+  assembly routine, its label). A remark may follow:
+  `Evidence: GetFirstGuidHob, MdePkg/Library/PeiHobLib/HobLib.c:181, with GetNextGuidHob inlined.`
+
+A publish checks every `edk2` candidate's citation against the tag and answers
+`evidence`: for each function whose line does not hold, `no_evidence`,
+`unparseable`, `file_not_at_tag`, `not_in_checkout` (the tag has the file,
+the server's copy does not), or `not_definition` with `defined_at`, the
+line the file does define it at. It is a warning, and the publish is stored;
+correct the plate and publish again. `evidence_unchecked` says why nothing was
+checked.
 
 **The library registry.** The registry is shared by every module
 (`Design/LIBRARY_REGISTRY_PLAN.md`) and keyed by a body as Function ID hashes it. It

@@ -37,6 +37,7 @@ public enum CASCommand {
                               [--no-create] <command>
           hello
           library-holdings
+          library-evidence --edk2 <checkout of the pinned tag>
           relink-modules [--apply]
           drop-earlier-projects [--apply]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
@@ -235,6 +236,20 @@ public enum CASCommand {
                 "own_bodies_in_registry": rows.reduce(0) { $0 + $1.ownBodiesInRegistry },
                 "out_of_format": rows.reduce(0) { $0 + $1.outOfFormat }
             ])
+        case "library-evidence":
+            guard let tree = parser.option("--edk2") else {
+                throw Usage(description: "library-evidence: --edk2 <checkout of the pinned tag> is required")
+            }
+            try parser.end()
+            let checkout = URL(fileURLWithPath: tree, isDirectory: true)
+            guard FileManager.default.fileExists(atPath: checkout.appendingPathComponent("MdePkg").path) else {
+                throw CodeAnalysisError.io("\(checkout.path): no MdePkg, not an EDK2 checkout")
+            }
+            let audit = try EDK2Evidence.audit(try store.libraryIndex(), object: { try store.object($0) },
+                                               checkout: checkout)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            output.stdout = try encoder.encode(audit) + Data("\n".utf8)
         case "drop-earlier-projects":
             let apply = parser.flag("--apply")
             try parser.end()

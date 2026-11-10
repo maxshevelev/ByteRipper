@@ -25,6 +25,7 @@ protocol StoreOperations {
     func collectGarbage(dryRun: Bool, deleteUnreferencedAnalyses: Bool) throws -> GarbageReport
     func exportBundle(_ keys: [AnalysisKey], to url: URL) throws -> BundleInfo
     func importBundle(from url: URL) throws -> BundleImport
+    func libraryIndex() throws -> LibraryIndex
 }
 
 /// A store on a directory this machine can open.
@@ -72,6 +73,7 @@ struct LocalOperations: StoreOperations {
         try store().exportBundle(keys, to: url)
     }
     func importBundle(from url: URL) throws -> BundleImport { try store().importBundle(from: url) }
+    func libraryIndex() throws -> LibraryIndex { try store().libraryIndex() }
 }
 
 /// A served store (`byteripper-server`), through `RemoteStore`.
@@ -100,6 +102,10 @@ struct RemoteOperations: StoreOperations {
     func object(_ digest: SHA256Digest) throws -> Data {
         let remote = self.remote
         return try wait { try await remote.object(digest) }
+    }
+    func libraryIndex() throws -> LibraryIndex {
+        let remote = self.remote
+        return try wait { try await remote.libraryIndex() }
     }
     func putAnalysis(module: ModuleIdentity, recipe: AnalysisRecipe, artifact: Data,
                      source: SourceIdentity, reading: AnalysisReading?, replace: Bool,

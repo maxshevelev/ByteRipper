@@ -1365,7 +1365,11 @@ public enum GhidraTools {
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
                 program is the same revision. `stale_links` lists links in comments and the description whose \
                 text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say \
-                where, `name` is what the text should read; they are reported, not rewritten. The review's types \
+                where, `name` is what the text should read; they are reported, not rewritten. `evidence` lists the \
+                `edk2` library functions offered whose plate's `Evidence: <Function>, <path>:<line>` is not \
+                the function's definition at edk2-stable202608: `no_evidence`, `unparseable`, \
+                `file_not_at_tag`, `not_in_checkout`, or `not_definition` with `defined_at` where the file \
+                defines it; a warning, the revision is stored. The review's types \
                 are shared by the registry's rule, and the store keeps the shared archive in versions: a \
                 type new to it is added; the same type is nothing; an addition — an enum member, a real \
                 name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member \

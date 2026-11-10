@@ -34,9 +34,9 @@ to the Reviewer.
   `ghidra_ticket_reply`, `ghidra_ticket_close`) are yours.
 - Reach dumps and analyses only through the `byteripper` tools. Never open
   the app's folders on disk. An EDK2 tree is a reference and may be read
-  directly. If there is none, ask the person to clone the version the type
-  archives are built from:
-  `git clone --depth 1 --branch edk2-stable202608 https://github.com/tianocore/edk2 ~/Projects/edk2`
+  directly: the pinned tag, `~/Projects/edk2-stable202608`, never master. If
+  it is not there, ask the person to clone it:
+  `git clone --depth 1 --branch edk2-stable202608 https://github.com/tianocore/edk2 ~/Projects/edk2-stable202608`
 - Identifying data stays out: serial numbers, UUIDs and product keys
   (`uefi_dmi`), the values of NVRAM variables that identify a machine or a
   person (`variables`), and file paths or names that carry a person's name or
@@ -130,9 +130,15 @@ mean worthless: a record with no references can still hold a live address.
 - A global's start value comes from the image bytes.
 - "Consumes this protocol" needs a check of who installs it.
 
-**Library plates.** Grep every cited file and function in the EDK2 tree. An
-"Evidence: X" line says nothing about its truth, and a registry entry carries
-a mistake to every module with that body.
+**Library plates.** An EDK2 function's plate ends with
+`Evidence: <Function>, <path>:<line>` at the tag, and a publish warns
+(`evidence`) where that line is not the function's definition — but a true
+line says only where the source is. Compare the prototype, the parameter and
+local names and the doc comment with the source at the tag, and the body with
+the instructions: the same arguments, checks and calls in the same order,
+with every place the compiler changed it marked. Grep every other cited file
+and function in the tree. A registry entry carries a mistake to every module
+with that body.
 
 **The description.** Compare it with `reference/description.md`: fixed
 headings in order, plain language, abbreviations expanded at first mention,
