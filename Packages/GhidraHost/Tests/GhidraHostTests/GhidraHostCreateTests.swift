@@ -330,6 +330,11 @@ final class GhidraHostLibraryTests: XCTestCase {
         let agreed = try await call(.init(action: .vote, agent: "Analyzis", id: proposalID, choice: .agree))
         XCTAssertEqual(agreed["state"] as? String, "agreed")
 
+        // The dry run decides as the publish does: the agreed proposal, not a refusal.
+        let preview = try json(await host.preview(other))
+        XCTAssertEqual(preview["library_agreed"] as? [String], [proposalID], "\(preview)")
+        XCTAssertNil(preview["library_refused"], "\(preview)")
+
         // Not what was voted on: refused as before.
         let version = try store.libraryIndex().entries[id]?.version
         _ = try await host.write(other, "/v1/set/comment", body: body([

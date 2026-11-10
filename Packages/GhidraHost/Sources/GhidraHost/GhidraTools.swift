@@ -1407,7 +1407,7 @@ public enum GhidraTools {
                 By default the answer carries only what the publish changed; `full: true` adds the list of \
                 entries it left as they were. `dry_run: true` answers the same without storing: the \
                 artifact's counts, the revision it would become, the description's size, the type \
-                conflicts with `types_refused` when they would refuse the publish (or `types_agreed`, the agreed proposals the publish would apply instead), and `library`, what the registry would do, with the refusal in \
+                conflicts with `types_refused` when they would refuse the publish (or `types_agreed`, the agreed proposals the publish would apply instead), and `library`, what the registry would do — with an agreed proposal's entries taken, named in `library_agreed` — with the refusal in \
                 `library_refused`. \
                 The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the \
                 owner also writes the program out when it idles out, is stopped or gets a signal — not \

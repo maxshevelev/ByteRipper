@@ -930,6 +930,14 @@ public actor GhidraHost {
         do {
             let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
                                               artifact: raw)
+            // An agreed proposal is the publish's decision when the person made
+            // none: the preview answers what that publish would do.
+            var takeLibrary = takeLibrary
+            if !takeLibrary.all, takeLibrary.reasons.isEmpty,
+               let agreed = try await agreedLibraryTake(module, raw: raw, offer: offer.proposals, reviewed: reviewed) {
+                takeLibrary = LibraryTake.these(agreed.reasons).with(entryReasons: takeLibrary.entryReasons)
+                preview["library_agreed"] = agreed.proposals
+            }
             var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
             let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
                                                         take: takeLibrary, writer: writer)
