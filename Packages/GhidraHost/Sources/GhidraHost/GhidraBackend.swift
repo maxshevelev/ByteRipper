@@ -52,6 +52,10 @@ public protocol GhidraBackend: Sendable {
     func tickets(_ request: TicketBook.Request) async throws -> Data
     /// A call on the shared types' proposals (`TypeProposalBook`).
     func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data
+    /// The named locals of the module's review document before revision 3
+    /// of the types, against the program now; with `apply`, under the
+    /// lease, put back on their locals (`GhidraHost+LocalsDrift`).
+    func localsDrift(_ module: SHA256Digest, _ request: GhidraHost.LocalsDriftRequest) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -88,6 +92,9 @@ public extension GhidraBackendWithoutServer {
     }
     func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no type proposals: there is no analysis server to keep them.")
+    }
+    func localsDrift(_ module: SHA256Digest, _ request: GhidraHost.LocalsDriftRequest) async throws -> Data {
+        throw GhidraHostError(.install, "this backend reads no store")
     }
 }
 
@@ -261,6 +268,10 @@ extension GhidraHost: GhidraBackend {
         try await typeProposalCall(request, holder: configuration.holder)
     }
 
+    public func localsDrift(_ module: SHA256Digest, _ request: GhidraHost.LocalsDriftRequest) async throws -> Data {
+        try await driftOfLocals(module, request, holder: nil)
+    }
+
     public nonisolated func myIssues(by reporter: String, limit: Int) async throws -> Data {
         guard let issues else {
             throw GhidraHostError(.install, "this host keeps no reports: there is no analysis server to read them from.")
@@ -311,6 +322,13 @@ public struct GhidraRemote: GhidraBackend {
 
     public func typeUses(name: String, limit: Int) async throws -> Data {
         try await call("GET", "type-uses", query: ["name": name, "limit": String(limit)])
+    }
+
+    public func localsDrift(_ module: SHA256Digest, _ request: GhidraHost.LocalsDriftRequest) async throws -> Data {
+        var body: [String: Any] = ["apply": request.apply, "functions": request.functions]
+        if let recipe = request.recipe { body["recipe"] = recipe }
+        return try await call("POST", "modules/\(module.hex)/locals-drift",
+                              body: try JSONSerialization.data(withJSONObject: body), timeout: 1800)
     }
 
     public func publishModule(_ module: SHA256Digest, by: String,

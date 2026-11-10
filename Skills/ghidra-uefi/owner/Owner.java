@@ -326,6 +326,8 @@ public class Owner {
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 if (path.equals("/v1/types/merge")) { json(exchange, 200, typesMerge(exchange)); return; }
                 if (path.equals("/v1/types/efiapi")) { json(exchange, 200, typesEfiApi(exchange)); return; }
+                // A read with a body: the review document's locals to compare.
+                if (path.equals("/v1/locals/drift")) { json(exchange, 200, localsDrift(body(exchange), false)); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
@@ -336,6 +338,7 @@ public class Owner {
                     case "/v1/clear/locals" -> write(exchange, this::clearLocals);
                     case "/v1/merge/functions" -> write(exchange, this::mergeFunctions);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
+                    case "/v1/locals/remap" -> write(exchange, body -> localsDrift(body, true));
                     case "/v1/rename/variables" -> batch(exchange, this::renameVariable);
                     case "/v1/set/comments" -> batch(exchange, this::setComment);
                     case "/v1/set/signature" -> write(exchange, this::setSignature);
@@ -5782,6 +5785,309 @@ public class Owner {
     private StringPropertyMap propertyMap(String name) throws Exception {
         StringPropertyMap map = program.getUsrPropertyManager().getStringPropertyMap(name);
         return map != null ? map : program.getUsrPropertyManager().createStringPropertyMap(name);
+    }
+
+
+    /** A local as the decompiler shows it now. */
+    private record LiveLocal(HighSymbol symbol, String name, String storage, String firstUse, boolean named,
+                             DataType type) {}
+
+    private java.util.List<LiveLocal> liveLocals(Function function) {
+        java.util.List<LiveLocal> locals = new java.util.ArrayList<>();
+        DecompileResults results = decompile(function);
+        HighFunction high = results == null ? null : results.getHighFunction();
+        if (high == null) return null;
+        Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+        while (symbols.hasNext()) {
+            HighSymbol symbol = symbols.next();
+            if (symbol.isParameter() || symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+            Address first = symbol.getPCAddress();
+            locals.add(new LiveLocal(symbol, symbol.getName(), symbol.getStorage().toString(),
+                                     first == null ? null : hex(first),
+                                     symbol.getSymbol() != null && !placeholder(symbol.getName()),
+                                     symbol.getDataType()));
+        }
+        return locals;
+    }
+
+    /**
+     * The local a recorded name belongs on now: the one whose first use is
+     * the recorded one. Several there — a value read as two pieces — are told
+     * apart by the recorded storage, then by the recorded type's size; nil
+     * when nothing, or nothing alone, is there.
+     */
+    private LiveLocal localFor(java.util.List<LiveLocal> live, String storage, String firstUse, DataType recordedType,
+                               String[] why) {
+        java.util.List<LiveLocal> there = new java.util.ArrayList<>();
+        for (LiveLocal local : live) {
+            if (firstUse.equalsIgnoreCase(local.firstUse())) there.add(local);
+        }
+        if (there.isEmpty()) { why[0] = "lost"; return null; }
+        if (there.size() == 1) return there.get(0);
+        for (LiveLocal local : there) if (local.storage().equals(storage)) return local;
+        if (recordedType != null) {
+            java.util.List<LiveLocal> sized = new java.util.ArrayList<>();
+            for (LiveLocal local : there) {
+                if (local.type() != null && local.type().getLength() == recordedType.getLength()) sized.add(local);
+            }
+            if (sized.size() == 1) return sized.get(0);
+        }
+        why[0] = "ambiguous";
+        return null;
+    }
+
+    private DataType recordedType(String text) {
+        if (text == null || text.startsWith("undefined")) return null;
+        try { return type(text); } catch (Exception unknown) { return null; }
+    }
+
+    /**
+     * The named locals of a review document — `functions`, as a revision
+     * recorded them — against the program as it decompiles now, by first use
+     * (issue 4a9a4484's re-laid frames). A name is bound to a storage, and
+     * anything that lays a frame out again — a calling convention, a callee's
+     * prototype, a type's size — leaves it on the old slot, or on none, while
+     * the value it named has moved: the first use, an instruction address,
+     * does not move. Each recorded local is `intact` (its name on its first
+     * use), `moved` (another local holds its first use now: the target),
+     * `conflict` (that local holds a name the document does not have — one
+     * given after it), `lost` (no local starts there) or `ambiguous`.
+     *
+     * With `apply`, under the lease, the moved names go to their targets with
+     * their recorded types: the names first put aside, so a name still on
+     * the wrong slot is free, then set one by one through the decompiler, and
+     * read back. A put-aside variable no name came back to is removed: its
+     * slot is unnamed again. A type the program refuses is reported, and the
+     * name is set without it. Nothing is published.
+     */
+    private JsonObject localsDrift(JsonObject body, boolean apply) throws Exception {
+        if (!body.has("functions") || !body.get("functions").isJsonObject()) {
+            throw new Failure(400, "functions is the review document's functions");
+        }
+        JsonObject recorded = body.getAsJsonObject("functions");
+        java.util.Set<String> only = new java.util.HashSet<>();
+        if (body.has("only") && body.get("only").isJsonArray()) {
+            for (JsonElement entry : body.getAsJsonArray("only")) {
+                only.add(hex(address(entry.getAsString())));
+            }
+        }
+        JsonArray functions = new JsonArray();
+        java.util.Map<String, Integer> totals = new java.util.TreeMap<>();
+        for (String entry : recorded.keySet()) {
+            JsonObject decisions = recorded.getAsJsonObject(entry);
+            if (!decisions.has("locals")) continue;
+            Address at = address(entry);
+            if (!only.isEmpty() && !only.contains(hex(at))) continue;
+            JsonObject report = new JsonObject();
+            report.addProperty("entry", hex(at));
+            Function function = program.getFunctionManager().getFunctionAt(at);
+            java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+            if (function == null) {
+                report.addProperty("gone", true);
+                counts.merge("lost", decisions.getAsJsonArray("locals").size(), Integer::sum);
+                report.add("counts", counted(counts));
+                counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
+                functions.add(report);
+                continue;
+            }
+            report.addProperty("name", function.getName());
+            java.util.List<LiveLocal> live = liveLocals(function);
+            if (live == null) {
+                report.addProperty("decompile_error", true);
+                counts.merge("lost", decisions.getAsJsonArray("locals").size(), Integer::sum);
+                report.add("counts", counted(counts));
+                counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
+                functions.add(report);
+                continue;
+            }
+            java.util.Set<String> recordedNames = new java.util.HashSet<>();
+            for (JsonElement element : decisions.getAsJsonArray("locals")) {
+                recordedNames.add(element.getAsJsonObject().get("name").getAsString());
+            }
+            if (decisions.has("params")) {
+                for (JsonElement element : decisions.getAsJsonArray("params")) {
+                    recordedNames.add(element.getAsJsonObject().get("name").getAsString());
+                }
+            }
+            JsonArray items = new JsonArray();
+            java.util.List<JsonObject> moves = new java.util.ArrayList<>();
+            for (JsonElement element : decisions.getAsJsonArray("locals")) {
+                JsonObject local = element.getAsJsonObject();
+                String name = local.get("name").getAsString();
+                String storage = local.get("storage").getAsString();
+                String firstUse = local.has("first_use") && !local.get("first_use").isJsonNull()
+                    ? local.get("first_use").getAsString() : null;
+                String typeText = local.has("type") ? local.get("type").getAsString() : null;
+                JsonObject item = new JsonObject();
+                item.addProperty("name", name);
+                item.addProperty("storage", storage);
+                item.addProperty("first_use", firstUse);
+                item.addProperty("type", typeText);
+                String status;
+                LiveLocal target = null;
+                if (firstUse == null) {
+                    // A stack variable with no first use is the slot itself.
+                    status = "lost";
+                    for (LiveLocal candidate : live) {
+                        if (candidate.storage().equals(storage) && candidate.name().equals(name) && candidate.named()) {
+                            status = "intact";
+                        }
+                    }
+                    if (!status.equals("intact")) item.addProperty("why", "no first use recorded: matched by storage only");
+                } else {
+                    String[] why = {null};
+                    target = localFor(live, storage, firstUse, recordedType(typeText), why);
+                    if (target == null) {
+                        status = why[0];
+                    } else if (target.named() && target.name().equals(name)) {
+                        status = "intact";
+                    } else if (target.named() && !recordedNames.contains(target.name())) {
+                        status = "conflict";
+                    } else {
+                        status = "moved";
+                    }
+                }
+                if (target != null && !status.equals("intact")) {
+                    JsonObject now = new JsonObject();
+                    now.addProperty("name", target.name());
+                    now.addProperty("storage", target.storage());
+                    now.addProperty("named", target.named());
+                    now.addProperty("type", target.type() == null ? null : target.type().getDisplayName());
+                    item.add("now", now);
+                }
+                // Where the name sits now, when it sits somewhere else.
+                for (LiveLocal carrier : live) {
+                    if (carrier.name().equals(name) && carrier != target) {
+                        item.addProperty("name_now_on", carrier.storage()
+                            + (carrier.firstUse() == null ? "" : "@" + carrier.firstUse()));
+                        break;
+                    }
+                }
+                item.addProperty("status", status);
+                if (status.equals("moved")) moves.add(item);
+                items.add(item);
+            }
+            if (apply && !moves.isEmpty()) {
+                int cleared = applyMoves(function, moves);
+                if (cleared > 0) report.addProperty("cleared", cleared);
+            }
+            for (JsonElement element : items) {
+                JsonObject item = element.getAsJsonObject();
+                String status = item.get("status").getAsString();
+                if (apply && status.equals("moved")) status = item.has("restored") ? "restored" : "refused";
+                counts.merge(status, 1, Integer::sum);
+                if (item.has("type_refused")) counts.merge("type_refused", 1, Integer::sum);
+            }
+            if (apply && report.has("cleared")) counts.merge("cleared", report.get("cleared").getAsInt(), Integer::sum);
+            int notIntact = items.size() - counts.getOrDefault("intact", 0);
+            if (notIntact == 0) continue;
+            JsonArray shown = new JsonArray();
+            for (JsonElement element : items) {
+                if (!element.getAsJsonObject().get("status").getAsString().equals("intact")) shown.add(element);
+            }
+            report.add("locals", shown);
+            report.add("counts", counted(counts));
+            counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
+            functions.add(report);
+        }
+        JsonObject answer = identity();
+        answer.add("functions", functions);
+        answer.add("totals", counted(totals));
+        answer.addProperty("applied", apply);
+        return answer;
+    }
+
+    private static JsonObject counted(java.util.Map<String, Integer> counts) {
+        JsonObject object = new JsonObject();
+        counts.forEach(object::addProperty);
+        return object;
+    }
+
+    /**
+     * The moved names set on their targets, as `localsDrift` says; each item
+     * says what became of it. Answers how many put-aside slots were left unnamed.
+     */
+    private int applyMoves(Function function, java.util.List<JsonObject> moves) throws Exception {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (JsonObject move : moves) names.add(move.get("name").getAsString());
+        // Put aside: a name still on another slot would refuse its target.
+        int aside = 0;
+        for (ghidra.program.model.listing.Variable variable : function.getLocalVariables()) {
+            if (!names.contains(variable.getName())) continue;
+            variable.setName("__remap_" + (aside++), SourceType.USER_DEFINED);
+        }
+        decompiled.remove(function.getEntryPoint());
+        for (JsonObject move : moves) {
+            String name = move.get("name").getAsString();
+            String firstUse = move.get("first_use").getAsString();
+            String storage = move.get("storage").getAsString();
+            String typeText = move.has("type") ? move.get("type").getAsString() : null;
+            DataType type = recordedType(typeText);
+            java.util.List<LiveLocal> live = liveLocals(function);
+            LiveLocal target = live == null ? null : localFor(live, storage, firstUse, type, new String[1]);
+            if (target == null) {
+                move.addProperty("refused", "no local starts at " + firstUse + " any more");
+                continue;
+            }
+            boolean typed = type != null && (target.type() == null
+                || !target.type().getDisplayName().equals(type.getDisplayName()));
+            try {
+                HighFunctionDBUtil.updateDBVariable(target.symbol(), name, typed ? type : null, SourceType.USER_DEFINED);
+            } catch (Exception refused) {
+                if (!typed) {
+                    move.addProperty("refused", refused.getMessage());
+                    decompiled.remove(function.getEntryPoint());
+                    continue;
+                }
+                move.addProperty("type_refused", refused.getMessage());
+                decompiled.remove(function.getEntryPoint());
+                live = liveLocals(function);
+                target = live == null ? null : localFor(live, storage, firstUse, type, new String[1]);
+                if (target == null) {
+                    move.addProperty("refused", "no local starts at " + firstUse + " any more");
+                    continue;
+                }
+                try {
+                    HighFunctionDBUtil.updateDBVariable(target.symbol(), name, null, SourceType.USER_DEFINED);
+                } catch (Exception again) {
+                    move.addProperty("refused", again.getMessage());
+                    decompiled.remove(function.getEntryPoint());
+                    continue;
+                }
+            }
+            decompiled.remove(function.getEntryPoint());
+        }
+        // Read back: the name on the local of its first use.
+        java.util.List<LiveLocal> after = liveLocals(function);
+        for (JsonObject move : moves) {
+            if (move.has("refused")) continue;
+            String name = move.get("name").getAsString();
+            String firstUse = move.get("first_use").getAsString();
+            boolean there = false;
+            if (after != null) {
+                for (LiveLocal local : after) {
+                    if (local.named() && local.name().equals(name) && firstUse.equalsIgnoreCase(local.firstUse())) {
+                        there = true;
+                        JsonObject now = new JsonObject();
+                        now.addProperty("name", local.name());
+                        now.addProperty("storage", local.storage());
+                        now.addProperty("type", local.type() == null ? null : local.type().getDisplayName());
+                        move.add("after", now);
+                    }
+                }
+            }
+            if (there) move.addProperty("restored", true);
+            else move.addProperty("refused", "read back: the name is not on the local of " + firstUse);
+        }
+        // What was put aside and not taken again leaves its slot unnamed.
+        int cleared = 0;
+        for (ghidra.program.model.listing.Variable variable : function.getLocalVariables()) {
+            if (!variable.getName().startsWith("__remap_")) continue;
+            function.removeVariable(variable);
+            cleared++;
+        }
+        decompiled.remove(function.getEntryPoint());
+        return cleared;
     }
 
     /**

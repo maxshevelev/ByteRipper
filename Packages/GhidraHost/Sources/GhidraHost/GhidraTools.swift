@@ -19,6 +19,7 @@ public enum GhidraTools {
         tools += writeTools(backend)
         tools += libraryTools(backend)
         tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
+        tools.append(localsDriftTool(backend))
         tools.append(reportIssueTool(backend))
         tools.append(issuesTool(backend))
         tools += ticketTools(backend)
@@ -1501,6 +1502,43 @@ public enum GhidraTools {
             let module = try module(call.arguments)
             let discard = try call.arguments.bool("discard", default: false)
             return try await answer { try await backend.releaseModule(module, by: "agent", discard: discard) }
+        }
+    }
+
+    static func localsDriftTool(_ backend: GhidraBackend) -> AgentTool {
+        AgentTool(
+            name: "ghidra_locals_drift",
+            title: "Find local names a re-laid frame left behind",
+            description: """
+                Compares the named locals of the module's review document from before revision 3 of the \
+                types (EFIAPI as __cdecl on IA32, issue 4a9a4484) with the program now. A local's name is \
+                bound to its storage. Re-laying a frame — a calling convention, a callee's prototype, a \
+                type's size — leaves the name on the old slot or on none, but its first use, an \
+                instruction address, stays. `baseline` names the reference: `rev`, `recipe` and \
+                `review`; `recipe` picks another. Each function lists the locals that are not intact, by \
+                `status`: `moved` (another local starts at that first use now: `now`), `conflict` (that \
+                local holds a name the document does not have, one given after it: never overwritten), \
+                `lost` (no local starts there) or `ambiguous` (several do). `name_now_on` says where \
+                the name sits now. `counts` per function and `totals` count each status. With \
+                `apply: true`, on a module you have in work, every moved name goes to its local with its \
+                recorded type, and each write is read back: `restored`, `refused` (with why), \
+                `type_refused` (the name set without the type) and `cleared` (a slot that held a name \
+                wrongly is unnamed again). Nothing is published: read the instructions, then publish. \
+                `functions` limits it to these entries.
+                """,
+            inputSchema: AgentSchema.object([
+                "module": moduleProperty,
+                "apply": AgentSchema.boolean("Put the moved names on their locals; the module must be in work."),
+                "recipe": AgentSchema.string("The recipe whose last publish is the reference; by default the module's before revision 3."),
+                "functions": AgentSchema.strings("Only these function entries.")
+            ], required: ["module"]),
+            annotations: .edit
+        ) { call in
+            let module = try module(call.arguments)
+            let request = GhidraHost.LocalsDriftRequest(apply: try call.arguments.bool("apply", default: false),
+                                                        recipe: try call.arguments.optionalString("recipe"),
+                                                        functions: try call.arguments.strings("functions"))
+            return try await answer { try await backend.localsDrift(module, request) }
         }
     }
 

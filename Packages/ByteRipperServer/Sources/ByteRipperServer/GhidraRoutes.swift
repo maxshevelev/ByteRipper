@@ -279,6 +279,19 @@ enum GhidraRoutes {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
+        // The named locals of the review document before revision 3 of the
+        // types against the program now: a read without `apply`; with it a
+        // write under the holder's lease, which publishes nothing.
+        router.add("POST", "\(prefix)/modules/:module/locals-drift", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            let body = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            let drift = GhidraHost.LocalsDriftRequest(apply: body["apply"] as? Bool ?? false,
+                                                      recipe: body["recipe"] as? String,
+                                                      functions: body["functions"] as? [String] ?? [])
+            let data = try await answer { try await host.driftOfLocals(module, drift, holder: holder(request)) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+
         router.add("POST", "\(prefix)/modules/:module/preview/*call", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             let call = request.parameters["call"] ?? ""

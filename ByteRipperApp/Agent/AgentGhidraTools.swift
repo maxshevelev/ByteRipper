@@ -109,6 +109,9 @@ struct CurrentGhidraBackend: GhidraBackend {
     func typeUses(name: String, limit: Int) async throws -> Data {
         try await resolve().typeUses(name: name, limit: limit)
     }
+    func localsDrift(_ module: SHA256Digest, _ request: GhidraHost.LocalsDriftRequest) async throws -> Data {
+        try await resolve().localsDrift(module, request)
+    }
     func takeModule(_ module: SHA256Digest) async throws -> Data {
         try await resolve().takeModule(module)
     }
