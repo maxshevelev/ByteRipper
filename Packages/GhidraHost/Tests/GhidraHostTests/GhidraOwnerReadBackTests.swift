@@ -386,6 +386,37 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 85624707: a structure defined again with an inline member of
+    /// another prototype gives the member's named signature type that
+    /// prototype — it was kept with the old one — and the parser's `_func_N`
+    /// for the member is not left in the program.
+    func testAMemberDeclaredAgainTakesItsNewPrototype() async throws {
+        try await open(try image())
+        func parserTypes() async throws -> Int {
+            let listed = try await read("/v1/types?contains=_func_&kind=function&limit=5000")
+            return (listed["types"] as? [[String: Any]] ?? []).filter { ($0["source"] as? String) == "program" }.count
+        }
+        let before = try await parserTypes()
+        _ = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_ERR_PPI { void (*AddLog)(struct _PROBE_ERR_PPI *This, UINT32 Event); \
+            UINT32 Count; } PROBE_ERR_PPI;
+            """])
+        let first = try await read("/v1/type?name=PROBE_ERR_PPI_AddLog")
+        XCTAssertTrue(((first["program"] as? [String: Any])?["c"] as? String ?? "").contains("void"), "\(first)")
+        let again = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_ERR_PPI { EFI_STATUS (*AddLog)(struct _PROBE_ERR_PPI *This, UINT32 Event); \
+            UINT32 Count; } PROBE_ERR_PPI;
+            """])
+        XCTAssertEqual(again["member_types_replaced"] as? [String], ["PROBE_ERR_PPI_AddLog"], "\(again)")
+        let after = try await read("/v1/type?name=PROBE_ERR_PPI_AddLog")
+        let c = (after["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("EFI_STATUS"), "\(after)")
+        XCTAssertFalse(c.contains("void PROBE_ERR_PPI_AddLog"), "\(after)")
+        let left = try await parserTypes()
+        XCTAssertEqual(left, before, "the parser's _func_ types are gone")
+        _ = try await release()
+    }
+
     /// Issue ce3740de: the owner's lease lapsed after an hour with no write
     /// and the host kept its token. A publish takes it again for its type
     /// step, as a write does, instead of failing with "take the write lease first".

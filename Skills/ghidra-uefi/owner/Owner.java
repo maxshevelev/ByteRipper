@@ -2313,17 +2313,46 @@ public class Owner {
      */
     private boolean nameFunctionPointerMembers() {
         boolean changed = false;
+        java.util.List<DataType> left = new java.util.ArrayList<>();
         for (String name : new java.util.ArrayList<>(Harvest.reviewTypes(program).keySet())) {
             DataType type = find(program.getDataTypeManager(), name);
             if (type == null || type.getDataTypeManager() != program.getDataTypeManager()) continue;
-            if (!nameFunctionPointerMembers(type)) continue;
+            if (!nameFunctionPointerMembers(type, false, null, left)) continue;
             changed = true;
             Harvest.recordType(program, type.getName(), ExportCode.typeC(type));
         }
+        removeUnusedParserTypes(left);
         return changed;
     }
 
-    private static boolean nameFunctionPointerMembers(DataType type) {
+    /**
+     * The parser's `_func_N` types a member no longer uses, gone from the
+     * program when nothing else uses them either (issue 85624707): left
+     * behind, each is one more type the shared archive holds under a name
+     * another module gives a different signature.
+     */
+    private void removeUnusedParserTypes(java.util.List<DataType> left) {
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        for (DataType type : left) {
+            if (type.getDataTypeManager() != manager || type.isDeleted()) continue;
+            if (!type.getName().matches("_func_\\d+")) continue;
+            if (!typeUsedBy(type, 1).isEmpty()) continue;
+            manager.remove(type);
+        }
+    }
+
+    /**
+     * `declared`: the C of this call wrote the member's prototype, so a named
+     * signature type the program already holds under `STRUCT_field` takes that
+     * prototype — the name is the member's, and the C is what the review said
+     * it is (issue 85624707). At a publish nothing was declared, and a named
+     * type the program holds is kept as it is. `replaced` gets the names of
+     * the named types whose signature changed; `left` the definitions the
+     * members no longer use.
+     */
+    private static boolean nameFunctionPointerMembers(DataType type, boolean declared,
+                                                      java.util.List<String> replaced,
+                                                      java.util.List<DataType> left) {
         DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
         if (!(base instanceof ghidra.program.model.data.Composite composite)) return false;
         boolean changed = false;
@@ -2350,6 +2379,18 @@ public class Owner {
                     // comment, and that stays with the component.
                 }
                 DataType resolved = manager.resolve(copied, DataTypeConflictHandler.KEEP_HANDLER);
+                if (declared && resolved instanceof ghidra.program.model.data.FunctionDefinition existing
+                    && copied instanceof ghidra.program.model.data.FunctionDefinition fresh
+                    && !sameSignature(existing, fresh)) {
+                    // The convention the C cannot say (EFIAPI) stays as the
+                    // program's type has it.
+                    if (ghidra.program.model.lang.CompilerSpec.CALLING_CONVENTION_unknown
+                            .equals(fresh.getCallingConventionName())) {
+                        fresh.setCallingConvention(existing.getCallingConventionName());
+                    }
+                    existing.replaceWith(fresh);
+                    if (replaced != null) replaced.add(existing.getName());
+                }
                 DataType replacement = pointer ? manager.getPointer(resolved) : resolved;
                 if (composite instanceof ghidra.program.model.data.Structure structure) {
                     structure.replaceAtOffset(component.getOffset(), replacement, component.getLength(),
@@ -2363,12 +2404,26 @@ public class Owner {
                     composite.delete(ordinal);
                     composite.insert(ordinal, replacement, length, field, comment);
                 }
+                if (left != null) left.add(definition);
                 changed = true;
             } catch (Exception error) {
                 System.out.println("OWNER TYPE member " + wanted + ": " + error.getMessage());
             }
         }
         return changed;
+    }
+
+    /** The same return, parameters and varargs; the convention is not the C's. */
+    private static boolean sameSignature(ghidra.program.model.data.FunctionDefinition a,
+                                         ghidra.program.model.data.FunctionDefinition b) {
+        if (a.hasVarArgs() != b.hasVarArgs() || !a.getReturnType().isEquivalent(b.getReturnType())) return false;
+        ghidra.program.model.data.ParameterDefinition[] mine = a.getArguments(), theirs = b.getArguments();
+        if (mine.length != theirs.length) return false;
+        for (int i = 0; i < mine.length; i++) {
+            if (!mine[i].getDataType().isEquivalent(theirs[i].getDataType())) return false;
+            if (!java.util.Objects.equals(mine[i].getName(), theirs[i].getName())) return false;
+        }
+        return true;
     }
 
     /**
@@ -6868,7 +6923,10 @@ public class Owner {
         // The canonical C, not the text the caller sent: two equivalent
         // definitions must leave the review document byte-identical, or a
         // redefinition for a check reads as a new revision.
-        nameFunctionPointerMembers(resolved);
+        java.util.List<String> memberTypesReplaced = new java.util.ArrayList<>();
+        java.util.List<DataType> parserLeft = new java.util.ArrayList<>();
+        nameFunctionPointerMembers(resolved, c != null, memberTypesReplaced, parserLeft);
+        removeUnusedParserTypes(parserLeft);
         // Its function types are EFIAPI before its C is recorded, not after.
         efiApiFunctionTypes(program);
         Harvest.recordType(program, resolved.getName(), ExportCode.typeC(resolved));
@@ -6881,6 +6939,11 @@ public class Owner {
         answer.addProperty("comments_kept", commentsKept);
         if (cComments > 0) answer.addProperty("comments_from_c", cComments);
         if (tookShared) answer.addProperty("taken_from_shared", true);
+        if (!memberTypesReplaced.isEmpty()) {
+            JsonArray names = new JsonArray();
+            memberTypesReplaced.forEach(names::add);
+            answer.add("member_types_replaced", names);
+        }
         if (cUnplaced != null) answer.add("comments_not_placed", cUnplaced);
         answer.addProperty("unchanged", unchanged);
         return answer;
