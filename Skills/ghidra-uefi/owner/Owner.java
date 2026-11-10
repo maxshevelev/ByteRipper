@@ -5982,6 +5982,7 @@ public class Owner {
         }
         JsonArray functions = new JsonArray();
         java.util.Map<String, Integer> totals = new java.util.TreeMap<>();
+        int intactFunctions = 0;
         for (String entry : recorded.keySet()) {
             JsonObject decisions = recorded.getAsJsonObject(entry);
             if (!decisions.has("locals")) continue;
@@ -6137,7 +6138,14 @@ public class Owner {
             }
             if (apply && report.has("cleared")) counts.merge("cleared", report.get("cleared").getAsInt(), Integer::sum);
             int notIntact = items.size() - counts.getOrDefault("intact", 0);
-            if (notIntact == 0) continue;
+            if (notIntact == 0) {
+                // Not listed, but counted: a function that reads intact now
+                // keeps its locals in `totals`, so a total does not shrink
+                // when names go back.
+                intactFunctions++;
+                counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
+                continue;
+            }
             JsonArray shown = new JsonArray();
             for (JsonElement element : items) {
                 if (!element.getAsJsonObject().get("status").getAsString().equals("intact")) shown.add(element);
@@ -6150,6 +6158,7 @@ public class Owner {
         JsonObject answer = identity();
         answer.add("functions", functions);
         answer.add("totals", counted(totals));
+        answer.addProperty("intact_functions", intactFunctions);
         answer.addProperty("applied", apply);
         return answer;
     }

@@ -1519,7 +1519,8 @@ public enum GhidraTools {
                 `status`: `moved` (another local starts at that first use now: `now`), `conflict` (that \
                 local holds a name the document does not have, one given after it: never overwritten), \
                 `lost` (no local starts there), `merged` (another recorded name holds that local: two slots became one) or `ambiguous` (several locals start there, or several names want one). In a function linked to a registry entry (`library_link` on the function) every such local is `library_link`, with what it would be in `drift`: a rename there would set it apart from its entry, so an apply never renames there. `name_now_on` says where \
-                the name sits now. `counts` per function and `totals` count each status. With \
+                the name sits now. `counts` per function and `totals` count each status; a function that reads \
+                intact is not listed, but its locals count in `totals`, and `intact_functions` says how many. With \
                 `apply: true`, on a module you have in work, every moved name goes to its local with its \
                 recorded type, and each write is read back: `restored`, `refused` (with why), \
                 `type_refused` (the name set without the type) and `cleared` (a slot that held a name \

@@ -294,5 +294,12 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
         // Once put back, the same document reads intact.
         let again = try await drift(document, apply: false)
         XCTAssertNil(items(again)["DriftedValue"], "\(again)")
+        // The conflict keeps the function listed; its intact local counts.
+        XCTAssertEqual((again["totals"] as? [String: Any])?["intact"] as? Int, 1, "\(again)")
+        // A document whose every name reads intact lists nothing and counts it.
+        let whole = try await drift([entry: ["locals": [recorded("DriftedValue", moved)]]], apply: false)
+        XCTAssertEqual((whole["functions"] as? [Any])?.count, 0, "\(whole)")
+        XCTAssertEqual(whole["intact_functions"] as? Int, 1, "\(whole)")
+        XCTAssertEqual((whole["totals"] as? [String: Any])?["intact"] as? Int, 1, "\(whole)")
     }
 }
