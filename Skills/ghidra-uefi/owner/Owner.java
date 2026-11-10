@@ -6471,6 +6471,7 @@ public class Owner {
             } catch (Exception error) {
                 throw new Failure(400, error.getMessage() + holderOf(name != null ? name : stale.getName(), function));
             }
+            if (type != null) requireTypeTaken(function, stale.getName(), type);
             decompiled.remove(function.getEntryPoint());
             JsonObject answer = identity();
             answer.addProperty("function", hex(function.getEntryPoint()));
@@ -6490,6 +6491,15 @@ public class Owner {
         // (issue 57972088). What is dropped is said: `type_unchanged`.
         String typeUnchanged = null;
         if (type != null && match.getDataType() != null && sameNamedType(match.getDataType(), type)) {
+            // Recorded is not used: the program can hold the type on a symbol
+            // the decompiler prints with a placeholder and a warning. Answered
+            // as unchanged, a review would read the placeholder as typed.
+            if (typeWarning(results, match.getName())) {
+                throw new Failure(409, "the program records the type " + type.getDisplayName() + " for "
+                    + match.getName() + ", but the decompiler does not use it: its C says \"WARNING: Unable to use type"
+                    + " for symbol " + match.getName() + "\" and keeps a placeholder type. Nothing was changed;"
+                    + " ghidra_function_locals_reset with `names` lets the variable go, then type the value it comes from");
+            }
             typeUnchanged = match.getDataType().getDisplayName();
             type = null;
             if (name == null) {
@@ -6595,21 +6605,28 @@ public class Owner {
                 if (symbol.getName().equals(name)) { now = symbol.getDataType(); break; }
             }
         }
-        boolean declined;
-        if (now != null) {
-            declined = !sameType(now, type);
-        } else {
-            var c = results == null ? null : results.getDecompiledFunction();
-            declined = c != null && c.getC().contains("Unable to use type for symbol " + name);
-        }
+        // The symbol can report the type it was given while the decompiler
+        // could not use it: a zero-hash temporary holds it in the program, and
+        // the C warns and keeps its placeholder (issue 7ed6937e). The warning
+        // decides as much as the type does.
+        boolean warned = typeWarning(results, name);
+        boolean declined = warned || (now != null && !sameType(now, type));
         // The answer below rolls back: what was just decompiled is of the
         // program as it will no longer be.
         decompiled.remove(function.getEntryPoint());
         if (declined) {
             throw new Failure(409, "the decompiler did not take the type " + type.getDisplayName() + " for " + name
-                + (now == null ? "" : ": it still reads as " + now.getDisplayName())
+                + (warned ? ": its C says \"WARNING: Unable to use type for symbol " + name + "\" and keeps a placeholder type"
+                    : now == null ? "" : ": it still reads as " + now.getDisplayName())
                 + " — nothing was changed; type the value it comes from, or say in a comment what it is");
         }
+    }
+
+    /** Whether the decompiled C says it could not use the type recorded for `name`. */
+    private static boolean typeWarning(DecompileResults results, String name) {
+        var c = results == null ? null : results.getDecompiledFunction();
+        return c != null && java.util.regex.Pattern.compile(
+            "Unable to use type for symbol " + java.util.regex.Pattern.quote(name) + "(?![A-Za-z0-9_])").matcher(c.getC()).find();
     }
 
     /** The same type by the name the C prints as well as by its layout. */

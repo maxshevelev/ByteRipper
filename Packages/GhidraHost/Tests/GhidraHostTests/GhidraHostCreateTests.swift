@@ -1522,4 +1522,53 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         print("DECLINED refused=\(refused) taken=\(taken)")
         XCTAssertGreaterThan(refused + taken, 0)
     }
+
+    /// A write answered as taken leaves no "Unable to use type" behind: a type
+    /// the decompiler declines is refused, whichever path the write took, and
+    /// so is one the program records but the decompiler does not use
+    /// (issue 7ed6937e). Types of the local's own size, named as a review does.
+    func testATypeAnsweredAsTakenIsUsedByTheDecompiler() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostUsedTypeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostUsedTypeTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Module")
+        try await host.take(SHA256Digest(data: image))
+        let bySize = ["1": "UINT8", "2": "UINT16", "4": "UINT32", "8": "UINT64"]
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        var answered = 0, refused = 0
+        var silent: [String] = []
+        for function in functions {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let before = try json(await host.read(module, "/v1/function/\(entry)"))
+            for (index, local) in (before["locals"] as? [[String: Any]] ?? []).enumerated() {
+                guard let storage = local["storage"] as? String,
+                      let size = storage.split(separator: ":").last, let type = bySize[String(size)] else { continue }
+                let name = "Probe\(index)"
+                var request: [String: Any] = ["function": entry, "storage": storage, "type": type, "name": name]
+                if let first = local["first_use"] as? String { request["first_use"] = first }
+                do {
+                    _ = try await host.write(module, "/v1/rename/variable",
+                                             body: try JSONSerialization.data(withJSONObject: request))
+                    answered += 1
+                    let c = try json(await host.read(module, "/v1/function/\(entry)"))["c"] as? String ?? ""
+                    if c.contains("Unable to use type for symbol \(name)") { silent.append("\(entry) \(storage) \(type)") }
+                } catch {
+                    refused += 1
+                }
+            }
+        }
+        await host.stop(module)
+        print("USED answered=\(answered) refused=\(refused) silent=\(silent.count) \(silent.prefix(5))")
+        XCTAssertGreaterThan(answered, 0)
+        XCTAssertEqual(silent, [], "a type answered as taken that the decompiler does not use")
+    }
 }
