@@ -287,7 +287,8 @@ enum GhidraRoutes {
             let body = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
             let drift = GhidraHost.LocalsDriftRequest(apply: body["apply"] as? Bool ?? false,
                                                       recipe: body["recipe"] as? String,
-                                                      functions: body["functions"] as? [String] ?? [])
+                                                      functions: body["functions"] as? [String] ?? [],
+                                                      registry: body["registry"] as? Bool ?? false)
             let data = try await answer { try await host.driftOfLocals(module, drift, holder: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }

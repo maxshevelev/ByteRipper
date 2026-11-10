@@ -328,6 +328,7 @@ public class Owner {
                 if (path.equals("/v1/types/efiapi")) { json(exchange, 200, typesEfiApi(exchange)); return; }
                 // A read with a body: the review document's locals to compare.
                 if (path.equals("/v1/locals/drift")) { json(exchange, 200, localsDrift(body(exchange), false)); return; }
+                if (path.equals("/v1/locals/entries")) { json(exchange, 200, entryLocalsPlacement(body(exchange))); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
@@ -5906,11 +5907,70 @@ public class Owner {
      * slot is unnamed again. A type the program refuses is reported, and the
      * name is set without it. Nothing is published.
      */
+    /**
+     * The registry's entries against the functions of this program linked to
+     * them (issue 24c094eb): each entry's locals, placed at the function's
+     * entry plus their first use, compared by placement — is the entry's
+     * storage still that of the local the program starts there? A stack
+     * local (first use 0) is its frame slot and is matched by storage. Body:
+     * `entries`, id to the entry's `version` and `locals`. Read only.
+     */
+    private JsonObject entryLocalsPlacement(JsonObject body) throws Exception {
+        if (!body.has("entries") || !body.get("entries").isJsonObject()) {
+            throw new Failure(400, "entries is the registry entries' locals by id");
+        }
+        JsonObject entries = body.getAsJsonObject("entries");
+        JsonObject document = new JsonObject();
+        JsonObject versions = new JsonObject();
+        int linked = 0;
+        ghidra.program.model.listing.FunctionIterator all = program.getFunctionManager().getFunctions(true);
+        while (all.hasNext()) {
+            Function function = all.next();
+            JsonObject mark = libraryMark(function);
+            if (mark == null || !mark.has("id")) continue;
+            String id = mark.get("id").getAsString();
+            if (!entries.has(id)) continue;
+            linked++;
+            JsonObject entry = entries.getAsJsonObject(id);
+            JsonArray placed = new JsonArray();
+            for (JsonElement element : entry.has("locals") ? entry.getAsJsonArray("locals") : new JsonArray()) {
+                JsonObject theirs = element.getAsJsonObject().deepCopy();
+                long offset = relative(theirs.get("first_use").getAsString());
+                if (offset == 0) theirs.add("first_use", com.google.gson.JsonNull.INSTANCE);
+                else theirs.addProperty("first_use", hex(function.getEntryPoint().add(offset)));
+                placed.add(theirs);
+            }
+            if (placed.isEmpty()) continue;
+            JsonObject decisions = new JsonObject();
+            decisions.add("locals", placed);
+            document.add(hex(function.getEntryPoint()), decisions);
+            if (entry.has("version")) versions.add(hex(function.getEntryPoint()), entry.get("version"));
+        }
+        JsonObject request = new JsonObject();
+        request.add("functions", document);
+        request.addProperty("placement", true);
+        JsonObject answer = localsDrift(request, false);
+        for (JsonElement element : answer.getAsJsonArray("functions")) {
+            JsonObject report = element.getAsJsonObject();
+            String at = report.get("entry").getAsString();
+            if (versions.has(at)) report.add("entry_version", versions.get(at));
+        }
+        answer.addProperty("linked", linked);
+        answer.addProperty("compared", document.size());
+        return answer;
+    }
+
     private JsonObject localsDrift(JsonObject body, boolean apply) throws Exception {
         if (!body.has("functions") || !body.get("functions").isJsonObject()) {
             throw new Failure(400, "functions is the review document's functions");
         }
         JsonObject recorded = body.getAsJsonObject("functions");
+        // `placement`: the registry's entries against their linked functions
+        // (`entryLocalsPlacement`). A linked function keeps its module's names,
+        // so a name says nothing there: what is compared is whether the entry's
+        // storage is still the storage of the local at its first use.
+        boolean placement = body.has("placement") && body.get("placement").getAsBoolean();
+        if (placement && apply) throw new Failure(400, "a placement is read, never applied");
         java.util.Set<String> only = new java.util.HashSet<>();
         if (body.has("only") && body.get("only").isJsonArray()) {
             for (JsonElement entry : body.getAsJsonArray("only")) {
@@ -5937,9 +5997,9 @@ public class Owner {
                 continue;
             }
             report.addProperty("name", function.getName());
-            // A function linked to a registry entry has the entry's names: a
-            // rename here would edit the entry and drop its text, so its
-            // drift is reported and never applied.
+            // A function linked to a registry entry reads as the entry's text:
+            // a rename here would set it apart from the entry, so its drift
+            // is reported and never applied.
             JsonObject mark = libraryMark(function);
             if (mark != null) {
                 JsonObject link = new JsonObject();
@@ -5988,7 +6048,8 @@ public class Owner {
                     // A stack variable with no first use is the slot itself.
                     status = "lost";
                     for (LiveLocal candidate : live) {
-                        if (candidate.storage().equals(storage) && candidate.name().equals(name) && candidate.named()) {
+                        if (candidate.storage().equals(storage)
+                            && (placement || (candidate.name().equals(name) && candidate.named()))) {
                             status = "intact";
                         }
                     }
@@ -5998,6 +6059,8 @@ public class Owner {
                     target = localFor(live, storage, firstUse, recordedType(typeText), why);
                     if (target == null) {
                         status = why[0];
+                    } else if (placement) {
+                        status = target.storage().equals(storage) ? "intact" : "moved";
                     } else if (target.named() && target.name().equals(name)) {
                         status = "intact";
                     } else if (target.named() && !recordedNames.contains(target.name())) {
@@ -6038,7 +6101,7 @@ public class Owner {
             for (JsonElement element : items) {
                 JsonObject item = element.getAsJsonObject();
                 String status = item.get("status").getAsString();
-                if (mark != null && !status.equals("intact")) {
+                if (mark != null && !placement && !status.equals("intact")) {
                     item.addProperty("drift", status);
                     item.addProperty("status", "library_link");
                 } else if (status.equals("moved")) {

@@ -185,6 +185,58 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
         XCTAssertFalse(now.contains { ($0["storage"] as? String) == "ESI:4" && ($0["named"] as? Bool) == true }, "\(now)")
     }
 
+    /// A registry entry's locals against a function linked to it, by
+    /// placement: the entry's storage at its first use is intact, another
+    /// storage there is moved, a first use no local starts at is lost; names
+    /// are not compared, and nothing is written.
+    func testAnEntrysLocalsArePlacedAtItsLinkedFunctions() async throws {
+        let (entry, locals) = try await function()
+        try await host.take(module)
+        _ = try await host.write(module, "/v1/library/mark", body: try JSONSerialization.data(withJSONObject: [
+            "items": [["address": entry, "id": "test-entry", "version": 3, "kind": "edk2"]]]), byHost: true)
+        let offset = { (local: [String: Any]) -> String in
+            let at = UInt64((local["first_use"] as! String).dropFirst(2), radix: 16)!
+            return String(format: "0x%llX", at - UInt64(entry.dropFirst(2), radix: 16)!)
+        }
+        let entryLocals: [[String: Any]] = [
+            ["name": "SameSlot", "storage": locals[0]["storage"]!, "first_use": offset(locals[0]), "type": "undefined4"],
+            ["name": "OldSlot", "storage": "EDI:4", "first_use": offset(locals[1]), "type": "undefined4"],
+            ["name": "NoStart", "storage": "ESI:4", "first_use": "0x1", "type": "undefined4"],
+            ["name": "NoFrameSlot", "storage": "Stack[-0x7c0]:4", "first_use": "0x0", "type": "undefined4"]
+        ]
+        let body = try JSONSerialization.data(withJSONObject: ["entries": [
+            "test-entry": ["version": 3, "locals": entryLocals],
+            "other-entry": ["version": 1, "locals": entryLocals]]])
+        let answer = try json(await host.preview(module, "/v1/locals/entries", body: body))
+        XCTAssertEqual(answer["linked"] as? Int, 1, "\(answer)")
+        let function = try XCTUnwrap((answer["functions"] as? [[String: Any]])?.first, "\(answer)")
+        XCTAssertEqual(function["entry_version"] as? Int, 3)
+        XCTAssertEqual((function["library_link"] as? [String: Any])?["id"] as? String, "test-entry")
+        let byName = items(answer)
+        XCTAssertNil(byName["SameSlot"], "intact is not listed: \(answer)")
+        XCTAssertEqual(byName["OldSlot"]?["status"] as? String, "moved", "\(answer)")
+        XCTAssertEqual((byName["OldSlot"]?["now"] as? [String: Any])?["storage"] as? String,
+                       locals[1]["storage"] as? String, "\(answer)")
+        XCTAssertEqual(byName["NoStart"]?["status"] as? String, "lost", "\(answer)")
+        XCTAssertEqual(byName["NoFrameSlot"]?["status"] as? String, "lost", "\(answer)")
+        let now = try await read("/v1/function/\(entry)?summary=1")["locals"] as? [[String: Any]] ?? []
+        XCTAssertFalse(now.contains { ["SameSlot", "OldSlot", "NoStart", "NoFrameSlot"].contains($0["name"] as? String ?? "") },
+                       "nothing written: \(now)")
+    }
+
+    /// Through the host, the registry is read from the store, and an apply is refused.
+    func testTheRegistryComparisonIsReadOnly() async throws {
+        let answer = try json(await host.driftOfLocals(module, .init(registry: true), holder: nil))
+        XCTAssertEqual(answer["linked"] as? Int, 0, "\(answer)")
+        XCTAssertEqual((answer["registry"] as? [String: Any])?["entries_with_locals"] as? Int, 0, "\(answer)")
+        do {
+            _ = try await host.driftOfLocals(module, .init(apply: true, registry: true), holder: nil)
+            XCTFail("a registry comparison is never applied")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 400, "\(error)")
+        }
+    }
+
     func testTheReferenceIsTheRecipeBeforeRevision3() {
         XCTAssertEqual(GhidraHost.recipeBeforeEFIAPI("code-v10-types3-ghidra-12.2-lang-descriptor-tables-1"),
                        "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1")

@@ -325,7 +325,7 @@ public struct GhidraRemote: GhidraBackend {
     }
 
     public func localsDrift(_ module: SHA256Digest, _ request: GhidraHost.LocalsDriftRequest) async throws -> Data {
-        var body: [String: Any] = ["apply": request.apply, "functions": request.functions]
+        var body: [String: Any] = ["apply": request.apply, "functions": request.functions, "registry": request.registry]
         if let recipe = request.recipe { body["recipe"] = recipe }
         return try await call("POST", "modules/\(module.hex)/locals-drift",
                               body: try JSONSerialization.data(withJSONObject: body), timeout: 1800)

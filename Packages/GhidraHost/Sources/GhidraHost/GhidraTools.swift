@@ -1518,26 +1518,36 @@ public enum GhidraTools {
                 `review`; `recipe` picks another. Each function lists the locals that are not intact, by \
                 `status`: `moved` (another local starts at that first use now: `now`), `conflict` (that \
                 local holds a name the document does not have, one given after it: never overwritten), \
-                `lost` (no local starts there), `merged` (another recorded name holds that local: two slots became one) or `ambiguous` (several locals start there, or several names want one). In a function linked to a registry entry (`library_link` on the function) every such local is `library_link`, with what it would be in `drift`: its names are the entry's, and an apply never renames there. `name_now_on` says where \
+                `lost` (no local starts there), `merged` (another recorded name holds that local: two slots became one) or `ambiguous` (several locals start there, or several names want one). In a function linked to a registry entry (`library_link` on the function) every such local is `library_link`, with what it would be in `drift`: a rename there would set it apart from its entry, so an apply never renames there. `name_now_on` says where \
                 the name sits now. `counts` per function and `totals` count each status. With \
                 `apply: true`, on a module you have in work, every moved name goes to its local with its \
                 recorded type, and each write is read back: `restored`, `refused` (with why), \
                 `type_refused` (the name set without the type) and `cleared` (a slot that held a name \
                 wrongly is unnamed again). Nothing is published: read the instructions, then publish. \
-                `functions` limits it to these entries.
+                `functions` limits it to these entries. With `registry: true`, the reference is the library \
+                registry instead: each entry's locals (storage, and first use as an offset from the entry) \
+                placed at every function of this module linked to it, by placement, not by name — a linked \
+                function keeps its module's names. Per local: `intact` (the entry's storage starts at that \
+                first use), `moved` (another storage does: `now` — the entry names a slot the program no \
+                longer uses), `lost`, `merged` or `ambiguous`; a stack local, first use 0, is its frame slot \
+                and is matched by storage. Each function names its `library_link` and `entry_version`; \
+                `linked` counts the linked functions, `compared` those whose entry records locals. Read only: \
+                an entry is put right by a registry proposal.
                 """,
             inputSchema: AgentSchema.object([
                 "module": moduleProperty,
                 "apply": AgentSchema.boolean("Put the moved names on their locals; the module must be in work."),
                 "recipe": AgentSchema.string("The recipe whose last publish is the reference; by default the module's before revision 3."),
-                "functions": AgentSchema.strings("Only these function entries.")
+                "functions": AgentSchema.strings("Only these function entries."),
+                "registry": AgentSchema.boolean("Compare the registry entries' locals with this module's linked functions instead; read only.")
             ], required: ["module"]),
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
             let request = GhidraHost.LocalsDriftRequest(apply: try call.arguments.bool("apply", default: false),
                                                         recipe: try call.arguments.optionalString("recipe"),
-                                                        functions: try call.arguments.strings("functions"))
+                                                        functions: try call.arguments.strings("functions"),
+                                                        registry: try call.arguments.bool("registry", default: false))
             return try await answer { try await backend.localsDrift(module, request) }
         }
     }

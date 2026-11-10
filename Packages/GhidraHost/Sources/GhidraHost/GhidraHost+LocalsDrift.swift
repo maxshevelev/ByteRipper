@@ -17,11 +17,15 @@ extension GhidraHost {
         public var recipe: String?
         /// Only these function entries; all of the document's when empty.
         public var functions: [String]
+        /// Compare the registry's entries with this module's functions linked
+        /// to them, instead of the review document: read only.
+        public var registry: Bool
 
-        public init(apply: Bool = false, recipe: String? = nil, functions: [String] = []) {
+        public init(apply: Bool = false, recipe: String? = nil, functions: [String] = [], registry: Bool = false) {
             self.apply = apply
             self.recipe = recipe
             self.functions = functions
+            self.registry = registry
         }
     }
 
@@ -34,6 +38,7 @@ extension GhidraHost {
 
     public func driftOfLocals(_ module: SHA256Digest, _ request: LocalsDriftRequest,
                               holder: String?) async throws -> Data {
+        if request.registry { return try await driftOfRegistryEntries(module, request, holder: holder) }
         let state = try project(module).state()
         guard let published = state.published else {
             throw GhidraHostError(.refused, "the module was never published: there is no review document to compare with",
@@ -58,6 +63,40 @@ extension GhidraHost {
         var baseline: [String: Any] = ["recipe": recipe, "review": review.hex]
         if let rev = manifest.reading?.rev { baseline["rev"] = rev }
         answer["baseline"] = baseline
+        return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
+    }
+
+    /// Issue 24c094eb: each registry entry's locals against the functions of
+    /// this module linked to it. An entry records a local's storage and its
+    /// first use as an offset from the function's entry; a frame laid out
+    /// again keeps the first use and may move the storage, and an entry
+    /// recorded before it then names a slot its linkers no longer use. The
+    /// owner places each entry's locals at each linked function and answers,
+    /// per local, `intact` (that storage starts there), `moved` (another
+    /// storage does: `now`), `lost` or `ambiguous`. A linked function keeps
+    /// its module's names, so names are not compared. Read only: an entry is
+    /// put right by a registry proposal, not here.
+    func driftOfRegistryEntries(_ module: SHA256Digest, _ request: LocalsDriftRequest,
+                                holder: String?) async throws -> Data {
+        guard !request.apply else {
+            throw GhidraHostError(.refused, "a registry entry is put right by a registry proposal: `registry` is read only",
+                                  status: 400)
+        }
+        let index = try await writer.readLibraryIndex()
+        var entries: [String: Any] = [:]
+        for (id, held) in index.entries {
+            let object = try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry)) as? [String: Any] ?? [:]
+            guard let locals = object["locals"] as? [[String: Any]], !locals.isEmpty else { continue }
+            entries[id] = ["version": held.version, "locals": locals] as [String: Any]
+        }
+        let body = try JSONSerialization.data(withJSONObject: ["entries": entries])
+        let raw = try await preview(module, "/v1/locals/entries", body: body, holder: holder)
+        var answer = try JSONSerialization.jsonObject(with: raw) as? [String: Any] ?? [:]
+        if !request.functions.isEmpty, let functions = answer["functions"] as? [[String: Any]] {
+            let wanted = Set(request.functions.map { $0.lowercased() })
+            answer["functions"] = functions.filter { wanted.contains(($0["entry"] as? String ?? "").lowercased()) }
+        }
+        answer["registry"] = ["entries_with_locals": entries.count] as [String: Any]
         return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
     }
 }
