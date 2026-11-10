@@ -5935,7 +5935,10 @@ public class Owner {
             JsonArray placed = new JsonArray();
             for (JsonElement element : entry.has("locals") ? entry.getAsJsonArray("locals") : new JsonArray()) {
                 JsonObject theirs = element.getAsJsonObject().deepCopy();
-                long offset = relative(theirs.get("first_use").getAsString());
+                // An offset is a 32-bit signed one: 0xFFFFFFFF is a first use
+                // one byte before the entry, as Ghidra keeps it for a local set
+                // in code laid out ahead of the function's start.
+                long offset = (int) relative(theirs.get("first_use").getAsString());
                 if (offset == 0) theirs.add("first_use", com.google.gson.JsonNull.INSTANCE);
                 else theirs.addProperty("first_use", hex(function.getEntryPoint().add(offset)));
                 placed.add(theirs);
@@ -6059,6 +6062,19 @@ public class Owner {
                     target = localFor(live, storage, firstUse, recordedType(typeText), why);
                     if (target == null) {
                         status = why[0];
+                        if ("ambiguous".equals(status)) {
+                            // What starts there now, for a reader to tell them apart.
+                            JsonArray there = new JsonArray();
+                            for (LiveLocal candidate : live) {
+                                if (!firstUse.equalsIgnoreCase(candidate.firstUse())) continue;
+                                JsonObject one = new JsonObject();
+                                one.addProperty("name", candidate.name());
+                                one.addProperty("storage", candidate.storage());
+                                one.addProperty("type", candidate.type() == null ? null : candidate.type().getDisplayName());
+                                there.add(one);
+                            }
+                            item.add("candidates", there);
+                        }
                     } else if (placement) {
                         status = target.storage().equals(storage) ? "intact" : "moved";
                     } else if (target.named() && target.name().equals(name)) {
@@ -6521,11 +6537,19 @@ public class Owner {
                 for (Iterator<HighSymbol> scan = after.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
                     HighSymbol symbol = scan.next();
                     if (symbol.getName().equals(asked) && symbol.getStorage().toString().equals(askedStorage)) still = true;
-                    if (symbol.getName().equals(applied)) holder = symbol.getStorage().toString();
+                    if (symbol.getName().equals(applied)) {
+                        Address held = symbol.getPCAddress();
+                        holder = symbol.getStorage() + (held == null ? "" : " at " + hex(held));
+                    }
                 }
                 if (still) {
+                    // The holder's storage is the hash of the variable the name
+                    // went to; the write is undone, so it exists no more and
+                    // naming it again finds nothing (issue 90a63322).
                     throw new Failure(409, "the name " + applied + " landed on another variable (" + holder + "), not on "
-                        + asked + " (" + askedStorage + "); nothing was changed. This can depend on the order: name the function's other "
+                        + asked + " (" + askedStorage + "). The write was undone, so nothing was changed, and that "
+                        + "storage was made by the write itself: it does not exist now, and naming it finds nothing. "
+                        + "This can depend on the order: name the function's other "
                         + "variables and try again, and only if it is still refused say what " + asked + " is in a comment");
                 }
             }

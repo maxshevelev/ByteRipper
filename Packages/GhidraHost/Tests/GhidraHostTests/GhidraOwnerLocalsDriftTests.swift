@@ -202,7 +202,9 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
             ["name": "SameSlot", "storage": locals[0]["storage"]!, "first_use": offset(locals[0]), "type": "undefined4"],
             ["name": "OldSlot", "storage": "EDI:4", "first_use": offset(locals[1]), "type": "undefined4"],
             ["name": "NoStart", "storage": "ESI:4", "first_use": "0x1", "type": "undefined4"],
-            ["name": "NoFrameSlot", "storage": "Stack[-0x7c0]:4", "first_use": "0x0", "type": "undefined4"]
+            ["name": "NoFrameSlot", "storage": "Stack[-0x7c0]:4", "first_use": "0x0", "type": "undefined4"],
+            // A first use before the entry, as Ghidra keeps an input register's: signed.
+            ["name": "BeforeEntry", "storage": "CR4:8", "first_use": "0xFFFFFFFF", "type": "UINTN"]
         ]
         let body = try JSONSerialization.data(withJSONObject: ["entries": [
             "test-entry": ["version": 3, "locals": entryLocals],
@@ -219,6 +221,8 @@ final class GhidraOwnerLocalsDriftTests: XCTestCase {
                        locals[1]["storage"] as? String, "\(answer)")
         XCTAssertEqual(byName["NoStart"]?["status"] as? String, "lost", "\(answer)")
         XCTAssertEqual(byName["NoFrameSlot"]?["status"] as? String, "lost", "\(answer)")
+        let before = String(format: "0x%llX", UInt64(entry.dropFirst(2), radix: 16)! - 1)
+        XCTAssertEqual(byName["BeforeEntry"]?["first_use"] as? String, before, "\(answer)")
         let now = try await read("/v1/function/\(entry)?summary=1")["locals"] as? [[String: Any]] ?? []
         XCTAssertFalse(now.contains { ["SameSlot", "OldSlot", "NoStart", "NoFrameSlot"].contains($0["name"] as? String ?? "") },
                        "nothing written: \(now)")
