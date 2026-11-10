@@ -18,15 +18,33 @@ extension GhidraHost {
             return id
         }
         func encoded(_ proposal: TypeProposalBook.Proposal) throws -> Data {
-            try TicketBook.encoder.encode(TypeProposalBook.Listed(proposal))
+            switch request.view {
+            case nil: return try TicketBook.encoder.encode(TypeProposalBook.Listed(proposal))
+            case .summary: return try TicketBook.encoder.encode(TypeProposalBook.Summary(proposal))
+            case .proposal: return try TicketBook.encoder.encode(TypeProposalBook.Summary(proposal, withTypes: true))
+            }
         }
         switch request.action {
         case .list:
             let rows = await book.list(state: request.state, module: request.module)
-            return try TicketBook.encoder.encode(rows.map(TypeProposalBook.Listed.init))
+            if request.view == nil { return try TicketBook.encoder.encode(rows.map(TypeProposalBook.Listed.init)) }
+            return try TicketBook.encoder.encode(rows.map { TypeProposalBook.Summary($0) })
         case .read:
             guard let proposal = await book.proposal(try id()) else {
                 throw GhidraHostError(.refused, "no type proposal \(try id())", status: 404)
+            }
+            if let wanted = request.entry?.trimmingCharacters(in: .whitespaces), !wanted.isEmpty {
+                guard let entry = proposal.entries?[wanted] else {
+                    let held = (proposal.entries ?? [:]).keys.sorted().joined(separator: ", ")
+                    throw GhidraHostError(.refused, "proposal \(proposal.id) has no entry \(wanted)"
+                                          + (held.isEmpty ? "" : "; it has \(held)"), status: 404)
+                }
+                struct One: Encodable {
+                    let proposal: String
+                    let id: String
+                    let entry: TypeProposalBook.Entry
+                }
+                return try TicketBook.encoder.encode(One(proposal: proposal.id, id: wanted, entry: entry))
             }
             return try encoded(proposal)
         case .propose:

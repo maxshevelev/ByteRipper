@@ -12,21 +12,21 @@ extension GhidraHost {
         public var findings: [EDK2Evidence.Finding]
     }
 
-    /// The warnings for the offered EDK2 functions, or why they could not be
-    /// checked. A checkout not there yet starts its fetch, which the next
-    /// publish reads.
-    func evidenceCheck(_ offered: [LibraryProposal]) -> (warnings: [EvidenceWarning], unchecked: String?) {
+    /// The warnings for the offered EDK2 functions, how many were checked, or
+    /// why they could not be. A checkout not there yet starts its fetch,
+    /// which the next publish reads.
+    func evidenceCheck(_ offered: [LibraryProposal]) -> (warnings: [EvidenceWarning], checked: Int, unchecked: String?) {
         let edk2 = offered.filter { $0.kind == "edk2" }
-        guard !edk2.isEmpty, let checkout = configuration.edk2Sources else { return ([], nil) }
+        guard !edk2.isEmpty, let checkout = configuration.edk2Sources else { return ([], 0, nil) }
         guard FileManager.default.fileExists(atPath: checkout.appendingPathComponent(EDK2Evidence.listingName).path)
         else {
             let failed = edk2FetchError
             startEDK2Fetch(into: checkout)
-            return ([], "the \(UEFITypes.edk2Tag) library sources are not here yet; they are being fetched, "
+            return ([], 0, "the \(UEFITypes.edk2Tag) library sources are not here yet; they are being fetched, "
                     + "and a later publish checks the Evidence lines"
                     + (failed.map { " (the last fetch failed: \($0))" } ?? ""))
         }
-        return (Self.evidenceWarnings(edk2, checkout: checkout), nil)
+        return (Self.evidenceWarnings(edk2, checkout: checkout), edk2.count, nil)
     }
 
     static func evidenceWarnings(_ proposals: [LibraryProposal], checkout: URL) -> [EvidenceWarning] {

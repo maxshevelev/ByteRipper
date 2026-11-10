@@ -139,6 +139,7 @@ public struct PublishAnswer: Codable, Sendable {
     /// EDK2 functions whose `Evidence:` line does not hold at the pinned tag.
     public var evidence: [GhidraHost.EvidenceWarning]?
     public var evidenceUnchecked: String?
+    public var evidenceChecked: Int?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -154,6 +155,7 @@ public struct PublishAnswer: Codable, Sendable {
         typesVersion = publication?.typesVersion
         evidence = publication.map(\.evidence).flatMap { $0.isEmpty ? nil : $0 }
         evidenceUnchecked = publication?.evidenceUnchecked
+        evidenceChecked = publication.flatMap { $0.evidenceChecked > 0 ? $0.evidenceChecked : nil }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -170,6 +172,7 @@ public struct PublishAnswer: Codable, Sendable {
         case typesVersion = "types_version"
         case evidence
         case evidenceUnchecked = "evidence_unchecked"
+        case evidenceChecked = "evidence_checked"
     }
 }
 

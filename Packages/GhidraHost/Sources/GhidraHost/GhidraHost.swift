@@ -101,6 +101,9 @@ public actor GhidraHost {
         public var evidence: [EvidenceWarning] = []
         /// Why the citations could not be checked, when they could not.
         public var evidenceUnchecked: String?
+        /// How many offered EDK2 functions had their citation checked: with no
+        /// `evidence`, every one of them held.
+        public var evidenceChecked = 0
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
@@ -620,6 +623,7 @@ public actor GhidraHost {
         publication.projectError = journal.projectError
         publication.evidence = evidence.warnings
         publication.evidenceUnchecked = evidence.unchecked
+        publication.evidenceChecked = evidence.checked
         if !byHost { noteActivity(module, holder: holder, call: "publish", kind: .publish, revision: journal.rev) }
         return publication
     }
@@ -933,6 +937,7 @@ public actor GhidraHost {
             let evidence = evidenceCheck(offered)
             if !evidence.warnings.isEmpty { preview["evidence"] = try Self.plain(evidence.warnings) }
             if let unchecked = evidence.unchecked { preview["evidence_unchecked"] = unchecked }
+            if evidence.checked > 0 { preview["evidence_checked"] = evidence.checked }
             if let refusal = LibraryRefusal.refusal(completion.refused) {
                 preview["library_refused"] = refusal
             } else if !offered.isEmpty {

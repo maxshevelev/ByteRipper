@@ -160,8 +160,86 @@ public actor TypeProposalBook {
         enum Extra: String, CodingKey { case agrees, objections, needed = "agrees_needed" }
     }
 
+    /// A proposal in a size an agent's answer holds: the types it would
+    /// replace by name, and each registry entry by id with the names of the
+    /// fields it changes and their size — `entry` reads one in full.
+    public struct Summary: Encodable, Sendable {
+        public let proposal: Proposal
+        /// The types' C too: they are a type's lines, not a function's.
+        public let withTypes: Bool
+        public init(_ proposal: Proposal, withTypes: Bool = false) {
+            self.proposal = proposal
+            self.withTypes = withTypes
+        }
+
+        struct EntryRow: Encodable {
+            let id: String
+            let name: String
+            let proposedName: String?
+            let heldBy: String?
+            let version: Int?
+            let fields: [String]
+            /// The bytes of the held and offered texts together.
+            let bytes: Int
+            enum CodingKeys: String, CodingKey {
+                case id, name, version, fields, bytes
+                case proposedName = "proposed_name"
+                case heldBy = "held_by"
+            }
+        }
+
+        enum Keys: String, CodingKey {
+            case id, at, module, name, bits, names, origins, entries, author, holder, reason, votes, state, decided
+            case applied, agrees, objections
+            case moduleC = "module_c"
+            case sharedC = "shared_c"
+            case needed = "agrees_needed"
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var out = encoder.container(keyedBy: Keys.self)
+            try out.encode(proposal.id, forKey: .id)
+            try out.encode(proposal.at, forKey: .at)
+            try out.encode(proposal.module, forKey: .module)
+            try out.encodeIfPresent(proposal.name, forKey: .name)
+            try out.encode(proposal.bits, forKey: .bits)
+            try out.encode(proposal.names, forKey: .names)
+            try out.encode(proposal.origins, forKey: .origins)
+            if withTypes {
+                try out.encode(proposal.moduleC, forKey: .moduleC)
+                try out.encode(proposal.sharedC, forKey: .sharedC)
+            }
+            if let entries = proposal.entries {
+                try out.encode(entries.keys.sorted().map { id -> EntryRow in
+                    let entry = entries[id]!
+                    return EntryRow(id: id, name: entry.name, proposedName: entry.proposedName, heldBy: entry.heldBy,
+                                    version: entry.version, fields: entry.fields.map(\.field),
+                                    bytes: entry.fields.reduce(0) { $0 + $1.held.utf8.count + $1.offered.utf8.count })
+                }, forKey: .entries)
+            }
+            try out.encode(proposal.author, forKey: .author)
+            try out.encode(proposal.holder, forKey: .holder)
+            try out.encode(proposal.reason, forKey: .reason)
+            try out.encode(proposal.votes, forKey: .votes)
+            try out.encode(proposal.state, forKey: .state)
+            try out.encodeIfPresent(proposal.decided, forKey: .decided)
+            try out.encodeIfPresent(proposal.applied, forKey: .applied)
+            try out.encode(proposal.agrees, forKey: .agrees)
+            try out.encode(proposal.objections, forKey: .objections)
+            try out.encode(TypeProposalBook.agreesNeeded, forKey: .needed)
+        }
+    }
+
     /// One call, as a tool or a client sends it.
     public struct Request: Codable, Equatable, Sendable {
+        /// How much of a proposal an answer carries. Nil is all of it, as the
+        /// console reads it.
+        public enum View: String, Codable, Sendable {
+            /// `Summary`: the list, and the answer to a propose or a vote.
+            case summary
+            /// One proposal: its types' C, its entries summarized.
+            case proposal
+        }
         public enum Action: String, Codable, Sendable {
             /// Proposals, filtered by `state` and `module`.
             case list
@@ -182,9 +260,13 @@ public actor TypeProposalBook {
         public var choice: Choice?
         public var text: String?
         public var reason: String?
+        public var view: View?
+        /// With `id`: one registry entry of the proposal, in full.
+        public var entry: String?
 
         public init(action: Action, agent: String? = nil, module: String? = nil, id: String? = nil,
-                    state: String? = nil, choice: Choice? = nil, text: String? = nil, reason: String? = nil) {
+                    state: String? = nil, choice: Choice? = nil, text: String? = nil, reason: String? = nil,
+                    view: View? = nil, entry: String? = nil) {
             self.action = action
             self.agent = agent
             self.module = module
@@ -193,6 +275,8 @@ public actor TypeProposalBook {
             self.choice = choice
             self.text = text
             self.reason = reason
+            self.view = view
+            self.entry = entry
         }
     }
 

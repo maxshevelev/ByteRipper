@@ -195,7 +195,9 @@ modules, read `ghidra_type_proposals` with `state: "open"`. For each one you
 did not write:
 
 - read both texts in the proposal — each type's, each entry's changed fields —
-  and the author's `reason`, then the code: the module's instructions at the
+  and the author's `reason`, then the code. The list names each entry and the
+  fields it changes; read the texts with `id` and `entry`, one entry at a time.
+  Then the code: the module's instructions at the
   addresses named, and the uses in other modules (`ghidra_type_uses`, the
   entry's modules in `library_registry`, then their functions);
 - `ghidra_type_vote` `agree` when the instructions prove the module's layout

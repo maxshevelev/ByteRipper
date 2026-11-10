@@ -24,11 +24,16 @@ extension GhidraTools {
                 the entry is (`held_by`); the author's `reason`, the votes, and its \
                 `state`: `open` (waiting, or held by an objection), `agreed` (\(TypeProposalBook.agreesNeeded) \
                 agents other than the author agree and none objects: the module's next publish applies it), \
-                `applied`, `rejected` (by the person), `withdrawn`. With `id`, that proposal; otherwise \
-                narrowed by `state` and `module`. A verifier reads `state: "open"` for what waits for its vote.
+                `applied`, `rejected` (by the person), `withdrawn`. Without `id`: the proposals narrowed by \
+                `state` and `module`, each with its types by name and its entries by id — the `fields` each \
+                changes and their size in `bytes` — but no texts. With `id`: that proposal, the types' C \
+                included, the entries as in the list. With `id` and `entry`: that entry's fields in full, \
+                `held` and `offered` — read each before you vote. A verifier reads `state: "open"` for what \
+                waits for its vote.
                 """,
             inputSchema: AgentSchema.object([
                 "id": AgentSchema.string("One proposal's `id`."),
+                "entry": AgentSchema.string("With `id`: one registry entry's id, as the proposal lists it, for its fields in full."),
                 "state": AgentSchema.choice(TypeProposalBook.State.allCases.map(\.rawValue), "Only proposals in this state."),
                 "module": moduleProperty
             ]),
@@ -36,9 +41,12 @@ extension GhidraTools {
         ) { call in
             let arguments = call.arguments
             let id = try arguments.optionalString("id")
+            let entry = try arguments.optionalString("entry")
+            if entry != nil, id == nil { throw AgentToolError("`entry` reads one entry of the proposal `id` names.") }
             let request = TypeProposalBook.Request(action: id == nil ? .list : .read,
                                                    module: try arguments.optionalString("module"), id: id,
-                                                   state: try arguments.optionalString("state"))
+                                                   state: try arguments.optionalString("state"),
+                                                   view: id == nil ? .summary : .proposal, entry: entry)
             return try await answer { try await backend.typeProposals(request) }
         }
     }
@@ -63,8 +71,9 @@ extension GhidraTools {
                 proposed and nobody changed the shared ones meanwhile; otherwise it is refused as before, and \
                 you propose again. The modules that wrote the replaced definitions, and every other module \
                 whose review uses them, then get a remark on their tickets. One live proposal per module, and per type: a refusal names the one in the way. \
-                The person can agree or reject any proposal in the server's console. The whole rule is the \
-                review skill's "Changing a shared type".
+                The person can agree or reject any proposal in the server's console. Answers with the \
+                proposal's `id` and `state`, its types by name and its entries by id, as \
+                `ghidra_type_proposals` lists it. The whole rule is the review skill's "Changing a shared type".
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
@@ -76,7 +85,7 @@ extension GhidraTools {
             let arguments = call.arguments
             let request = TypeProposalBook.Request(action: .propose, agent: try arguments.string("agent"),
                                                    module: try arguments.string("module"),
-                                                   reason: try arguments.string("reason"))
+                                                   reason: try arguments.string("reason"), view: .summary)
             return try await answer { try await backend.typeProposals(request) }
         }
     }
@@ -96,7 +105,7 @@ extension GhidraTools {
                 server or through ByteRipper on any Mac; agents are told apart by `agent` alone, so vote under \
                 one name. Your later vote replaces your earlier one. The author does not vote. `withdraw` is \
                 the author's: it takes the proposal back. The whole rule is the review skill's "Changing a \
-                shared type". Answers with the proposal, its `state`, `agrees` and `objections`.
+                shared type". Answers with the proposal as `ghidra_type_proposals` lists it: its `state`, `agrees` and `objections`.
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
@@ -110,7 +119,7 @@ extension GhidraTools {
             let choice = try arguments.string("choice")
             var request = TypeProposalBook.Request(action: .vote, agent: try arguments.string("agent"),
                                                    id: try arguments.string("id"),
-                                                   text: try arguments.optionalString("text"))
+                                                   text: try arguments.optionalString("text"), view: .summary)
             if choice == "withdraw" {
                 request.action = .withdraw
             } else {

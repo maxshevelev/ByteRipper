@@ -1369,7 +1369,8 @@ public enum GhidraTools {
                 `edk2` library functions offered whose plate's `Evidence: <Function>, <path>:<line>` is not \
                 the function's definition at edk2-stable202608: `no_evidence`, `unparseable`, \
                 `file_not_at_tag`, `not_in_checkout`, or `not_definition` with `defined_at` where the file \
-                defines it; a warning, the revision is stored. The review's types \
+                defines it; a warning, the revision is stored. `evidence_checked` counts the functions \
+                checked: with no `evidence`, every citation held. The review's types \
                 are shared by the registry's rule, and the store keeps the shared archive in versions: a \
                 type new to it is added; the same type is nothing; an addition — an enum member, a real \
                 name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member \
