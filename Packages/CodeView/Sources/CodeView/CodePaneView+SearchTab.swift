@@ -99,6 +99,7 @@ extension CodePaneView {
         view.setSelectedRange(range)
         view.scrollRangeToVisible(range)
         if view.window != nil { view.showFindIndicator(for: range) }
+        showFindPlate(range, in: view)
     }
 
     // MARK: - For tests

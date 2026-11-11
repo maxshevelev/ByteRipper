@@ -33,6 +33,7 @@ extension CodePaneView {
     /// the height back.
     public func hideFindBar() {
         findBarSlot.bar = nil
+        findPlate.hide()
         finder.cancel()
         finder.endHighlighting()
     }
@@ -101,6 +102,7 @@ extension CodePaneView {
     /// The set goes, and a search the reader is running is indexed again over
     /// the new text, so its matches show there too.
     func findTextMayHaveChanged() {
+        findPlate.check()
         // Without the bar, the Search tab's occurrences are still drawn.
         guard findBarSlot.bar != nil else { return paintFindMatches() }
         let side = findSide
@@ -126,6 +128,25 @@ extension CodePaneView {
         selectedFindMatch = match
         view.scrollRangeToVisible(match)
         if view.window != nil { view.showFindIndicator(for: match) }
+        showFindPlate(match, in: view)
+    }
+
+    /// The yellow stays on `match` after the indicator has bounced, until
+    /// the selection leaves it.
+    func showFindPlate(_ match: NSRange, in view: NSTextView) {
+        watchSelectionForFindPlate()
+        findPlate.show(match, in: view)
+    }
+
+    private func watchSelectionForFindPlate() {
+        guard findPlateWatch.isEmpty else { return }
+        for view in [cTextView, descriptionView.textView] as [NSTextView] {
+            findPlateWatch.append(NotificationCenter.default.addObserver(
+                forName: NSTextView.didChangeSelectionNotification, object: view, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.findPlate.check() }
+            })
+        }
     }
 
     /// A search that found nothing: the match an earlier search selected is
@@ -133,6 +154,7 @@ extension CodePaneView {
     /// began. A selection the reader made is left alone.
     public func dropSelectedFindMatch() {
         defer { selectedFindMatch = nil }
+        findPlate.hide()
         guard let match = selectedFindMatch, let side = findSearched?.side else { return }
         let view = findTextView(side)
         guard view.selectedRange() == match else { return }
@@ -199,6 +221,12 @@ extension CodePaneView {
     static let findMatchFill = NSColor.unemphasizedSelectedTextBackgroundColor
 
     // MARK: - For tests
+
+    /// The match the yellow plate stands on, and in which side; nil without one.
+    var findPlateRange: (side: FindSide, range: NSRange)? {
+        guard findPlate.isShown, let range = findPlate.range else { return nil }
+        return (findPlate.textView === cTextView ? .c : .description, range)
+    }
 
     /// The ranges the side's text view has under the find fill.
     func paintedFindRanges(_ side: FindSide) -> [NSRange] {

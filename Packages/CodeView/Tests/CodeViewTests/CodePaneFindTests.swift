@@ -126,8 +126,16 @@ final class CodePaneFindTests: XCTestCase {
         pane.showFindMatch(range)
         XCTAssertEqual(text.substring(with: pane.cTextView.selectedRange()), "Status")
         XCTAssertEqual(pane.findSelection, "Status", "what ⌘E takes")
+        XCTAssertEqual(pane.findPlateRange?.side, .c, "the yellow stays on the match")
+        XCTAssertEqual(pane.findPlateRange?.range, pane.cTextView.selectedRange())
+
+        pane.cTextView.setSelectedRange(NSRange(location: 0, length: 0))
+        XCTAssertNil(pane.findPlateRange, "the selection moved off: the yellow goes")
+        pane.showFindMatch(range)
+        XCTAssertNotNil(pane.findPlateRange)
 
         pane.hideFindBar()
+        XCTAssertNil(pane.findPlateRange, "Done takes the yellow away")
         XCTAssertEqual(pane.paintedFindRanges(.c), [], "Done takes the showing away")
     }
 
@@ -239,6 +247,10 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual(pane.selectedFunction?.name, "First")
         XCTAssertEqual(pane.findSelection, "Status")
         XCTAssertEqual(pane.paintedFindRanges(.c).count, 4)
+        XCTAssertEqual(pane.findPlateRange?.range, pane.cTextView.selectedRange(), "the yellow on it")
+        pane.chooseSearchRowForTests(6)
+        XCTAssertEqual(pane.findPlateRange?.side, .c, "another function: the yellow moves with it")
+        XCTAssertEqual(pane.findPlateRange?.range, pane.cTextView.selectedRange())
 
         pane.searchAllFunctions(TextQuery(text: ""))
         XCTAssertEqual(pane.paintedFindRanges(.c), [])

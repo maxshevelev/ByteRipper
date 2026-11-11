@@ -195,6 +195,10 @@ import ToolModuleKit
     var findSearched: (side: FindSide, text: String)?
     /// The match a search last selected, while it is still the selection.
     var selectedFindMatch: NSRange?
+    /// The yellow that stays on the match a search put the reader on.
+    let findPlate = FindMatchPlate()
+    /// The selection watches that take the plate off when the reader moves.
+    var findPlateWatch: [NSObjectProtocol] = []
     /// The search's showing changed: the app re-reads its count.
     public var onFindChanged: (() -> Void)?
     /// The navigator's Search tab: a search of every function's C and the
