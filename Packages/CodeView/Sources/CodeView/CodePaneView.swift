@@ -118,7 +118,7 @@ import ToolModuleKit
     private var pendingFunctionPopover: DispatchWorkItem?
     private var clicksInCode = 0
     private var callersPopover: CodeCallersPopover?
-    private let table = NSTableView()
+    private let table = CodeListingTableView()
     private let tableScroll = NSScrollView()
     private let cTextView = CodeTextView()
     private let cScroll = NSScrollView()
@@ -453,6 +453,9 @@ import ToolModuleKit
     private(set) var descriptionButtonSymbol = ""
     func clickDescriptionButton() { descriptionButton.performClick(nil) }
     func clickCloseDescription() { descriptionView.closeButton.performClick(nil) }
+    /// The C's text view and the ASM listing, for the tests of the current line.
+    var cTextViewForTests: CodeTextView { cTextView }
+    var listingForTests: NSTableView { table }
     var descriptionCloseFrame: NSRect { convert(descriptionView.closeButton.bounds, from: descriptionView.closeButton) }
     var descriptionFrameInPane: NSRect { convert(descriptionView.bounds, from: descriptionView) }
     var codeAreaFrameInPane: NSRect { convert(codeContent.bounds, from: codeContent) }
@@ -4396,6 +4399,7 @@ import ToolModuleKit
         spaced.addAttribute(.baselineOffset, value: Self.codeLinePadding, range: whole)
         cTextView.highlightInset = Self.codeLinePadding
         cTextView.hover(at: nil)
+        if cTextView.string != spaced.string { cTextView.textWasReplaced() }
         cTextView.textStorage?.setAttributedString(spaced)
         // Laid out whole, and the view as tall as the text, before anything
         // scrolls in it: the lines are taller than the font's, and a view
@@ -5380,6 +5384,10 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
     }
 
     public func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        if tableView === table {
+            let reused = tableView.makeView(withIdentifier: CodeListingRowView.identifier, owner: nil)
+            return reused as? CodeListingRowView ?? CodeListingRowView()
+        }
         guard tableView === functionTable else { return nil }
         let reused = tableView.makeView(withIdentifier: CodeNavigatorRowView.identifier, owner: nil)
         let rowView = reused as? CodeNavigatorRowView ?? CodeNavigatorRowView()
@@ -5751,6 +5759,68 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         }
     }
 
+}
+
+/// The ASM listing: the arrow keys move the selected instruction as a
+/// table's do, and Page Up, Page Down, Home and End move it too — a page, or
+/// to the first or the last — as they move the C's current line.
+final class CodeListingTableView: NSTableView {
+    private func select(_ row: Int) {
+        guard numberOfRows > 0 else { return }
+        let row = min(max(row, 0), numberOfRows - 1)
+        selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        scrollRowToVisible(row)
+    }
+
+    private var rowsPerPage: Int {
+        max(1, Int((enclosingScrollView?.contentView.bounds.height ?? visibleRect.height) / max(rowHeight, 1)) - 1)
+    }
+
+    override func pageUp(_ sender: Any?) { select(max(selectedRow, 0) - rowsPerPage) }
+    override func pageDown(_ sender: Any?) { select(max(selectedRow, 0) + rowsPerPage) }
+    override func scrollPageUp(_ sender: Any?) { pageUp(sender) }
+    override func scrollPageDown(_ sender: Any?) { pageDown(sender) }
+    override func moveToBeginningOfDocument(_ sender: Any?) { select(0) }
+    override func moveToEndOfDocument(_ sender: Any?) { select(numberOfRows - 1) }
+    override func scrollToBeginningOfDocument(_ sender: Any?) { select(0) }
+    override func scrollToEndOfDocument(_ sender: Any?) { select(numberOfRows - 1) }
+
+    override func keyDown(with event: NSEvent) {
+        // A table pages and goes home by scrolling alone; the listing moves
+        // its selected instruction, as the C moves its current line.
+        switch event.specialKey {
+        case .pageUp?: pageUp(nil)
+        case .pageDown?: pageDown(nil)
+        case .home?: select(0)
+        case .end?: select(numberOfRows - 1)
+        default: super.keyDown(with: event)
+        }
+    }
+}
+
+/// A row of the ASM listing. The selected instruction wears the C's
+/// current-line colour, not the accent: it is where the reader is, and its
+/// tokens keep their colours on it.
+final class CodeListingRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("code-listing-row")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identifier = Self.identifier
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var isEmphasized: Bool {
+        get { false }
+        set {}
+    }
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        CodeColors.currentLine.setFill()
+        bounds.fill()
+    }
 }
 
 /// A navigator row. The call tree selects a function at each of its places, and

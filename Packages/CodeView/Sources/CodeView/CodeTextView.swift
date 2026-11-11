@@ -65,8 +65,92 @@ final class CodeTextView: NSTextView {
     /// Escape, which a text view otherwise sends as `complete:`.
     var onEscape: (() -> Void)?
 
+    // MARK: - The current line
+
+    // help: panel.code.current-line
+
+    /// The line the reader is on: the one last clicked, moved by the arrow
+    /// keys, Page Up and Page Down, Home and End. The C has no caret — it is
+    /// read, not edited — so this band says where the reader is, as Xcode's
+    /// current line does. Nil until the first click; a new text drops it.
+    private(set) var currentLine: NSRange? {
+        didSet { if currentLine != oldValue { needsDisplay = true } }
+    }
+
+    /// The line holding `character`, as `currentLine`.
+    func setCurrentLine(containing character: Int) {
+        let text = string as NSString
+        guard text.length > 0 else { currentLine = nil; return }
+        currentLine = text.lineRange(for: NSRange(location: min(max(character, 0), text.length - 1), length: 0))
+    }
+
+    /// The lines' starts, top to bottom.
+    private var lineStarts: [Int] {
+        let text = string as NSString
+        var starts: [Int] = []
+        var index = 0
+        while index < text.length {
+            starts.append(index)
+            index = NSMaxRange(text.lineRange(for: NSRange(location: index, length: 0)))
+        }
+        return starts
+    }
+
+    /// The number of lines one page of the view shows.
+    private var linesPerPage: Int {
+        let line = layoutManager.map { $0.defaultLineHeight(for: font ?? .systemFont(ofSize: 13)) } ?? 16
+        let shown = enclosingScrollView?.contentView.bounds.height ?? visibleRect.height
+        // The paragraph style may space the lines further: measure one.
+        let measured: CGFloat = {
+            guard let layoutManager, layoutManager.numberOfGlyphs > 0 else { return line }
+            return layoutManager.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).height
+        }()
+        return max(1, Int(shown / max(measured, 1)) - 1)
+    }
+
+    /// Moves the current line `by` lines (negative: up), or to the first or
+    /// the last, and brings it into view. With no current line yet the move
+    /// starts from the top of what is shown.
+    private func moveCurrentLine(by delta: Int? = nil, toEnd: Bool? = nil) {
+        let starts = lineStarts
+        guard !starts.isEmpty else { return }
+        let here: Int = {
+            if let currentLine, let index = starts.lastIndex(where: { $0 <= currentLine.location }) { return index }
+            let top = characterIndexForInsertion(at: NSPoint(x: textContainerOrigin.x, y: visibleRect.minY + 1))
+            return starts.lastIndex { $0 <= top } ?? 0
+        }()
+        let target: Int
+        if let toEnd { target = toEnd ? starts.count - 1 : 0 }
+        else { target = min(max(here + (delta ?? 0), 0), starts.count - 1) }
+        setCurrentLine(containing: starts[target])
+        if let currentLine {
+            setSelectedRange(NSRange(location: currentLine.location, length: 0))
+            scrollRangeToVisible(currentLine)
+        }
+    }
+
+    override func moveUp(_ sender: Any?) { moveCurrentLine(by: -1) }
+    override func moveDown(_ sender: Any?) { moveCurrentLine(by: 1) }
+    override func pageUp(_ sender: Any?) { moveCurrentLine(by: -linesPerPage) }
+    override func pageDown(_ sender: Any?) { moveCurrentLine(by: linesPerPage) }
+    override func scrollPageUp(_ sender: Any?) { moveCurrentLine(by: -linesPerPage) }
+    override func scrollPageDown(_ sender: Any?) { moveCurrentLine(by: linesPerPage) }
+    override func moveToBeginningOfDocument(_ sender: Any?) { moveCurrentLine(toEnd: false) }
+    override func moveToEndOfDocument(_ sender: Any?) { moveCurrentLine(toEnd: true) }
+    override func scrollToBeginningOfDocument(_ sender: Any?) { moveCurrentLine(toEnd: false) }
+    override func scrollToEndOfDocument(_ sender: Any?) { moveCurrentLine(toEnd: true) }
+
+    /// A new text, as the pane sets one: the reader is on no line of it yet.
+    func textWasReplaced() { currentLine = nil }
+
     override func mouseDown(with event: NSEvent) {
-        let character = characterIndex(atViewPoint: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        // The line clicked is the reader's line, wherever on it the click
+        // fell — on a name, past the line's end — and whatever it does next.
+        if !event.modifierFlags.contains(.control), (string as NSString).length > 0 {
+            setCurrentLine(containing: characterIndexForInsertion(at: point))
+        }
+        let character = characterIndex(atViewPoint: point)
         if onClick?(character, event) == true { return }
         // A link is followed by the pane, on ⌘-click or a double click; the
         // text view's own handling of a plain click would follow it too.
@@ -173,6 +257,20 @@ final class CodeTextView: NSTextView {
         super.drawBackground(in: rect)
         guard let layoutManager, let textContainer else { return }
         let origin = textContainerOrigin
+        // The current line, under everything: the whole width of the view.
+        if let currentLine, NSMaxRange(currentLine) <= (string as NSString).length {
+            let glyphs = layoutManager.glyphRange(forCharacterRange: currentLine, actualCharacterRange: nil)
+            if glyphs.length > 0 {
+                let first = layoutManager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+                let last = layoutManager.lineFragmentRect(forGlyphAt: NSMaxRange(glyphs) - 1, effectiveRange: nil)
+                let band = NSRect(x: bounds.minX, y: first.minY + origin.y,
+                                  width: bounds.width, height: last.maxY - first.minY)
+                if band.intersects(rect) {
+                    CodeColors.currentLine.setFill()
+                    band.fill()
+                }
+            }
+        }
         func boxes(_ range: NSRange, inset: CGFloat, radius: CGFloat, fill: NSColor) {
             guard range.location + range.length <= (string as NSString).length else { return }
             let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)

@@ -133,6 +133,17 @@ a cut's offset and description.
   focus, and that may be another pane.
 - **Toolbar items** use plain `NSToolbarItem` images. A view item draws small.
 
+## 4a. The reader's line in read-only text
+
+A view that is read and not edited has no caret. The line the reader is on
+is marked instead with `CodeColors.currentLine`, Xcode's current-line colour,
+across the whole width. That line is the one last clicked, or the selected
+row of a list of lines. It is drawn under everything else on the line, and the
+text keeps its own colours on it. **↑ ↓** move it a line, **Page Up** and
+**Page Down** a screen, **Home** and **End** to the first and the last line.
+The C (`CodeTextView`) and the ASM listing (`CodeListingTableView`,
+`CodeListingRowView`) follow this rule.
+
 ## 5. Words on a control
 
 - Every user-visible string goes through `L("…")`.

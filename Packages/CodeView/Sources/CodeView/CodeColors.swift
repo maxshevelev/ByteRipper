@@ -131,6 +131,12 @@ enum CodeColors {
     }
     static let symbolHighlightRadius: CGFloat = 3
 
+    /// Behind the line the reader is on — the C line last clicked or moved
+    /// to, the listing's selected instruction: Xcode's current-line colour
+    /// (#E8F2FF in Default (Light), #23252B in Default (Dark)), the whole
+    /// width of the code, under everything else drawn there.
+    static let currentLine = themed(light: 0xE8F2FF, dark: 0x23252B)
+
     /// The plate over a function marked New — a yellow notice as macOS draws
     /// one: a pale amber ground, a hairline of a deeper amber, an amber sign.
     static let newMarkBannerBackground = themed(light: 0xFFF8DE, dark: 0x3A331A)

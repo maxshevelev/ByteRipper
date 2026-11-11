@@ -2580,6 +2580,108 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(short.codeTextWidthForTest, column * CGFloat(CodePaneView.longestCodeLine))
     }
 
+    /// The C has no caret, but the line last clicked is the reader's line:
+    /// drawn in Xcode's current-line colour, moved by the arrow keys, Page Up
+    /// and Page Down, Home and End. The ASM listing's selected instruction
+    /// wears the same colour, and those keys move it too.
+    func testTheCurrentLineFollowsTheClickAndTheKeys() throws {
+        let c = (["void First(void)", "{"] + (1...60).map { "  Step\($0)();" } + ["}"]).joined(separator: "\n") + "\n"
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "First", "c": c,
+                 "instructions": (0..<40).map { ["address": String(format: "0x%X", 0x220 + $0), "bytes": "90",
+                                                  "mnemonic": "NOP", "text": "NOP"] }],
+            ]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.layoutSubtreeIfNeeded()
+        let text = view.cTextViewForTests
+        let lines = text.string.components(separatedBy: "\n")
+        func line(_ range: NSRange?) -> String? {
+            range.map { (text.string as NSString).substring(with: $0).trimmingCharacters(in: .newlines) }
+        }
+        XCTAssertNil(text.currentLine, "no line before the first click")
+
+        // A click on the fourth line, past its end.
+        let fourth = (text.string as NSString).range(of: lines[3])
+        let glyphs = try XCTUnwrap(text.layoutManager).glyphRange(forCharacterRange: fourth, actualCharacterRange: nil)
+        let box = try XCTUnwrap(text.layoutManager).boundingRect(forGlyphRange: glyphs, in: try XCTUnwrap(text.textContainer))
+        let point = text.convert(NSPoint(x: box.maxX + 40 + text.textContainerOrigin.x,
+                                         y: box.midY + text.textContainerOrigin.y), to: nil)
+        func mouse(_ type: NSEvent.EventType) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        // The window of a test is never the key one, which loses a first
+        // click: the text view takes the click itself.
+        NSApp.postEvent(mouse(.leftMouseUp), atStart: false)
+        text.mouseDown(with: mouse(.leftMouseDown))
+        // The click's mouse-up stays the app's current event in a test
+        // process, which nothing else moves on; a later test that asks
+        // whether it is inside a click would hear this one.
+        NSApp.postEvent(NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [],
+                                           timestamp: 0, windowNumber: 0, context: nil, subtype: 0,
+                                           data1: 0, data2: 0)!, atStart: true)
+        _ = NSApp.nextEvent(matching: .applicationDefined, until: Date(), inMode: .default, dequeue: true)
+        XCTAssertEqual(line(text.currentLine), lines[3], "the line clicked")
+        window.makeFirstResponder(text)
+
+        func press(_ key: Int, _ code: UInt16) {
+            let characters = String(Character(UnicodeScalar(key)!))
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.function],
+                                         timestamp: ProcessInfo.processInfo.systemUptime,
+                                         windowNumber: window.windowNumber, context: nil, characters: characters,
+                                         charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
+            window.sendEvent(event)
+        }
+        press(NSDownArrowFunctionKey, 125)
+        XCTAssertEqual(line(text.currentLine), lines[4], "down one line")
+        press(NSUpArrowFunctionKey, 126)
+        press(NSUpArrowFunctionKey, 126)
+        XCTAssertEqual(line(text.currentLine), lines[2], "up two")
+        press(NSPageDownFunctionKey, 121)
+        let paged = try XCTUnwrap(lines.firstIndex(of: try XCTUnwrap(line(text.currentLine))))
+        XCTAssertGreaterThanOrEqual(paged, 2 + 5, "a page down: a view of lines, less one")
+        XCTAssertTrue(text.visibleRect.contains(text.firstRect(forCharacterRange: try XCTUnwrap(text.currentLine),
+                                                               actualRange: nil).isEmpty ? .zero
+                      : try XCTUnwrap(text.layoutManager).boundingRect(
+                          forGlyphRange: try XCTUnwrap(text.layoutManager).glyphRange(forCharacterRange: try XCTUnwrap(text.currentLine),
+                                                                                  actualCharacterRange: nil),
+                          in: try XCTUnwrap(text.textContainer)).offsetBy(dx: 0, dy: text.textContainerOrigin.y).insetBy(dx: 1, dy: 1)),
+                      "and in sight")
+        press(NSPageUpFunctionKey, 116)
+        XCTAssertEqual(line(text.currentLine), lines[2], "a page up comes back")
+        press(NSEndFunctionKey, 119)
+        XCTAssertEqual(line(text.currentLine), "}", "End: the last line")
+        press(NSHomeFunctionKey, 115)
+        XCTAssertEqual(line(text.currentLine), lines[0], "Home: the first line")
+
+        // The listing: its selected instruction in the same colour, the keys too.
+        view.restore(function: 0, instruction: 0, showsC: false)
+        view.layoutSubtreeIfNeeded()
+        let listing = view.listingForTests
+        window.makeFirstResponder(listing)
+        let row = try XCTUnwrap(listing.rowView(atRow: listing.selectedRow, makeIfNecessary: true))
+        XCTAssertTrue(row is CodeListingRowView)
+        XCTAssertFalse(row.isEmphasized, "the tokens keep their colours")
+        press(NSEndFunctionKey, 119)
+        XCTAssertEqual(listing.selectedRow, listing.numberOfRows - 1, "End: the last instruction")
+        press(NSHomeFunctionKey, 115)
+        XCTAssertEqual(listing.selectedRow, 0, "Home: the first")
+        press(NSPageDownFunctionKey, 121)
+        XCTAssertGreaterThan(listing.selectedRow, 5, "a page down")
+        press(NSDownArrowFunctionKey, 125)
+    }
+
     /// A plain click on a call opens what the function is; a double click goes
     /// there and opens nothing.
     func testAClickOnACallOpensTheFunctionsPopover() throws {

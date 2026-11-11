@@ -12,6 +12,7 @@
 @covers panel.code.function-view
 @covers panel.code.copy-name
 @covers panel.code.function-popover
+@covers panel.code.current-line
 @covers panel.code.description
 @covers panel.code.description-sections
 @covers panel.code.diff
@@ -25,6 +26,8 @@
 **Open with Code** in the [[topic:tool-uefi|UEFI Structure]] tree opens a module the store holds an analysis of: the module's bytes and its code side by side in one fragment panel, named after the module and the image's format, such as `SecCore ▸ PE32`. The analysis is read-only — editing belongs in the dump — and the panel is where it is read: the functions on the left, the selected function's ASM or C above, the module's bytes below.
 
 ## The code
+
+The code is read, not edited, so the C has no text cursor. The line last clicked is marked instead with a light band across the code, as an editor marks the current line; **↑** and **↓** move it a line, **Page Up** and **Page Down** a screen, **Home** and **End** to the first and the last line, and the code scrolls to keep it in view. In the ASM listing the selected instruction is marked with the same band, and the same keys move it.
 
 In the code panel the code leads where it names. A click on a name highlights every place it occurs: a parameter or a local in the function shown, a function or a global in the C and in the ASM listing wherever it names the same address. A click on anything else, or **Esc**, removes the highlight. **⌘**-click or a double click on a parameter or a local selects where it is defined: the parameter in the function's signature, the local in the declarations at the top of the function. A called function's name — in the C and in the ASM listing — is a link, underlined under the pointer: **⌘**-click or a double click opens that function, and its bytes become the dump's main zone. A jump's target selects the instruction it lands on, in the same way; the bytes of a global or a GUID are selected by **⌘**-click, since a double click on such a name asks what it is instead. The label of a `goto` is a link in the same way: **⌘**-click or a double click selects the line in the C that defines the label, and the label's instruction when its name still spells its address; a plain click highlights the label wherever it is named. A place opened from **Used at** in a name's popover is a move as well. **View ▸ Back** and **View ▸ Forward** (**⌘[** and **⌘]**), or the **‹ ›** buttons in the toolbar, walk back and forth through the places those clicks led to while the panel has the keyboard or is in front. Past the first of those places Back goes on through the tab's [[topic:navigation|history]]: a place outside the panel puts the panel away, and Forward brings it back. A place is returned to as it was left: the ASM listing and the C are scrolled where they were, and the call that was followed is selected again. A function opened from a link shows its C from the top. The place arrived at — the instruction's row in the listing; in the C the call, or the function's name in its signature — flashes briefly so it is easy to find.
 
