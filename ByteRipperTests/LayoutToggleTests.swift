@@ -82,7 +82,7 @@ final class LayoutToggleTests: XCTestCase {
         // panel split holds a collapsed tool panel and a collapsed minimap, and
         // each of their seams keeps its point whether the panel behind it is
         // open or shut (Design/TOOL_MODULES_PLAN.md, §19).
-        let contentWidth = wc.mainViewController.contentHost.frame.width
+        let contentWidth = wc.mainViewController.paneHost.frame.width
 
         // Vertical: side-by-side, full height, window unchanged.
         XCTAssertEqual(window.frame.size.width, 1080, accuracy: 1)

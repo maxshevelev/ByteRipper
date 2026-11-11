@@ -10,8 +10,8 @@ final class FindCountTests: XCTestCase {
     private let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
 
     private func set(total: Int, extent: UInt64 = 1 << 20,
-                     storage: MatchSet.Storage? = nil) -> MatchSet {
-        MatchSet(pattern: pattern, folding: .exact, extent: extent, total: total,
+                     storage: ByteMatchSet.Storage? = nil) -> ByteMatchSet {
+        ByteMatchSet(pattern: pattern, folding: .exact, extent: extent, total: total,
                  storage: storage ?? .sparse((0..<total).map { UInt64($0) * 8 }))
     }
 
@@ -66,7 +66,7 @@ final class FindCountTests: XCTestCase {
     /// — and the sentence says what still holds, so the user is not left
     /// guessing whether the search worked.
     func testACountedSetWarnsAboutTheHighlightingInstead() {
-        let counted = MatchSet(pattern: pattern, folding: .exact, extent: 1 << 30,
+        let counted = ByteMatchSet(pattern: pattern, folding: .exact, extent: 1 << 30,
                                total: 2_481_903, storage: .counted)
         let reading = FindCount.reading(of: counted, current: nil)
         XCTAssertEqual(reading?.text, grouped(2_481_903))
@@ -79,12 +79,12 @@ final class FindCountTests: XCTestCase {
     /// operation (§11).
     func testAnIndexStillBeingBuiltHasNoReading() {
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        let partial = MatchSet(pattern: pattern, folding: .exact, extent: 1024,
+        let partial = ByteMatchSet(pattern: pattern, folding: .exact, extent: 1024,
                                starts: [0, 8, 16], indexedUpTo: 32)
         XCTAssertFalse(partial.isComplete, "the premise")
         XCTAssertNil(FindCount.reading(of: partial, current: 0))
 
-        let whole = MatchSet(pattern: pattern, folding: .exact, extent: 1024,
+        let whole = ByteMatchSet(pattern: pattern, folding: .exact, extent: 1024,
                              starts: [0, 8, 16])
         let reading = try? XCTUnwrap(FindCount.reading(of: whole, current: 0))
         XCTAssertEqual(reading?.total, 3, "the finished index reports, and reports exactly")

@@ -617,21 +617,30 @@ public struct PieceLinkState: Codable, Equatable, Sendable {
     }
 }
 
-/// What sits around a tab's panes: the minimap and the Find bar.
+/// What sits around a surface's panes — the tab's, or a panel's: the minimap
+/// and the Find bar. Each surface has a bar of its own (§11).
 public struct SurfaceState: Codable, Equatable, Sendable {
     public var minimapVisible: Bool
     /// "detail" or "overview" (§19.4); nil leaves the mode the file picks.
     public var minimapMode: String?
     /// The Find bar's pattern while the bar is open; nil while it is closed.
+    /// Written for a panel's bar as well as the tab's from 0.9.6 on; earlier
+    /// builds wrote the tab's only.
     public var findPattern: FindPatternState?
+    /// Whether the surface's Find bar matches case, open or closed. Nil in a
+    /// file written before each bar had its own, where the app's standing
+    /// choice applies.
+    public var findCaseSensitive: Bool?
     /// The tool panel, while one is open.
     public var tool: ToolState?
 
     public init(minimapVisible: Bool = false, minimapMode: String? = nil,
-                findPattern: FindPatternState? = nil, tool: ToolState? = nil) {
+                findPattern: FindPatternState? = nil, findCaseSensitive: Bool? = nil,
+                tool: ToolState? = nil) {
         self.minimapVisible = minimapVisible
         self.minimapMode = minimapMode
         self.findPattern = findPattern
+        self.findCaseSensitive = findCaseSensitive
         self.tool = tool
     }
 }

@@ -88,9 +88,6 @@ extension MainViewController {
             panes: panes, activePane: windowModel.activePaneIndex, dividerFraction: fraction,
             bookmarks: windowModel.bookmarkStore.bookmarks.map { BookmarkState(row: $0.row, name: $0.name) },
             surface: workspaceSurface(surface))
-        state.surface.findPattern = openFindPattern.map {
-            FindPatternState(text: $0.text, encoding: $0.encoding.rawValue)
-        }
         state.code = currentCodeScreen().flatMap(workspaceCodeScreen)
             ?? (mode == .comparison ? nil : heldCode(of: windowModel.pane1))
         var expanded: Int?
@@ -111,6 +108,10 @@ extension MainViewController {
         let minimap = surface.minimap
         return SurfaceState(minimapVisible: minimap.isPanelVisible,
                             minimapMode: minimap.isPanelVisible ? minimap.view.renderMode.rawValue : nil,
+                            findPattern: surface.find.openPattern.map {
+                                FindPatternState(text: $0.text, encoding: $0.encoding.rawValue)
+                            },
+                            findCaseSensitive: surface.find.caseSensitive,
                             tool: workspaceTool(surface.tools))
     }
 
@@ -493,6 +494,12 @@ extension MainViewController {
             if let tool = state.surface.tool {
                 restoreTool(tool, on: surface.tools, pane: opened)
             }
+            // The panel's own bar, as it was: no search runs, the greys come
+            // back when the person searches again (§11).
+            if let find = state.surface.findPattern {
+                surface.find.reopen(text: find.text,
+                                    encoding: SearchEncoding(rawValue: find.encoding) ?? .hex)
+            }
         }
         view.layoutSubtreeIfNeeded()
         scroll(opened.pane, to: state.pane, unchanged: opened.unchanged)
@@ -561,6 +568,7 @@ extension MainViewController {
     }
 
     private func apply(_ state: SurfaceState, to surface: DocumentSurface) {
+        if let caseSensitive = state.findCaseSensitive { surface.find.caseSensitive = caseSensitive }
         guard state.minimapVisible else { return }
         surface.minimap.setPanelVisible(true, animated: false)
         if let mode = state.minimapMode.flatMap(MinimapView.RenderMode.init(rawValue:)) {

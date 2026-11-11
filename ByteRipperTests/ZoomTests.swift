@@ -167,7 +167,7 @@ final class ZoomTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let pattern = try SearchEngine.parsePattern("AB", encoding: .hex)
-        let set = MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        let set = ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                            starts: Array(0..<8).map(UInt64.init))
         pane.setMatches(set, current: 0)
 

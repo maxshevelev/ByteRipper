@@ -158,7 +158,7 @@ final class SmartSearchFlowTests: XCTestCase {
         XCTAssertTrue(pumpUntil(5) { pane.hexSelection().start == 64 },
                       "the string is found in the encoding it is stored in")
         XCTAssertEqual(pane.hexSelection().end, 72)
-        XCTAssertEqual(pane.currentMatch, 64..<72, "and the plate is on it")
+        XCTAssertEqual(pane.currentMatchRange, 64..<72, "and the plate is on it")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "UTF-16 LE",
                        "the popup says how it was found")
         XCTAssertEqual(FindHistoryStore.mostRecent?.encoding, .utf16LE,
@@ -218,7 +218,7 @@ final class SmartSearchFlowTests: XCTestCase {
 
         controller.findPattern()
         try search("DE AD", in: window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 32..<34 }, "the hex pattern is found")
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 32..<34 }, "the hex pattern is found")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "Hex bytes")
 
         // The user types over it, which ends the first search's highlighting.
@@ -227,7 +227,7 @@ final class SmartSearchFlowTests: XCTestCase {
         NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field)
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 128..<132 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 128..<132 },
                       "the text is in the file as ASCII, so Smart Search must find it")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "ASCII",
                        "and the popup follows the encoding that found it")
@@ -246,14 +246,14 @@ final class SmartSearchFlowTests: XCTestCase {
 
         controller.findPattern()
         try search("DE AD", in: window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 32..<34 }, "the hex pattern first")
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 32..<34 }, "the hex pattern first")
 
         let field = try combo(window)
         field.stringValue = "cafe"
         NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field)
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 200..<204 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 200..<204 },
                       "CA FE is nowhere, so the word is what is found")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "ASCII")
     }
@@ -273,14 +273,14 @@ final class SmartSearchFlowTests: XCTestCase {
         let field = try combo(window)
         field.stringValue = "DE AD"
         field.sendAction(field.action, to: field.target)   // Return
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 32..<34 }, "the hex pattern")
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 32..<34 }, "the hex pattern")
 
         field.stringValue = "boot"
         NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field)
         field.sendAction(field.action, to: field.target)   // Return again
 
         XCTAssertEqual(field.stringValue, "boot", "the press must not rewrite the field")
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 128..<132 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 128..<132 },
                       "and it must search what is in the field")
     }
 
@@ -307,7 +307,7 @@ final class SmartSearchFlowTests: XCTestCase {
                        "the bar opens on the last search, encoding and all")
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 128..<136 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 128..<136 },
                       "the encoding the user brought is tried before the app's own guesses")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "UTF-16 LE")
     }
@@ -334,7 +334,7 @@ final class SmartSearchFlowTests: XCTestCase {
         XCTAssertNil(bar.preferredEncodingForTests, "a keystroke takes the pairing back")
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 64..<68 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 64..<68 },
                       "so the default order applies, and ASCII comes first")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "ASCII")
     }
@@ -360,7 +360,7 @@ final class SmartSearchFlowTests: XCTestCase {
         popup.sendAction(popup.action, to: popup.target)
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 64..<68 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 64..<68 },
                       "the chosen encoding is tried first, so the word wins over the bytes")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "ASCII")
     }
@@ -382,7 +382,7 @@ final class SmartSearchFlowTests: XCTestCase {
         let bar = try findBar(window)
         XCTAssertFalse(bar.caseButton.state == .on, "the premise: case-insensitive")
         try search("FF 33", in: window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 0x2eae3..<0x2eae5 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 0x2eae3..<0x2eae5 },
                       "the hex pattern is found")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "Hex bytes")
 
@@ -391,7 +391,7 @@ final class SmartSearchFlowTests: XCTestCase {
         NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field)
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 0x66a144..<0x66a148 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 0x66a144..<0x66a148 },
                       "`root` folds onto `Root`, so Smart Search must find it")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "ASCII")
         XCTAssertNil(controller.transientNotice, "and nothing reports a failure")
@@ -413,7 +413,7 @@ final class SmartSearchFlowTests: XCTestCase {
 
         controller.findPattern()
         try search("windows", in: window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 64..<71 }, "the ASCII copy first")
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 64..<71 }, "the ASCII copy first")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "ASCII")
         XCTAssertTrue(pumpUntil(3) { pane.matchSet?.isComplete == true },
                       "and that search is indexed, which is what used to win")
@@ -423,7 +423,7 @@ final class SmartSearchFlowTests: XCTestCase {
         popup.sendAction(popup.action, to: popup.target)
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 512..<(512 + UInt64(wide.count)) },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 512..<(512 + UInt64(wide.count)) },
                       "the press looks for the encoding the user named")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "UTF-16 LE")
         XCTAssertEqual(pane.matchSet?.pattern.encoding, .utf16LE,
@@ -442,7 +442,7 @@ final class SmartSearchFlowTests: XCTestCase {
 
         controller.findPattern()
         try search("windows", in: window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 64..<71 })
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 64..<71 })
         XCTAssertTrue(pumpUntil(3) { pane.matchSet?.isComplete == true })
 
         let popup = try encodingPopup(window)
@@ -450,7 +450,7 @@ final class SmartSearchFlowTests: XCTestCase {
         popup.sendAction(popup.action, to: popup.target)
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertEqual(pane.currentMatch, 128..<135, "a step, not a fresh search")
+        XCTAssertEqual(pane.currentMatchRange, 128..<135, "a step, not a fresh search")
         XCTAssertEqual(pane.matchSet?.total, 2, "on the index it already had")
         XCTAssertTrue(try XCTUnwrap(pane.matchSet).isComplete)
     }
@@ -480,7 +480,7 @@ final class SmartSearchFlowTests: XCTestCase {
 
         try findBar(window).pressFindForTests(.forward)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 512..<(512 + UInt64(wide.count)) },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 512..<(512 + UInt64(wide.count)) },
                       "found as UTF-16 LE, which the named BE is not")
         XCTAssertEqual(try encodingPopup(window).titleOfSelectedItem, "UTF-16 LE",
                        "the popup says what worked, not what was asked for")
@@ -492,7 +492,7 @@ final class SmartSearchFlowTests: XCTestCase {
         // ever asked for.
         XCTAssertTrue(pumpUntil(3) { pane.matchSet?.isComplete == true })
         try findBar(window).pressFindForTests(.forward)
-        XCTAssertEqual(pane.currentMatch, 1024..<(1024 + UInt64(wide.count)),
+        XCTAssertEqual(pane.currentMatchRange, 1024..<(1024 + UInt64(wide.count)),
                        "the second occurrence, by a step")
         XCTAssertTrue(try XCTUnwrap(pane.matchSet).isComplete,
                       "on the index it already had — a pass would have replaced it")
@@ -596,7 +596,7 @@ final class SmartSearchFlowTests: XCTestCase {
         try findBar(window).pressFindForTests(.forward)
 
         XCTAssertNil(controller.transientNotice, "the stale answer is gone at once")
-        XCTAssertTrue(pumpUntil(2) { controller.windowModel.pane1.currentMatch == 64..<68 },
+        XCTAssertTrue(pumpUntil(2) { controller.windowModel.pane1.currentMatchRange == 64..<68 },
                       "and the new search runs")
     }
 

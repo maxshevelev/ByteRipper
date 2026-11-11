@@ -62,7 +62,7 @@ final class FragmentMinimapTests: XCTestCase {
         surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(window.frame.width, before, accuracy: 0.5, "shown")
-        XCTAssertGreaterThanOrEqual(surface.contentHost.frame.width, paneView.contentFitWidth,
+        XCTAssertGreaterThanOrEqual(surface.paneHost.frame.width, paneView.contentFitWidth,
                                     "and the dump still fits its grid")
 
         surface.minimap.setPanelVisible(false, animated: false)
@@ -230,7 +230,7 @@ final class FragmentMinimapTests: XCTestCase {
         let partWalks = surface.minimap.matchOverlayWalksForTesting
         let tabWalks = controller.matchOverlayWalksForTesting
 
-        let set = MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
+        let set = ByteMatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
                            folding: .exact, extent: 0x80, starts: [0x10, 0x40])
         part.setMatches(set, current: 0)
 

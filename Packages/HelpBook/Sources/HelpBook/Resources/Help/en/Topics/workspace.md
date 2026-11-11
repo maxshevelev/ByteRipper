@@ -21,7 +21,7 @@ The switch is **Reopen the workspace at launch** in [[topic:settings|Settings �
 - **Unsaved changes to files on disk**, which come back red as they were, still unsaved. Only the changed bytes are kept beside the workspace, not a copy of the file; like documents never saved, they survive an abnormal termination, and quitting does not ask about them. The changes are laid over the file again only when it is the file they were made on (see below).
 - **The undo history** of every document — files on disk, documents never saved, parts — with what can still be redone. After a restart ⌘Z undoes the edits made before it, the cuts of the segments move back with them, undoing a join attaches the document to its file again, and undoing back to the state saved on disk makes a file unmodified. The history keeps to the limits set under [[topic:editing|Editing Bytes]]. The name of a step in the Edit menu stays in the language the program spoke when the edit was made.
 - The [[topic:notes|Annotations window]], at its place among the tabs or as a window of its own, with the cards that were selected.
-- The [[topic:minimap|minimap]], the Find bar with its pattern, and the tool panel with the node or row selected in it and the open branches of the UEFI tree.
+- The [[topic:minimap|minimap]], the find bar — the tab's and each fragment panel's — with its pattern and case rule, and the tool panel with the node or row selected in it and the open branches of the UEFI tree.
 
 ## What is not restored
 

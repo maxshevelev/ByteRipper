@@ -356,7 +356,7 @@ final class ZoomToFitTests: XCTestCase {
         // Within the point the window's rounding and the hidden tool panel's
         // divider take: the fit has 16 pt of slack past the grid for exactly
         // that. Without the margins counted it came out 32 pt short.
-        XCTAssertEqual(surface.contentHost.frame.width, part.contentFitWidth, accuracy: 1.5,
+        XCTAssertEqual(surface.paneHost.frame.width, part.contentFitWidth, accuracy: 1.5,
                        "the dump gets the width its grid needs")
     }
 

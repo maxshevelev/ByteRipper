@@ -1715,13 +1715,13 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "DE AD"
         try clickFindNext(window)
         XCTAssertTrue(indexed(window), "the premise: a finished index")
-        XCTAssertTrue(pumpUntil(2) { pane.currentMatch == 0..<2 })
+        XCTAssertTrue(pumpUntil(2) { pane.currentMatchRange == 0..<2 })
         let set = try XCTUnwrap(pane.matchSet)
         XCTAssertEqual(set.total, 3)
 
         try clickFindNext(window)
 
-        XCTAssertEqual(pane.currentMatch, 3..<5, "the step lands at once, with no scan")
+        XCTAssertEqual(pane.currentMatchRange, 3..<5, "the step lands at once, with no scan")
         XCTAssertEqual(pane.matchSet?.total, 3, "on the same index")
         XCTAssertTrue(try XCTUnwrap(pane.matchSet).isComplete,
                       "which is still finished — a rescan would have replaced it")
@@ -1742,7 +1742,7 @@ final class FindFlowTests: XCTestCase {
 
         // A half-built index: two matches found, the file covered to byte 6.
         let pattern = SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex)
-        let half = MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        let half = ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                             starts: [0, 3], indexedUpTo: 6)
         pane.setMatches(half, current: 0)
         // Standing on the first match, as a search leaves the user.
@@ -1753,7 +1753,7 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "DE AD"
         try clickFindNext(window)
 
-        XCTAssertEqual(pane.currentMatch, 3..<5,
+        XCTAssertEqual(pane.currentMatchRange, 3..<5,
                        "the next match is inside what the index covers, so it is a step")
         XCTAssertEqual(pane.matchSet?.indexedUpTo, 6, "the half-built index is untouched")
         XCTAssertEqual(pane.matchSet?.total, 2, "and still holds what it had found")
@@ -1777,7 +1777,7 @@ final class FindFlowTests: XCTestCase {
 
         // Covered to byte 8, so the match at 128 is not in the index yet.
         let pattern = SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex)
-        pane.setMatches(MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                                  starts: [0], indexedUpTo: 8),
                         current: 0)
         pane.select(range: 0..<2)
@@ -1786,7 +1786,7 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "DE AD"
         try clickFindNext(window)
 
-        XCTAssertTrue(pumpUntil(3) { pane.currentMatch == 128..<130 },
+        XCTAssertTrue(pumpUntil(3) { pane.currentMatchRange == 128..<130 },
                       "the scan finds what the index has not reached")
         XCTAssertEqual(pane.matchSet?.indexedUpTo, 8, "and the index is left as it was")
         XCTAssertEqual(pane.matchSet?.total, 1)
@@ -1812,16 +1812,16 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "DE AD"
         try clickFindNext(window)
         XCTAssertTrue(indexed(window))
-        XCTAssertTrue(pumpUntil(2) { pane.currentMatch == 0..<2 }, "the first match")
+        XCTAssertTrue(pumpUntil(2) { pane.currentMatchRange == 0..<2 }, "the first match")
         XCTAssertNil(controller.transientNotice, "nothing to say about a plain step")
 
         try clickFindNext(window)
-        XCTAssertTrue(pumpUntil(2) { pane.currentMatch == 3..<5 }, "the second, still no wrap")
+        XCTAssertTrue(pumpUntil(2) { pane.currentMatchRange == 3..<5 }, "the second, still no wrap")
         XCTAssertNil(controller.transientNotice)
 
         // Past the last one: back to the first, which is news.
         try clickFindNext(window)
-        XCTAssertTrue(pumpUntil(2) { pane.currentMatch == 0..<2 }, "round to the first")
+        XCTAssertTrue(pumpUntil(2) { pane.currentMatchRange == 0..<2 }, "round to the first")
         let forward = try XCTUnwrap(controller.transientNotice, "a wrap is said")
         XCTAssertTrue(forward.lines.isEmpty, "with no text — it is a sign, not a report")
         XCTAssertEqual(forward.accessibilityLabel(), MainViewController.wrapForwardGlyph,
@@ -1833,7 +1833,7 @@ final class FindFlowTests: XCTestCase {
 
         // And backwards, off the front of the file.
         try clickFindPrevious(window)
-        XCTAssertTrue(pumpUntil(2) { pane.currentMatch == 3..<5 }, "round to the last")
+        XCTAssertTrue(pumpUntil(2) { pane.currentMatchRange == 3..<5 }, "round to the last")
         let backward = try XCTUnwrap(controller.transientNotice)
         XCTAssertEqual(backward.accessibilityLabel(), MainViewController.wrapBackwardGlyph)
         XCTAssertNotNil(backward.symbolImageForTests,
@@ -1861,7 +1861,7 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "DE AD"
         try clickFindNext(window)
 
-        XCTAssertTrue(pumpUntil(3) { pane.currentMatch == 0..<2 },
+        XCTAssertTrue(pumpUntil(3) { pane.currentMatchRange == 0..<2 },
                       "the only match is behind the caret")
         XCTAssertEqual(controller.transientNotice?.accessibilityLabel(),
                        MainViewController.wrapForwardGlyph)
@@ -1889,8 +1889,8 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "DE AD BE EF"
         try clickFindNext(window)
 
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch != nil }, "the match is shown")
-        XCTAssertEqual(pane.currentMatch, 0..<4)
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange != nil }, "the match is shown")
+        XCTAssertEqual(pane.currentMatchRange, 0..<4)
         XCTAssertEqual(pane.hexSelection().start, 0, "and selected")
         let set = try XCTUnwrap(pane.matchSet)
         XCTAssertFalse(set.isComplete,
@@ -1917,11 +1917,11 @@ final class FindFlowTests: XCTestCase {
         let (combo, _, _, _) = try barControls(window)
         combo.stringValue = "DE AD"
         try clickFindNext(window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 0..<2 }, "the first match")
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 0..<2 }, "the first match")
 
         // The second press, still mid-index.
         try clickFindNext(window)
-        XCTAssertTrue(pumpUntil(5) { pane.currentMatch == 64..<66 },
+        XCTAssertTrue(pumpUntil(5) { pane.currentMatchRange == 64..<66 },
                       "the next match, found by a scan the index did not have to finish for")
         XCTAssertTrue(indexed(window))
         XCTAssertTrue(pumpUntil(2) { self.hasCount("2 of 2", in: window) },
@@ -1940,13 +1940,13 @@ final class FindFlowTests: XCTestCase {
 
         let pattern = SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex)
         // A half-built index: nothing found in the stretch covered so far.
-        pane.setMatches(MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                                  starts: [], indexedUpTo: 0))
         XCTAssertEqual(view.content, .searching, "not \"no matches\" — the scan has not looked yet")
         XCTAssertEqual(headerText(of: view), "Search results (searching…)")
 
         // The first occurrence, with the file's tail still to go.
-        pane.setMatches(MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                                  starts: [0], indexedUpTo: 2))
         XCTAssertEqual(view.content, .matches(total: 1))
         XCTAssertEqual(headerText(of: view), "Search results (1, searching…)",
@@ -2480,7 +2480,7 @@ final class FindFlowTests: XCTestCase {
     func testOnlyANewSetIsAnnouncedToTheList() {
         let pane = PaneViewModel()
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        let set = MatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [0, 8, 16])
+        let set = ByteMatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [0, 8, 16])
         var setChanges = 0
         var appearanceChanges = 0
         pane.onMatchSetChanged = { setChanges += 1 }

@@ -74,7 +74,7 @@ final class SearchResultsViewController: NSViewController {
     /// The set the rows come from: the pane's own, read live. Not a copy — the
     /// scan behind the dump's highlighting is the one this lists, and a second
     /// copy is a second thing to keep in step (§11).
-    private var matchSet: MatchSet? { isPresenting ? pane.matchSet : nil }
+    private var matchSet: ByteMatchSet? { isPresenting ? pane.matchSet : nil }
 
     /// The matches the table lists, in file order — none past the listing
     /// limit, and none for a set whose positions were never kept.
@@ -367,7 +367,7 @@ final class SearchResultsViewController: NSViewController {
     }
 
     /// What a set reads as: rows, a count and a refusal, or nothing at all.
-    private static func content(of set: MatchSet?) -> Content {
+    private static func content(of set: ByteMatchSet?) -> Content {
         guard let set else { return .empty }
         guard set.total > 0 else { return set.isComplete ? .empty : .searching }
         guard set.isListable, set.isHighlightable else { return .tooMany(total: set.total) }

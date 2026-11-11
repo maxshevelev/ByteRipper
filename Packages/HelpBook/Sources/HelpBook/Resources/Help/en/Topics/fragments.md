@@ -20,12 +20,13 @@ A fragment is named after what was opened — the node or the zone — and nothi
 - **File ▸ Update in Parent**, which writes the edited bytes back into the range they came from as a single undo step in the parent document. Once the fragment differs from what it was opened with, its header shows a **Modified** button, with a download-arrow icon, right after the parent's name, that does the same; a dialog then says what was written and that ⌘Z in the parent takes it back.
 - Saving to disk as a file of its own, where the extracted part is what is required rather than an edited parent.
 
-## The panel's own minimap and tool panel
+## The panel's own minimap, tool panel and find bar
 
-A fragment panel is a reading surface in its own right rather than a second view of the parent's, and it carries the same two instruments the window carries:
+A fragment panel is a reading surface in its own right rather than a second view of the parent's, and it carries the same three instruments the window carries:
 
 - **Its own minimap.** **View ▸ Show Minimap** (⇧⌘M) and the button at the right end of the toolbar act on whichever panel is in front, so the column beside a fragment maps the fragment: its own bookmarks, its own segment strip, and the zones a tool published in it. A panel opens with its minimap hidden, whatever the tab shows, so opening a fragment never changes the window's size; the toolbar button shows whether the minimap of the panel in front is on.
 - **Its own tool panel.** The **Tools** menu and the toolbar's tool button act on the panel in front in the same way, and the tool that opens there reads the fragment's bytes. It is bound to that one fragment: where a tool in the window can be pointed at either of the open files, a tool in a panel has one and offers no switch.
+- **Its own find bar.** ⌘F in the panel in front opens a find bar over the fragment's dump, which searches the fragment and nothing else, with its own pattern and case rule ([[topic:search|Finding Bytes and Text]]).
 
 ## When putting it back is refused
 

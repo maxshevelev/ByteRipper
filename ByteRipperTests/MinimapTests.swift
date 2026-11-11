@@ -215,14 +215,14 @@ final class MinimapTests: XCTestCase {
     func testDividerDragCannotOpenAHiddenMinimap() throws {
         let (_, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        let sv = split.panelSplit
+        let sv = split.contentSplit
 
         XCTAssertFalse(split.minimapPanelVisible, "the minimap starts hidden")
         window.layoutIfNeeded()
 
         // Grab the divider at the trailing edge and drag it well to the left —
         // the gesture that used to open the panel.
-        let dividerX = sv.dividerPosition(at: 0)
+        let dividerX = sv.dividerPosition(at: MainViewController.minimapDividerIndex)
         let start = NSPoint(x: dividerX + sv.dividerThickness / 2, y: sv.bounds.midY)
         let target = NSPoint(x: dividerX - 150, y: sv.bounds.midY)
         sv.mouseDown(with: mouse(.leftMouseDown, at: sv.convert(start, to: nil), window: window))
@@ -300,7 +300,7 @@ final class MinimapTests: XCTestCase {
                       "reduced motion snaps the panel, so there is no animation to sample")
         let (_, window) = try makeController()
         let (controller, _) = try minimapViews(window)
-        let split = controller.panelSplit
+        let split = controller.contentSplit
         let startWidth = window.frame.width
 
         controller.surface.minimap.setPanelVisible(true, animated: true)
@@ -724,7 +724,7 @@ final class MinimapTests: XCTestCase {
         XCTAssertTrue(panel.detailMatchBars(forMapAt: 0, in: panel.bounds).matches.isEmpty,
                       "no search, no marks")
 
-        pane.setMatches(MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
+        pane.setMatches(ByteMatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
                                  folding: .exact, extent: UInt64(bytes.count),
                                  starts: [2, 20]),
                         current: 1)
@@ -763,7 +763,7 @@ final class MinimapTests: XCTestCase {
         let (controller, window, panel) = try makeSingleFileWindow(bytes)
         window.layoutIfNeeded()
         controller.windowModel.pane1.setMatches(
-            MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD, 0xBE, 0xEF], encoding: .hex),
+            ByteMatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD, 0xBE, 0xEF], encoding: .hex),
                      folding: .exact, extent: UInt64(bytes.count), starts: [14]),
             current: 0)
         window.layoutIfNeeded()
@@ -1981,7 +1981,7 @@ final class MinimapTests: XCTestCase {
         XCTAssertTrue(panel.matchOverlays.allSatisfy { $0.matched.allSatisfy { $0 == 0 } },
                       "no search, no strokes")
 
-        let set = MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
+        let set = ByteMatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
                            folding: .exact, extent: UInt64(size),
                            starts: [UInt64(size / 8), UInt64(size * 5 / 8)])
         pane.setMatches(set, current: 0)
@@ -2043,7 +2043,7 @@ final class MinimapTests: XCTestCase {
             / Double(binning.start(ofRow: row + 1) - binning.start(ofRow: row))
         XCTAssertGreaterThan(fraction, 0.2, "the byte is not near its row's start")
 
-        pane.setMatches(MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
+        pane.setMatches(ByteMatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
                                  folding: .exact, extent: UInt64(size),
                                  starts: [UInt64(offset)]),
                         current: 0)
@@ -2084,7 +2084,7 @@ final class MinimapTests: XCTestCase {
         let pane = controller.windowModel.pane1
         let rowCount = panel.overviewRowCount()
 
-        pane.setMatches(MatchSet(pattern: SearchPattern(bytes: [0xDE], encoding: .hex),
+        pane.setMatches(ByteMatchSet(pattern: SearchPattern(bytes: [0xDE], encoding: .hex),
                                  folding: .exact, extent: UInt64(size),
                                  starts: [UInt64(offset)]),
                         current: 0)
@@ -2118,7 +2118,7 @@ final class MinimapTests: XCTestCase {
         let rowEnd = binning.start(ofRow: row + 1)
         let plateOffset = rowEnd - (rowEnd - rowStart) / 8
         let pattern = SearchPattern(bytes: [0x00], encoding: .hex)
-        var builder = MatchSetBuilder(pattern: pattern, folding: .exact, extent: UInt64(size))
+        var builder = ByteMatchSetBuilder(pattern: pattern, folding: .exact, extent: UInt64(size))
         builder.add((0..<UInt64(size)).map { $0 })
         pane.setMatches(builder.finish())
         pane.highlightMatches(onMatch: plateOffset..<(plateOffset + 1))

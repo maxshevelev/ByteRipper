@@ -29,7 +29,7 @@ struct FindCount: Equatable {
     /// app's diagnosis of a pattern goes, so it waits for the whole file; what
     /// says the work is still running is the status bar's own operation, which
     /// carries its progress (§11, §14.4).
-    static func reading(of set: MatchSet?, current: Int?) -> FindCount? {
+    static func reading(of set: ByteMatchSet?, current: Int?) -> FindCount? {
         guard let set, set.isComplete else { return nil }
         return FindCount(total: set.total,
                          ordinal: current.map { $0 + 1 },

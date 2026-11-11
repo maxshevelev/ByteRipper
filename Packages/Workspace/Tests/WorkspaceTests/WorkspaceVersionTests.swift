@@ -100,6 +100,21 @@ final class WorkspaceVersionTests: XCTestCase {
         XCTAssertEqual(try folder.load().get(), Self.version4Sample())
     }
 
+    /// A surface's own case rule is an added optional field: written when
+    /// there is one, absent — and nil — in a file from before (§11), so it
+    /// needs no new version.
+    func testASurfacesCaseRuleIsAnOptionalField() throws {
+        let surface = SurfaceState(findPattern: FindPatternState(text: "BEEF", encoding: "ascii"),
+                                   findCaseSensitive: true)
+        let data = try JSONEncoder().encode(surface)
+        XCTAssertEqual(try JSONDecoder().decode(SurfaceState.self, from: data), surface)
+        let earlier = Data(#"{"minimapVisible": false, "findPattern": {"text": "AA", "encoding": "hex"}}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(SurfaceState.self, from: earlier).findCaseSensitive)
+        let none = try JSONEncoder().encode(SurfaceState())
+        XCTAssertFalse(String(decoding: none, as: UTF8.self).contains("findCaseSensitive"),
+                       "a surface without one writes what version 4 wrote")
+    }
+
     // MARK: - The chain
 
     private func json(_ object: [String: Any]) throws -> Data {

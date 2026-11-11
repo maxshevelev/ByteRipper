@@ -1,6 +1,7 @@
 import Foundation
 
 @_exported import BytePattern
+@_exported import Find
 
 extension CaseFolding {
     /// The rule for an encoding and the user's choice.
@@ -26,11 +27,6 @@ public enum SearchEncoding: String, CaseIterable, Sendable {
     case utf8
     case utf16LE
     case utf16BE
-}
-
-public enum SearchDirection: Sendable {
-    case forward
-    case backward
 }
 
 /// A resolved search pattern: the exact byte sequence to find, plus the
@@ -177,7 +173,7 @@ public enum SearchEngine {
     /// The default cap on how many matches a Search All reports (§11). A pattern
     /// that occurs more often stops the scan at the cap: searching for a single
     /// byte in a large file must not scan for, or report, millions of rows.
-    public static let defaultMaxResults = 1000
+    public static let defaultMaxResults = FindLimits.listedMatches
 
     /// One instalment of an index being built: the matches found since the last
     /// one, and how far the scan has got.
@@ -186,16 +182,7 @@ public enum SearchEngine {
     /// has been reported, so the dump can grey what is known while the rest of
     /// the file is still being scanned, and only the things that need the whole
     /// file — the total, the wrap, an ordinal — wait for the end (§11).
-    public struct MatchBatch: Sendable, Equatable {
-        public let starts: [UInt64]
-        /// Half-open: matches at or above this offset are not known yet.
-        public let scannedUpTo: UInt64
-
-        public init(starts: [UInt64], scannedUpTo: UInt64) {
-            self.starts = starts
-            self.scannedUpTo = scannedUpTo
-        }
-    }
+    public typealias MatchBatch = Find.MatchBatch
 
     /// Streaming variant of `findAll`: yields every non-overlapping match as the
     /// scan finds it — one `Range` per occurrence, in file order, delivered the
