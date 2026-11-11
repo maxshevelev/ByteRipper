@@ -68,4 +68,41 @@ final class ReviewProgressTests: XCTestCase {
         XCTAssertNil(stats.reviewLevels)
         XCTAssertEqual(stats.functions, 3)
     }
+
+    /// A store written before the levels were counted gets them once, from
+    /// each artifact; nothing else in the manifest moves.
+    func testAnOldStoreIsRecountedOnceAndOnlyTheCountsMove() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ReviewProgressTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root)
+        let recipe = AnalysisRecipe(id: "code-v7-ghidra-12.1.2", exporter: 7, ghidra: "12.1.2", script: "ExportCode.java")
+        func module(_ name: String) -> ModuleIdentity {
+            ModuleIdentity(sha256: SHA256Digest(data: Data(name.utf8)), size: name.utf8.count, name: name)
+        }
+        let reviewed = try JSONSerialization.data(withJSONObject: ["functions": [
+            ["entry": "0x10", "name": "Reads", "c": "void Reads(void) {}", "review_level": "full"],
+            ["entry": "0x20", "review_level": "no_body"]]])
+        let plain = try JSONSerialization.data(withJSONObject: ["functions": [["entry": "0x10"]]])
+        let old = try store.putAnalysis(module: module("Reviewed"), recipe: recipe, artifact: reviewed,
+                                        reading: AnalysisReading(rev: 2, description: digest))
+        _ = try store.putAnalysis(module: module("Plain"), recipe: recipe, artifact: plain)
+        // As an earlier build wrote it: no review_levels.
+        var written = old
+        written.stats.reviewLevels = nil
+        let url = store.manifestURL(try XCTUnwrap(old.key))
+        try JSONEncoder().encode(written).write(to: url)
+        XCTAssertEqual(try store.analysis(module: old.module.sha256)?.reviewProgress, .partial)
+
+        let preview = try store.recountStats(dryRun: true)
+        XCTAssertEqual(preview.map(\.name), ["Reviewed"], "the plain one has no levels to count")
+        XCTAssertNil(try store.analysis(module: old.module.sha256)?.stats.reviewLevels, "a dry run writes nothing")
+
+        XCTAssertEqual(try store.recountStats().map(\.reviewLevels), [["full": 1, "no_body": 1]])
+        var now = try XCTUnwrap(try store.analysis(module: old.module.sha256))
+        XCTAssertEqual(now.reviewProgress, .complete)
+        now.stats.reviewLevels = nil
+        XCTAssertEqual(now, written, "only the counts moved")
+        XCTAssertEqual(try store.recountStats(), [], "once")
+    }
 }

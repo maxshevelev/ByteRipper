@@ -39,6 +39,7 @@ public enum CASCommand {
           library-holdings
           library-evidence --edk2 <checkout of the pinned tag>
           relink-modules [--apply]
+          recount-stats [--apply]
           drop-earlier-projects [--apply]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
           library-rename <id> <name> --reason <text> [--apply]
@@ -284,6 +285,16 @@ public enum CASCommand {
             }
             output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
                 .relinkModules(dryRun: !apply))
+        case "recount-stats":
+            // The manifests written before the review levels were counted get
+            // them from their own artifacts; a dry run lists them.
+            let apply = parser.flag("--apply")
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("recount-stats runs on a store directory, not on a server")
+            }
+            output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
+                .recountStats(dryRun: !apply))
         case "library-rename", "library-take-out", "library-restore", "library-split":
             // Changing what the registry says is an administrator's: whoever holds
             // the store's directory, or a token with the `admin` right.

@@ -49,6 +49,43 @@ extension ContentStore {
         return done
     }
 
+    /// One analysis whose manifest got the counts it was written without.
+    public struct Recounted: Codable, Equatable, Sendable {
+        public var module: SHA256Digest
+        public var name: String
+        public var recipe: String
+        public var reviewLevels: [String: Int]?
+
+        private enum CodingKeys: String, CodingKey {
+            case module, name, recipe
+            case reviewLevels = "review_levels"
+        }
+    }
+
+    /// The manifests written before `review_levels` was counted get it, read
+    /// from their own artifact. Nothing else in a manifest moves: the artifact,
+    /// the reading and the time stay what the publish wrote. A manifest that has
+    /// the field already, or whose artifact holds no levels, is left as it is.
+    @discardableResult
+    public func recountStats(dryRun: Bool = false) throws -> [Recounted] {
+        var done: [Recounted] = []
+        for found in analyses() where found.stats.reviewLevels == nil {
+            guard let key = found.key, let artifact = try? object(found.artifact.sha256) else { continue }
+            guard let levels = ArtifactStats.count(in: artifact).reviewLevels else { continue }
+            done.append(Recounted(module: found.module.sha256, name: found.module.name,
+                                  recipe: found.recipe.id, reviewLevels: levels))
+            if dryRun { continue }
+            try withLock {
+                // A publish that came in meanwhile wrote its own counts.
+                var manifest = try decodeManifest(at: manifestURL(key))
+                guard manifest.artifact.sha256 == found.artifact.sha256, manifest.stats.reviewLevels == nil else { return }
+                manifest.stats.reviewLevels = levels
+                try atomicWrite(try encoder.encode(manifest), to: manifestURL(key))
+            }
+        }
+        return done
+    }
+
     /// The code objects an artifact's functions read through.
     func libraryCode(for artifact: Data, index: LibraryIndex) -> [SHA256Digest: Data] {
         var code: [SHA256Digest: Data] = [:]
