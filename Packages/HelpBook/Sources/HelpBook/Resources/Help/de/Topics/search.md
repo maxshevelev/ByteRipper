@@ -1,9 +1,15 @@
-@source-sha 615e095fd3590ec35d0548f8be8520096ccc7b606ef38a59cb6f0d606ba81a9f
+@source-sha 47fc4efa26792399592324477af78db013f2cb385af757c5d7f8ec88064544fa
 # Bytes und Text finden
 
 > ⌘F. Suche nach einer Byte-Folge oder einer Zeichenfolge über den ganzen Dump, im Hintergrund.
 
 Die Suchleiste durchsucht den **aktiven Bereich** über seinen aktuellen Inhalt, ungesicherte Änderungen eingeschlossen.
+
+## Welche Suchleiste was durchsucht
+
+Eine Suchleiste gehört zu dem Dump, den sie durchsucht. Die Suchleiste des Tabs steht über den Vergleichsbereichen und der Minimap und durchsucht den aktiven der beiden Bereiche. Ein [[topic:fragments|Fragment-Bereich]] hat eine eigene Suchleiste über dem Dump des Fragments, die nur das Fragment durchsucht. ⌘F, ⌘G, Esc und **Suchen** in der Symbolleiste wirken auf die Suchleiste des vordersten Bereichs.
+
+Jede Suchleiste hat ihr eigenes Muster, ihre eigenen Treffer und ihre eigene Einstellung zur Groß- und Kleinschreibung: Eine Suche im Fragment beeinflusst die Suche im Tab nicht, und umgekehrt. Ein neuer Fragment-Bereich übernimmt die Einstellung zur Groß- und Kleinschreibung von der Suchleiste des Bereichs, aus dem das Fragment entnommen wurde. Wird der Bereich in die Pille des Docks eingeklappt, klappt seine Suchleiste mit ein und kehrt beim Aufklappen unverändert zurück.
 
 ## Hex
 

@@ -1,4 +1,4 @@
-@source-sha 3048eb58d563a0ff032524e336b01a32812d66d94947cdc99c50d131ccc48ce7
+@source-sha 5c2527a3cb7bd033298703c8cc60e69321ed49c930916213f5f40534fba0aa5e
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -16,7 +16,7 @@ Die Einstellung heißt **Arbeitsbereich beim Start wiederherstellen** und befind
 - **Ungesicherte Änderungen an Dateien auf dem Datenträger**, die rot und weiterhin ungesichert zurückkehren, wie sie waren. Neben dem Arbeitsbereich werden nur die geänderten Bytes aufbewahrt, keine Kopie der Datei. Wie nie gesicherte Dokumente gehen sie bei einem unplanmäßigen Ende nicht verloren, und beim Beenden fragt das Programm nicht nach ihnen. Die Änderungen werden nur dann wieder auf die Datei gelegt, wenn es dieselbe Datei ist, an der sie vorgenommen wurden (siehe unten).
 - **Der Widerrufsverlauf** jedes Dokuments — Dateien auf dem Datenträger, nie gesicherte Dokumente, Teile — mit dem, was sich noch wiederholen lässt. Nach einem Neustart widerruft ⌘Z die Änderungen von davor: Die Schnitte der Segmente kehren mit ihnen zurück, das Widerrufen eines Zusammenfügens verbindet das Dokument wieder mit seiner Datei, und das Widerrufen bis zum auf dem Datenträger gesicherten Stand macht eine Datei wieder ungeändert. Der Verlauf hält sich an die Grenzen, die unter [[topic:editing|Bytes bearbeiten]] festgelegt sind. Der Name eines Schritts im Menü „Bearbeiten“ bleibt in der Sprache, in der das Programm lief, als die Änderung vorgenommen wurde.
 - Das [[topic:notes|Anmerkungen-Fenster]] an seinem Platz zwischen den Tabs oder als eigenes Fenster, mit den Karten, die ausgewählt waren.
-- Die [[topic:minimap|Minimap]], die Suchleiste mit ihrem Muster sowie der Werkzeugbereich mit dem darin gewählten Knoten oder der gewählten Zeile und den geöffneten Zweigen des UEFI-Baums.
+- Die [[topic:minimap|Minimap]], die Suchleiste — die des Tabs und die jedes Fragment-Bereichs — mit ihrem Muster und ihrer Einstellung zur Groß- und Kleinschreibung sowie der Werkzeugbereich mit dem darin gewählten Knoten oder der gewählten Zeile und den geöffneten Zweigen des UEFI-Baums.
 
 ## Was nicht wiederhergestellt wird
 

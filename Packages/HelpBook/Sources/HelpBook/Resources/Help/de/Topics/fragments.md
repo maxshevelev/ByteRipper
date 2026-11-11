@@ -1,4 +1,4 @@
-@source-sha d89180128e9055231906154323e501a642d7da010863e3c79480d737d5059086
+@source-sha 61831bd41db4261bece96f16114f36daf4ad5351aa4ad29c6ff65dca4645d6be
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -16,12 +16,13 @@ Ein Fragment trägt den Namen dessen, was geöffnet wurde – des Knotens oder d
 - **Ablage ▸ In der Quelle aktualisieren** schreibt die geänderten Bytes zurück in den Bereich, aus dem sie stammen, als einen einzigen Widerrufsschritt im Quelldokument. Sobald sich das Fragment von dem unterscheidet, mit dem es geöffnet wurde, zeigt seine Kopfzeile unmittelbar hinter dem Namen der Quelle die Schaltfläche **Geändert** mit einem Pfeil-nach-unten-Symbol, die dasselbe tut; ein Dialog meldet dann, was geschrieben wurde und dass ⌘Z im Quelldokument es zurücknimmt.
 - Sichern als eigene Datei auf dem Volume, wenn der entnommene Teil gebraucht wird und nicht die geänderte Quelle.
 
-## Eigene Minimap, eigener Werkzeugbereich
+## Eigene Minimap, eigener Werkzeugbereich, eigene Suchleiste
 
-Ein Fragment-Bereich ist eine eigenständige Lesefläche und nicht eine zweite Ansicht der Quelle; er trägt dieselben zwei Instrumente wie das Fenster:
+Ein Fragment-Bereich ist eine eigenständige Lesefläche und nicht eine zweite Ansicht der Quelle; er trägt dieselben drei Instrumente wie das Fenster:
 
 - **Eine eigene Minimap.** **Darstellung ▸ Minimap einblenden** (⇧⌘M) und die Taste ganz rechts in der Symbolleiste wirken auf den jeweils vordersten Bereich, sodass die Spalte neben einem Fragment das Fragment selbst abbildet: dessen Lesezeichen, dessen Segmentstreifen und die Zonen, die ein Werkzeug darin veröffentlicht hat. Ein Bereich öffnet sich mit ausgeblendeter Minimap, unabhängig davon, was der Tab zeigt; das Öffnen eines Fragments ändert die Fenstergröße daher nie. Die Taste in der Symbolleiste zeigt an, ob die Minimap des vordersten Bereichs eingeblendet ist.
 - **Ein eigener Werkzeugbereich.** Das Menü **Werkzeuge** und die Werkzeugtaste der Symbolleiste wirken ebenso auf den vordersten Bereich, und das dort geöffnete Werkzeug liest die Bytes des Fragments. Es ist an dieses eine Fragment gebunden: Wo sich ein Werkzeug im Fenster auf jede der geöffneten Dateien richten lässt, hat eines im Bereich eine einzige und bietet keinen Wechsel an.
+- **Eine eigene Suchleiste.** ⌘F im vordersten Bereich öffnet eine Suchleiste über dem Dump des Fragments; sie durchsucht nur das Fragment, mit eigenem Muster und eigener Einstellung zur Groß- und Kleinschreibung ([[topic:search|Bytes und Text finden]]).
 
 ## Wenn das Zurückschreiben abgelehnt wird
 
