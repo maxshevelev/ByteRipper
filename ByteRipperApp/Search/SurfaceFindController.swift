@@ -552,6 +552,7 @@ extension BackgroundOperation: FindActivity {}
                     self.land(onCode: range, wrapped: wrapped, direction: direction, in: code)
                 case .notFound:
                     NSSound.beep()
+                    code.dropSelectedFindMatch()
                     self.handOffFocus(fromCode: code)
                 case .nothing, .cancelled:
                     break
@@ -569,6 +570,7 @@ extension BackgroundOperation: FindActivity {}
             case .nothing:
                 // The count says Not Found; the beep says the press was heard.
                 NSSound.beep()
+                code.dropSelectedFindMatch()
                 self.sync()
                 self.handOffFocus(fromCode: code)
             case .cancelled, .alreadyRunning:

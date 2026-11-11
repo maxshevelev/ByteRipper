@@ -140,6 +140,22 @@ final class CodeFindBarTests: XCTestCase {
         try await waitUntil({ bar.countTextForTests == L("Not found") }, "not found")
     }
 
+    /// A search that finds nothing lets the match the last one selected go:
+    /// with the case rule switched on, "status" is not in the C, and the
+    /// "Status" an earlier search selected is no answer to it.
+    func testASearchThatFindsNothingLetsTheOldMatchGo() async throws {
+        let (controller, code) = try codeTab()
+        controller.findPattern()
+        let bar = controller.findBar
+        bar.setPatternTextForTests("status")
+        bar.pressFindForTests(.forward)
+        try await waitUntil({ code.findSelection == "Status" }, "found, case folded")
+        bar.setCaseSensitiveForTests(true)
+        bar.pressFindForTests(.forward)
+        try await waitUntil({ bar.countTextForTests == L("Not found") }, "not found")
+        XCTAssertNil(code.findSelection, "the old match is no longer selected")
+    }
+
     /// Done takes the bar away and the code gets its height back.
     func testDoneTakesTheBarAway() async throws {
         let (controller, code) = try codeTab()

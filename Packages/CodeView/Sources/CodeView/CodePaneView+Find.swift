@@ -115,8 +115,20 @@ extension CodePaneView {
         let match = NSRange(location: Int(range.lowerBound), length: Int(range.upperBound - range.lowerBound))
         guard NSMaxRange(match) <= (view.string as NSString).length else { return }
         view.setSelectedRange(match)
+        selectedFindMatch = match
         view.scrollRangeToVisible(match)
         if view.window != nil { view.showFindIndicator(for: match) }
+    }
+
+    /// A search that found nothing: the match an earlier search selected is
+    /// no answer to this one, so it is let go — the caret stays where it
+    /// began. A selection the reader made is left alone.
+    public func dropSelectedFindMatch() {
+        defer { selectedFindMatch = nil }
+        guard let match = selectedFindMatch, let side = findSearched?.side else { return }
+        let view = findTextView(side)
+        guard view.selectedRange() == match else { return }
+        view.setSelectedRange(NSRange(location: match.location, length: 0))
     }
 
     /// The finder's matches, as the text views draw them.

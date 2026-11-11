@@ -193,6 +193,8 @@ import ToolModuleKit
     public let finder = TextFindIndexer()
     /// What `finder` was last given to search: the side and its text.
     var findSearched: (side: FindSide, text: String)?
+    /// The match a search last selected, while it is still the selection.
+    var selectedFindMatch: NSRange?
     /// The search's showing changed: the app re-reads its count.
     public var onFindChanged: (() -> Void)?
     private var descriptionLeading: NSLayoutConstraint?
