@@ -734,8 +734,6 @@ extension PatternQueryControls {
     fileprivate func setUpWordButton() {
         wordButton.isBordered = false
         wordButton.imagePosition = .imageOnly
-        wordButton.image = NSImage(systemSymbolName: "textformat.abc",
-                                   accessibilityDescription: L("Whole Word"))
         wordButton.setButtonType(.pushOnPushOff)
         wordButton.target = self
         wordButton.action = #selector(wordToggled)
@@ -747,8 +745,9 @@ extension PatternQueryControls {
     func syncWordButtonAppearance() {
         let on = wordButton.state == .on
         wordButton.contentTintColor = on ? .controlAccentColor : .secondaryLabelColor
-        wordButton.symbolConfiguration = NSImage.SymbolConfiguration(
-            pointSize: Self.iconPointSize, weight: on ? .semibold : .regular)
+        let glyph = WholeWordGlyph.image(pointSize: Self.iconPointSize, weight: on ? .semibold : .regular)
+        glyph.accessibilityDescription = L("Whole Word")
+        wordButton.image = glyph
         ControlHelp.describe(wordButton, name: L("Whole Word"),
                              tooltip: on
                                  ? L("Whole Word — a match is a whole name, not part of a longer one")
