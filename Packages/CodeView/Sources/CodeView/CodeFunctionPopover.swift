@@ -16,9 +16,7 @@ import ToolModuleKit
     private let onGo: () -> Void
     private let popover = NSPopover()
 
-    private static var size: CGFloat { CodePaneView.codeFont().pointSize }
-    private static var width: CGFloat { (size * 40).rounded() }
-    private static var inset: CGFloat { (size * 1.3).rounded() }
+    private static var size: CGFloat { ToolPanelPopover.size }
 
     init(function: CodeArtifact.Function, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor),
          signatureTokens: [CodeToken], onGo: @escaping () -> Void) {
@@ -33,10 +31,7 @@ import ToolModuleKit
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func show(relativeTo rect: NSRect, of view: NSView) {
-        popover.contentViewController = self
-        popover.behavior = .transient
-        popover.animates = false
-        popover.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+        ToolPanelPopover.show(popover, with: self, relativeTo: rect, of: view, edge: .maxY)
     }
 
     var isShown: Bool { popover.isShown }
@@ -77,30 +72,21 @@ import ToolModuleKit
 
     override func loadView() {
         let size = Self.size
-        let inner = Self.width - 2 * Self.inset
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = (size * 0.6).rounded()
-        stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
+        let inner = ToolPanelPopover.inner
+        let stack = ToolPanelPopover.stack()
 
-        let name = NSTextField(labelWithString: function.name)
-        name.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
-        name.isSelectable = true
-        name.lineBreakMode = .byTruncatingMiddle
         // The pointer over the mark says the level and what is missing.
-        let titleSize = (size * 1.35).rounded()
-        let side = CodeNavigatorIcon.side(forFontSize: titleSize)
+        let side = CodeNavigatorIcon.side(forFontSize: ToolPanelPopover.titleFont.pointSize)
         let image = CodeNavigatorIcon.image(mark.glyph, color: mark.color, side: side)
         let icon = NSImageView(image: image)
         icon.widthAnchor.constraint(equalToConstant: image.size.width).isActive = true
         icon.heightAnchor.constraint(equalToConstant: image.size.height).isActive = true
         ControlHelp.describe(icon, CodePaneView.reviewDetail(function))
+        let name = ToolPanelPopover.title(function.name, width: inner - image.size.width - (size * 0.5).rounded())
         let title = NSStackView(views: [icon, name])
         title.orientation = .horizontal
         title.alignment = .centerY
         title.spacing = (size * 0.5).rounded()
-        name.widthAnchor.constraint(lessThanOrEqualToConstant: inner - image.size.width - title.spacing).isActive = true
         stack.addArrangedSubview(title)
 
         if let signature = signatureText {
@@ -111,24 +97,19 @@ import ToolModuleKit
         }
 
         let said = descriptionText
-        let words = NSTextField(wrappingLabelWithString: said ?? L("The review has not described this function yet."))
-        words.font = .systemFont(ofSize: size + 1)
-        words.textColor = said == nil ? .secondaryLabelColor : .labelColor
-        words.isSelectable = true
-        words.preferredMaxLayoutWidth = inner
+        let words = ToolPanelPopover.prose(said ?? L("The review has not described this function yet."),
+                                           said: said != nil)
         words.translatesAutoresizingMaskIntoConstraints = false
         // A long plate scrolls inside the popover, which stays on the screen.
-        let height = (size * 22).rounded()
+        let height = ToolPanelPopover.tallestProse
         stack.addArrangedSubview(words.fittingSize.height > height
                                  ? CodeExplanationPopover.scrolling(words, width: inner, height: height) : words)
 
-        let go = NSButton(title: L("Go to Function"), target: self, action: #selector(goChosen))
-        go.bezelStyle = .rounded
+        let go = ToolPanelPopover.action(L("Go to Function"), target: self, action: #selector(goChosen))
         ControlHelp.describe(go, L("Go to Function"))
         stack.addArrangedSubview(go)
 
-        stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
-        view = stack
+        view = ToolPanelPopover.content(stack)
     }
 
     /// Presses the button as the reader would, for a test.

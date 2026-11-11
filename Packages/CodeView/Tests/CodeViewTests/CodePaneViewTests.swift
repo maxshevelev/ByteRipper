@@ -2625,6 +2625,18 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(signature.string, "void Second(void)")
         XCTAssertEqual(signature.attribute(.foregroundColor, at: 5, effectiveRange: nil) as? NSColor,
                        CodeColors.function, "the name is coloured as in the code")
+        // Laid out as every information popover is: its action the default
+        // button, the margins the shared ones (Design/DESIGN_GUIDE.md §2.1).
+        func all(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(all) }
+        let go = try XCTUnwrap(all(popover.view).compactMap { $0 as? NSButton }
+            .first { $0.title == "Go to Function" })
+        // The popover's window takes the default button's Return for itself.
+        XCTAssertTrue(go.window?.defaultButtonCell === go.cell,
+                      "Return goes, and the button wears the accent colour")
+        popover.view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(popover.view.frame.width, ToolPanelPopover.width)
+        let box = popover.view.convert(go.alignmentRect(forFrame: go.frame), from: go.superview)
+        XCTAssertEqual(box.minX, ToolPanelPopover.margin, accuracy: 0.5)
         popover.pressGo()
         XCTAssertEqual(view.selectedFunctionIndex, 1)
     }
@@ -4592,7 +4604,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(global.uses.map(\.line), [0])
         let popover = CodeExplanationPopover(explanation: global, model: CodeModel(artifact: artifact, moduleBytes: module))
         XCTAssertEqual(popover.factsText(), "UINT16 at address 0x78\nIn the image: 0x5756 = 22358")
-        let stack = try XCTUnwrap(popover.view as? NSStackView)
+        let stack = try XCTUnwrap(popover.view.subviews.first as? NSStackView)
         XCTAssertEqual((stack.arrangedSubviews.last as? NSTextField)?.stringValue, "Source: the board's schematic.")
         view.shownExplanationClose()
 
@@ -4741,7 +4753,7 @@ final class CodePaneViewTests: XCTestCase {
                                          declaration: nil, text: "The UART SEC reports through. Source: EDK2 SerialPortLib.",
                                          c: "struct T {\n};", uses: []),
             model: model)
-        let stack = try XCTUnwrap(popover.view as? NSStackView)
+        let stack = try XCTUnwrap(popover.view.subviews.first as? NSStackView)
         let labels = stack.arrangedSubviews.compactMap { $0 as? NSTextField }
         XCTAssertTrue(labels.contains { $0.stringValue == "The UART SEC reports through." })
         let last = try XCTUnwrap(stack.arrangedSubviews.last as? NSTextField)

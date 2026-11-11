@@ -1,6 +1,7 @@
 import AppKit
 import CodeAnalysis
 import Localization
+import ToolModuleKit
 
 /// One row of Show Callers: a call to the function, or a caller the analysis
 /// knows but whose call it could not place — through a pointer.
@@ -44,10 +45,7 @@ struct CodeCaller: Equatable {
     }
 
     func show(relativeTo rect: NSRect, of view: NSView) {
-        popover.contentViewController = self
-        popover.behavior = .transient
-        popover.animates = false
-        popover.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+        ToolPanelPopover.show(popover, with: self, relativeTo: rect, of: view, edge: .maxY)
     }
 
     var isShown: Bool { popover.isShown }
@@ -81,22 +79,17 @@ struct CodeCaller: Equatable {
     }
 
     override func loadView() {
-        let size = CodePaneView.codeFont().pointSize
-        let inset = (size * 1.3).rounded()
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = (size * 0.6).rounded()
-        stack.edgeInsets = NSEdgeInsets(top: inset, left: inset, bottom: inset, right: inset)
+        let size = ToolPanelPopover.size
+        let stack = ToolPanelPopover.stack()
 
         let title = NSTextField(labelWithString: L("Callers of %1$@", calleeName))
-        title.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
+        title.font = ToolPanelPopover.titleFont
         title.isSelectable = true
         title.lineBreakMode = .byTruncatingMiddle
         stack.addArrangedSubview(title)
 
         let count = NSTextField(labelWithString: L("Calls: %1$@", "\(callers.count)"))
-        count.font = .systemFont(ofSize: size + 1)
+        count.font = ToolPanelPopover.proseFont
         count.textColor = .secondaryLabelColor
         stack.addArrangedSubview(count)
 
@@ -135,8 +128,7 @@ struct CodeCaller: Equatable {
             stack.addArrangedSubview(grid)
         }
         // The popover is as wide as its table: no row is cut.
-        stack.widthAnchor.constraint(equalToConstant: width + 2 * inset).isActive = true
-        view = stack
+        view = ToolPanelPopover.content(stack, width: width + 2 * ToolPanelPopover.margin)
     }
 
     /// Goes to the caller in row `row`: what a click on it does.

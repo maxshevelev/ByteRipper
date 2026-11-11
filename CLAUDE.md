@@ -149,6 +149,10 @@ Workspace and project format (`Design/WORKSPACE_PLAN.md`, "Versions"):
 
 Important rules:
 - Domain code must be pure Swift, modular, and unit-testable.
+- A component the app repeats — a popover, a button row, a glyph in a row, a
+  progress indicator — follows `Design/DESIGN_GUIDE.md`, and uses the shared
+  code it names (an information popover is built with `ToolPanelPopover`).
+  A new deviation is fixed or listed in the guide's "Where the code stands".
 - Every split view is `ALSplitView`. Never `NSSplitView`: it sizes its panes
   from their content, which fights the enclosing layout, and its divider
   position has to be set after the view has a size. `ALSplitView` places panes

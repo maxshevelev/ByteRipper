@@ -36,6 +36,9 @@ of it, never as points, so that everything grows together.
 | a secondary note under something (a source, a reference) | `max(size - 2, 9)` |
 | code, addresses, bytes | `ToolPanelFont.monospaced(size:)` |
 
+The information popovers take these sizes from `ToolPanelPopover`
+(`titleFont`, `proseFont`, `headerFont`, `noteFont`).
+
 **Exception: form popovers.** The bookmark and cut editors use fixed 12 pt
 fields. Their fields hold what the user types, and the zoom does not change
 their purpose.
@@ -50,6 +53,10 @@ It says what something is and offers the one place it leads to. Examples:
 the function under a call, a name the code explains, a function's callers,
 and a module's summary from the UEFI tree.
 
+The layout lives in `ToolPanelPopover` (`Packages/ToolModuleKit`). A popover
+asks it for its parts (`stack`, `title`, `prose`, `action`, `content`,
+`show`) and never writes a size of its own.
+
 | part | rule |
 |---|---|
 | behaviour | `.transient`, `animates = false` |
@@ -61,7 +68,7 @@ and a module's summary from the UEFI tree.
 | prose | wrapping label at `size + 1`, selectable, `preferredMaxLayoutWidth` = width − 2 × margin; secondary colour when it says that there is nothing (“not described yet”) |
 | long prose | scrolls inside the popover after `(size * 22).rounded()` (`CodeExplanationPopover.scrolling`) |
 | loading | a small spinning `NSProgressIndicator` stands where the content will be, and `ControlHelp` says what is being read |
-| the action | one button, regular size, `.rounded`, at the bottom, aligned to the leading edge, and it is the **default button** (`keyEquivalent = "\r"`). It is the thing the popover is for, so Return does it and it wears the accent colour |
+| the action | one button, regular size, `.rounded`, at the bottom, aligned to the leading edge, and it is the **default button** (`ToolPanelPopover.action`). It is the thing the popover is for, so Return does it and it wears the accent colour. Once shown, the popover's window holds the Return as its `defaultButtonCell`, and the button's own `keyEquivalent` then reads empty; a test checks the window |
 | a failed load | secondary text beside the dimmed action, saying why |
 
 **The margins are constraints of a container, not `edgeInsets`.** Put the
@@ -159,13 +166,10 @@ is the pattern. To check how something looks, capture the window with
 
 ## 9. Where the code stands
 
-The rules above are the target, and the code does not meet all of them yet.
-Each line below is a known deviation. Remove it from this list when it is
-fixed.
+The rules above are the target. Each line below is a known deviation. Remove
+it from this list when it is fixed.
 
 | component | deviation |
 |---|---|
-| `CodeFunctionPopover` | **Go to Function** is not the default button, so it is grey where **Open with Code** is accent-coloured, and Return does nothing |
-| `ToolPanelModuleSummaryPopover` | title `size * 1.25` (rule: 1.35), margins `size * 1.2` (1.3), prose at `size` (`size + 1`), width `size * 34` (40) |
-| `CodeFunctionPopover`, `CodeExplanationPopover`, `CodeCallersPopover` | margins come from `edgeInsets` rather than a container's constraints; they hold only because each pins its stack's width |
-| information popovers | the metrics are written in every popover, and no shared code holds them |
+| form popovers (`BookmarkEditPopover`, `CutEditPopover`) | their metrics are written in each of the two, the same in both, and no shared code holds them |
+| sheets | the button row is written in `SheetControllers` and again in each tool's own sheet |

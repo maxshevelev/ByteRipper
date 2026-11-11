@@ -74,15 +74,12 @@ public final class ToolPanelModuleInfoButton: NSButton {
     private let popover = NSPopover()
     private var openCode: (() -> Void)?
 
-    private let words = NSTextField(wrappingLabelWithString: "")
+    private lazy var words = ToolPanelPopover.prose("")
     private let wordsProgress = NSProgressIndicator()
-    private let open = NSButton()
+    private lazy var open = ToolPanelPopover.action(L("Open with Code"), target: self,
+                                                    action: #selector(openClicked))
     private let codeProgress = NSProgressIndicator()
     private let codeState = NSTextField(labelWithString: "")
-
-    private static var size: CGFloat { ToolPanelFont.size }
-    private static var width: CGFloat { (size * 34).rounded() }
-    private static var inset: CGFloat { (size * 1.2).rounded() }
 
     public init(name: String) {
         self.name = name
@@ -93,10 +90,8 @@ public final class ToolPanelModuleInfoButton: NSButton {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     public func show(relativeTo rect: NSRect, of view: NSView) {
-        popover.contentViewController = self
-        popover.behavior = .transient
-        popover.animates = false
-        popover.show(relativeTo: rect, of: view, preferredEdge: .maxX)
+        // From a row of the tree: beside it, so the rows under it stay in sight.
+        ToolPanelPopover.show(popover, with: self, relativeTo: rect, of: view, edge: .maxX)
     }
 
     public var isShown: Bool { popover.isShown }
@@ -141,20 +136,8 @@ public final class ToolPanelModuleInfoButton: NSButton {
     public func clickOpen() { open.performClick(nil) }
 
     override public func loadView() {
-        let size = Self.size
-        let inner = Self.width - 2 * Self.inset
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = (size * 0.6).rounded()
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let title = NSTextField(labelWithString: name)
-        title.font = .systemFont(ofSize: (size * 1.25).rounded(), weight: .bold)
-        title.isSelectable = true
-        title.lineBreakMode = .byTruncatingMiddle
-        title.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
-        stack.addArrangedSubview(title)
+        let stack = ToolPanelPopover.stack()
+        stack.addArrangedSubview(ToolPanelPopover.title(name))
 
         // The summary's place, with a spinner in it until the description is read.
         wordsProgress.style = .spinning
@@ -163,19 +146,11 @@ public final class ToolPanelModuleInfoButton: NSButton {
         wordsProgress.startAnimation(nil)
         ControlHelp.describe(wordsProgress, L("Reading the module's description"))
         stack.addArrangedSubview(wordsProgress)
-        words.font = .systemFont(ofSize: size)
-        words.isSelectable = true
-        words.preferredMaxLayoutWidth = inner
-        words.widthAnchor.constraint(equalToConstant: inner).isActive = true
+        words.widthAnchor.constraint(equalToConstant: ToolPanelPopover.inner).isActive = true
         words.isHidden = true
         stack.addArrangedSubview(words)
 
         // The button, dimmed beside a spinner until the code is loaded.
-        open.title = L("Open with Code")
-        open.bezelStyle = .rounded
-        open.keyEquivalent = "\r"
-        open.target = self
-        open.action = #selector(openClicked)
         open.isEnabled = false
         ControlHelp.describe(open, L("Opens the module's bytes and its code"))
         codeProgress.style = .spinning
@@ -183,28 +158,15 @@ public final class ToolPanelModuleInfoButton: NSButton {
         codeProgress.isIndeterminate = true
         codeProgress.startAnimation(nil)
         ControlHelp.describe(codeProgress, L("Loading the module's code"))
-        codeState.font = .systemFont(ofSize: size)
+        codeState.font = .systemFont(ofSize: ToolPanelPopover.size)
         codeState.textColor = .secondaryLabelColor
         codeState.isHidden = true
         let row = NSStackView(views: [open, codeProgress, codeState])
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = (size * 0.6).rounded()
+        row.spacing = ToolPanelPopover.spacing
         stack.addArrangedSubview(row)
-
-        // The margins are the container's constraints, not the stack's
-        // edgeInsets: with a wrapping label in it the stack reported a width
-        // without its right inset, and the popover cut the text at its edge.
-        let container = NSView()
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            container.widthAnchor.constraint(equalToConstant: Self.width),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Self.inset),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -Self.inset),
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: Self.inset),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Self.inset),
-        ])
-        view = container
+        view = ToolPanelPopover.content(stack)
     }
 
     @objc private func openClicked() {

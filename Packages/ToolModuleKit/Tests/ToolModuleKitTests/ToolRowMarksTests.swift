@@ -321,6 +321,20 @@ final class ToolRowMarksTests: XCTestCase {
 
     /// A long summary wraps inside the popover's margins, where the title
     /// and the button stand, however long it is.
+    /// An information popover's action is its default button: Return does
+    /// it, and it wears the accent colour (Design/DESIGN_GUIDE.md §2.1).
+    func testThePopoversActionIsTheDefaultButton() throws {
+        final class Target: NSObject { @objc func go() {} }
+        let target = Target()
+        let button = ToolPanelPopover.action("Go", target: target, action: #selector(Target.go))
+        let popover = ToolPanelModuleSummaryPopover(name: "CpuIoPei")
+        popover.loadView()
+        func all(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(all) }
+        let open = try XCTUnwrap(all(popover.view).compactMap { $0 as? NSButton }.first { $0.title == "Open with Code" })
+        XCTAssertEqual(button.keyEquivalent.unicodeScalars.map(\.value), [13])
+        XCTAssertEqual(open.keyEquivalent.unicodeScalars.map(\.value), [13])
+    }
+
     func testALongSummaryKeepsThePopoversMargins() throws {
         let popover = ToolPanelModuleSummaryPopover(name: "CpuIoPei")
         popover.loadView()

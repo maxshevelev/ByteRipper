@@ -1,6 +1,7 @@
 import AppKit
 import CodeAnalysis
 import Localization
+import ToolModuleKit
 
 /// What a name in the code stands for, in a popover off the name: a constant
 /// a review named (`PCI_CONFIG_ADDRESS`), a type the C names, a field of a
@@ -23,9 +24,7 @@ import Localization
 
     /// The popover's type follows the code's zoom: the body a little larger
     /// than the code, as Xcode's Quick Help is, the name larger still.
-    private static var size: CGFloat { CodePaneView.codeFont().pointSize }
-    private static var width: CGFloat { (size * 40).rounded() }
-    private static var inset: CGFloat { (size * 1.3).rounded() }
+    private static var size: CGFloat { ToolPanelPopover.size }
 
     init(explanation: CodeExplanation, model: CodeModel) {
         self.explanation = explanation
@@ -42,10 +41,7 @@ import Localization
 
     func show(relativeTo rect: NSRect, of view: NSView) {
         shownRect = rect
-        popover.contentViewController = self
-        popover.behavior = .transient
-        popover.animates = false
-        popover.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+        ToolPanelPopover.show(popover, with: self, relativeTo: rect, of: view, edge: .maxY)
     }
 
     var isShown: Bool { popover.isShown }
@@ -60,19 +56,9 @@ import Localization
 
     override func loadView() {
         let size = Self.size
-        let inner = Self.width - 2 * Self.inset
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = (size * 0.6).rounded()
-        stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
-
-        let name = NSTextField(labelWithString: title())
-        name.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
-        name.isSelectable = true
-        name.lineBreakMode = .byTruncatingMiddle
-        name.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
-        stack.addArrangedSubview(name)
+        let inner = ToolPanelPopover.inner
+        let stack = ToolPanelPopover.stack()
+        stack.addArrangedSubview(ToolPanelPopover.title(title()))
 
         let facts = NSTextField(labelWithString: factsText())
         facts.font = .monospacedSystemFont(ofSize: size, weight: .regular)
@@ -85,11 +71,8 @@ import Localization
 
         let split = wordsText().map(CodeExplanation.splitSource)
         let said = split?.text.isEmpty == false ? split?.text : nil
-        let words = NSTextField(wrappingLabelWithString: said ?? L("The review has not explained this name yet."))
-        words.font = .systemFont(ofSize: size + 1)
-        words.textColor = said == nil ? .secondaryLabelColor : .labelColor
-        words.isSelectable = true
-        words.preferredMaxLayoutWidth = inner
+        let words = ToolPanelPopover.prose(said ?? L("The review has not explained this name yet."),
+                                           said: said != nil)
         stack.addArrangedSubview(words)
 
         if let c = explanation.c {
@@ -103,7 +86,7 @@ import Localization
             let removed: Bool
             if case .unreachable = explanation.subject { removed = true } else { removed = false }
             let header = NSTextField(labelWithString: removed ? L("Removed blocks") : L("Used at"))
-            header.font = .systemFont(ofSize: size + 1, weight: .semibold)
+            header.font = ToolPanelPopover.headerFont
             stack.addArrangedSubview(header)
             let list = NSStackView()
             list.orientation = .vertical
@@ -129,14 +112,13 @@ import Localization
         if let source = split?.source {
             if let last = stack.arrangedSubviews.last { stack.setCustomSpacing(size, after: last) }
             let reference = NSTextField(wrappingLabelWithString: source)
-            reference.font = .systemFont(ofSize: max(size - 2, 9))
+            reference.font = ToolPanelPopover.noteFont
             reference.textColor = .secondaryLabelColor
             reference.isSelectable = true
             reference.preferredMaxLayoutWidth = inner
             stack.addArrangedSubview(reference)
         }
-        stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
-        view = stack
+        view = ToolPanelPopover.content(stack)
     }
 
     /// A long list of uses in a box of its own height that scrolls, so the
