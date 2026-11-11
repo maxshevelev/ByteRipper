@@ -5,11 +5,11 @@
 
 Die Suchleiste durchsucht den **aktiven Bereich** über seinen aktuellen Inhalt, ungesicherte Änderungen eingeschlossen.
 
-## Welche Suchleiste was durchsucht
+## Suchleiste des Tabs und der Fragment-Bereiche
 
-Eine Suchleiste gehört zu dem Dump, den sie durchsucht. Die Suchleiste des Tabs steht über den Vergleichsbereichen und der Minimap und durchsucht den aktiven der beiden Bereiche. Ein [[topic:fragments|Fragment-Bereich]] hat eine eigene Suchleiste über dem Dump des Fragments, die nur das Fragment durchsucht. ⌘F, ⌘G, Esc und **Suchen** in der Symbolleiste wirken auf die Suchleiste des vordersten Bereichs.
+Jede Suchleiste ist dem Dump zugeordnet, in dem sie sucht. Im Tab befindet sie sich oberhalb der Vergleichsbereiche und der Minimap; durchsucht wird der jeweils aktive Bereich. Jeder [[topic:fragments|Fragment-Bereich]] verfügt über eine eigene Suchleiste oberhalb seines Dumps, deren Suche sich auf die Bytes des Fragments beschränkt. ⌘F, ⌘G, Esc sowie die Taste **Suchen** in der Symbolleiste beziehen sich stets auf die Suchleiste des vordersten Bereichs.
 
-Jede Suchleiste hat ihr eigenes Muster, ihre eigenen Treffer und ihre eigene Einstellung zur Groß- und Kleinschreibung: Eine Suche im Fragment beeinflusst die Suche im Tab nicht, und umgekehrt. Ein neuer Fragment-Bereich übernimmt die Einstellung zur Groß- und Kleinschreibung von der Suchleiste des Bereichs, aus dem das Fragment entnommen wurde. Wird der Bereich in die Pille des Docks eingeklappt, klappt seine Suchleiste mit ein und kehrt beim Aufklappen unverändert zurück.
+Muster, Treffer und die Einstellung zur Groß-/Kleinschreibung werden für jede Suchleiste getrennt geführt; Suchvorgänge im Fragment und im Tab beeinflussen einander daher nicht. Ein neu geöffneter Fragment-Bereich übernimmt die Einstellung zur Groß-/Kleinschreibung aus der Suchleiste des Bereichs, dem das Fragment entnommen wurde. Beim Einklappen des Bereichs in seine Pille im Dock wird auch die Suchleiste eingeklappt; nach dem Aufklappen steht sie unverändert wieder zur Verfügung.
 
 ## Hex
 

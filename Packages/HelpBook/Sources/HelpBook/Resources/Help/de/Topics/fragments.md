@@ -22,7 +22,7 @@ Ein Fragment-Bereich ist eine eigenständige Lesefläche und nicht eine zweite A
 
 - **Eine eigene Minimap.** **Darstellung ▸ Minimap einblenden** (⇧⌘M) und die Taste ganz rechts in der Symbolleiste wirken auf den jeweils vordersten Bereich, sodass die Spalte neben einem Fragment das Fragment selbst abbildet: dessen Lesezeichen, dessen Segmentstreifen und die Zonen, die ein Werkzeug darin veröffentlicht hat. Ein Bereich öffnet sich mit ausgeblendeter Minimap, unabhängig davon, was der Tab zeigt; das Öffnen eines Fragments ändert die Fenstergröße daher nie. Die Taste in der Symbolleiste zeigt an, ob die Minimap des vordersten Bereichs eingeblendet ist.
 - **Ein eigener Werkzeugbereich.** Das Menü **Werkzeuge** und die Werkzeugtaste der Symbolleiste wirken ebenso auf den vordersten Bereich, und das dort geöffnete Werkzeug liest die Bytes des Fragments. Es ist an dieses eine Fragment gebunden: Wo sich ein Werkzeug im Fenster auf jede der geöffneten Dateien richten lässt, hat eines im Bereich eine einzige und bietet keinen Wechsel an.
-- **Eine eigene Suchleiste.** ⌘F im vordersten Bereich öffnet eine Suchleiste über dem Dump des Fragments; sie durchsucht nur das Fragment, mit eigenem Muster und eigener Einstellung zur Groß- und Kleinschreibung ([[topic:search|Bytes und Text finden]]).
+- **Eine eigene Suchleiste.** ⌘F öffnet im vordersten Bereich eine Suchleiste oberhalb des Fragment-Dumps. Sie durchsucht ausschließlich das Fragment; Muster und Groß-/Kleinschreibung werden unabhängig von der Suchleiste des Tabs eingestellt ([[topic:search|Bytes und Text finden]]).
 
 ## Wenn das Zurückschreiben abgelehnt wird
 
