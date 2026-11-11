@@ -22,8 +22,8 @@ import ToolModuleKit
     /// More uses than this scroll inside the popover.
     private static let mostUses = 12
 
-    /// The popover's type follows the code's zoom: the body a little larger
-    /// than the code, as Xcode's Quick Help is, the name larger still.
+    /// The popover's type follows the zoom (`ToolPanelPopover`): the words at
+    /// the help popovers' size, the name a little larger.
     private static var size: CGFloat { ToolPanelPopover.size }
 
     init(explanation: CodeExplanation, model: CodeModel) {

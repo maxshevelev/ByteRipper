@@ -28,12 +28,12 @@ import AppKit
     /// How tall prose grows before it scrolls inside the popover.
     public static var tallestProse: CGFloat { (size * 22).rounded() }
 
-    public static var titleFont: NSFont { .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold) }
-    /// Prose a reader reads — a summary, a plate: a little larger than the
-    /// code, as Xcode's Quick Help is.
-    public static var proseFont: NSFont { .systemFont(ofSize: size + 1) }
+    public static var titleFont: NSFont { .systemFont(ofSize: (size * 1.2).rounded(), weight: .bold) }
+    /// Prose a reader reads — a summary, a plate: the body size, as the help
+    /// popovers' words are (`HelpPopoverLayout.bodySize`).
+    public static var proseFont: NSFont { .systemFont(ofSize: size) }
     /// A header over a part of the popover.
-    public static var headerFont: NSFont { .systemFont(ofSize: size + 1, weight: .semibold) }
+    public static var headerFont: NSFont { .systemFont(ofSize: size, weight: .semibold) }
     /// Where the words come from, under them: smaller.
     public static var noteFont: NSFont { .systemFont(ofSize: max(size - 2, 9)) }
 

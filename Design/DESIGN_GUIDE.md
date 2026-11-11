@@ -31,8 +31,9 @@ of it, never as points, so that everything grows together.
 | role | size |
 |---|---|
 | body text, table cells, detail rows | `size` |
-| prose a reader reads (a summary, a plate, a description) | `size + 1` |
-| a popover's title | `(size * 1.35).rounded()`, bold |
+| prose in a popover (a summary, a plate), as in the help popovers | `size` |
+| a header over a part of a popover | `size`, semibold |
+| a popover's title | `(size * 1.2).rounded()`, bold |
 | a secondary note under something (a source, a reference) | `max(size - 2, 9)` |
 | code, addresses, bytes | `ToolPanelFont.monospaced(size:)` |
 
@@ -66,7 +67,7 @@ asks it for its parts (`stack`, `title`, `prose`, `action`, `content`,
 | margins | `(size * 1.3).rounded()` on all four sides |
 | spacing between parts | `(size * 0.6).rounded()` |
 | order | title (with its mark, when it has one), facts, prose, then the action |
-| prose | wrapping label at `size + 1`, selectable, `preferredMaxLayoutWidth` = width − 2 × margin; secondary colour when it says that there is nothing (“not described yet”) |
+| prose | wrapping label at `size`, selectable, `preferredMaxLayoutWidth` = width − 2 × margin; secondary colour when it says that there is nothing (“not described yet”) |
 | long prose | scrolls inside the popover after `(size * 22).rounded()` (`CodeExplanationPopover.scrolling`) |
 | loading | a small spinning `NSProgressIndicator` stands where the content will be, and `ControlHelp` says what is being read |
 | the action | one button, regular size, `.rounded`, at the bottom, aligned to the leading edge, and it is the **default button** (`ToolPanelPopover.action`). It is the thing the popover is for, so Return does it and it wears the accent colour. Once shown, the popover's window holds the Return as its `defaultButtonCell`, and the button's own `keyEquivalent` then reads empty; a test checks the window |
