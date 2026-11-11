@@ -326,6 +326,17 @@ import ALSplitView
 
     // MARK: - The Find bar
 
+    /// This surface's Find bar and its searches: over its own content, and
+    /// searching only its own panes — the panel's part, or the tab's active
+    /// pane (§11).
+    private(set) lazy var find: SurfaceFindController = {
+        let find = SurfaceFindController(surface: self, host: host)
+        find.searchedPane = { [weak self] in
+            self?.pinnedPane ?? self?.host?.windowModel.activePane
+        }
+        return find
+    }()
+
     /// Puts `bar` across the top of the content, over the panes and the
     /// minimap. A bar another surface showed comes over without being removed
     /// first: `addSubview` alone moves it.

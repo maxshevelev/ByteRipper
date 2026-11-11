@@ -157,6 +157,9 @@ import ToolModuleKit
         host.addChild(surface)
         let paneView = host.paneView(for: pane)
         surface.setContent(paneView)
+        // The panel's own Find bar, over its dump, parked hidden until ⌘F in
+        // the panel (§11). It folds into the pill with the panel.
+        surface.find.park()
         // The pane's title bar goes across the whole panel, over the tool and
         // the map as well as the dump.
         let view = FragmentPanelView(header: paneView.hoistHeader(), content: surface.view)

@@ -154,19 +154,39 @@ public final class FindIndexer<Content: FindContent> {
     /// already under way.
     public func find(_ candidates: [Query], from anchor: UInt64, direction: SearchDirection,
                      landing: Bool = true) async -> FindOutcome<Query> {
-        guard let content, let first = candidates.first else { return .nothing }
-        guard passInFlight != candidates else { return .alreadyRunning }
+        await start(candidates, from: anchor, direction: direction, landing: landing).value
+    }
+
+    /// `find`, with everything a press changes at once done before it
+    /// returns: the search is the first candidate's, covering nothing, and a
+    /// second press already finds it under way. The task is the rest — the
+    /// pass, then the index.
+    public func start(_ candidates: [Query], from anchor: UInt64, direction: SearchDirection,
+                      landing: Bool = true) -> Task<FindOutcome<Query>, Never> {
+        guard let content, let first = candidates.first else { return Task { .nothing } }
+        guard passInFlight != candidates else { return Task { .alreadyRunning } }
         cancelNavigation()
         stopIndexing()
         install(placeholder(for: first, in: content))
         let (flag, activity) = beginNavigation()
         passInFlight = candidates
-        let result = await Task.detached(priority: .userInitiated) {
+        let scan = Task.detached(priority: .userInitiated) {
             try? FindPass.firstMatch(among: candidates, in: content, from: anchor,
                                      direction: direction,
                                      shouldCancel: { flag.isCancelled },
                                      progress: { activity?.report($0) })
-        }.value
+        }
+        return Task { @MainActor in
+            await self.finishPass(candidates, scan: scan, flag: flag, activity: activity,
+                                  content: content, landing: landing)
+        }
+    }
+
+    private func finishPass(_ candidates: [Query],
+                            scan: Task<FindPass.Found<Query>?, Never>,
+                            flag: FindCancelFlag, activity: (any FindActivity)?,
+                            content: Content, landing: Bool) async -> FindOutcome<Query> {
+        let result = await scan.value
         activity?.finish()
         guard navigationFlag === flag, !flag.isCancelled else { return .cancelled }
         navigationFlag = nil
@@ -203,13 +223,20 @@ public final class FindIndexer<Content: FindContent> {
     /// fills "nothing ahead" may mean "not found yet". Only a step it cannot
     /// answer is scanned for: one scan for the search's own query, which does
     /// not stop the index being built behind it.
+    /// The step the index can answer by itself, at once, and shows it; nil
+    /// where it cannot — no set, a set not shown, a match not covered yet, or
+    /// a wrap while the index is still filling. What a key press tries first,
+    /// so a step through a built index lands before the press returns.
+    public func indexedStep(_ direction: SearchDirection, from anchor: UInt64) -> MatchStep? {
+        guard let set = matches, set.isHighlightable, let step = set.step(direction, from: anchor),
+              !step.wrapped || set.isComplete else { return nil }
+        highlight(current: step.index)
+        return step
+    }
+
     public func step(_ direction: SearchDirection, from anchor: UInt64) async -> FindStepOutcome {
         guard let set = matches else { return .nothing }
-        if set.isHighlightable, let step = set.step(direction, from: anchor),
-           !step.wrapped || set.isComplete {
-            highlight(current: step.index)
-            return .indexed(step)
-        }
+        if let step = indexedStep(direction, from: anchor) { return .indexed(step) }
         // A finished index with nothing in it has nothing to step to.
         guard !set.isComplete || !set.isHighlightable, let content else { return .nothing }
         cancelNavigation()
@@ -230,6 +257,18 @@ public final class FindIndexer<Content: FindContent> {
     }
 
     // MARK: - Showing
+
+    /// Puts `set` in place of the search, stopping whatever was running, and
+    /// shows it — on the match at `index` when one is named. For a set made
+    /// elsewhere; a search is started with `find` or `index`.
+    public func replace(with set: Matches?, current index: Int? = nil) {
+        cancel()
+        matches = set
+        current = index.flatMap { set?.range(at: $0) }
+        isHighlighting = set != nil
+        onSetChanged?()
+        onAppearanceChanged?()
+    }
 
     /// Shows the set again, on the match at `index` when one is named.
     /// Announced even when nothing changed: the same match picked twice is

@@ -101,9 +101,11 @@ final class FindBarPlacementTests: XCTestCase {
         XCTAssertEqual(inWindow(controller.paneHost), before, "and gave it back")
     }
 
-    /// On a fragment panel the bar is the panel's: inside the panel, over its
-    /// dump. Folding the panel takes the bar back over the tab's panes.
-    func testOnAFragmentPanelTheBarStandsOverThePanelsDump() throws {
+    /// On a fragment panel the bar is the panel's own: inside the panel, over
+    /// its dump, and not the tab's bar moved there — the tab's stays closed.
+    /// Folding the panel takes its bar into the pill with it; raising the
+    /// panel brings it back, still open.
+    func testAFragmentPanelHasABarOfItsOwnThatFoldsWithIt() throws {
         let (controller, window, url) = try makeController()
         defer { cleanup(controller, url) }
         let id = try XCTUnwrap(controller.openFragment([UInt8](0..<64), named: "part", animated: false))
@@ -114,7 +116,9 @@ final class FindBarPlacementTests: XCTestCase {
         window.layoutIfNeeded()
 
         let bar = try shownBar(window)
-        XCTAssertTrue(controller.findBarSurfaceForTests === panel, "the panel in front holds the bar")
+        XCTAssertTrue(bar === panel.find.bar, "the panel in front opened its own bar")
+        XCTAssertFalse(panel.find.bar === controller.surface.find.bar, "a bar per surface")
+        XCTAssertFalse(controller.surface.find.isShown, "the tab's bar stays closed")
         XCTAssertTrue(bar.isDescendant(of: panel.contentHost), "inside the panel's content")
         let panes = inWindow(panel.paneHost)
         XCTAssertEqual(inWindow(bar).minY, panes.maxY, accuracy: 0.5, "over the panel's dump")
@@ -122,11 +126,12 @@ final class FindBarPlacementTests: XCTestCase {
 
         controller.fragments.collapse(animated: false)
         window.layoutIfNeeded()
+        // Folded, nothing opens the tab's bar in its place.
+        XCTAssertFalse(controller.surface.find.isShown)
+        XCTAssertTrue(panel.find.isShown, "the panel's bar folded with the panel, still open")
 
-        let back = try shownBar(window)
-        XCTAssertTrue(back.isDescendant(of: controller.contentHost),
-                      "folded, the bar stands over the tab's panes again")
-        XCTAssertTrue(controller.findBarSurfaceForTests === controller.surface)
-        XCTAssertEqual(inWindow(back).minY, inWindow(controller.paneHost).maxY, accuracy: 0.5)
+        controller.fragments.expand(id, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertTrue(try shownBar(window) === panel.find.bar, "and it comes back with the panel")
     }
 }
