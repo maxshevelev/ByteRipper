@@ -46,6 +46,14 @@ final class ToolPanelOriginBadge: NSView {
     /// Three quarters of the panel's text: a tag, not a second name.
     static var pointSize: CGFloat { (ToolPanelFont.size * 0.75).rounded() }
 
+    /// The row's selection, as the cell is told it: on a selected row the
+    /// badge is drawn in the selection's text colour, as the glyphs beside it
+    /// are, since the category's colour does not read on the accent.
+    var backgroundStyle: NSView.BackgroundStyle = .normal {
+        didSet { if backgroundStyle != oldValue { needsDisplay = true } }
+    }
+    var isEmphasized: Bool { backgroundStyle == .emphasized }
+
     /// The word on the badge, for the tests.
     var word: String { label.stringValue }
     var isDashed: Bool { inferred }
@@ -72,10 +80,11 @@ final class ToolPanelOriginBadge: NSView {
 
     /// The colours are read again on each change of theme.
     override func updateLayer() {
+        let ink = isEmphasized ? NSColor.alternateSelectedControlTextColor : hue
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            frameLayer.strokeColor = hue.cgColor
-            layer?.backgroundColor = inferred ? nil : hue.withAlphaComponent(0.12).cgColor
-            label.textColor = inferred ? hue.withAlphaComponent(0.75) : hue
+            frameLayer.strokeColor = ink.cgColor
+            layer?.backgroundColor = inferred ? nil : ink.withAlphaComponent(isEmphasized ? 0.2 : 0.12).cgColor
+            label.textColor = inferred ? ink.withAlphaComponent(0.75) : ink
         }
     }
 

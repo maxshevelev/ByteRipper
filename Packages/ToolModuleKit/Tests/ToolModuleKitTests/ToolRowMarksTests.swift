@@ -188,6 +188,13 @@ final class ToolRowMarksTests: XCTestCase {
         cell.layoutSubtreeIfNeeded()
         Self.snapshot(cell, "origin-inferred")
 
+        // On a selected row it takes the selection's text colour, as the glyphs do.
+        cell.backgroundStyle = .emphasized
+        XCTAssertTrue(badge.isEmphasized)
+        Self.snapshot(Self.selected(cell), "origin-selected")
+        cell.backgroundStyle = .normal
+        XCTAssertFalse(badge.isEmphasized)
+
         ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis(.partial)],
                                                       origin: ModuleOrigin(category: .unknown, confidence: nil)))
         XCTAssertTrue(badge.isHidden, "unknown draws nothing")
@@ -200,6 +207,18 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(ModuleOrigin.Category.allCases.map {
             ModuleOrigin(category: $0, confidence: .established).badgeWord
         }, ["EDK2", "EDK2*", "AMD", "Intel", "Vendor", nil])
+    }
+
+    /// The cell on the accent colour, as a selected row draws it.
+    private static func selected(_ cell: NSView) -> NSView {
+        let row = NSView(frame: cell.bounds)
+        row.wantsLayer = true
+        row.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        cell.removeFromSuperview()
+        row.addSubview(cell)
+        cell.frame = row.bounds
+        row.layoutSubtreeIfNeeded()
+        return row
     }
 
     /// Where `BR_SNAPSHOT_DIR` names a folder, a picture of the cell for a

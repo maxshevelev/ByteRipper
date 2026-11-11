@@ -27,6 +27,14 @@ final class ToolPanelCellView: NSTableCellView {
 
     /// What the pointer at `point`, in the cell's coordinates, would read.
     func shownToolTip(at point: NSPoint) -> String { gate.string(at: point) }
+
+    /// The selection reaches the glyphs through AppKit; the origin badge draws
+    /// itself, so it is told here.
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            (viewWithTag(ToolPanelTable.codeOriginTag) as? ToolPanelOriginBadge)?.backgroundStyle = backgroundStyle
+        }
+    }
 }
 
 /// A tool panel's icon — a warning, a badge, a marker — with the same tooltip
