@@ -233,6 +233,9 @@ extension BackgroundOperation: FindActivity {}
                 return nil
             }
             return attempts
+        case .text:
+            // The code panel's search (#41) is not the dump's.
+            return nil
         }
     }
 

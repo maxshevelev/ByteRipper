@@ -209,8 +209,8 @@ final class FindBarView: NSView {
 
         // Give everything except the pattern a high hugging priority so only it
         // expands when the window is resized (§11).
-        for view in [findLabel, encodingPopup, smartButton, caseButton, countLabel, warningView,
-                     navControl, findAllButton, doneButton] {
+        for view in [findLabel, encodingPopup, smartButton, caseButton, query.wordButton, countLabel,
+                     warningView, navControl, findAllButton, doneButton] {
             view.setContentHuggingPriority(.defaultHigh, for: .horizontal)
             view.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         }
@@ -247,6 +247,7 @@ final class FindBarView: NSView {
             separator.layer?.backgroundColor = NSColor.separatorColor.cgColor
             // The case toggle's fill is a CGColor too (§11).
             query.syncCaseButtonAppearance()
+            query.syncWordButtonAppearance()
         }
     }
 
@@ -265,6 +266,25 @@ final class FindBarView: NSView {
 
     /// Whether Smart Search is on.
     var isSmartSearchEnabled: Bool { query.isSmartSearchEnabled }
+
+    /// Bytes in a dump, or text in the code panel (#41). In code the bar has
+    /// no results button: the panel lists dump offsets, and the code's list
+    /// of every occurrence is the navigator's Search tab.
+    var mode: PatternQueryControls.Mode {
+        get { query.mode }
+        set {
+            query.mode = newValue
+            findAllButton.isHidden = newValue == .code
+        }
+    }
+
+    /// The whole-word toggle, in code. Internal so a test can read it.
+    var wordButton: NSButton { query.wordButton }
+    /// The bar's whole-word rule: its own, as its case rule is.
+    var wholeWordRule: Bool {
+        get { query.wholeWordRule }
+        set { query.wholeWordRule = newValue }
+    }
 
     private func setUpCountLabel() {
         countLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
@@ -463,6 +483,7 @@ final class FindBarView: NSView {
     var patternFieldWidthForTests: CGFloat { patternField.frame.width }
     var navControlEnabledForTests: Bool { navControl.isEnabled }
     var findAllEnabledForTests: Bool { findAllButton.isEnabled }
+    var findAllButtonForTests: NSButton { findAllButton }
 
     private func setUpNavControl() {
         // Two momentary segments: pressing one runs a search, neither stays

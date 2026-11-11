@@ -35,6 +35,28 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         /// they came from the history rather than from the keyboard: Smart
         /// Search tries it first and then falls back to its own order (§11).
         case smart(text: String, caseSensitive: Bool, preferring: SearchEncoding?)
+        /// Text in the code panel's C or description (#41): no encoding to
+        /// choose, and the whole-word rule as well as the case rule.
+        case text(String, caseSensitive: Bool, wholeWord: Bool)
+    }
+
+    /// What the controls ask for: bytes in a dump, or text in the code panel.
+    ///
+    /// In code the parts that mean nothing for C are not there at all: the
+    /// encoding, Smart Search, hex patterns and the pattern library. The
+    /// whole-word toggle is code's own, and so is the history of recent
+    /// queries (`CodeFindHistoryStore`).
+    enum Mode: Equatable {
+        case bytes
+        case code
+    }
+
+    /// Switched by the owner; the controls show what the mode has.
+    var mode: Mode = .bytes {
+        didSet {
+            guard mode != oldValue else { return }
+            applyMode()
+        }
     }
 
     // MARK: - What the owner hears
@@ -72,6 +94,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// Whether Smart Search is on: remembered like the case toggle, and **on**
     /// until the user says otherwise (§11).
     static let smartSearchKey = "FindSmartSearch"
+    /// The whole-word rule last chosen in code: what a code bar starts with.
+    static let wholeWordKey = "CodeFindWholeWord"
 
     /// The defaults domain the toggles live in. Swappable so tests run against
     /// an isolated store (§11).
@@ -88,9 +112,11 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// The Smart Search toggle, beside the encoding it makes a result rather
     /// than an instruction (§11).
     let smartButton = NSButton()
+    /// The whole-word toggle, in code only (#41).
+    let wordButton = NSButton()
 
     /// The controls in their order, for an owner laying them out.
-    var views: [NSView] { [patternField, encodingPopup, smartButton, caseButton] }
+    var views: [NSView] { [patternField, encodingPopup, smartButton, caseButton, wordButton] }
 
     override init() {
         super.init()
@@ -98,7 +124,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         setUpEncodingPopup()
         setUpCaseButton()
         setUpSmartButton()
-        updateCaseButtonVisibility()
+        setUpWordButton()
+        applyMode()
     }
 
     deinit {
@@ -111,7 +138,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// rather than the search, so the toggle alone answers: each attempt
     /// derives its own folding from its own encoding.
     var isCaseSensitive: Bool {
-        guard !isSmartSearchEnabled else { return caseButton.state == .on }
+        guard mode == .bytes, !isSmartSearchEnabled else { return caseButton.state == .on }
         guard Self.supportsCaseFolding(currentEncoding()) else { return true }
         return caseButton.state == .on
     }
@@ -260,8 +287,10 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         syncSmartButtonAppearance()
         if !keepsOwnCaseRule {
             caseButton.state = Self.storedCaseSensitive ? .on : .off
+            wordButton.state = Self.storedWholeWord ? .on : .off
         }
         syncCaseButtonAppearance()
+        syncWordButtonAppearance()
         updateCaseButtonVisibility()
         rebuildPatternMenu()
     }
@@ -276,6 +305,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         onPatternError?(nil, nil)
         if let staged = stagedPattern {
             applyStaged(staged)
+        } else if mode == .code {
+            patternField.stringValue = CodeFindHistoryStore.mostRecent?.pattern ?? ""
         } else if let mostRecent = FindHistoryStore.mostRecent {
             patternField.stringValue = mostRecent.pattern
             select(mostRecent.encoding)
@@ -331,6 +362,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
 
     private func applyStaged(_ pattern: SelectionFindPattern) {
         setPatternText(pattern.text)
+        guard mode == .bytes else { return }
         select(pattern.encoding)
         pickedEncoding = pattern.encoding
         updateCaseButtonVisibility()
@@ -341,6 +373,10 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// Rebuilds the field's menu: the two lists and the commands that belong to
     /// each (§11, `Design/PATTERN_LIBRARY_IDEA.md`).
     @objc func rebuildPatternMenu() {
+        guard mode == .bytes else {
+            patternField.searchMenuTemplate = codeMenu()
+            return
+        }
         let menu = NSMenu()
         let recents = FindHistoryStore.recent
         if !recents.isEmpty {
@@ -489,7 +525,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     }
 
     @objc private func clearRecents() {
-        FindHistoryStore.clear()
+        if mode == .code { CodeFindHistoryStore.clear() } else { FindHistoryStore.clear() }
         rebuildPatternMenu()
     }
 
@@ -531,6 +567,15 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// What the field is asking for, or nil when it is asking for nothing —
     /// reported through `onPatternError`, or for an empty field `onError`.
     func searchRequest() -> Request? {
+        if mode == .code {
+            let text = patternField.stringValue
+            guard !text.isEmpty else {
+                onError?(Self.errorText(for: SearchError.emptyPattern))
+                return nil
+            }
+            onPatternError?(nil, nil)
+            return .text(text, caseSensitive: caseRule, wholeWord: wholeWordRule)
+        }
         guard isSmartSearchEnabled else {
             guard let pattern = parsedPattern() else { return nil }
             return .pattern(pattern,
@@ -559,6 +604,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// What was typed when a search started, waiting to be remembered: the
     /// history is the searches that found something (§11).
     private var searchToRecord: (text: String, caseSensitive: Bool)?
+    /// The same for a search of the code, with its whole-word rule.
+    private var codeSearchToRecord: CodeQueryEntry?
 
     /// A search is starting: it supersedes a staged pattern, and what was typed
     /// is kept to be written down if it finds anything. A picked row records
@@ -567,6 +614,17 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         findPasteboardSeen = FindPasteboard.write(patternField.stringValue)
         stagedPattern = nil
         searchToRecord = recording ? (patternField.stringValue, isCaseSensitive) : nil
+        codeSearchToRecord = recording && mode == .code
+            ? CodeQueryEntry(pattern: patternField.stringValue, caseSensitive: caseRule,
+                             wholeWord: wholeWordRule)
+            : nil
+    }
+
+    /// The code search that was started found something (#41).
+    func recordFoundCodeSearch() {
+        guard let started = codeSearchToRecord else { return }
+        codeSearchToRecord = nil
+        if CodeFindHistoryStore.record(started) { rebuildPatternMenu() }
     }
 
     /// The search that was started found something, in `encoding` — so it is
@@ -643,7 +701,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// Shows the case toggle only where case means something: with Smart
     /// Search on, or a text encoding chosen (§11).
     func updateCaseButtonVisibility() {
-        let foldable = isSmartSearchEnabled || Self.supportsCaseFolding(currentEncoding())
+        let foldable = mode == .code || isSmartSearchEnabled
+            || Self.supportsCaseFolding(currentEncoding())
         caseButton.isHidden = !foldable
         caseButton.isEnabled = foldable
         syncCaseButtonAppearance()
@@ -658,5 +717,125 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
             }
         }
         return L("Invalid pattern.")
+    }
+}
+
+// MARK: - Code mode (#41)
+
+extension PatternQueryControls {
+    /// The whole-word rule last chosen anywhere in code.
+    static var storedWholeWord: Bool {
+        defaults.object(forKey: wholeWordKey) as? Bool ?? false
+    }
+
+    /// The whole-word toggle's state: a bar's own, as its case rule is.
+    var wholeWordRule: Bool {
+        get { wordButton.state == .on }
+        set {
+            wordButton.state = newValue ? .on : .off
+            syncWordButtonAppearance()
+        }
+    }
+
+    fileprivate func setUpWordButton() {
+        wordButton.isBordered = false
+        wordButton.imagePosition = .imageOnly
+        wordButton.image = NSImage(systemSymbolName: "textformat.abc",
+                                   accessibilityDescription: L("Whole Word"))
+        wordButton.setButtonType(.pushOnPushOff)
+        wordButton.target = self
+        wordButton.action = #selector(wordToggled)
+        wordButton.state = Self.storedWholeWord ? .on : .off
+        syncWordButtonAppearance()
+    }
+
+    /// The same two states, in the same colour and weight, as the case toggle.
+    func syncWordButtonAppearance() {
+        let on = wordButton.state == .on
+        wordButton.contentTintColor = on ? .controlAccentColor : .secondaryLabelColor
+        wordButton.symbolConfiguration = NSImage.SymbolConfiguration(
+            pointSize: Self.iconPointSize, weight: on ? .semibold : .regular)
+        ControlHelp.describe(wordButton, name: L("Whole Word"),
+                             tooltip: on
+                                 ? L("Whole Word — a match is a whole name, not part of a longer one")
+                                 : L("Whole Word — off, a match may be part of a longer name"))
+    }
+
+    @objc fileprivate func wordToggled() {
+        Self.defaults.set(wordButton.state == .on, forKey: Self.wholeWordKey)
+        syncWordButtonAppearance()
+    }
+
+    /// Shows what the mode has, and nothing it has not.
+    fileprivate func applyMode() {
+        let code = mode == .code
+        encodingPopup.isHidden = code
+        smartButton.isHidden = code
+        wordButton.isHidden = !code
+        updateCaseButtonVisibility()
+        rebuildPatternMenu()
+    }
+
+    /// Code's menu: its own recent queries, and the command that clears them.
+    /// No library: a library of byte patterns does not apply to C.
+    fileprivate func codeMenu() -> NSMenu {
+        let menu = NSMenu()
+        let recents = CodeFindHistoryStore.recent
+        guard !recents.isEmpty else { return menu }
+        menu.addItem(Self.codeMenuHeader(L("Recent Queries")))
+        for entry in recents {
+            let item = NSMenuItem(title: entry.pattern, action: #selector(codeRecentPicked(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = entry.storedValue
+            let title = NSMutableAttributedString(
+                string: "\"\(entry.pattern)\"",
+                attributes: [.font: NSFont.systemFont(ofSize: Self.menuRowSize)])
+            var flags = [entry.caseSensitive ? L("match case") : L("ignore case")]
+            if entry.wholeWord { flags.append(L("whole word")) }
+            title.append(NSAttributedString(
+                string: "  " + flags.joined(separator: ", "),
+                attributes: [.font: NSFont.systemFont(ofSize: Self.menuFlagSize),
+                             .foregroundColor: NSColor.secondaryLabelColor]))
+            item.attributedTitle = title
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let clear = NSMenuItem(title: L("Clear Recents"), action: #selector(clearCodeRecents),
+                               keyEquivalent: "")
+        clear.target = self
+        clear.attributedTitle = NSAttributedString(
+            string: L("Clear Recents"), attributes: [.font: NSFont.systemFont(ofSize: Self.menuRowSize)])
+        menu.addItem(clear)
+        return menu
+    }
+
+    private static func codeMenuHeader(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.isEnabled = false
+        item.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: menuFlagSize, weight: .semibold))
+        item.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [.font: NSFont.systemFont(ofSize: menuFlagSize, weight: .semibold),
+                         .foregroundColor: NSColor.secondaryLabelColor])
+        return item
+    }
+
+    /// A recent code query fills the field and both rules, and the owner runs
+    /// it — as a pick from the dump's list does.
+    @objc fileprivate func codeRecentPicked(_ sender: NSMenuItem) {
+        guard let stored = sender.representedObject as? [String: Any],
+              let entry = CodeQueryEntry(stored: stored) else { return }
+        setPatternText(entry.pattern)
+        caseRule = entry.caseSensitive
+        wholeWordRule = entry.wholeWord
+        onPatternError?(nil, nil)
+        onPicked?()
+    }
+
+    @objc fileprivate func clearCodeRecents() {
+        CodeFindHistoryStore.clear()
+        rebuildPatternMenu()
     }
 }

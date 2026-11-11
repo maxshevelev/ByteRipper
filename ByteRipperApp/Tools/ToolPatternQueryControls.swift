@@ -87,6 +87,9 @@ final class ToolPatternQueryControls: ToolPatternQuery {
                 return nil
             }
             return attempts.map { Self.attempt($0.pattern, folding: $0.folding, encoding: $0.encoding) }
+        case .text:
+            // A tool's controls stay in the bytes mode.
+            return nil
         }
     }
 

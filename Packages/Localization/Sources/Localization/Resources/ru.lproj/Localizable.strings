@@ -344,6 +344,10 @@
 "Case Sensitive" = "С учётом регистра";
 "Case Sensitive — matching exactly" = "С учётом регистра — точное совпадение";
 "Case Sensitive — off, upper and lower case match" = "С учётом регистра — выключено, прописные и строчные совпадают";
+"Whole Word" = "Слово целиком";
+"Whole Word — a match is a whole name, not part of a longer one" = "Слово целиком — совпадением считается только имя целиком, а не часть более длинного имени";
+"Whole Word — off, a match may be part of a longer name" = "Слово целиком — выключено, совпадение может быть частью более длинного имени";
+"whole word" = "слово целиком";
 "Catalogue lists a newer revision (r.%1$@)" = "В каталоге есть более свежая ревизия (r.%1$@)";
 "Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry" = "В каталоге есть более свежая ревизия (r.%1$@), но её платформы лишь частично пересекаются с этой — подойдёт ли она этой плате, зависит от её собственного platform ID, которого в образе нет";
 "Checksum" = "Контрольная сумма";

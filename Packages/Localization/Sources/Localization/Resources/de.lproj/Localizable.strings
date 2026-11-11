@@ -344,6 +344,10 @@
 "Case Sensitive" = "Groß-/Kleinschreibung beachten";
 "Case Sensitive — matching exactly" = "Groß-/Kleinschreibung — exakte Übereinstimmung";
 "Case Sensitive — off, upper and lower case match" = "Groß-/Kleinschreibung — aus, Groß und Klein stimmen überein";
+"Whole Word" = "Ganzes Wort";
+"Whole Word — a match is a whole name, not part of a longer one" = "Ganzes Wort — als Treffer gilt nur ein vollständiger Name, nicht der Teil eines längeren";
+"Whole Word — off, a match may be part of a longer name" = "Ganzes Wort — aus, ein Treffer kann Teil eines längeren Namens sein";
+"whole word" = "ganzes Wort";
 "Catalogue lists a newer revision (r.%1$@)" = "Der Katalog führt eine neuere Revision (r.%1$@)";
 "Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry" = "Der Katalog führt eine neuere Revision (r.%1$@), deren Plattformen sich mit dieser nur teilweise überschneiden — ob sie dieser Platine dient, hängt von deren eigener Platform-ID ab, die das Image nicht mitführt";
 "Checksum" = "Prüfsumme";
