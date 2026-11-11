@@ -1,7 +1,7 @@
 import Foundation
 
-/// Where every occurrence of one search pattern is, in one file
-/// (`Design/FIND_HIGHLIGHT_PLAN.md`, §11).
+/// Where every occurrence of one search is, in one piece of content — a
+/// file's bytes, or a text (`Design/FIND_HIGHLIGHT_PLAN.md`, §11).
 ///
 /// Activating a search scans the whole file, so that one scan is the single
 /// source for everything downstream: the dump's greys, the find indicator, Find
@@ -9,8 +9,9 @@ import Foundation
 /// results panel and both minimap modes. They cannot disagree, because they read
 /// this.
 ///
-/// A match is one number — its start — because every match has the pattern's
-/// byte length. How those numbers are held follows their density, and the
+/// A match is one number — its start — because every match has the same
+/// length, `matchLength`, in the content's units (bytes, or UTF-16 units of a
+/// text). How those numbers are held follows their density, and the
 /// representation is what keeps the set exact instead of truncated:
 ///
 /// - `sparse`: sorted starts, 8 bytes each. What a signature search produces.
@@ -23,7 +24,7 @@ import Foundation
 ///
 /// The set knows nothing about which match the user is standing on: "3 of 128"
 /// is a question about the caret, and the caret belongs to the pane.
-public struct MatchSet: Equatable, Sendable {
+public struct MatchSet<Query: Equatable & Sendable>: Equatable, Sendable {
     public enum Storage: Equatable, Sendable {
         case sparse([UInt64])
         case bitmap(MatchBitmap)
@@ -31,9 +32,10 @@ public struct MatchSet: Equatable, Sendable {
     }
 
     /// What was searched — kept so the app can tell "the same search" from a new
-    /// one without holding the pattern beside the set.
-    public let pattern: SearchPattern
-    public let folding: CaseFolding
+    /// one without holding the query beside the set.
+    public let query: Query
+    /// How long every match is.
+    public let matchLength: Int
     /// The size of the file the scan covered. Bit `i` of a bitmap is offset `i`,
     /// so this is also the bitmap's bit count.
     public let extent: UInt64
@@ -61,12 +63,12 @@ public struct MatchSet: Equatable, Sendable {
     /// The ceiling on the index itself, not on the number of matches: 32 MB,
     /// which a bitmap reaches at an extent of 256 MB. Below that nothing
     /// degrades however common the pattern is.
-    public static let maxIndexBytes = 32 << 20
+    public static var maxIndexBytes: Int { FindLimits.maxIndexBytes }
 
-    public init(pattern: SearchPattern, folding: CaseFolding, extent: UInt64,
+    public init(query: Query, matchLength: Int, extent: UInt64,
                 total: Int, storage: Storage, indexedUpTo: UInt64? = nil) {
-        self.pattern = pattern
-        self.folding = folding
+        self.query = query
+        self.matchLength = max(matchLength, 1)
         self.extent = extent
         self.total = total
         self.storage = storage
@@ -75,14 +77,15 @@ public struct MatchSet: Equatable, Sendable {
 
     /// Direct form for tests and callers holding starts already: picks the
     /// representation the builder would have picked.
-    public init(pattern: SearchPattern, folding: CaseFolding, extent: UInt64,
+    public init(query: Query, matchLength: Int, extent: UInt64,
                 starts: [UInt64], indexedUpTo: UInt64? = nil) {
-        var builder = MatchSetBuilder(pattern: pattern, folding: folding, extent: extent)
+        var builder = MatchSetBuilder(query: query, matchLength: matchLength, extent: extent)
         builder.add(starts)
         self = builder.snapshot(indexedUpTo: indexedUpTo ?? extent)
     }
 
-    public var patternLength: Int { max(pattern.bytes.count, 1) }
+    /// How long every match is — the name the byte search has always used.
+    public var patternLength: Int { matchLength }
     public var isEmpty: Bool { total == 0 }
 
     /// Whether the matches can be pointed at individually — false only for a
@@ -97,7 +100,7 @@ public struct MatchSet: Equatable, Sendable {
     /// Whether the results panel should list the matches at all. Past the limit
     /// a list of four thousand rows impersonates a tool, so the panel states the
     /// count and refuses instead (§11).
-    public var isListable: Bool { total > 0 && total <= SearchEngine.defaultMaxResults }
+    public var isListable: Bool { total > 0 && total <= FindLimits.listedMatches }
 
     // MARK: - Reading the set
 
@@ -154,19 +157,7 @@ public struct MatchSet: Equatable, Sendable {
         return Step(index: target, range: range, wrapped: found == nil)
     }
 
-    public struct Step: Equatable, Sendable {
-        public let index: Int
-        public let range: Range<UInt64>
-        /// True when the step came round the end of the file: a single match
-        /// steps onto itself, which is a wrap too.
-        public let wrapped: Bool
-
-        public init(index: Int, range: Range<UInt64>, wrapped: Bool) {
-            self.index = index
-            self.range = range
-            self.wrapped = wrapped
-        }
-    }
+    public typealias Step = MatchStep
 
     /// The `index`-th match's start, or nil when the index is out of the set or
     /// the set is only counted.
@@ -437,20 +428,20 @@ public struct MatchBitmap: Equatable, Sendable {
 /// Fed in batches: the scan delivers a chunk's matches at once rather than one
 /// at a time, because a million hops onto the main actor is a cost the count
 /// does not justify.
-public struct MatchSetBuilder {
-    private let pattern: SearchPattern
-    private let folding: CaseFolding
+public struct MatchSetBuilder<Query: Equatable & Sendable> {
+    private let query: Query
+    private let matchLength: Int
     private let extent: UInt64
     private let maxIndexBytes: Int
-    private var storage: MatchSet.Storage
+    private var storage: MatchSet<Query>.Storage
     private var total = 0
     /// The count at which a sparse list costs more than the bitmap would.
     private let sparseLimit: Int
 
-    public init(pattern: SearchPattern, folding: CaseFolding, extent: UInt64,
-                maxIndexBytes: Int = MatchSet.maxIndexBytes) {
-        self.pattern = pattern
-        self.folding = folding
+    public init(query: Query, matchLength: Int, extent: UInt64,
+                maxIndexBytes: Int = FindLimits.maxIndexBytes) {
+        self.query = query
+        self.matchLength = matchLength
         self.extent = extent
         self.maxIndexBytes = maxIndexBytes
         self.storage = .sparse([])
@@ -486,7 +477,7 @@ public struct MatchSetBuilder {
         }
     }
 
-    public func finish() -> MatchSet {
+    public func finish() -> MatchSet<Query> {
         snapshot(indexedUpTo: extent)
     }
 
@@ -497,14 +488,25 @@ public struct MatchSetBuilder {
     /// Cheap enough to do on a cadence: the copy is the representation, which
     /// is bounded by the smaller of the bitmap (one bit per byte) and the list
     /// of starts, and sealing the ranks is a pass over the bitmap's blocks.
-    public func snapshot(indexedUpTo: UInt64) -> MatchSet {
+    public func snapshot(indexedUpTo: UInt64) -> MatchSet<Query> {
         var sealed = storage
         if case .bitmap(var bitmap) = sealed {
             bitmap.sealRanks()
             sealed = .bitmap(bitmap)
         }
-        return MatchSet(pattern: pattern, folding: folding, extent: extent,
+        return MatchSet(query: query, matchLength: matchLength, extent: extent,
                         total: total, storage: sealed,
                         indexedUpTo: min(indexedUpTo, extent))
     }
+}
+
+/// The limits every search shares, whatever it searches.
+public enum FindLimits {
+    /// The ceiling on an index itself, not on the number of matches: 32 MB,
+    /// which a bitmap reaches at an extent of 256 MB. Below that nothing
+    /// degrades however common the pattern is.
+    public static let maxIndexBytes = 32 << 20
+    /// The most matches a results list shows. Past it, a list of four thousand
+    /// rows impersonates a tool, so the list states the count instead (§11).
+    public static let listedMatches = 1000
 }

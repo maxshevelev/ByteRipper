@@ -379,7 +379,7 @@ final class SearchEngineTests: XCTestCase {
         let storage = ArrayStorage(bytes)
         let pattern = SearchPattern(bytes: [0xFF], encoding: .hex)
 
-        var builder = MatchSetBuilder(pattern: pattern, folding: .exact, extent: storage.size)
+        var builder = ByteMatchSetBuilder(pattern: pattern, folding: .exact, extent: storage.size)
         for try await batch in SearchEngine.matchStartsStream(pattern: pattern.bytes, in: storage) {
             builder.add(batch.starts)
         }
@@ -418,8 +418,8 @@ final class SearchEngineTests: XCTestCase {
     func testAPartialSetKnowsItIsPartial() async throws {
         let storage = ArrayStorage([UInt8](repeating: 0xAA, count: 16))
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        var builder = MatchSetBuilder(pattern: pattern, folding: .exact, extent: storage.size)
-        var partial: MatchSet?
+        var builder = ByteMatchSetBuilder(pattern: pattern, folding: .exact, extent: storage.size)
+        var partial: ByteMatchSet?
 
         for try await batch in SearchEngine.matchStartsStream(pattern: pattern.bytes, in: storage,
                                                               chunkSize: 4) {

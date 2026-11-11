@@ -7040,7 +7040,7 @@ final class MainViewController: NSViewController {
         // "searching" instead of going on listing the pattern before this one.
         // It stands in the first attempt's name until an attempt wins, and it
         // is what makes a second press find a search already under way.
-        pane.setMatches(MatchSet(pattern: first.pattern, folding: first.folding,
+        pane.setMatches(ByteMatchSet(pattern: first.pattern, folding: first.folding,
                                  extent: pane.fileSize, starts: [], indexedUpTo: 0))
         let operation = BackgroundOperation(name: L("Searching…")) { [weak self] in
             self?.cancelFind()
@@ -7089,7 +7089,7 @@ final class MainViewController: NSViewController {
     private func adopt(attempt: SmartSearch.Attempt, foundAt range: Range<UInt64>,
                        wrapped: Bool, direction: SearchDirection, goal: SearchPassGoal,
                        in pane: PaneViewModel) {
-        pane.setMatches(MatchSet(pattern: attempt.pattern, folding: attempt.folding,
+        pane.setMatches(ByteMatchSet(pattern: attempt.pattern, folding: attempt.folding,
                                  extent: pane.fileSize, starts: [], indexedUpTo: 0))
         findBar.adopt(encoding: attempt.encoding)
         // A match in hand is the strongest answer there is, so the search goes
@@ -7118,7 +7118,7 @@ final class MainViewController: NSViewController {
     private func reportNothingFound(attempts: [SmartSearch.Attempt], goal: SearchPassGoal,
                                     in pane: PaneViewModel) {
         if let last = attempts.last {
-            pane.setMatches(MatchSet(pattern: last.pattern, folding: last.folding,
+            pane.setMatches(ByteMatchSet(pattern: last.pattern, folding: last.folding,
                                      extent: pane.fileSize, starts: []))
         }
         // The button opens the panel whatever the search has to say (§11) —
@@ -7154,7 +7154,7 @@ final class MainViewController: NSViewController {
         // An index covering nothing yet, so the session exists from this
         // instant: a second press finds a search already under way and steps
         // within it instead of starting another.
-        pane.setMatches(MatchSet(pattern: pattern, folding: folding,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: folding,
                                  extent: pane.fileSize, starts: [], indexedUpTo: 0))
         startIndexing(pattern: pattern, folding: folding, in: pane)
     }
@@ -7188,7 +7188,7 @@ final class MainViewController: NSViewController {
                 pattern: pattern.bytes, in: storage, folding: folding, chunkSize: chunkSize,
                 shouldCancel: { Task.isCancelled },
                 progress: { operation.report($0) })
-            var builder = MatchSetBuilder(pattern: pattern, folding: folding, extent: extent)
+            var builder = ByteMatchSetBuilder(pattern: pattern, folding: folding, extent: extent)
             var publishedUpTo: UInt64 = 0
             var lastPublish = Date.distantPast
             do {
@@ -7267,7 +7267,7 @@ final class MainViewController: NSViewController {
     }
 
     /// Puts the user on a step the index answered.
-    private func land(_ step: MatchSet.Step, direction: SearchDirection,
+    private func land(_ step: ByteMatchSet.Step, direction: SearchDirection,
                       in pane: PaneViewModel) {
         recordJump(in: pane)
         pane.select(range: step.range)

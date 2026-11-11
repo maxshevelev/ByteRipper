@@ -34,6 +34,10 @@ packages:
   # ByteRipperCore, and the UEFI Structure's Contents search's.
   BytePattern:
     path: Packages/BytePattern
+  # The logic of a search — the index, the pass, the steps — over a dump's
+  # bytes through ByteRipperCore, and over the code panel's text.
+  Find:
+    path: Packages/Find
   ALSplitView:
     path: Packages/ALSplitView
   ToolModuleKit:
@@ -132,6 +136,8 @@ targets:
       # The masked pattern the find bar and `find_bytes` build, which
       # ByteRipperCore re-exports.
       - package: BytePattern
+      # The index and the steps of a search, which ByteRipperCore re-exports.
+      - package: Find
       - package: ALSplitView
       # What a tool-module and the app agree on (Design/TOOL_MODULES_PLAN.md).
       # The app links it; each tool-module package links it too, and that is the
@@ -373,6 +379,7 @@ targets:
       - target: ByteRipper
       - package: ByteRipperCore
       - package: BytePattern
+      - package: Find
       - package: ALSplitView
       - package: ToolModuleKit
       - package: AppPalette

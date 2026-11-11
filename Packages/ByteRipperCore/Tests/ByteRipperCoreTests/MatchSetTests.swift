@@ -11,8 +11,8 @@ final class MatchSetTests: XCTestCase {
     private let pattern = SearchPattern(bytes: [0xDE, 0xAD, 0xBE, 0xEF], encoding: .hex)
 
     private func set(extent: UInt64, starts: [UInt64],
-                     maxIndexBytes: Int = MatchSet.maxIndexBytes) -> MatchSet {
-        var builder = MatchSetBuilder(pattern: pattern, folding: .exact, extent: extent,
+                     maxIndexBytes: Int = ByteMatchSet.maxIndexBytes) -> ByteMatchSet {
+        var builder = ByteMatchSetBuilder(pattern: pattern, folding: .exact, extent: extent,
                                       maxIndexBytes: maxIndexBytes)
         builder.add(starts)
         return builder.finish()
@@ -20,16 +20,16 @@ final class MatchSetTests: XCTestCase {
 
     /// A set holding its starts sparsely, whatever the density — for comparing
     /// the two representations answer for answer.
-    private func sparse(extent: UInt64, starts: [UInt64]) -> MatchSet {
-        MatchSet(pattern: pattern, folding: .exact, extent: extent,
+    private func sparse(extent: UInt64, starts: [UInt64]) -> ByteMatchSet {
+        ByteMatchSet(pattern: pattern, folding: .exact, extent: extent,
                  total: starts.count, storage: .sparse(starts))
     }
 
-    private func bitmap(extent: UInt64, starts: [UInt64]) -> MatchSet {
+    private func bitmap(extent: UInt64, starts: [UInt64]) -> ByteMatchSet {
         var map = MatchBitmap(bitCount: extent)
         for start in starts { map.set(start) }
         map.sealRanks()
-        return MatchSet(pattern: pattern, folding: .exact, extent: extent,
+        return ByteMatchSet(pattern: pattern, folding: .exact, extent: extent,
                         total: starts.count, storage: .bitmap(map))
     }
 
@@ -57,7 +57,7 @@ final class MatchSetTests: XCTestCase {
     /// match that ends just before the range.
     func testASingleBytePatternDoesNotReachBackwards() {
         let single = SearchPattern(bytes: [0xFF], encoding: .hex)
-        var builder = MatchSetBuilder(pattern: single, folding: .exact, extent: 0x100)
+        var builder = ByteMatchSetBuilder(pattern: single, folding: .exact, extent: 0x100)
         builder.add([0x0F, 0x10])
         XCTAssertEqual(builder.finish().matches(intersecting: 0x10..<0x20), [0x10..<0x11])
     }
@@ -150,7 +150,7 @@ final class MatchSetTests: XCTestCase {
     /// batch.
     func testBatchedDeliveryMatchesOneBigBatch() {
         let starts = (0..<300).map { UInt64($0) * 4 }
-        var batched = MatchSetBuilder(pattern: pattern, folding: .exact, extent: 6400)
+        var batched = ByteMatchSetBuilder(pattern: pattern, folding: .exact, extent: 6400)
         for chunk in stride(from: 0, to: starts.count, by: 37) {
             batched.add(Array(starts[chunk..<min(chunk + 37, starts.count)]))
         }
@@ -222,7 +222,7 @@ final class MatchSetTests: XCTestCase {
     /// A counted set cannot be patched, and says so rather than pretending: the
     /// caller rescans.
     func testACountedSetRefusesToBeSpliced() {
-        var counted = MatchSet(pattern: pattern, folding: .exact, extent: 1 << 20,
+        var counted = ByteMatchSet(pattern: pattern, folding: .exact, extent: 1 << 20,
                                total: 9_000, storage: .counted)
         XCTAssertFalse(counted.splice([0x10], replacing: 0..<0x100))
         XCTAssertEqual(counted.total, 9_000, "a refused splice changes nothing")
@@ -233,7 +233,7 @@ final class MatchSetTests: XCTestCase {
     /// one row above where its match was.
     func testTheIndexAtAnOffsetPointsAtTheMatchThere() {
         let pattern = SearchPattern(bytes: [0xFF], encoding: .hex)
-        let dense = MatchSet(pattern: pattern, folding: .exact, extent: 4096,
+        let dense = ByteMatchSet(pattern: pattern, folding: .exact, extent: 4096,
                              starts: (0..<4096).map { $0 })
         for offset in [UInt64(0), 1, 63, 64, 65, 1000, 4095] {
             let index = dense.index(atOrAfter: offset)
@@ -242,7 +242,7 @@ final class MatchSetTests: XCTestCase {
         }
 
         // And with gaps, where "at or after" has to skip.
-        let sparse = MatchSet(pattern: pattern, folding: .exact, extent: 4096,
+        let sparse = ByteMatchSet(pattern: pattern, folding: .exact, extent: 4096,
                               starts: [0, 100, 4000])
         XCTAssertEqual(sparse.index(atOrAfter: 1).flatMap { sparse.start(at: $0) }, 100)
         XCTAssertEqual(sparse.index(atOrAfter: 100).flatMap { sparse.start(at: $0) }, 100)
@@ -257,7 +257,7 @@ final class MatchSetTests: XCTestCase {
     /// exactly as they do for the next match in line (§11).
     func testAStepSaysWhenItWrapped() throws {
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        let set = MatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [8, 16, 32])
+        let set = ByteMatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [8, 16, 32])
 
         let first = try XCTUnwrap(set.step(.forward, from: 0))
         XCTAssertEqual(first.index, 0)
@@ -278,7 +278,7 @@ final class MatchSetTests: XCTestCase {
     /// nothing at all reads as a broken key, so it re-lands and says why.
     func testALoneMatchWrapsOntoItself() throws {
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        let set = MatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [16])
+        let set = ByteMatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [16])
 
         let forward = try XCTUnwrap(set.step(.forward, from: 20))
         XCTAssertEqual(forward.range, 16..<17)
@@ -293,10 +293,10 @@ final class MatchSetTests: XCTestCase {
     /// cannot point at a match.
     func testThereIsNoStepWhereThereIsNothingToStepTo() {
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        let empty = MatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [])
+        let empty = ByteMatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [])
         XCTAssertNil(empty.step(.forward, from: 0))
 
-        let counted = MatchSet(pattern: pattern, folding: .exact, extent: 1 << 20,
+        let counted = ByteMatchSet(pattern: pattern, folding: .exact, extent: 1 << 20,
                                total: 500_000, storage: .counted)
         XCTAssertNil(counted.step(.forward, from: 0), "a count cannot be stepped through")
     }

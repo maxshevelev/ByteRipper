@@ -39,6 +39,9 @@ public enum SmartSearch {
         /// The encoding a field adopts when this attempt is the one that finds
         /// a match.
         public var encoding: SearchEncoding { encodings.first ?? pattern.encoding }
+
+        /// What the attempt looks for, as a search's query.
+        public var query: ByteQuery { ByteQuery(pattern: pattern, folding: folding) }
     }
 
     /// What a pass came back with.
@@ -162,25 +165,11 @@ public enum SmartSearch {
         shouldCancel: () -> Bool = { false },
         progress: (Double) -> Void = { _ in }
     ) throws -> Outcome {
-        guard !attempts.isEmpty else { return .nothing }
-        let total = Double(attempts.count)
-        for (position, attempt) in attempts.enumerated() {
-            let base = Double(position)
-            func scan(from offset: UInt64, half: Double) throws -> Range<UInt64>? {
-                try SearchEngine.find(pattern: attempt.pattern.bytes, in: storage, from: offset,
-                                      direction: direction, folding: attempt.folding,
-                                      chunkSize: chunkSize, shouldCancel: shouldCancel,
-                                      progress: { progress((base + half + $0 / 2) / total) })
-            }
-            if let range = try scan(from: anchor, half: 0) {
-                return .found(attempt: attempt, range: range, wrapped: false)
-            }
-            let edge: UInt64 = direction == .forward ? 0 : storage.size
-            if let range = try scan(from: edge, half: 0.5) {
-                return .found(attempt: attempt, range: range, wrapped: true)
-            }
-            progress((base + 1) / total)
-        }
-        return .nothing
+        let content = ByteFindContent(storage: storage, chunkSize: chunkSize)
+        guard let found = try FindPass.firstMatch(among: attempts.map(\.query), in: content,
+                                                  from: anchor, direction: direction,
+                                                  shouldCancel: shouldCancel,
+                                                  progress: progress) else { return .nothing }
+        return .found(attempt: attempts[found.index], range: found.range, wrapped: found.wrapped)
     }
 }

@@ -493,7 +493,7 @@ import UEFIImage
             let folding: CaseFolding
             let total: Int
 
-            init?(_ set: MatchSet?) {
+            init?(_ set: ByteMatchSet?) {
                 guard let set else { return nil }
                 pattern = set.pattern
                 folding = set.folding
@@ -513,7 +513,7 @@ import UEFIImage
     /// thousand rows, so per-match work would be the wrong way round. Each row
     /// stops early once every column is marked or after `perRowMarkLimit`
     /// matches — by then the row says all it can say at this scale.
-    nonisolated private static func matchOverlay(for set: MatchSet?, current: Range<UInt64>?,
+    nonisolated private static func matchOverlay(for set: ByteMatchSet?, current: Range<UInt64>?,
                                                  binning: OverviewBinning,
                                                  rowCount: Int,
                                                  extent: UInt64) -> MinimapView.MatchOverlay {
@@ -1054,7 +1054,7 @@ import UEFIImage
         }
         // The sets and the plates as values, so the walk needs nothing from the
         // main actor.
-        let sets = panes.map { pane -> MatchSet? in
+        let sets = panes.map { pane -> ByteMatchSet? in
             guard let pane, pane.isOpen else { return nil }
             return pane.highlightedMatchSet
         }

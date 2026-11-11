@@ -387,7 +387,7 @@ final class PaneViewModel: HexViewDataSource {
     ///
     /// It belongs to the pane that was searched, and to no other: greys in a
     /// file nobody searched would be a plain lie in comparison mode.
-    private(set) var matchSet: MatchSet?
+    private(set) var matchSet: ByteMatchSet?
 
     /// The match the user is standing on — what the find indicator draws in
     /// yellow. Nil between activating a search and the first Find Next,
@@ -451,12 +451,12 @@ final class PaneViewModel: HexViewDataSource {
     /// The set as far as everything that *draws* it is concerned: nil once the
     /// highlighting ended, even though the set is still there for the results
     /// panel to list (§11).
-    var highlightedMatchSet: MatchSet? { highlightsMatches ? matchSet : nil }
+    var highlightedMatchSet: ByteMatchSet? { highlightsMatches ? matchSet : nil }
 
     /// Installs a scan's result, and shows it: a search was just activated.
     /// `current` is read against the set, so a stale ordinal from a previous
     /// pattern can never point past the new one.
-    func setMatches(_ set: MatchSet?, current: Int? = nil) {
+    func setMatches(_ set: ByteMatchSet?, current: Int? = nil) {
         matchSet = set
         currentMatch = current.flatMap { set?.range(at: $0) }
         highlightsMatches = set != nil
@@ -472,7 +472,7 @@ final class PaneViewModel: HexViewDataSource {
     /// Ignored when the pane has moved on to another search since the scan
     /// started: a batch from a superseded scan has nothing to say about this
     /// one.
-    func fillMatches(_ set: MatchSet, filled: Range<UInt64>) {
+    func fillMatches(_ set: ByteMatchSet, filled: Range<UInt64>) {
         guard let existing = matchSet, existing.pattern == set.pattern,
               existing.folding == set.folding else { return }
         matchSet = set

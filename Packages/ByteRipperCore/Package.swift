@@ -19,14 +19,20 @@ let package = Package(
         // The masked pattern and its scan, shared with the UEFI Structure's
         // search, which may not link this package. Re-exported: to everyone
         // here it is the search engine's own.
-        .package(path: "../BytePattern")
+        .package(path: "../BytePattern"),
+        // The logic of a search — the index, the pass, the steps — shared
+        // with the code panel's search, which may not link this package.
+        // Re-exported for the same reason as BytePattern: to everyone here
+        // the index and the direction are the search engine's own.
+        .package(path: "../Find")
     ],
     targets: [
         .target(
             name: "ByteRipperCore",
             dependencies: [
                 .product(name: "Localization", package: "Localization"),
-                .product(name: "BytePattern", package: "BytePattern")
+                .product(name: "BytePattern", package: "BytePattern"),
+                .product(name: "Find", package: "Find")
             ]
         ),
         .testTarget(
@@ -34,6 +40,7 @@ let package = Package(
             dependencies: [
                 "ByteRipperCore",
                 .product(name: "Localization", package: "Localization"),
+                .product(name: "Find", package: "Find"),
             ],
             resources: [.copy("Fixtures")]
         )

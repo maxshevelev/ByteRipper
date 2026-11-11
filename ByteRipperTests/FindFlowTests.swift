@@ -1742,7 +1742,7 @@ final class FindFlowTests: XCTestCase {
 
         // A half-built index: two matches found, the file covered to byte 6.
         let pattern = SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex)
-        let half = MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        let half = ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                             starts: [0, 3], indexedUpTo: 6)
         pane.setMatches(half, current: 0)
         // Standing on the first match, as a search leaves the user.
@@ -1777,7 +1777,7 @@ final class FindFlowTests: XCTestCase {
 
         // Covered to byte 8, so the match at 128 is not in the index yet.
         let pattern = SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex)
-        pane.setMatches(MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                                  starts: [0], indexedUpTo: 8),
                         current: 0)
         pane.select(range: 0..<2)
@@ -1940,13 +1940,13 @@ final class FindFlowTests: XCTestCase {
 
         let pattern = SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex)
         // A half-built index: nothing found in the stretch covered so far.
-        pane.setMatches(MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                                  starts: [], indexedUpTo: 0))
         XCTAssertEqual(view.content, .searching, "not \"no matches\" — the scan has not looked yet")
         XCTAssertEqual(headerText(of: view), "Search results (searching…)")
 
         // The first occurrence, with the file's tail still to go.
-        pane.setMatches(MatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
+        pane.setMatches(ByteMatchSet(pattern: pattern, folding: .exact, extent: pane.fileSize,
                                  starts: [0], indexedUpTo: 2))
         XCTAssertEqual(view.content, .matches(total: 1))
         XCTAssertEqual(headerText(of: view), "Search results (1, searching…)",
@@ -2480,7 +2480,7 @@ final class FindFlowTests: XCTestCase {
     func testOnlyANewSetIsAnnouncedToTheList() {
         let pane = PaneViewModel()
         let pattern = SearchPattern(bytes: [0xAA], encoding: .hex)
-        let set = MatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [0, 8, 16])
+        let set = ByteMatchSet(pattern: pattern, folding: .exact, extent: 64, starts: [0, 8, 16])
         var setChanges = 0
         var appearanceChanges = 0
         pane.onMatchSetChanged = { setChanges += 1 }

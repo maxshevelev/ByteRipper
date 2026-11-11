@@ -230,7 +230,7 @@ final class FragmentMinimapTests: XCTestCase {
         let partWalks = surface.minimap.matchOverlayWalksForTesting
         let tabWalks = controller.matchOverlayWalksForTesting
 
-        let set = MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
+        let set = ByteMatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
                            folding: .exact, extent: 0x80, starts: [0x10, 0x40])
         part.setMatches(set, current: 0)
 
