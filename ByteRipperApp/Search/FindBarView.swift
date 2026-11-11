@@ -267,14 +267,14 @@ final class FindBarView: NSView {
     /// Whether Smart Search is on.
     var isSmartSearchEnabled: Bool { query.isSmartSearchEnabled }
 
-    /// Bytes in a dump, or text in the code panel (#41). In code the bar has
-    /// no results button: the panel lists dump offsets, and the code's list
-    /// of every occurrence is the navigator's Search tab.
-    var mode: PatternQueryControls.Mode {
-        get { query.mode }
+    /// What the bar searches (`FindBarProfile`, #41). Without a results list
+    /// the button is not there: the code's list of every occurrence is the
+    /// navigator's Search tab, not the pane's results panel.
+    var profile: FindBarProfile {
+        get { query.profile }
         set {
-            query.mode = newValue
-            findAllButton.isHidden = newValue == .code
+            query.profile = newValue
+            findAllButton.isHidden = !newValue.offersResultsList
         }
     }
 

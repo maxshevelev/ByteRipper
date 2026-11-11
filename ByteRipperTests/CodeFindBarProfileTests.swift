@@ -2,10 +2,10 @@ import XCTest
 import Localization
 @testable import ByteRipper
 
-/// The Find bar in the code panel's mode (#41): what it shows, what it asks
+/// The Find bar's code profile (#41): what it shows, what it asks
 /// for, and its own history of recent queries.
 @MainActor
-final class CodeFindBarModeTests: XCTestCase {
+final class CodeFindBarProfileTests: XCTestCase {
     private var defaultsName = ""
     private var defaults: UserDefaults!
 
@@ -28,7 +28,7 @@ final class CodeFindBarModeTests: XCTestCase {
 
     private func codeBar() -> FindBarView {
         let bar = FindBarView()
-        bar.mode = .code
+        bar.profile = .code
         return bar
     }
 
