@@ -14,10 +14,13 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     final class FunctionItem {
         let index: Int
         let name: String
+        /// The mark the Functions list draws for it (`CodeNavigatorCell`).
+        let mark: String?
         let children: [HitItem]
-        init(index: Int, name: String, hits: [TextSearchHit]) {
+        init(index: Int, name: String, mark: String? = nil, hits: [TextSearchHit]) {
             self.index = index
             self.name = name
+            self.mark = mark
             children = hits.map { HitItem(function: index, hit: $0) }
         }
     }
@@ -35,7 +38,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     /// Where the app puts its query controls.
     let querySlot = NSView()
     let summaryLabel = NSTextField(labelWithString: "")
-    let outline = NSOutlineView()
+    let outline = SearchOutlineView()
     private let scroll = NSScrollView()
     private(set) var items: [FunctionItem] = []
 
@@ -75,7 +78,10 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         outline.rowSizeStyle = .custom
         outline.style = .plain
         outline.backgroundColor = .clear
-        outline.indentationPerLevel = 12
+        // The rows draw their own chevron and inset, as the Functions list's
+        // groups do; the outline's own triangle and indent are not used.
+        outline.indentationPerLevel = 0
+        outline.intercellSpacing = NSSize(width: 0, height: 0)
         outline.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         outline.dataSource = self
         outline.delegate = self
@@ -166,56 +172,112 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
-        ceil(ToolPanelFont.size * 1.6)
+        let row = CodePaneView.navigatorRowHeight
+        guard let hit = item as? HitItem else { return row }
+        // A long line wraps: the row is as tall as its lines.
+        let width = max(40, outlineView.bounds.width - Self.hitInset - Self.hitTrailing - 4)
+        let height = Self.line(of: hit.hit)
+            .boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
+                          options: [.usesLineFragmentOrigin, .usesFontLeading]).height
+        return max(row, ceil(height) + 2 * Self.hitPadding)
     }
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?,
                      item: Any) -> NSView? {
-        let id = NSUserInterfaceItemIdentifier("cell")
+        if let function = item as? FunctionItem {
+            let id = NSUserInterfaceItemIdentifier("function")
+            let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? CodeNavigatorCell
+                ?? CodeNavigatorCell(identifier: id)
+            cell.showsDisclosure(true)
+            cell.showsCalls(expandable: true, expanded: outlineView.isItemExpanded(function))
+            cell.onToggle = { [weak outlineView, weak cell] in
+                guard let outlineView else { return }
+                if outlineView.isItemExpanded(function) {
+                    outlineView.collapseItem(function)
+                } else {
+                    outlineView.expandItem(function)
+                }
+                cell?.showsCalls(expandable: true, expanded: outlineView.isItemExpanded(function))
+            }
+            cell.showsIcon(function.mark)
+            let line = NSMutableAttributedString(string: function.name, attributes: [
+                .font: CodePaneView.navigatorBoldFont(), .foregroundColor: NSColor.labelColor
+            ])
+            line.append(NSAttributedString(string: "  \(function.children.count)", attributes: [
+                .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
+            ]))
+            cell.textField?.attributedStringValue = line
+            return cell
+        }
+        guard let hit = item as? HitItem else { return nil }
+        let id = NSUserInterfaceItemIdentifier("hit")
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? NSTableCellView ?? {
             let cell = NSTableCellView()
             cell.identifier = id
-            let text = NSTextField(labelWithString: "")
-            text.lineBreakMode = .byTruncatingTail
+            let text = NSTextField(wrappingLabelWithString: "")
+            text.maximumNumberOfLines = 0
+            text.lineBreakMode = .byWordWrapping
+            text.isSelectable = false
             text.translatesAutoresizingMaskIntoConstraints = false
+            text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             cell.addSubview(text)
             cell.textField = text
             NSLayoutConstraint.activate([
-                text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-                text.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -4),
-                text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+                text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: Self.hitInset),
+                text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -Self.hitTrailing),
+                text.topAnchor.constraint(equalTo: cell.topAnchor, constant: Self.hitPadding)
             ])
             return cell
         }()
-        if let function = item as? FunctionItem {
-            let line = NSMutableAttributedString(string: function.name, attributes: [
-                .font: NSFont.systemFont(ofSize: ToolPanelFont.size, weight: .semibold),
-                .foregroundColor: NSColor.labelColor
-            ])
-            line.append(NSAttributedString(string: "  \(function.children.count)", attributes: [
-                .font: NSFont.systemFont(ofSize: ToolPanelFont.size - 1),
-                .foregroundColor: NSColor.secondaryLabelColor
-            ]))
-            cell.textField?.attributedStringValue = line
-        } else if let hit = item as? HitItem {
-            cell.textField?.attributedStringValue = Self.line(of: hit.hit)
-        }
+        cell.textField?.attributedStringValue = Self.line(of: hit.hit)
         return cell
+    }
+
+    /// Where an occurrence's line starts: under the function's name, past
+    /// the chevron and the mark, as a group's functions stand under it.
+    static var hitInset: CGFloat {
+        4 + CodeNavigatorCell.disclosureRoom
+            + CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize) + 5
+    }
+    static let hitTrailing: CGFloat = 8
+    static let hitPadding: CGFloat = 3
+
+    /// A width the rows have not been measured at: the lines wrap anew.
+    private var measuredWidth: CGFloat = 0
+
+    override func layout() {
+        super.layout()
+        let width = outline.bounds.width
+        guard width != measuredWidth, outline.numberOfRows > 0 else { return }
+        measuredWidth = width
+        outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
+    }
+
+    func outlineViewItemDidExpand(_ notification: Notification) { redrawChevron(notification) }
+    func outlineViewItemDidCollapse(_ notification: Notification) { redrawChevron(notification) }
+
+    private func redrawChevron(_ notification: Notification) {
+        guard let item = notification.userInfo?["NSObject"] as? FunctionItem else { return }
+        let row = outline.row(forItem: item)
+        guard row >= 0,
+              let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? CodeNavigatorCell
+        else { return }
+        cell.showsCalls(expandable: true, expanded: outline.isItemExpanded(item))
     }
 
     /// The occurrence's line in the code's type, the match set off as the
     /// code sets off a found match.
     static func line(of hit: TextSearchHit) -> NSAttributedString {
-        let font = ToolPanelFont.monospaced(size: ToolPanelFont.size - 1, bold: false)
+        // The navigator's own type, regular: a line to recognise, not code to
+        // read — the code is a click away.
         let text = NSMutableAttributedString(string: hit.lineText, attributes: [
-            .font: font, .foregroundColor: NSColor.labelColor
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
         ])
         let length = text.length
         let start = min(hit.rangeInLine.lowerBound, length)
         let end = min(hit.rangeInLine.upperBound, length)
         if end > start {
             let range = NSRange(location: start, length: end - start)
-            text.addAttribute(.font, value: ToolPanelFont.monospaced(size: font.pointSize, bold: true), range: range)
             text.addAttribute(.backgroundColor, value: CodePaneView.findMatchFill, range: range)
         }
         return text
@@ -241,4 +303,10 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
             onChoose?(function.index, nil)
         }
     }
+}
+
+/// The Search tab's tree: the rows draw their own chevron, so the outline's
+/// triangle takes no room and is never drawn.
+final class SearchOutlineView: NSOutlineView {
+    override func frameOfOutlineCell(atRow row: Int) -> NSRect { .zero }
 }

@@ -219,6 +219,24 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual((pane.cTextView.string as NSString).substring(with: pane.cTextView.selectedRange()), "Status")
     }
 
+    /// The tab takes the filter's bar away, and the keyboard out of the
+    /// filter: its focus ring would be drawn over the tab.
+    func testTheTabHidesTheFilterAndItsFocus() throws {
+        let (pane, window) = try paneInWindow()
+        let filter = try XCTUnwrap(all(NSSearchField.self, in: pane).first)
+        window.makeFirstResponder(filter)
+        pane.showSearchTab(true)
+        XCTAssertTrue(filter.isHiddenOrHasHiddenAncestor)
+        let responder = window.firstResponder as? NSView
+        XCTAssertFalse(responder?.isDescendant(of: filter) ?? false, "the filter lets the keyboard go")
+        pane.showSearchTab(false)
+        XCTAssertFalse(filter.isHiddenOrHasHiddenAncestor)
+    }
+
+    private func all<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {
+        view.subviews.flatMap { ($0 as? T).map { [$0] } ?? [] } + view.subviews.flatMap { all(type, in: $0) }
+    }
+
     /// Choosing a list puts the lists back in front of the tab.
     func testAListTakesTheTabsPlace() throws {
         let (pane, _) = try paneInWindow()

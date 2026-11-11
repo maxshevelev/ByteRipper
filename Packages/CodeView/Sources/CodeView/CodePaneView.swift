@@ -2497,9 +2497,16 @@ import ToolModuleKit
     /// The Search tab's place in the switch, after the lists.
     static let searchSegment = List.allCases.count
 
-    /// The switch says which tab is in front: a list, or Search.
+    /// The switch says which tab is in front: a list, or Search. The list's
+    /// filter bar goes while the tab is up — the keyboard with it, or its
+    /// focus ring would be drawn over the tab.
     func drawListSwitch() {
         listControl.selectedSegment = showsSearchTab ? Self.searchSegment : state.list.rawValue
+        if showsSearchTab, let responder = window?.firstResponder as? NSView,
+           responder.isDescendant(of: navigatorBar) {
+            window?.makeFirstResponder(functionTable)
+        }
+        navigatorBar.isHidden = showsSearchTab
     }
 
     /// Every function's C, by its place in the artifact: what the Search tab
@@ -2508,6 +2515,12 @@ import ToolModuleKit
         model.functions.indices.compactMap { index in
             model.functions[index].c.map { (index, $0) }
         }
+    }
+
+    /// A function's mark as the Functions list draws it: how far its review
+    /// has got, or the library it is from.
+    func navigatorMark(of index: Int) -> String {
+        Self.functionMark(state.group(of: index), library: state.librarySection(of: index))
     }
 
     /// A function's name as the navigator writes it.

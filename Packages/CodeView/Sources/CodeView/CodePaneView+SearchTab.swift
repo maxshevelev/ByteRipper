@@ -55,7 +55,8 @@ extension CodePaneView {
             }.value
             guard let self, !Task.isCancelled, self.searchedAll == query, let result else { return }
             let items = result.groups.map {
-                CodeSearchPanel.FunctionItem(index: $0.id, name: self.navigatorName(of: $0.id), hits: $0.hits)
+                CodeSearchPanel.FunctionItem(index: $0.id, name: self.navigatorName(of: $0.id),
+                                             mark: self.navigatorMark(of: $0.id), hits: $0.hits)
             }
             self.searchPanel.show(items, truncated: result.isTruncated)
             self.searchAllTask = nil
