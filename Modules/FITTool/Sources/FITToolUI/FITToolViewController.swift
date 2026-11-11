@@ -988,16 +988,15 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         plate.show(entry.processorGroups.map {
             (L("CPUID %1$@", $0.cpuid), $0.codeNames.joined(separator: ", "), !$0.codeNames.isEmpty)
         }, quiet: entry.isBackup)
-        plate.onInfo = { [weak self, weak plate] index, rect in
-            guard let self, let plate else { return }
-            self.showProcessors(key: entry.key, group: index, from: plate.textView, rect: rect)
+        plate.onInfo = { [weak self] index, button in
+            self?.showProcessors(key: entry.key, group: index, from: button, rect: nil)
         }
         return plate
     }
 
     /// A CPUID's `ⓘ`: the processors behind it, in a popover off the `ⓘ`.
     // help: fit.processors
-    private func showProcessors(key: Int, group: Int, from anchor: NSView, rect: NSRect) {
+    private func showProcessors(key: Int, group: Int, from anchor: NSView, rect: NSRect?) {
         guard let entry = entry(ofKey: key), group < entry.processorGroups.count else { return }
         processorsPopover?.close()
         processorsPopover = FITProcessorsPopover.show(entry.processorGroups[group], from: anchor, rect: rect)
@@ -1099,16 +1098,21 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     /// The microcode row the lines are under.
     var key: Int?
     let textView = FITCPUIDTextView()
-    /// What a click on a line's `ⓘ` asks for: the line's place, and where the
-    /// `ⓘ` is in `textView`.
-    var onInfo: ((Int, NSRect) -> Void)?
+    /// What a click on a line's `ⓘ` asks for: the line's place, and the
+    /// `ⓘ` the popover stands off.
+    var onInfo: ((Int, NSView) -> Void)?
+    /// The lines' `ⓘ`: the panel's own button, as a module's in the UEFI
+    /// tree, laid over the room the text keeps for it after the CPUID. A real
+    /// button, so the click is its own — a link in the text lost it to the
+    /// text's selection and the table's row more often than not. Tagged
+    /// with its line; hidden where a line has none.
+    private(set) var infoButtons: [ToolPanelInfoButton] = []
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
         textView.frame = bounds.insetBy(dx: 0, dy: Self.margin)
         textView.autoresizingMask = [.width, .height]
-        textView.onInfo = { [weak self] in self?.onInfo?($0, $1) }
         addSubview(textView)
     }
 
@@ -1119,7 +1123,32 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         super.layout()
         textView.frame = NSRect(x: 2, y: Self.margin, width: max(0, bounds.width - 4),
                                 height: max(0, bounds.height - 2 * Self.margin))
+        placeInfoButtons()
     }
+
+    /// Sets each `ⓘ` over the room its line keeps for it; one whose room
+    /// is cut off by a narrow column is hidden with it.
+    private func placeInfoButtons() {
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        for button in infoButtons {
+            guard let room = textView.rectOfInfo(button.tag), room.width > 0 else {
+                button.isHidden = true
+                continue
+            }
+            let side = ToolPanelInfoButton.side
+            button.frame = NSRect(x: room.midX - side / 2, y: room.midY - side / 2, width: side, height: side)
+            button.isHidden = room.maxX > textView.bounds.width
+        }
+    }
+
+    /// Opens line `index`'s processors, as a click on its `ⓘ` does — where
+    /// the line has one.
+    func openInfo(_ index: Int) {
+        guard let button = infoButtons.first(where: { $0.tag == index }) else { return }
+        onInfo?(index, button)
+    }
+
+    @objc private func infoClicked(_ sender: NSButton) { onInfo?(sender.tag, sender) }
 
     /// The height of one line at `textSize`.
     static func lineHeight(textSize: CGFloat) -> CGFloat {
@@ -1152,7 +1181,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
             ]))
             if line.hasInfo {
                 text.append(NSAttributedString(string: "  "))
-                text.append(FITCPUIDTextView.infoMark(index: index, size: size))
+                text.append(FITCPUIDTextView.infoRoom(index: index))
             }
             if !line.names.isEmpty {
                 text.append(NSAttributedString(string: "  " + line.names, attributes: [
@@ -1164,16 +1193,28 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
         textView.textStorage?.setAttributedString(text)
         textView.setSelectedRange(NSRange(location: 0, length: 0))
+        infoButtons.forEach { $0.removeFromSuperview() }
+        infoButtons = lines.indices.filter { lines[$0].hasInfo }.map { index in
+            let button = ToolPanelInfoButton()
+            button.translatesAutoresizingMaskIntoConstraints = true
+            button.tag = index
+            button.target = self
+            button.action = #selector(infoClicked(_:))
+            ControlHelp.describe(button, name: L("Processors"), tooltip: L("Show the processors with this CPUID"))
+            textView.addSubview(button)
+            return button
+        }
+        needsLayout = true
+        placeInfoButtons()
     }
 }
 
 /// The text the CPUIDs are: selectable, never edited, on no background of
 /// its own. Its `ⓘ` are links; a copy leaves them out.
 @MainActor final class FITCPUIDTextView: NSTextView, NSTextViewDelegate {
-    /// The scheme of an `ⓘ`'s link; the line's place is its host.
-    static let scheme = "fit-cpuid-info"
-
-    var onInfo: ((Int, NSRect) -> Void)?
+    /// The attribute that marks the room a line keeps for its `ⓘ`; its
+    /// value is the line's place.
+    static let infoLine = NSAttributedString.Key("FITCPUIDInfoLine")
 
     convenience init() {
         let storage = NSTextStorage()
@@ -1191,28 +1232,21 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         textContainerInset = .zero
         isVerticallyResizable = false
         isHorizontallyResizable = false
-        // The `ⓘ` keeps its own colour: no link blue, no underline.
-        linkTextAttributes = [.cursor: NSCursor.pointingHand]
         delegate = self
     }
 
-    /// One line's `ⓘ`: the panel's info glyph in the CPUID's weight and the
-    /// colour of a link — which it is, to the line's processors — with the
-    /// same words a field's `ⓘ` has.
-    static func infoMark(index: Int, size: CGFloat) -> NSAttributedString {
+    /// The room a line keeps for its `ⓘ` right after the CPUID: an empty
+    /// attachment the button's size, which the plate lays the button over.
+    static func infoRoom(index: Int) -> NSAttributedString {
         let attachment = NSTextAttachment()
-        let image = FITProcessorsPopover.infoImage(size: size)
-        attachment.image = image
-        let side = image?.size ?? NSSize(width: size, height: size)
+        let side = ToolPanelInfoButton.side
+        attachment.image = NSImage(size: NSSize(width: side, height: side))
         let font = ToolPanelFont.body(weight: .medium)
-        attachment.bounds = NSRect(x: 0, y: (font.capHeight - side.height) / 2, width: side.width, height: side.height)
-        let mark = NSMutableAttributedString(attachment: attachment)
-        mark.addAttributes([
-            .link: URL(string: "\(scheme)://\(index)") as Any,
-            .toolTip: L("Show the processors with this CPUID"),
-            .font: font,
-        ], range: NSRange(location: 0, length: mark.length))
-        return mark
+        attachment.bounds = NSRect(x: 0, y: (font.capHeight - side) / 2, width: side, height: side)
+        let room = NSMutableAttributedString(attachment: attachment)
+        room.addAttributes([.font: font, Self.infoLine: index],
+                           range: NSRange(location: 0, length: room.length))
+        return room
     }
 
     /// `text` as a reader copies it: without the character an `ⓘ` stands on,
@@ -1221,38 +1255,18 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         text.replacingOccurrences(of: "  \u{FFFC}", with: "").replacingOccurrences(of: "\u{FFFC}", with: "")
     }
 
-    /// The line an `ⓘ` link names.
-    static func line(of link: Any) -> Int? {
-        let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
-        guard url?.scheme == scheme else { return nil }
-        return url?.host.flatMap { Int($0) }
-    }
-
-    /// Where line `index`'s `ⓘ` is drawn, in this view.
+    /// Where line `index`'s `ⓘ` stands, in this view; nil for a line without.
     func rectOfInfo(_ index: Int) -> NSRect? {
         guard let storage = textStorage, let layoutManager, let textContainer else { return nil }
         var found: NSRect?
-        storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
-            guard let value, Self.line(of: value) == index else { return }
+        storage.enumerateAttribute(Self.infoLine, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+            guard (value as? Int) == index else { return }
             let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
             found = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
                 .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
             stop.pointee = true
         }
         return found
-    }
-
-    /// Opens line `index`'s processors, as a click on its `ⓘ` does — where
-    /// the line has one.
-    func openInfo(_ index: Int) {
-        guard let rect = rectOfInfo(index) else { return }
-        onInfo?(index, rect)
-    }
-
-    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-        guard let index = Self.line(of: link) else { return false }
-        openInfo(index)
-        return true
     }
 
     // MARK: - Copying

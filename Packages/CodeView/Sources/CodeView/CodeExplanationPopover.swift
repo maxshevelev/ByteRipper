@@ -124,26 +124,7 @@ import ToolModuleKit
     /// A long list of uses in a box of its own height that scrolls, so the
     /// popover stays on the screen.
     static func scrolling(_ list: NSView, width: CGFloat, height: CGFloat) -> NSView {
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
-        scroll.drawsBackground = false
-        scroll.borderType = .noBorder
-        list.translatesAutoresizingMaskIntoConstraints = false
-        let clip = FlippedClipView()
-        clip.drawsBackground = false
-        scroll.contentView = clip
-        scroll.documentView = list
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        let rows = list.fittingSize.height
-        NSLayoutConstraint.activate([
-            list.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            list.topAnchor.constraint(equalTo: clip.topAnchor),
-            list.widthAnchor.constraint(equalToConstant: width),
-            scroll.widthAnchor.constraint(equalToConstant: width),
-            scroll.heightAnchor.constraint(equalToConstant: min(rows, height))
-        ])
-        return scroll
+        ToolPanelPopover.scrolling(list, width: width, height: height)
     }
 
     /// The name as the code writes it; the removed blocks' line has a title,
@@ -327,11 +308,6 @@ import ToolModuleKit
         close()
         onUse?(sender.tag)
     }
-}
-
-/// A clip view whose list starts at the top, as a list is read.
-final class FlippedClipView: NSClipView {
-    override var isFlipped: Bool { true }
 }
 
 /// The light rounded ground a code snippet sits on in the popover: the

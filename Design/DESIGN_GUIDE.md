@@ -51,7 +51,8 @@ The app has two kinds of popover, and each kind has one layout.
 
 It says what something is and offers the one place it leads to. Examples:
 the function under a call, a name the code explains, a function's callers,
-and a module's summary from the UEFI tree.
+a module's summary from the UEFI tree, and a CPUID's processors in the FIT
+table and the microcode catalogue.
 
 The layout lives in `ToolPanelPopover` (`Packages/ToolModuleKit`). A popover
 asks it for its parts (`stack`, `title`, `prose`, `action`, `content`,
@@ -116,8 +117,13 @@ a cut's offset and description.
   a description is available. Use `NSColor.linkColor`, and on a selected row
   use `alternateSelectedControlTextColor`, because blue on the accent colour
   cannot be seen.
-- **The (i)** is `info.circle`, semibold, at `ToolPanelTable.codeBadgePointSize`,
-  drawn as a palette symbol in that colour.
+- **The (i)** is `ToolPanelInfoButton` (`Packages/ToolModuleKit`):
+  `info.circle`, semibold, at `ToolPanelTable.codeBadgePointSize`, drawn as a
+  palette symbol in that colour, with its `backgroundStyle` passed on from the
+  row. It is always a real button. Inside text, as on the FIT table's CPUID
+  lines, the text keeps an empty room for it and the button is laid over
+  that room. A link or an attachment in the text loses the click to the
+  text's selection and to the table's row.
 - **Size an image view from `image.size`, not from its intrinsic size.** An
   image view reports the wrong size for a configured symbol. Tint with
   `.sourceIn` when the symbol is not a palette symbol.

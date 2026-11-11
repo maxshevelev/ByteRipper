@@ -332,15 +332,13 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
 @MainActor final class FITCatalogueCPUIDCell: NSTableCellView {
     /// What the `ⓘ` opens; nil when the cell has no `ⓘ`.
     private(set) var group: FITProcessorGroup?
-    let infoButton = NSButton()
-    /// The `ⓘ`'s colour: a link's, and the selection's text colour while the
-    /// row is selected — blue on the accent is not seen.
-    private(set) var infoColor: NSColor = .linkColor {
-        didSet { infoButton.image = FITProcessorsPopover.infoImage(size: 11, color: infoColor) }
-    }
+    /// The panel's (i), as every row's: a link's colour, the selection's text
+    /// colour while the row is selected — blue on the accent is not seen.
+    let infoButton = ToolPanelInfoButton()
+    var infoColor: NSColor { infoButton.color }
 
     override var backgroundStyle: NSView.BackgroundStyle {
-        didSet { infoColor = backgroundStyle == .emphasized ? .alternateSelectedControlTextColor : .linkColor }
+        didSet { infoButton.backgroundStyle = backgroundStyle }
     }
 
     init(target: AnyObject, action: Selector) {
@@ -354,13 +352,8 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         field.setContentHuggingPriority(.required, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textField = field
-        infoButton.image = FITProcessorsPopover.infoImage(size: 11, color: infoColor)
-        infoButton.isBordered = false
-        infoButton.imagePosition = .imageOnly
         infoButton.target = target
         infoButton.action = action
-        infoButton.translatesAutoresizingMaskIntoConstraints = false
-        infoButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         ControlHelp.describe(infoButton, name: L("Processors"), tooltip: L("Show the processors with this CPUID"))
         addSubview(field)
         addSubview(infoButton)
@@ -370,8 +363,8 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
             infoButton.leadingAnchor.constraint(equalTo: field.trailingAnchor, constant: 5),
             infoButton.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
             infoButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            infoButton.widthAnchor.constraint(equalToConstant: 14),
-            infoButton.heightAnchor.constraint(equalToConstant: 14),
+            infoButton.widthAnchor.constraint(equalToConstant: ToolPanelInfoButton.side),
+            infoButton.heightAnchor.constraint(equalToConstant: ToolPanelInfoButton.side),
         ])
     }
 

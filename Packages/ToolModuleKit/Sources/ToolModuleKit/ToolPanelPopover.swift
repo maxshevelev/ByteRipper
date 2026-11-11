@@ -95,6 +95,36 @@ import AppKit
         return container
     }
 
+    /// `content` in a box `height` tall at most that scrolls, `width` wide:
+    /// a long list or a long text keeps the popover on the screen.
+    public static func scrolling(_ content: NSView, width: CGFloat, height: CGFloat) -> NSView {
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        content.translatesAutoresizingMaskIntoConstraints = false
+        let clip = FlippedClip()
+        clip.drawsBackground = false
+        scroll.contentView = clip
+        scroll.documentView = content
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let rows = content.fittingSize.height
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            content.topAnchor.constraint(equalTo: clip.topAnchor),
+            content.widthAnchor.constraint(equalToConstant: width),
+            scroll.widthAnchor.constraint(equalToConstant: width),
+            scroll.heightAnchor.constraint(equalToConstant: min(rows, height)),
+        ])
+        return scroll
+    }
+
+    /// A clip view that starts at the top.
+    private final class FlippedClip: NSClipView {
+        override var isFlipped: Bool { true }
+    }
+
     /// Shows `controller` in `popover` beside `rect`: transient, at once.
     /// `.maxY` from a word in text; `.maxX` from a row of a list or a tree,
     /// so the rows under it stay in sight.

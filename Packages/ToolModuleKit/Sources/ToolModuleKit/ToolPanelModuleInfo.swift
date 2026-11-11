@@ -9,11 +9,12 @@ import Localization
     func showModuleInfo(_ sender: NSButton)
 }
 
-// help: panel.uefi.module-summary
-/// The (i) after a module's badges: its summary, the paragraph under its
-/// description's title, in a popover, read without opening the code. A link's
-/// colour, as the CPUID's (i) of a microcode is: it opens something.
-public final class ToolPanelModuleInfoButton: NSButton {
+/// The (i) a row wears where something stands behind it to open: a module's
+/// summary in the UEFI tree, a CPUID's processors in the FIT table. A real
+/// button, so a click on it is the button's and never the text's or the
+/// row's; a link's colour, because it opens something; the size of the
+/// code badges beside it (`Design/DESIGN_GUIDE.md` §4).
+public class ToolPanelInfoButton: NSButton {
     public convenience init() {
         self.init(frame: .zero)
     }
@@ -26,25 +27,19 @@ public final class ToolPanelModuleInfoButton: NSButton {
         imagePosition = .imageOnly
         title = ""
         setButtonType(.momentaryChange)
-        // The panel's controller sets itself as the target when it makes the
-        // cell; nil sends up the responder chain, which reaches the controller
-        // only while the focus is in its own panel.
-        target = nil
-        action = #selector(ToolPanelModuleInfoResponder.showModuleInfo(_:))
         setContentHuggingPriority(.required, for: .horizontal)
         setContentCompressionResistancePriority(.required, for: .horizontal)
-        ControlHelp.describe(self, name: L("Module summary"),
-                             tooltip: L("Shows the module's summary from its description"))
         paint()
-        isHidden = true
     }
 
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    override public var tag: Int {
-        get { ToolPanelTable.codeInfoTag }
-        set {}
+    /// The glyph's side, for a place that sets the button by hand.
+    public static var side: CGFloat {
+        let config = NSImage.SymbolConfiguration(pointSize: ToolPanelTable.codeBadgePointSize, weight: .semibold)
+        return NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)?.size.width ?? ToolPanelTable.codeBadgePointSize
     }
 
     /// A link's colour; on a selected row the selection's text colour, as
@@ -63,6 +58,31 @@ public final class ToolPanelModuleInfoButton: NSButton {
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
         image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)?
             .withSymbolConfiguration(config)
+    }
+}
+
+// help: panel.uefi.module-summary
+/// The (i) after a module's badges: its summary, the paragraph under its
+/// description's title, in a popover, read without opening the code.
+public final class ToolPanelModuleInfoButton: ToolPanelInfoButton {
+    override public init(frame: NSRect) {
+        super.init(frame: frame)
+        // The panel's controller sets itself as the target when it makes the
+        // cell; nil sends up the responder chain, which reaches the controller
+        // only while the focus is in its own panel.
+        target = nil
+        action = #selector(ToolPanelModuleInfoResponder.showModuleInfo(_:))
+        ControlHelp.describe(self, name: L("Module summary"),
+                             tooltip: L("Shows the module's summary from its description"))
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override public var tag: Int {
+        get { ToolPanelTable.codeInfoTag }
+        set {}
     }
 }
 

@@ -1353,11 +1353,14 @@ final class FITToolFlowTests: XCTestCase {
         let plate = try plate(in: outline, row: 2)
         XCTAssertEqual(plate.textView.string, "CPUID 806EA  \u{FFFC}  Coffee Lake U43e, Kaby Lake Refresh U",
                        "the ⓘ right after the CPUID, the code names after it")
-        let mark = try XCTUnwrap(plate.textView.textStorage?.attribute(.toolTip, at: 13, effectiveRange: nil) as? String)
-        XCTAssertEqual(mark, "Show the processors with this CPUID")
         XCTAssertNotNil(plate.textView.rectOfInfo(0))
+        // The ⓘ is the panel's button over that room, as a module's in the
+        // UEFI tree is.
+        let button = try XCTUnwrap(plate.infoButtons.first)
+        XCTAssertEqual(button.toolTip, "Show the processors with this CPUID")
+        XCTAssertEqual(button.color, .linkColor)
 
-        plate.textView.openInfo(0)
+        plate.openInfo(0)
 
         let popover = try XCTUnwrap(panel.processorsPopover, "the popover is open")
         defer { popover.close() }
@@ -1374,6 +1377,50 @@ final class FITToolFlowTests: XCTestCase {
         let names = try XCTUnwrap(head.first { $0.stringValue == note })
         XCTAssertTrue(title.isSelectable, "the CPUID is copied like the rest")
         XCTAssertTrue(names.isSelectable, "the code names are copied like the rest")
+    }
+
+    /// A click of the mouse on a CPUID's `ⓘ` opens its popover every time —
+    /// a real click, through the window, the table and the plate, not a call
+    /// on the plate.
+    func testAClickOnTheInfoMarkOpensThePopoverEveryTime() throws {
+        _ = try open(FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        let panel = try XCTUnwrap(outline.delegate as? FITToolViewController)
+        let window = try XCTUnwrap(outline.window)
+        let plate = try plate(in: outline, row: 2)
+        outline.layoutSubtreeIfNeeded()
+        let target = try XCTUnwrap(infoTarget(in: plate))
+        // A window the mouse can reach: shown and key, as the reader's is.
+        window.makeKeyAndOrderFront(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        var opened = 0
+        for attempt in 0..<10 {
+            panel.processorsPopover?.close()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            let shownBefore = panel.processorsPopover
+            // From a point a little off the centre each time, as a hand is.
+            let point = NSPoint(x: target.midX + CGFloat(attempt % 3 - 1), y: target.midY + CGFloat(attempt % 2))
+            let location = target.view.convert(point, to: nil)
+            func event(_ type: NSEvent.EventType) -> NSEvent {
+                NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
+                                   timestamp: ProcessInfo.processInfo.systemUptime,
+                                   windowNumber: window.windowNumber, context: nil,
+                                   eventNumber: attempt, clickCount: 1, pressure: 1)!
+            }
+            NSApp.postEvent(event(.leftMouseUp), atStart: false)
+            window.sendEvent(event(.leftMouseDown))
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            if let shown = panel.processorsPopover, shown !== shownBefore, shown.isShown { opened += 1 }
+        }
+        panel.processorsPopover?.close()
+        print("INFO-CLICKS opened \(opened) of 10")
+        XCTAssertEqual(opened, 10, "every click opens the popover")
+    }
+
+    /// Where the first line's `ⓘ` is, in the view that holds it.
+    private func infoTarget(in plate: FITCPUIDPlate) -> (view: NSView, midX: CGFloat, midY: CGFloat)? {
+        guard let button = plate.infoButtons.first(where: { !$0.isHidden }) else { return nil }
+        return (button, button.bounds.midX, button.bounds.midY)
     }
 
     /// The CPUIDs are text on the table's background: the table lets a click
