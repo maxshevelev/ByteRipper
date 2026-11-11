@@ -96,3 +96,40 @@ final class TextFindContentTests: XCTestCase {
         XCTAssertTrue(next.wrapped, "the only match, come round to")
     }
 }
+
+/// One query over many texts (#41): groups in the corpus's order, each hit
+/// with its line, and a limit that says it stopped.
+final class TextCorpusSearchTests: XCTestCase {
+    func testGroupsHoldTheirHitsWithTheirLines() throws {
+        let texts: [(id: Int, text: String)] = [
+            (0, "x = 1;\n  Status = Read();\n  return Status;"),
+            (1, "return 0;"),
+            (2, "Status_1 = Status;")
+        ]
+        let result = try TextCorpusSearch.search(TextQuery(text: "Status", caseSensitive: true,
+                                                           wholeWord: true), in: texts)
+        XCTAssertEqual(result.groups.map(\.id), [0, 2], "only the texts that hold it")
+        XCTAssertEqual(result.hitCount, 3)
+        XCTAssertFalse(result.isTruncated)
+        let first = result.groups[0].hits
+        XCTAssertEqual(first.map(\.line), [1, 2])
+        XCTAssertEqual(first[0].lineText, "Status = Read();", "the line without its indentation")
+        XCTAssertEqual(first[0].rangeInLine, 0..<6)
+        XCTAssertEqual(first[1].lineText, "return Status;")
+        XCTAssertEqual(first[1].rangeInLine, 7..<13)
+        XCTAssertEqual(first[0].range, 9..<15, "the range is the text's own")
+        XCTAssertEqual(result.groups[1].hits.map(\.rangeInLine), [11..<17], "not Status_1")
+    }
+
+    func testTheLimitStopsTheSearchAndSaysSo() throws {
+        let texts: [(id: Int, text: String)] = [(0, "a a a"), (1, "a"), (2, "b")]
+        let cut = try TextCorpusSearch.search(TextQuery(text: "a"), in: texts, limit: 2)
+        XCTAssertEqual(cut.hitCount, 2)
+        XCTAssertTrue(cut.isTruncated)
+        let exact = try TextCorpusSearch.search(TextQuery(text: "a"), in: texts, limit: 4)
+        XCTAssertEqual(exact.hitCount, 4)
+        XCTAssertFalse(exact.isTruncated, "the limit met, with nothing past it")
+        let more = try TextCorpusSearch.search(TextQuery(text: "a"), in: texts, limit: 3)
+        XCTAssertTrue(more.isTruncated, "the last text's match did not fit")
+    }
+}

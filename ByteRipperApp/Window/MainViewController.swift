@@ -6932,6 +6932,12 @@ final class MainViewController: NSViewController {
         findBar.stage(pattern)
     }
 
+    /// Edit ▸ Find in All Functions (⇧⌘F): the code pane's Search tab, its
+    /// field ready to type in (#41).
+    @objc func findInFunctions() {
+        frontFind.showSearchInFunctions(window: view.window)
+    }
+
     /// Edit ▸ Find Next (⌘G): the next match of what the Find bar holds — or
     /// of the find pasteboard's string, when another search put a new one
     /// there (`FindPasteboard`). A closed bar opens, so what is being looked
@@ -7759,6 +7765,9 @@ extension MainViewController: NSMenuItemValidation {
              #selector(findPreviousMatch),
              #selector(selectAll(_:)):
             return activePane.isOpen
+        case #selector(findInFunctions):
+            // Only a code pane has functions to search.
+            return frontFind.searchedCode() != nil
         case #selector(toggleBookmark):
             // The title says what ⌘D will do to the caret's row: add a mark,
             // or delete the one that is there.

@@ -163,4 +163,69 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual(pane.paintedFindRanges(.description).count, 1)
         XCTAssertEqual(pane.paintedFindRanges(.c), [])
     }
+
+    // MARK: - The Search tab
+
+    private func waitForSearch(_ pane: CodePaneView) async throws {
+        for _ in 0..<400 where pane.isSearchingAllForTests {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    /// The tab searches every function's C and lists the occurrences under
+    /// each function, line by line.
+    func testTheSearchTabListsEveryFunctionsOccurrences() async throws {
+        let (pane, _) = try paneInWindow()
+        var finished: (TextQuery, Bool)?
+        pane.onSearchAllFinished = { finished = ($0, $1) }
+        let query = TextQuery(text: "Status", caseSensitive: true, wholeWord: true)
+        pane.searchAllFunctions(query)
+        XCTAssertTrue(pane.showsSearchTab)
+        try await waitForSearch(pane)
+        XCTAssertEqual(pane.searchResultsForTests.map(\.function), ["First", "Second"])
+        XCTAssertEqual(pane.searchResultsForTests[0].lines.count, 4)
+        XCTAssertEqual(pane.searchResultsForTests[1].lines, ["return Status;"])
+        XCTAssertEqual(finished?.0, query)
+        XCTAssertEqual(finished?.1, true)
+
+        pane.searchAllFunctions(TextQuery(text: "NoSuchName"))
+        try await waitForSearch(pane)
+        XCTAssertTrue(pane.searchResultsForTests.isEmpty)
+        XCTAssertEqual(finished?.1, false)
+    }
+
+    /// A click on an occurrence opens its function on the C, with the
+    /// occurrence selected — from the listing and from the description too.
+    func testAnOccurrenceOpensItsFunctionOnTheMatch() async throws {
+        let (pane, _) = try paneInWindow()
+        pane.showDecompiledC(false)
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true))
+        try await waitForSearch(pane)
+        // Rows: First, its four lines, Second, its one line.
+        pane.chooseSearchRowForTests(6)
+        XCTAssertEqual(pane.selectedFunction?.name, "Second")
+        XCTAssertTrue(pane.showsDecompiledC)
+        let text = pane.cTextView.string as NSString
+        let selection = pane.cTextView.selectedRange()
+        XCTAssertEqual(text.substring(with: selection), "Status")
+        XCTAssertEqual(selection.location, text.range(of: "return Status").location + 7)
+
+        pane.setModuleDescription("# CpuPei")
+        pane.showDescription(true)
+        pane.chooseSearchRowForTests(2)
+        XCTAssertFalse(pane.showsDescription, "the code takes the description's place")
+        XCTAssertEqual(pane.selectedFunction?.name, "First")
+        XCTAssertEqual(text.length > 0, true)
+        XCTAssertEqual((pane.cTextView.string as NSString).substring(with: pane.cTextView.selectedRange()), "Status")
+    }
+
+    /// Choosing a list puts the lists back in front of the tab.
+    func testAListTakesTheTabsPlace() throws {
+        let (pane, _) = try paneInWindow()
+        pane.showSearchTab(true)
+        XCTAssertTrue(pane.showsSearchTab)
+        pane.selectList(.strings)
+        pane.showSearchTab(false)
+        XCTAssertFalse(pane.showsSearchTab)
+    }
 }

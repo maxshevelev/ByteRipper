@@ -441,6 +441,12 @@ enum MainMenu {
         editMenu.addItem(withTitle: L("Use Selection for Find"),
                          action: #selector(MainViewController.useSelectionForFind),
                          keyEquivalent: "e")
+        // ⇧⌘F, as editors have it, after the commands that search one place:
+        // a search of every function of the code pane in front, in its
+        // navigator's Search tab (#41).
+        // help: menu.edit.find-in-functions
+        editMenu.addItem(withTitle: L("Find in All Functions"),
+                         action: #selector(MainViewController.findInFunctions), keyEquivalent: "F")
         // ⌘D marks (or unmarks) the caret's row — the gesture that has to cost
         // nothing on a bench (§20). It sits beside Go To: mark where you are,
         // then go to a position. One key does both, and the title says which:

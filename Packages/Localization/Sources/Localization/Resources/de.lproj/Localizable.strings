@@ -1960,3 +1960,6 @@
 "The module's description has no summary." = "Die Beschreibung des Moduls enthält keine Kurzbeschreibung.";
 "Reading the module's description" = "Die Beschreibung des Moduls wird gelesen";
 "Loading the module's code" = "Der Code des Moduls wird geladen";
+"Find in All Functions" = "In allen Funktionen suchen";
+"%1$@ results in %2$@ functions" = "Treffer: %1$@, Funktionen: %2$@";
+"The first %1$@ results in %2$@ functions — refine the pattern" = "Nicht alle Treffer angezeigt: %1$@, Funktionen: %2$@. Präzisieren Sie das Muster.";

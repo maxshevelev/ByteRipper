@@ -107,6 +107,7 @@ extension BackgroundOperation: FindActivity {}
             bar.profile = .code
             if shownIn !== code { shownIn?.hideFindBar() }
             code.showFindBar(bar)
+            attachCodeSearch()
             code.onFindChanged = { [weak self, weak code] in
                 guard let self, let code, self.searchedCode() === code else { return }
                 self.sync()
@@ -127,6 +128,7 @@ extension BackgroundOperation: FindActivity {}
     /// The surface's content was replaced — the tab became a code screen, or
     /// stopped being one. An open bar follows to where it now belongs.
     func contentChanged() {
+        attachCodeSearch()
         guard let surface else { return }
         guard isShown else {
             if let shownIn, shownIn !== searchedCode() {
@@ -170,6 +172,7 @@ extension BackgroundOperation: FindActivity {}
     func park() {
         surface?.showFindBar(bar)
         surface?.hideFindBar()
+        attachCodeSearch()
     }
 
     /// ⌘E: the selection becomes the pattern.
@@ -533,6 +536,8 @@ extension BackgroundOperation: FindActivity {}
     /// function, or the description while it is open.
     private func runCodeSearch(_ query: TextQuery, direction: SearchDirection, in code: CodePaneView) {
         guard !query.text.isEmpty else { return }
+        // One pattern for the function and for every function (#41).
+        navigatorQuery.text = query.text
         host?.notices.dismiss()
         code.prepareForFind()
         let finder = code.finder
@@ -608,5 +613,78 @@ extension BackgroundOperation: FindActivity {}
         guard let code = searchedCode(), let text = code.findSelection else { return false }
         bar.stage(SelectionFindPattern(text: text, encoding: .utf8))
         return true
+    }
+
+    // MARK: - Searching every function (#41)
+
+    /// The Search tab's query controls: the code bar's field, case rule,
+    /// whole-word rule and recent queries, in the navigator.
+    private(set) lazy var navigatorQuery: PatternQueryControls = {
+        let controls = PatternQueryControls()
+        controls.profile = .code
+        controls.onSubmit = { [weak self] in self?.searchAllFunctions(recording: true) }
+        controls.onPicked = { [weak self] in self?.searchAllFunctions(recording: false) }
+        controls.onError = { _ in NSSound.beep() }
+        return controls
+    }()
+
+    /// The row the Search tab shows the controls in.
+    private lazy var navigatorQueryRow: NSView = {
+        let controls = navigatorQuery
+        let row = NSStackView(views: controls.views)
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 6
+        for control in controls.views where control !== controls.patternField {
+            control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            control.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        }
+        controls.patternField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        controls.patternField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        controls.patternField.placeholderString = L("Find in All Functions")
+        controls.reloadStandingChoices()
+        return row
+    }()
+
+    /// The code pane whose Search tab holds the controls.
+    private weak var searchTabPane: CodePaneView?
+
+    /// Gives the code pane the surface shows the Search tab's controls — one
+    /// set per surface, moved to a pane that replaced the last.
+    private func attachCodeSearch() {
+        guard let code = searchedCode(), code !== searchTabPane else { return }
+        code.setSearchQueryView(navigatorQueryRow)
+        code.onSearchAllFinished = { [weak self] _, found in
+            if found { self?.navigatorQuery.recordFoundCodeSearch() }
+        }
+        searchTabPane = code
+    }
+
+    /// Return in the Search tab's field, or a recent query picked.
+    private func searchAllFunctions(recording: Bool) {
+        guard let code = searchedCode(),
+              case .text(let text, let caseSensitive, let wholeWord) = navigatorQuery.searchRequest()
+        else { return }
+        navigatorQuery.noteSearchStarted(recording: recording)
+        // One pattern for every function and for the function (#41).
+        bar.query.text = text
+        code.searchAllFunctions(TextQuery(text: text, caseSensitive: caseSensitive, wholeWord: wholeWord))
+    }
+
+    /// ⌘⇧F: the Search tab in front, its field holding the pattern — the
+    /// selected C, or what the bar over the code holds — ready to type over.
+    func showSearchInFunctions(window: NSWindow?) {
+        guard let code = searchedCode() else { return }
+        attachCodeSearch()
+        code.showSearchTab(true)
+        if let selected = code.findSelection, !selected.contains("\n"), !code.selectionIsFindMatch {
+            navigatorQuery.text = selected
+        } else if !bar.query.text.isEmpty {
+            navigatorQuery.text = bar.query.text
+        } else if navigatorQuery.text.isEmpty {
+            navigatorQuery.text = CodeFindHistoryStore.mostRecent?.pattern ?? ""
+        }
+        window?.makeFirstResponder(navigatorQuery.patternField)
+        navigatorQuery.patternField.currentEditor()?.selectAll(nil)
     }
 }

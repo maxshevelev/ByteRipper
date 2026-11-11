@@ -218,4 +218,57 @@ final class CodeFindBarTests: XCTestCase {
         XCTAssertNil(surface.shownFindBar)
         XCTAssertEqual(controller.surface.find.bar.profile, .hexDump, "the tab's bar reads bytes")
     }
+
+    // MARK: - Every function (⇧⌘F)
+
+    /// ⇧⌘F puts the Search tab in front with the bar's pattern in its field;
+    /// Return lists every occurrence, and a search that found is kept.
+    func testFindInAllFunctionsSearchesWithTheBarsPattern() async throws {
+        let (controller, code) = try codeTab()
+        controller.findPattern()
+        controller.findBar.setPatternTextForTests("Status")
+        controller.findInFunctions()
+        XCTAssertTrue(code.showsSearchTab)
+        let query = controller.frontFind.navigatorQuery
+        XCTAssertEqual(query.text, "Status", "one pattern for the function and for every function")
+        XCTAssertTrue(controller.view.window?.firstResponder === query.patternField.currentEditor()
+                      || controller.view.window?.firstResponder === query.patternField)
+        query.onSubmit?()
+        try await waitUntil({ !code.searchResultsForTests.isEmpty }, "listed")
+        XCTAssertEqual(code.searchResultsForTests.first?.function, "entry")
+        XCTAssertEqual(code.searchResultsForTests.first?.lines.count, 4, "a row per occurrence, four on one line")
+        try await waitUntil({ CodeFindHistoryStore.recent.first?.pattern == "Status" }, "kept")
+
+        code.chooseSearchRowForTests(1)
+        XCTAssertEqual(code.findSelection, "Status", "the occurrence is selected in the C")
+    }
+
+    /// A pattern typed in the Search tab is the bar's too.
+    func testTheSearchTabsPatternIsTheBars() throws {
+        let (controller, _) = try codeTab()
+        controller.findInFunctions()
+        let query = controller.frontFind.navigatorQuery
+        query.text = "Check"
+        query.onSubmit?()
+        XCTAssertEqual(controller.findBar.query.text, "Check")
+    }
+
+    /// Over a dump there are no functions: the command is off.
+    func testFindInAllFunctionsIsOffOverADump() throws {
+        let controller = MainViewController()
+        let window = makeTestWindow(width: 1000, height: 600)
+        window.contentViewController = controller
+        let url = try tempFile([UInt8](repeating: 0xAA, count: 0x100))
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        cleanups.append {
+            controller.windowModel.pane1.close()
+            try? FileManager.default.removeItem(at: url)
+            window.close()
+        }
+        let item = NSMenuItem(title: "", action: #selector(MainViewController.findInFunctions), keyEquivalent: "")
+        XCTAssertFalse(controller.validateMenuItem(item))
+        let (code, _) = try codeTab()
+        XCTAssertTrue(code.validateMenuItem(item))
+    }
 }

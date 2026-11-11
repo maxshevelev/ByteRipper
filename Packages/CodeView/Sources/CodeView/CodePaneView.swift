@@ -108,7 +108,7 @@ import ToolModuleKit
     private var drawnC: Int?
     /// How far the function's own C starts into the text shown: the
     /// annotations' comments head it.
-    private var cShift = 0
+    var cShift = 0
     /// The line each function was left at, by its entry's address as text —
     /// see `topLinePositions`.
     private var topLines: [String: Int] = [:]
@@ -197,6 +197,16 @@ import ToolModuleKit
     var selectedFindMatch: NSRange?
     /// The search's showing changed: the app re-reads its count.
     public var onFindChanged: (() -> Void)?
+    /// The navigator's Search tab: a search of every function's C (#41).
+    let searchPanel = CodeSearchPanel()
+    /// Whether the Search tab is the one in front of the lists.
+    public internal(set) var showsSearchTab = false
+    /// The search of every function in flight.
+    var searchAllTask: Task<Void, Never>?
+    /// The query the Search tab last ran, while its result stands.
+    public internal(set) var searchedAll: TextQuery?
+    /// A search of every function finished: whether it found anything.
+    public var onSearchAllFinished: ((_ query: TextQuery, _ found: Bool) -> Void)?
     private var descriptionLeading: NSLayoutConstraint?
     private let rightSplit = ALSplitView()
     private let hexDumpBar = CodeDumpBar()
@@ -415,7 +425,7 @@ import ToolModuleKit
         modeControl = NSSegmentedControl(labels: ["ASM", "C"], trackingMode: .selectOne,
                                          target: nil, action: nil)
         listControl = NSSegmentedControl(
-            labels: [L("Functions"), L("Strings"), L("POST"), L("Status")],
+            labels: [L("Functions"), L("Strings"), L("POST"), L("Status"), ""],
             trackingMode: .selectOne, target: nil, action: nil)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -1589,7 +1599,7 @@ import ToolModuleKit
     /// The navigator's title and rows for the list in front, with the selected
     /// function's row chosen when Functions is showing.
     private func drawNavigator() {
-        listControl.selectedSegment = state.list.rawValue
+        listControl.selectedSegment = showsSearchTab ? Self.searchSegment : state.list.rawValue
         // The switch speaks about the functions only: with another list in
         // front the filter takes its room.
         let showsOrder = state.list == .functions
@@ -2475,9 +2485,39 @@ import ToolModuleKit
     }
 
     @objc private func listChanged() {
+        if listControl.selectedSegment == Self.searchSegment {
+            showSearchTab(true)
+            return
+        }
         guard let list = List(rawValue: listControl.selectedSegment) else { return }
+        showSearchTab(false)
         selectList(list)
     }
+
+    /// The Search tab's place in the switch, after the lists.
+    static let searchSegment = List.allCases.count
+
+    /// The switch says which tab is in front: a list, or Search.
+    func drawListSwitch() {
+        listControl.selectedSegment = showsSearchTab ? Self.searchSegment : state.list.rawValue
+    }
+
+    /// Every function's C, by its place in the artifact: what the Search tab
+    /// searches. A function whose code is not here yet is not in it.
+    var searchCorpus: [(id: Int, text: String)] {
+        model.functions.indices.compactMap { index in
+            model.functions[index].c.map { (index, $0) }
+        }
+    }
+
+    /// A function's name as the navigator writes it.
+    func navigatorName(of index: Int) -> String {
+        let function = model.functions[index]
+        return function.name.isEmpty ? model.displayAddress(function.entry) : function.name
+    }
+
+    /// Whether some function's code still has to be read from the store.
+    var hasCodeToRead: Bool { !model.pendingFunctions.isEmpty && onLoadFunctions != nil }
 
     @objc private func searchChanged() {
         state.search(searchField.stringValue)
@@ -3323,6 +3363,13 @@ import ToolModuleKit
         listControl.selectedSegment = List.functions.rawValue
         listControl.controlSize = .small
         listControl.font = .systemFont(ofSize: 11)
+        // help: panel.code.search-all
+        // The Search tab is a glyph, not a word: the four lists keep their
+        // room, and the magnifier says what it is in every language.
+        listControl.setImage(NSImage(systemSymbolName: "magnifyingglass",
+                                     accessibilityDescription: L("Find in All Functions")),
+                             forSegment: Self.searchSegment)
+        listControl.setToolTip(L("Find in All Functions"), forSegment: Self.searchSegment)
         listControl.setContentHuggingPriority(.defaultLow, for: .horizontal)
         listControl.translatesAutoresizingMaskIntoConstraints = false
 
@@ -3411,6 +3458,17 @@ import ToolModuleKit
         navigatorBar.addSubview(searchField)
         navigatorBar.addSubview(orderButtons)
         functionPane.addSubview(navigatorBar)
+        // The Search tab stands over the list and its filter, under the switch.
+        searchPanel.translatesAutoresizingMaskIntoConstraints = false
+        searchPanel.isHidden = true
+        searchPanel.onChoose = { [weak self] function, hit in self?.openSearchHit(function: function, hit: hit) }
+        functionPane.addSubview(searchPanel)
+        NSLayoutConstraint.activate([
+            searchPanel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),
+            searchPanel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
+            searchPanel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
+            searchPanel.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor)
+        ])
         // help: panel.code.new-clear
         clearNewMarksButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
         clearNewMarksButton.imagePosition = .imageOnly

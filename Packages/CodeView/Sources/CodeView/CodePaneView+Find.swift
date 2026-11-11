@@ -78,6 +78,13 @@ extension CodePaneView {
         return (view.string as NSString).substring(with: range)
     }
 
+    /// The selection is the match a search put the reader on, not one the
+    /// reader made.
+    public var selectionIsFindMatch: Bool {
+        guard let match = selectedFindMatch, let side = findSearched?.side else { return false }
+        return findTextView(side).selectedRange() == match
+    }
+
     /// Whether the keyboard is in the text a search reads.
     public var findTextHasKeyboard: Bool {
         guard let responder = window?.firstResponder as? NSView else { return false }

@@ -1,6 +1,7 @@
 import AppKit
 import XCTest
 import CodeAnalysis
+import Find
 @testable import CodeView
 
 /// A pane opened on a cut artifact's index reads a function's code when it is
@@ -123,5 +124,19 @@ final class CodePaneLazyReadingTests: XCTestCase {
         }
         await settle()
         XCTAssertTrue(loader.asked.isEmpty)
+    }
+
+    /// The Search tab reads every function's code before it searches: a
+    /// function not read yet is searched too (#41).
+    func testTheSearchTabReadsEveryFunctionFirst() async throws {
+        let loader = Loader()
+        let view = try pane(loader)
+        await settle()
+        view.searchAllFunctions(TextQuery(text: "void"))
+        for _ in 0..<400 where view.isSearchingAllForTests || view.searchResultsForTests.isEmpty {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(loader.asked.contains { $0 == nil || $0 == [CodeAddress(0x330)] }, "\(loader.asked)")
+        XCTAssertEqual(view.searchResultsForTests.map(\.function), ["Alpha", "Beta"])
     }
 }

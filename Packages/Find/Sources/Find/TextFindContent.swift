@@ -117,7 +117,7 @@ public typealias TextFindIndexer = FindIndexer<TextFindContent>
 public typealias TextMatchSet = MatchSet<TextQuery>
 
 /// One query over one text, in `NSString`'s terms.
-private struct Scanner {
+struct Scanner {
     let string: NSString
     let pattern: String
     let patternLength: Int
