@@ -3,8 +3,8 @@ import Find
 import Localization
 
 /// The navigator's Search tab (#41): one search over the C of every function
-/// of the module, its occurrences listed as a tree, and a click that opens
-/// the function on the occurrence.
+/// of the module and its description, the occurrences listed as a tree, and a
+/// click that opens the function, or the description, on the occurrence.
 ///
 /// The query controls are the app's — the same field, case rule, whole-word
 /// rule and recent queries as the bar over the code; the pane searches and
@@ -22,8 +22,9 @@ extension CodePaneView {
         drawListSwitch()
     }
 
-    /// Searches every function's C for `query` and lists what it finds. The
-    /// functions whose code has not been read yet are read first.
+    /// Searches what the tab's scope takes in — every function's C, the
+    /// description — for `query` and lists what it finds. The functions whose
+    /// code has not been read yet are read first.
     public func searchAllFunctions(_ query: TextQuery) {
         showSearchTab(true)
         searchAllTask?.cancel()
@@ -31,10 +32,11 @@ extension CodePaneView {
         guard !query.text.isEmpty else {
             searchedAll = nil
             searchPanel.clear()
+            paintFindMatches()
             return
         }
         searchedAll = query
-        guard hasCodeToRead else { return runSearchAll(query) }
+        guard hasCodeToRead, searchPanel.scope != .description else { return runSearchAll(query) }
         searchPanel.show(status: L("Reading all functions…"))
         // A read that fails leaves those functions out; the rest is searched.
         whenRead(nil, quietly: true, otherwise: { [weak self] in
@@ -54,35 +56,56 @@ extension CodePaneView {
                 try? TextCorpusSearch.search(query, in: corpus, shouldCancel: { Task.isCancelled })
             }.value
             guard let self, !Task.isCancelled, self.searchedAll == query, let result else { return }
-            let items = result.groups.map {
-                CodeSearchPanel.FunctionItem(index: $0.id, name: self.navigatorName(of: $0.id),
-                                             mark: self.navigatorMark(of: $0.id), hits: $0.hits)
+            let items = result.groups.map { group -> CodeSearchPanel.GroupItem in
+                switch group.id {
+                case .description:
+                    return CodeSearchPanel.GroupItem(target: .description, name: L("Description"),
+                                                     detail: self.manifest.module.name, hits: group.hits)
+                case .function(let index):
+                    return CodeSearchPanel.GroupItem(
+                        target: group.id, name: self.navigatorName(of: index),
+                        detail: self.navigatorAddress(of: index),
+                        mark: self.navigatorMark(of: index), hits: group.hits)
+                }
             }
             self.searchPanel.show(items, truncated: result.isTruncated)
+            self.paintFindMatches()
             self.searchAllTask = nil
             self.onSearchAllFinished?(query, !items.isEmpty)
         }
     }
 
-    /// Opens a row of the tab: the function, on its C, and — for an
-    /// occurrence — the occurrence selected, scrolled to and flashed.
-    func openSearchHit(function: Int, hit: TextSearchHit?) {
-        if showsDescription { showDescription(false) }
-        selectFunction(at: function)
-        showDecompiledC(true)
+    /// Opens a row of the tab: the function on its C, or the description,
+    /// and — for an occurrence — the occurrence selected, scrolled to and
+    /// flashed.
+    func openSearchHit(_ target: CodeSearchPanel.Target, hit: TextSearchHit?) {
+        let view: NSTextView
+        var shift = 0
+        switch target {
+        case .description:
+            showDescription(true)
+            view = descriptionView.textView
+        case .function(let index):
+            if showsDescription { showDescription(false) }
+            selectFunction(at: index)
+            showDecompiledC(true)
+            view = cTextView
+            shift = cShift
+        }
         guard let hit else { return }
-        let range = NSRange(location: Int(hit.range.lowerBound) + cShift,
+        let range = NSRange(location: Int(hit.range.lowerBound) + shift,
                             length: Int(hit.range.upperBound - hit.range.lowerBound))
-        guard NSMaxRange(range) <= (cTextView.string as NSString).length else { return }
-        cTextView.setSelectedRange(range)
-        cTextView.scrollRangeToVisible(range)
-        if cTextView.window != nil { cTextView.showFindIndicator(for: range) }
+        guard NSMaxRange(range) <= (view.string as NSString).length else { return }
+        view.setSelectedRange(range)
+        view.scrollRangeToVisible(range)
+        if view.window != nil { view.showFindIndicator(for: range) }
     }
 
     // MARK: - For tests
 
 
-    /// The tab's tree: each function's name and its occurrences' lines.
+    /// The tab's tree: each group's name — a function's, or "Description" —
+    /// and its occurrences' lines.
     public var searchResultsForTests: [(function: String, lines: [String])] {
         searchPanel.items.map { ($0.name, $0.children.map(\.hit.lineText)) }
     }
@@ -92,6 +115,12 @@ extension CodePaneView {
 
     /// Whether a search of every function is still running.
     public var isSearchingAllForTests: Bool { searchAllTask != nil }
+
+    /// The tab's scope, as the reader would choose it.
+    public func setSearchScopeForTests(everywhere: Bool, functions: Bool) {
+        searchPanel.scope = everywhere ? .everywhere : functions ? .functions : .description
+        searchPanel.onScopeChanged?(searchPanel.scope)
+    }
 
     /// Chooses the row at `row` of the tree, as a click would.
     public func chooseSearchRowForTests(_ row: Int) { searchPanel.choose(row: row) }

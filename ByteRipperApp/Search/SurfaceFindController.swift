@@ -641,7 +641,7 @@ extension BackgroundOperation: FindActivity {}
         }
         controls.patternField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         controls.patternField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        controls.patternField.placeholderString = L("Find in All Functions")
+        controls.patternField.placeholderString = L("Find")
         controls.reloadStandingChoices()
         return row
     }()

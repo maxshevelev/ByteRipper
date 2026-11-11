@@ -101,7 +101,8 @@ extension CodePaneView {
     /// The set goes, and a search the reader is running is indexed again over
     /// the new text, so its matches show there too.
     func findTextMayHaveChanged() {
-        guard findBarSlot.bar != nil else { return }
+        // Without the bar, the Search tab's occurrences are still drawn.
+        guard findBarSlot.bar != nil else { return paintFindMatches() }
         let side = findSide
         let text = findTextView(side).string
         if let searched = findSearched, searched.side == side, searched.text == text { return }
@@ -158,7 +159,9 @@ extension CodePaneView {
     }
 
     /// The grey of the dump's matches, behind every match of the side that
-    /// was searched; none in the other.
+    /// was searched; none in the other. Where the bar has no matches of its
+    /// own, the Search tab's stand: every occurrence of its pattern in the
+    /// function or the description on screen, as long as its result does.
     func paintFindMatches() {
         let ranges = findMatchRanges
         for side in [FindSide.c, .description] {
@@ -167,11 +170,27 @@ extension CodePaneView {
             let length = (view.string as NSString).length
             layout.removeTemporaryAttribute(.backgroundColor,
                                             forCharacterRange: NSRange(location: 0, length: length))
-            guard side == findSearched?.side, findSearched?.text == view.string else { continue }
-            for range in ranges where NSMaxRange(range) <= length {
+            let barMatches = side == findSearched?.side && findSearched?.text == view.string
+                ? ranges : []
+            let shown = barMatches.isEmpty ? searchTabMatches(side) : barMatches
+            for range in shown where NSMaxRange(range) <= length {
                 layout.addTemporaryAttribute(.backgroundColor, value: Self.findMatchFill,
                                              forCharacterRange: range)
             }
+        }
+    }
+
+    /// The Search tab's occurrences in the side's text: the C past its
+    /// heading, the description as shown. None while no result stands.
+    private func searchTabMatches(_ side: FindSide) -> [NSRange] {
+        guard let query = searchedAll else { return [] }
+        let view = findTextView(side)
+        let whole = view.string as NSString
+        let start = side == .c ? min(max(cShift, 0), whole.length) : 0
+        if side == .description, !descriptionView.hasDescription { return [] }
+        let text = whole.substring(from: start)
+        return TextFindContent(text: text).allMatches(of: query).map {
+            NSRange(location: start + Int($0.lowerBound), length: Int($0.upperBound - $0.lowerBound))
         }
     }
 

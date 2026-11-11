@@ -2,6 +2,7 @@ import AppKit
 import XCTest
 import CodeAnalysis
 import Find
+import Localization
 @testable import CodeView
 
 /// The code panel's side of a search (#41): the bar stands over the code or
@@ -217,6 +218,74 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual(pane.selectedFunction?.name, "First")
         XCTAssertEqual(text.length > 0, true)
         XCTAssertEqual((pane.cTextView.string as NSString).substring(with: pane.cTextView.selectedRange()), "Status")
+    }
+
+    /// A function or an occurrence opened from the tab shows every
+    /// occurrence in the function under the find grey, the other function too; a cleared search takes it away.
+    func testAnOpenedFunctionShowsEveryOccurrenceInGrey() async throws {
+        let (pane, _) = try paneInWindow()
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true, wholeWord: true))
+        try await waitForSearch(pane)
+        pane.chooseSearchRowForTests(0)
+        let text = pane.cTextView.string as NSString
+        XCTAssertEqual(pane.paintedFindRanges(.c).count, 4)
+        XCTAssertTrue(pane.paintedFindRanges(.c).allSatisfy { text.substring(with: $0) == "Status" })
+        pane.chooseSearchRowForTests(5)
+        XCTAssertEqual(pane.selectedFunction?.name, "Second")
+        XCTAssertEqual(pane.paintedFindRanges(.c).count, 1)
+
+        // An occurrence: it is selected, and the others are grey around it.
+        pane.chooseSearchRowForTests(3)
+        XCTAssertEqual(pane.selectedFunction?.name, "First")
+        XCTAssertEqual(pane.findSelection, "Status")
+        XCTAssertEqual(pane.paintedFindRanges(.c).count, 4)
+
+        pane.searchAllFunctions(TextQuery(text: ""))
+        XCTAssertEqual(pane.paintedFindRanges(.c), [])
+    }
+
+    /// The description is searched with the functions, listed first, and its
+    /// occurrence opens the description on the match. The scope narrows the
+    /// search to one or the other.
+    func testTheSearchTabSearchesTheDescriptionToo() async throws {
+        let (pane, _) = try paneInWindow()
+        pane.setModuleDescription("# CpuPei\n\nReads the Status of the CPU.")
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true, wholeWord: true))
+        try await waitForSearch(pane)
+        XCTAssertEqual(pane.searchResultsForTests.map(\.function), [L("Description"), "First", "Second"])
+        XCTAssertEqual(pane.searchResultsForTests[0].lines, ["Reads the Status of the CPU."])
+        XCTAssertEqual(pane.searchSummaryForTests,
+                       L("%1$@ results in %2$@ functions and the description", "6", "2"))
+
+        pane.chooseSearchRowForTests(1)
+        XCTAssertTrue(pane.showsDescription)
+        let view = pane.descriptionView.textView
+        XCTAssertEqual((view.string as NSString).substring(with: view.selectedRange()), "Status")
+
+        pane.setSearchScopeForTests(everywhere: false, functions: true)
+        try await waitForSearch(pane)
+        XCTAssertEqual(pane.searchResultsForTests.map(\.function), ["First", "Second"])
+        pane.setSearchScopeForTests(everywhere: false, functions: false)
+        try await waitForSearch(pane)
+        XCTAssertEqual(pane.searchResultsForTests.map(\.function), [L("Description")])
+        XCTAssertEqual(pane.searchSummaryForTests, L("%1$@ results in the description", "1"))
+    }
+
+    /// An occurrence is bold, with no fill under it; a match far into a
+    /// long line is brought forward behind an ellipsis.
+    func testAnOccurrenceIsBoldWithoutAFill() {
+        let lineText = String(repeating: "word ", count: 20) + "Status = 0;"
+        let start = (lineText as NSString).range(of: "Status").location
+        let hit = TextSearchHit(range: 0..<6, line: 0, lineText: lineText, rangeInLine: start..<(start + 6))
+        let line = CodeSearchPanel.line(of: hit)
+        XCTAssertTrue(line.string.hasPrefix("…"))
+        let at = (line.string as NSString).range(of: "Status")
+        XCTAssertLessThan(at.location, CodeSearchPanel.leadingContext + 2)
+        var effective = NSRange()
+        let font = line.attribute(.font, at: at.location, effectiveRange: &effective) as? NSFont
+        XCTAssertEqual(effective, at, "the match alone")
+        XCTAssertTrue(font?.fontDescriptor.symbolicTraits.contains(.bold) ?? false)
+        XCTAssertNil(line.attribute(.backgroundColor, at: at.location, effectiveRange: nil))
     }
 
     /// The tab takes the filter's bar away, and the keyboard out of the

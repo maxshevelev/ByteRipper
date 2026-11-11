@@ -197,7 +197,8 @@ import ToolModuleKit
     var selectedFindMatch: NSRange?
     /// The search's showing changed: the app re-reads its count.
     public var onFindChanged: (() -> Void)?
-    /// The navigator's Search tab: a search of every function's C (#41).
+    /// The navigator's Search tab: a search of every function's C and the
+    /// description (#41).
     let searchPanel = CodeSearchPanel()
     /// Whether the Search tab is the one in front of the lists.
     public internal(set) var showsSearchTab = false
@@ -2509,11 +2510,18 @@ import ToolModuleKit
         navigatorBar.isHidden = showsSearchTab
     }
 
-    /// Every function's C, by its place in the artifact: what the Search tab
-    /// searches. A function whose code is not here yet is not in it.
-    var searchCorpus: [(id: Int, text: String)] {
-        model.functions.indices.compactMap { index in
-            model.functions[index].c.map { (index, $0) }
+    /// What the Search tab searches in its scope: the description as the
+    /// pane shows it, then every function's C by its place in the artifact.
+    /// A function whose code is not here yet is not in it.
+    var searchCorpus: [(id: CodeSearchPanel.Target, text: String)] {
+        let scope = searchPanel.scope
+        var corpus: [(id: CodeSearchPanel.Target, text: String)] = []
+        if scope != .functions, descriptionView.hasDescription {
+            corpus.append((.description, descriptionView.shownText))
+        }
+        guard scope != .description else { return corpus }
+        return corpus + model.functions.indices.compactMap { index in
+            model.functions[index].c.map { (.function(index), $0) }
         }
     }
 
@@ -2521,6 +2529,11 @@ import ToolModuleKit
     /// has got, or the library it is from.
     func navigatorMark(of index: Int) -> String {
         Self.functionMark(state.group(of: index), library: state.librarySection(of: index))
+    }
+
+    /// A function's entry as the panel writes an address.
+    func navigatorAddress(of index: Int) -> String {
+        model.displayAddress(model.functions[index].entry)
     }
 
     /// A function's name as the navigator writes it.
@@ -3474,7 +3487,11 @@ import ToolModuleKit
         // The Search tab stands over the list and its filter, under the switch.
         searchPanel.translatesAutoresizingMaskIntoConstraints = false
         searchPanel.isHidden = true
-        searchPanel.onChoose = { [weak self] function, hit in self?.openSearchHit(function: function, hit: hit) }
+        searchPanel.onChoose = { [weak self] target, hit in self?.openSearchHit(target, hit: hit) }
+        searchPanel.onScopeChanged = { [weak self] _ in
+            guard let self, let query = self.searchedAll else { return }
+            self.searchAllFunctions(query)
+        }
         functionPane.addSubview(searchPanel)
         NSLayoutConstraint.activate([
             searchPanel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),
@@ -6145,6 +6162,19 @@ final class CodeNavigatorCell: NSTableCellView {
         icon.isHidden = mark == nil
         iconWidth.constant = mark.map { CodeNavigatorIcon.width(of: $0.glyph, side: side) } ?? 0
         iconGap.constant = mark == nil ? 0 : 5
+    }
+
+    /// A system symbol for a row that is not a function — the Search tab's
+    /// description, a book — in the mark's place and size.
+    func showsSymbol(_ symbol: String) {
+        iconName = symbol
+        mark = nil
+        let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
+        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: side - 2, weight: .regular))
+        icon.isHidden = false
+        iconWidth.constant = side
+        iconGap.constant = 5
     }
 
     /// The capsule a revision puts on a function it changed.
