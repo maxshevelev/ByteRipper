@@ -303,7 +303,7 @@ extension MainViewController {
                                     hexView: pane,
                                     recipes: screen.recipes)
         codeScreenView = codePane
-        codePane.loadModuleDescription()
+        codePane.loadModuleDescription(for: screen)
         followCodeStore()
         codePane.onChooseRecipe = { [weak self, weak paneModel] manifest in
             guard let self, let paneModel else { return }

@@ -973,12 +973,21 @@ import ToolModuleKit
     public func setModuleDescription(_ markdown: String?) {
         descriptionView.show(markdown)
         hasDescription = !(markdown ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if opensOnDescription, hasDescription { showDescription(true) }
+        opensOnDescription = false
         if let origin = pendingDescriptionScroll {
             pendingDescriptionScroll = nil
             layoutSubtreeIfNeeded()
             descriptionView.scroll(to: origin)
         }
     }
+
+    /// Whether the description, once read, takes the code's place: a module
+    /// opened afresh is read from what it is for, not from its first
+    /// function. Set by the app for a screen with no place to return to; the
+    /// reader's own choice first — the switch, the book, a function chosen in
+    /// the list, a place gone to — keeps the code.
+    public var opensOnDescription = false
 
     /// Whether the module has a description to read. The book says which of
     /// three it is: closed and unavailable while there is none (or it is
@@ -2829,6 +2838,7 @@ import ToolModuleKit
     /// as a click on a link would: a place Back returns from. What an
     /// annotation on code and an agent's `open_code` open at.
     public func go(to location: CodeLocation) {
+        opensOnDescription = false
         let place = model.indices(of: location)
         if let line = place.line {
             follow(.line(line))
@@ -4253,12 +4263,16 @@ import ToolModuleKit
     // MARK: - Selection
 
     @objc private func modeChanged() {
+        opensOnDescription = false
         mode = modeControl.selectedSegment
         applyMode()
     }
 
     // help: panel.code.description
-    @objc private func descriptionButtonClicked() { showDescription(!showsDescription) }
+    @objc private func descriptionButtonClicked() {
+        opensOnDescription = false
+        showDescription(!showsDescription)
+    }
 
     /// Set outright: a click on the button has just turned its state over.
     private func drawModeControls() {
@@ -5562,6 +5576,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         if table === functionTable {
             let row = functionTable.selectedRow
             guard row >= 0 else { return }
+            opensOnDescription = false
             leaveDescription()
             selectNavigatorRow(row)
         } else if table === self.table {

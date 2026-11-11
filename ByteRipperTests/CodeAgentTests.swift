@@ -450,6 +450,10 @@ final class CodeAgentTests: XCTestCase {
         popover.clickOpen()
         try await until { controller.fragments.expanded != nil }
         XCTAssertNotNil(controller.fragments.expanded, "Open with Code opened the code panel")
+        // A module with a description opens on it, not on its first function.
+        let code = try XCTUnwrap(controller.fragments.frontCodePane)
+        try await until { code.showsDescription }
+        XCTAssertTrue(code.showsDescription, "the code page opens on the description")
     }
 
     func testACodeAnnotationIsKeptBetweenLaunches() throws {

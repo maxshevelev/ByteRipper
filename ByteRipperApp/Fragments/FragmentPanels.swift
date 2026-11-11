@@ -244,7 +244,9 @@ import ToolModuleKit
             codePane = nil
         }
         if let codePane {
-            codePane.loadModuleDescription()
+            if case .code(let code) = screen { codePane.loadModuleDescription(for: code) } else {
+                codePane.loadModuleDescription()
+            }
             // The code screen is its own surface: no tool strip, no minimap —
             // the functions and the code are the screen.
             surface.tools.activate(nil, animated: false, movesWindow: false)

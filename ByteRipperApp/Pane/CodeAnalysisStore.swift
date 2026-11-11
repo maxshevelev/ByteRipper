@@ -236,8 +236,13 @@ enum CodeAnalysisStore {
 
 extension CodePaneView {
     /// Reads the description the pane's reading names and shows it: after
-    /// the pane is drawn, so the code never waits for the store.
-    func loadModuleDescription() {
+    /// the pane is drawn, so the code never waits for the store. A screen
+    /// opened afresh, with no place to go back to, opens on the description
+    /// when the module has one.
+    func loadModuleDescription(for screen: CodeScreen? = nil) {
+        if let screen, screen.place == nil, screen.selectedFunction == nil {
+            opensOnDescription = true
+        }
         let manifest = self.manifest
         Task { @MainActor [weak self] in
             let text = await CodeAnalysisStore.moduleDescription(for: manifest)
