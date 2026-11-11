@@ -97,8 +97,10 @@ to the Verifier and in anything written into a review.
 5. Library functions: propose them with `ghidra_library_candidate`, bind a
    registry entry with `ghidra_library_apply`, and resolve what the registry
    refuses as the rules' "Library functions" says.
-6. Write the description by `reference/description.md`. It names the board
-   and the module's place in the layout, never the dump file.
+6. Write the description by `reference/description.md`. It states only what
+   follows from the module's own bytes; what depends on the firmware around it
+   is a condition, and the one line `Reviewed in: <machine>, board <board>`
+   names where the review was made. Never the dump file.
 7. Before each publish, run `ghidra_publish` with `dry_run: true`. If it would
    change a registry entry or a shared type another review published, stop:
    the real publish would be refused. Propose it if the code proves the shared

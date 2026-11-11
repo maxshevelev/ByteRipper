@@ -142,8 +142,10 @@ with that body.
 
 **The description.** Compare it with `reference/description.md`: fixed
 headings in order, plain language, abbreviations expanded at first mention,
-main functions linked in the flow. It names the board, never the dump, and
-carries no review status. Check its facts against the code as well.
+main functions linked in the flow. `What it is` is two to four bullets with one
+`Reviewed in:` line; elsewhere nothing about the surrounding firmware is stated
+as a finding ("on this board…"), only as a condition. No dump file, no review
+status. Check its facts against the code as well.
 
 Reply with a numbered list of fixes, each with its address and what you
 observed, or with the closure and the next task the person gave. State a

@@ -66,6 +66,20 @@ The headings are fixed, in this order, in English, written exactly so. A section
 with nothing to say yet is left out rather than left empty. `###` subsections
 are free.
 
+**The module's own bytes, not the firmware around it.** A description is keyed
+by the module's SHA-256, so it shows in every firmware that holds the same
+bytes, on other boards too. It states as facts only what follows from those
+bytes: what its functions do, defects in its code, values folded in at build
+time (PCDs), and branches that cannot run because of those values. What
+depends on the surrounding image — a file present or absent, which modules hold
+a GUID or install a PPI, who calls it, NVRAM contents, the APRIORI order,
+another module's size, a guess at the boot order — is written as a condition,
+not as a finding: "if no firmware volume holds file X (GUID …), the update is
+dropped silently", not "on this board the update fails". "Cannot happen" is
+written only when the reason is in the module's own code. The one place that
+names the firmware the review was made in is the reference line in
+`What it is`.
+
 ```markdown
 # <ModuleName>
 
@@ -88,16 +102,28 @@ someone reads who reads nothing else: three to five sentences.
 
 ### `## What it is`
 
-Only what a technician needs: what kind of file this is, whose it is (EDK2, AMI,
-Insyde, AMD, Intel, the OEM), at what stage of the start-up it runs, and which
-board it was read from and where it sits in the firmware. Never the dump file it
-was read from: a module is the same in every dump of the board. Say how sure the
-origin is when it is inferred.
+As short as it can be: two to four short bullets, each one a detail that
+matters for this module.
+
+- **Origin**, in one line: whose code it is (EDK2, AMI, Insyde, AMD, Intel,
+  the OEM), the source path when there is one, how closely the build matches
+  it, and how sure that is.
+- **What is unusual**, only if something is: a dependency the source does not
+  declare (the dependency expression is in the firmware file, not in the hashed
+  image, so it is "this build's file"), an unusual dispatch, build-time settings
+  that change the behaviour.
+- **Exactly one reference line**: `Reviewed in: <machine>, board <board>`. It
+  says in which firmware the review was made, not where the module is: the
+  same bytes in another firmware show the same description.
+
+No general explanation of what a PEIM, a DXE driver or the PEI stage is, no
+flash addresses or volume ranges, no dump file name, no repeat of the summary.
+An abbreviation that needs explaining goes to `Terms`.
 
 ### `## What it does`
 
-What the module does for the machine, why it is in this image, what depends on
-it and what goes wrong without it.
+What the module does for the machine, what it gives the rest of the firmware and
+what goes wrong without it.
 
 ### `## Execution flow`
 
