@@ -247,6 +247,11 @@ private struct ChecksumPass: Sendable {
         codeAnalysisManifests.compactMapValues { $0.reading?.origin }
             .filter { codeAnalysisNodes.contains($0.key) }
     }
+    /// The analyzed nodes whose stored analysis carries a description.
+    private var codeDescribed: Set<NodeID> {
+        Set(codeAnalysisManifests.filter { $0.value.reading?.description != nil }.keys)
+            .intersection(codeAnalysisNodes)
+    }
     private var codeAnalysisRequest: Task<Void, Never>?
     /// Which scan is current; a result from an older reading is dropped.
     private var codeAnalysisGeneration = 0
@@ -424,6 +429,9 @@ private struct ChecksumPass: Sendable {
         }
         controller.onOpenCode = { [weak self] nodeID in
             self?.openCode(for: nodeID)
+        }
+        controller.onModuleInfo = { [weak self] nodeID, view in
+            self?.showModuleSummary(for: nodeID, beside: view)
         }
         controller.onOpenDecompressed = { [weak self] nodeID in
             self?.openDecompressedInNewTab(for: nodeID)
@@ -1185,6 +1193,7 @@ private struct ChecksumPass: Sendable {
             controller.show(
                 image: nil, tree: tree, focus: nil, detail: .empty, catalogue: guids,
                 badChecksums: checksumProblems, codeAnalysis: codeReadiness, codeOrigins: codeOrigins,
+                codeDescribed: codeDescribed,
                 canWrite: !host.isReadOnly,
                 isBuilding: tree != nil, rowsChanged: true,
                 meRoots: meRoots, meFocus: meFocus
@@ -1251,6 +1260,7 @@ private struct ChecksumPass: Sendable {
                 helpTerm: helpTerm,
                 catalogue: guids,
                 badChecksums: checksumProblems, codeAnalysis: codeReadiness, codeOrigins: codeOrigins,
+                codeDescribed: codeDescribed,
                 canWrite: !host.isReadOnly, isBuilding: false,
                 rowsChanged: rowsChanged,
                 meRoots: meRoots, meFocus: meFocus
@@ -2322,15 +2332,54 @@ private struct ChecksumPass: Sendable {
             fail(UEFICodeOpening.Failure.noAnalysis.message)
             return
         }
-        // Busy until the panel opens: the bytes are quick, the artifact is
-        // not — a large DXE driver's is ten megabytes of JSON.
+        let preferred = codeAnalysisManifests[nodeID]
+        open(Task {
+            try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: UEFIToolModule.codeAnalysisRoot,
+                                              preferred: preferred)
+        }, at: location)
+    }
+
+    // help: panel.uefi.module-summary
+    /// A module file's (i): the summary of image `nodeID`'s description, in
+    /// a popover beside `view`. The code is made ready while the description
+    /// is read, from the analysis and the index the tree already holds, so
+    /// the popover's **Open with Code** opens it without reading the store's
+    /// manifests again.
+    func showModuleSummary(for nodeID: NodeID, beside view: NSView) {
+        guard let tree, tree.isReady, let root = UEFIToolModule.codeAnalysisRoot,
+              let manifest = codeAnalysisManifests[nodeID], let digest = manifest.reading?.description
+        else { return }
+        let index = codeAnalysisIndex
+        let opening = Task {
+            try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: root, preferred: manifest, index: index)
+        }
+        let image = tree.image()
+        let name = UEFITreeMarks.moduleFile(of: nodeID, in: image).flatMap { image.node($0) }
+            .map { $0.displayName(in: Localization.appLanguage) } ?? manifest.module.name
+        Task { [weak self] in
+            let text = await Task.detached(priority: .userInitiated) { () -> String? in
+                guard let store = try? ContentStore(root: root, create: false),
+                      let data = try? store.object(digest) else { return nil }
+                return String(data: data, encoding: .utf8)
+            }.value
+            guard let self else { return }
+            let summary = text.flatMap { ModuleSummary.of(description: $0) }
+                ?? L("The module's description has no summary.")
+            self.controller.showModuleSummary(name: name, summary: summary, beside: view) { [weak self] in
+                self?.open(opening, at: nil)
+            }
+        }
+    }
+
+    /// Opens the code `opening` makes ready, busy until the panel opens: the
+    /// bytes are quick, the artifact is not — a large DXE driver's is ten
+    /// megabytes of JSON.
+    private func open(_ opening: Task<UEFICodeOpening, Error>, at location: CodeLocation?) {
         controller.showBusy()
         Task { [weak self] in
             defer { self?.controller.endBusy() }
             do {
-                let opening = try await UEFICodeOpening.prepare(
-                    node: nodeID, in: tree, store: UEFIToolModule.codeAnalysisRoot,
-                    preferred: self?.codeAnalysisManifests[nodeID])
+                let opening = try await opening.value
                 guard let self else { return }
                 guard let opener = self.host as? any CodePartOpening else {
                     self.fail(L("The code panel is not available."))

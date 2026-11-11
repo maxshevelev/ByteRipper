@@ -108,6 +108,9 @@ public struct ToolRowMarks: Hashable, Sendable {
     /// Whose code the module is, as its review set it: a short framed word
     /// after the code badge. Nil, or `unknown`, draws nothing.
     public var origin: ModuleOrigin?
+    /// The row is a module's file whose description has a summary: it wears
+    /// the (i) that shows it (`ToolPanelModuleInfoButton`).
+    public var moduleInfo: Bool = false
 
     public init(
         protection: Protection? = nil,
@@ -115,7 +118,8 @@ public struct ToolRowMarks: Hashable, Sendable {
         opensDecompressed: Bool = false,
         problem: Problem? = nil,
         roles: [Role] = [],
-        origin: ModuleOrigin? = nil
+        origin: ModuleOrigin? = nil,
+        moduleInfo: Bool = false
     ) {
         self.protection = protection
         self.decompressedFrom = decompressedFrom
@@ -123,6 +127,7 @@ public struct ToolRowMarks: Hashable, Sendable {
         self.problem = problem
         self.roles = roles
         self.origin = origin
+        self.moduleInfo = moduleInfo
     }
 
     public static let none = ToolRowMarks()

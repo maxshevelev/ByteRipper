@@ -1,5 +1,6 @@
 import AppKit
 import CodeAnalysis
+import Localization
 import XCTest
 @testable import ToolModuleKit
 
@@ -264,6 +265,46 @@ final class ToolRowMarksTests: XCTestCase {
                               ToolRowMarks.Role.codeAnalysisInside(readiness).toolTip)
             XCTAssertEqual(ToolRowMarks.Role.codeAnalysisModule(readiness).mark, .codeAnalysis)
         }
+    }
+
+    /// A described module's row wears the (i) after the origin; it asks the
+    /// responder chain, and inverts with the row's selection.
+    func testTheInfoButtonComesAfterTheOriginAndAsksTheResponderChain() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"), warning: true, badges: true)
+        let info = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.codeInfoTag) as? ToolPanelModuleInfoButton)
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisModule(.complete)]))
+        XCTAssertTrue(info.isHidden)
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisModule(.complete)],
+                                                      origin: ModuleOrigin(category: .edk2, confidence: .established),
+                                                      moduleInfo: true))
+        XCTAssertFalse(info.isHidden)
+        XCTAssertNil(info.target)
+        XCTAssertEqual(info.action, #selector(ToolPanelModuleInfoResponder.showModuleInfo(_:)))
+        XCTAssertEqual(info.accessibilityLabel(), L("Module summary"))
+
+        let row = try XCTUnwrap(info.superview as? NSStackView)
+        let origin = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.codeOriginTag))
+        let views = row.arrangedSubviews
+        XCTAssertEqual(views.firstIndex(of: info), try XCTUnwrap(views.firstIndex(of: origin)) + 1)
+
+        cell.backgroundStyle = .emphasized
+        XCTAssertEqual(info.contentTintColor, .alternateSelectedControlTextColor)
+        cell.backgroundStyle = .normal
+        XCTAssertEqual(info.contentTintColor, .secondaryLabelColor)
+    }
+
+    /// The popover says the module's name and summary, and its button opens
+    /// the code it was given.
+    func testTheSummaryPopoverOpensTheCodeItWasGiven() throws {
+        var opened = 0
+        let popover = ToolPanelModuleSummaryPopover(name: "PeiVariable", summary: "Reads variables.") { opened += 1 }
+        popover.loadView()
+        let fields = popover.view.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue)
+        XCTAssertEqual(fields, ["PeiVariable", "Reads variables."])
+        let button = try XCTUnwrap(popover.view.subviews.compactMap { $0 as? NSButton }
+            .first { $0.title == L("Open with Code") })
+        button.performClick(nil)
+        XCTAssertEqual(opened, 1)
     }
 
     /// The FIT panel's existing call still shows the red octagon, even on a

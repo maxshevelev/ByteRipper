@@ -153,7 +153,8 @@ import Localization
                 codeBadge.setContentHuggingPriority(.required, for: .horizontal)
                 let origin = ToolPanelOriginBadge()
                 origin.isHidden = true
-                row = NSStackView(views: leading + [field, codeBadge, origin, spacer])
+                let info = ToolPanelModuleInfoButton()
+                row = NSStackView(views: leading + [field, codeBadge, origin, info, spacer])
                 field.setContentHuggingPriority(.defaultHigh, for: .horizontal)
             } else {
                 row = NSStackView(views: leading + [field])
@@ -238,6 +239,9 @@ import Localization
     public static let codeBadgeTag = 6_004
     /// The module's origin, after the code badge (`ToolPanelOriginBadge`).
     public static let codeOriginTag = 6_005
+    /// The (i) after the origin that shows the module's summary
+    /// (`ToolPanelModuleInfoButton`).
+    public static let codeInfoTag = 6_006
     /// The readiness circle's size: four fifths of the panel's text.
     static var codeBadgePointSize: CGFloat { (ToolPanelFont.size * 0.8).rounded() }
     private static let codeBadgeSizeID = "ToolPanelTable.codeBadgeSize"
@@ -303,6 +307,7 @@ import Localization
         setProblem(marks.problem, on: cell)
         setBadges(marks.roles, on: cell)
         (cell.viewWithTag(codeOriginTag) as? ToolPanelOriginBadge)?.show(marks.origin)
+        (cell.viewWithTag(codeInfoTag) as? ToolPanelModuleInfoButton)?.isHidden = !marks.moduleInfo
         ControlHelp.describe(cell, marks.summary)
     }
 

@@ -49,6 +49,9 @@ import UEFITool
     /// **Open with Code** was chosen for an analyzed image: the module's bytes
     /// and its stored code in one fragment panel.
     var onOpenCode: ((NodeID) -> Void)?
+    /// A module file's (i) was clicked: the analysed image whose summary it
+    /// shows, and the button to show it beside.
+    var onModuleInfo: ((NodeID, NSView) -> Void)?
     /// A node's Save As item was chosen: the node itself, or its body alone.
     var onSaveNode: ((NodeID, Bool) -> Void)?
 
@@ -203,6 +206,11 @@ import UEFITool
     private var codeAnalysis: [NodeID: ToolRowMarks.CodeReadiness] = [:]
     /// Whose code each analysed module is, as its review set it.
     private var codeOrigins: [NodeID: ModuleOrigin] = [:]
+    /// The analysed images whose stored analysis carries a description: their
+    /// files wear the (i) that shows its summary.
+    private var codeDescribed: Set<NodeID> = []
+    /// The popover a module file's (i) opened, kept while it shows.
+    private(set) var moduleSummaryPopover: ToolPanelModuleSummaryPopover?
     /// Whether the file is open for writing. Without it the Fix Checksum menu
     /// item stands down — the module would refuse anyway, but a greyed item
     /// says so before the click.
@@ -779,6 +787,7 @@ import UEFITool
         badChecksums: [NodeID: Set<UEFIChecksumField>],
         codeAnalysis: [NodeID: ToolRowMarks.CodeReadiness] = [:],
         codeOrigins: [NodeID: ModuleOrigin] = [:],
+        codeDescribed: Set<NodeID> = [],
         canWrite: Bool,
         isBuilding: Bool,
         rowsChanged: Bool,
@@ -818,6 +827,7 @@ import UEFITool
         self.badChecksums = badChecksums
         self.codeAnalysis = codeAnalysis
         self.codeOrigins = codeOrigins
+        self.codeDescribed = codeDescribed
         self.canWrite = canWrite
         self.isBuilding = isBuilding
         self.meRoots = meRoots
@@ -2754,6 +2764,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                                    codeModule: UEFITreeMarks.codeModule(node, analyzed: codeAnalysis, in: image),
                                    origin: UEFITreeMarks.origin(of: node, origins: codeOrigins,
                                                                 analyzed: Set(codeAnalysis.keys), in: image),
+                                   moduleInfo: UEFITreeMarks.summaryImage(of: node, described: codeDescribed,
+                                                                          in: image) != nil,
                                    in: Localization.appLanguage)
     }
 
@@ -3119,6 +3131,15 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         onOpenNode?(target.id, target.body)
     }
 
+    /// Shows `summary` of module `name` beside `view`; its button opens the
+    /// code through `open`.
+    func showModuleSummary(name: String, summary: String, beside view: NSView, open: @escaping () -> Void) {
+        moduleSummaryPopover?.close()
+        let popover = ToolPanelModuleSummaryPopover(name: name, summary: summary, openCode: open)
+        moduleSummaryPopover = popover
+        popover.show(relativeTo: view.bounds, of: view)
+    }
+
     @objc private func openWithCodeClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
         onOpenCode?(nodeID)
@@ -3330,5 +3351,18 @@ private final class UEFIOutlineView: ToolPanelOutlineView {
               isItemExpanded(clickedItem) == wasExpanded
         else { return }
         onRowReclick?(clickedRow)
+    }
+}
+
+// help: panel.uefi.module-summary
+extension UEFIToolViewController: ToolPanelModuleInfoResponder {
+    /// A module file's (i): the row it sits in names the file, and the file's
+    /// described image is the one whose summary shows.
+    func showModuleInfo(_ sender: NSButton) {
+        let row = outline.row(for: sender)
+        guard row >= 0, let node = node(of: outline.item(atRow: row) as Any), let image,
+              let module = UEFITreeMarks.summaryImage(of: node, described: codeDescribed, in: image)
+        else { return }
+        onModuleInfo?(module, sender)
     }
 }

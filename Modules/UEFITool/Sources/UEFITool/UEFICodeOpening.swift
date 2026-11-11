@@ -49,9 +49,12 @@ public struct UEFICodeOpening: Sendable {
     /// - Parameter preferred: the analysis to open when it still matches the
     ///   bytes — the one the tree's badge was drawn from — at its recipe's
     ///   latest revision; otherwise the newest the store has for them.
+    /// - Parameter index: the store's index the tree already read: given, the
+    ///   store's manifests are not read again, only the artifact.
     @MainActor
     public static func prepare(node id: NodeID, in tree: LazyUEFITree, store root: URL?,
-                               preferred: AnalysisManifest? = nil) async throws -> UEFICodeOpening {
+                               preferred: AnalysisManifest? = nil,
+                               index known: CodeAnalysisIndex? = nil) async throws -> UEFICodeOpening {
         let image = tree.image()
         guard let root, let node = image.node(id), UEFICodeCandidates.isCandidate(node),
               let open = UEFIPresenter.nodeOpen(for: node, in: image, body: true)
@@ -66,7 +69,7 @@ public struct UEFICodeOpening: Sendable {
         let loaded = await Task.detached(priority: .userInitiated)
         { () -> (manifest: AnalysisManifest, artifact: CodeArtifact?, recipes: [AnalysisManifest])? in
             let digest = SHA256Digest(data: Data(bytes))
-            let index = CodeAnalysisIndex.load(from: root)
+            let index = known ?? CodeAnalysisIndex.load(from: root)
             let manifest = preferred.flatMap { preferred in
                 // The preferred analysis as the store has it now: the tree
                 // drew its badge from a revision a publish has since replaced.

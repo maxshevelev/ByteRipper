@@ -244,6 +244,27 @@ final class UEFITreeMarksTests: XCTestCase {
                      "no analysis, no origin")
     }
 
+    /// A described module's file wears the (i) that shows its summary; its
+    /// image, another file and a module without a description do not.
+    func testTheModuleFileOfADescribedModuleWearsTheInfoButton() throws {
+        let image = tree()
+        let file = try XCTUnwrap(image.node(NodeID([0, 0])))
+        let module = try XCTUnwrap(image.node(NodeID([0, 0, 1])))
+        let container = try XCTUnwrap(image.node(NodeID([0, 1])))
+        let described: Set<NodeID> = [module.id, NodeID([0, 1, 0, 0, 0, 0])]
+
+        XCTAssertEqual(UEFITreeMarks.summaryImage(of: file, described: described, in: image), module.id)
+        XCTAssertNil(UEFITreeMarks.summaryImage(of: module, described: described, in: image), "not on the image")
+        XCTAssertNil(UEFITreeMarks.summaryImage(of: container, described: described, in: image),
+                     "a container is not the module")
+        XCTAssertNil(UEFITreeMarks.summaryImage(of: file, described: [], in: image), "no description, no (i)")
+
+        XCTAssertTrue(UEFITreeMarks.marks(for: file, in: image, codeModule: .partial, moduleInfo: true,
+                                          in: .english).moduleInfo)
+        XCTAssertFalse(UEFITreeMarks.marks(for: file, in: image, moduleInfo: true, in: .english).moduleInfo,
+                       "no analysis on the row, no (i)")
+    }
+
     /// A shut volume would wear it for nearly every module: it does not.
     func testAVolumeWearsNoBadgeForWhatItHolds() {
         let volume = UEFINode(id: NodeID([0]), kind: .volume, name: "FV",

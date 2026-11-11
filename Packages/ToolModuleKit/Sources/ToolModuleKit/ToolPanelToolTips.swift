@@ -33,6 +33,7 @@ final class ToolPanelCellView: NSTableCellView {
     override var backgroundStyle: NSView.BackgroundStyle {
         didSet {
             (viewWithTag(ToolPanelTable.codeOriginTag) as? ToolPanelOriginBadge)?.backgroundStyle = backgroundStyle
+            (viewWithTag(ToolPanelTable.codeInfoTag) as? ToolPanelModuleInfoButton)?.backgroundStyle = backgroundStyle
         }
     }
 }

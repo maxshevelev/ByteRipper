@@ -46,6 +46,7 @@ public enum UEFITreeMarks {
         codeInside: ToolRowMarks.CodeReadiness? = nil,
         codeModule: ToolRowMarks.CodeReadiness? = nil,
         origin: ModuleOrigin? = nil,
+        moduleInfo: Bool = false,
         in language: AppLanguage
     ) -> ToolRowMarks {
         var errors: [String] = []
@@ -113,7 +114,8 @@ public enum UEFITreeMarks {
             opensDecompressed: opens,
             problem: .worst(errors: errors, cautions: cautions),
             roles: roles,
-            origin: codeModule != nil ? origin : nil
+            origin: codeModule != nil ? origin : nil,
+            moduleInfo: codeModule != nil && moduleInfo
         )
     }
 
@@ -164,6 +166,15 @@ public enum UEFITreeMarks {
     /// The origin a row shows: only the module's own file shows it, open or
     /// shut — the one every analysed image whose module the file is shares.
     /// The image's row, and the rows that hold several modules, show none.
+    /// The image whose summary a module's file shows behind its (i): the
+    /// file's own analysed image whose description has one, the first by its
+    /// place should the file hold more. Nil on any other row.
+    public static func summaryImage(of node: UEFINode, described: Set<NodeID>, in tree: UEFIImage) -> NodeID? {
+        guard node.kind == .file else { return nil }
+        return described.filter { moduleFile(of: $0, in: tree) == node.id }
+            .min { $0.path.lexicographicallyPrecedes($1.path) }
+    }
+
     public static func origin(of node: UEFINode, origins: [NodeID: ModuleOrigin],
                               analyzed: Set<NodeID>, in tree: UEFIImage) -> ModuleOrigin? {
         guard node.kind == .file else { return nil }

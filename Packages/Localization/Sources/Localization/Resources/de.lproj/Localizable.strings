@@ -1953,3 +1953,7 @@
 "%1$@ words" = "%1$@ Wörter";
 "Block type" = "Blocktyp";
 "Fields" = "Felder";
+"Module summary" = "Kurzbeschreibung des Moduls";
+"Shows the module's summary from its description" = "Zeigt die Kurzbeschreibung des Moduls aus seiner Beschreibung";
+"Opens the module's bytes and its code" = "Öffnet die Bytes des Moduls und seinen Code";
+"The module's description has no summary." = "Die Beschreibung des Moduls enthält keine Kurzbeschreibung.";
