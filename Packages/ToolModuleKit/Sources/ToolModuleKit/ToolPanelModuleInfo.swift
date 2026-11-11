@@ -147,7 +147,7 @@ public final class ToolPanelModuleInfoButton: NSButton {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = (size * 0.6).rounded()
-        stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
+        stack.translatesAutoresizingMaskIntoConstraints = false
 
         let title = NSTextField(labelWithString: name)
         title.font = .systemFont(ofSize: (size * 1.25).rounded(), weight: .bold)
@@ -191,7 +191,20 @@ public final class ToolPanelModuleInfoButton: NSButton {
         row.alignment = .centerY
         row.spacing = (size * 0.6).rounded()
         stack.addArrangedSubview(row)
-        view = stack
+
+        // The margins are the container's constraints, not the stack's
+        // edgeInsets: with a wrapping label in it the stack reported a width
+        // without its right inset, and the popover cut the text at its edge.
+        let container = NSView()
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            container.widthAnchor.constraint(equalToConstant: Self.width),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Self.inset),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -Self.inset),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: Self.inset),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Self.inset),
+        ])
+        view = container
     }
 
     @objc private func openClicked() {

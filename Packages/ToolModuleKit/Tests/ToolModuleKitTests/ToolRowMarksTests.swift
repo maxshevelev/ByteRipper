@@ -319,6 +319,35 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(opened, 1)
     }
 
+    /// A long summary wraps inside the popover's margins, where the title
+    /// and the button stand, however long it is.
+    func testALongSummaryKeepsThePopoversMargins() throws {
+        let popover = ToolPanelModuleSummaryPopover(name: "CpuIoPei")
+        popover.loadView()
+        let view = popover.view
+        view.layoutSubtreeIfNeeded()
+        popover.showSummary(String(repeating: "CpuIoPei gives the early start-up code one shared way to reach the ports. ",
+                                   count: 6))
+        view.setFrameSize(view.fittingSize)
+        view.layoutSubtreeIfNeeded()
+        let stack = try XCTUnwrap(view.subviews.first as? NSStackView)
+        let fields = stack.arrangedSubviews.compactMap { $0 as? NSTextField }
+        let title = try XCTUnwrap(fields.first), words = try XCTUnwrap(fields.last)
+        let row = try XCTUnwrap(stack.arrangedSubviews.compactMap { $0 as? NSStackView }.first)
+        // Where each one's text stands: a text field's frame runs past its
+        // text by its alignment insets.
+        func box(_ v: NSView) -> NSRect { view.convert(v.alignmentRect(forFrame: v.frame), from: v.superview) }
+        print("SUMMARY-LAYOUT view", view.frame, "title", box(title), "words", box(words), "row", box(row))
+        let margin = box(title).minX
+        XCTAssertGreaterThan(margin, 8, "a margin on the left")
+        XCTAssertEqual(box(words).minX, margin, accuracy: 0.5, "the summary starts where the title does")
+        XCTAssertEqual(box(row).minX, margin, accuracy: 0.5)
+        XCTAssertEqual(view.bounds.width - box(words).maxX, margin, accuracy: 0.5, "the same margin on the right")
+        XCTAssertEqual(box(words).maxY, view.bounds.height - margin - box(title).height
+                       - stack.spacing, accuracy: 0.5)
+        XCTAssertGreaterThan(box(words).height, box(title).height * 2, "it wraps")
+    }
+
     func testAFailedLoadSaysWhyAndCannotOpen() {
         let popover = ToolPanelModuleSummaryPopover(name: "PeiVariable")
         popover.loadView()
