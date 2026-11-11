@@ -1,5 +1,6 @@
 import Cocoa
 import ALSplitView
+import CodeView
 
 /// One content surface: the composite a document is looked at through — the
 /// tool-module's panel on the left, and the content beside it: the dump with
@@ -322,6 +323,19 @@ import ALSplitView
             newView.leadingAnchor.constraint(equalTo: paneHost.leadingAnchor),
             newView.trailingAnchor.constraint(equalTo: paneHost.trailingAnchor),
         ])
+        // An open Find bar follows the content: over the code of a code
+        // screen, over the panes of a dump (#41).
+        if findMade { find.contentChanged() }
+    }
+
+    /// The code pane this surface shows, when its content is one: a code
+    /// panel's, or the tab's code screen under its title bar (#41).
+    var shownCodePane: CodePaneView? {
+        for view in paneHost.subviews {
+            if let code = view as? CodePaneView { return code }
+            if let code = view.subviews.lazy.compactMap({ $0 as? CodePaneView }).first { return code }
+        }
+        return nil
     }
 
     // MARK: - The Find bar
@@ -334,8 +348,11 @@ import ALSplitView
         find.searchedPane = { [weak self] in
             self?.pinnedPane ?? self?.host?.windowModel.activePane
         }
+        find.searchedCode = { [weak self] in self?.shownCodePane }
+        findMade = true
         return find
     }()
+    private var findMade = false
 
     /// Puts `bar` across the top of the content, over the panes and the
     /// minimap. A bar another surface showed comes over without being removed

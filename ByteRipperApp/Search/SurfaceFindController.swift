@@ -1,5 +1,7 @@
 import AppKit
 import ByteRipperCore
+import CodeView
+import Find
 import Localization
 
 /// The search status bar operation is what a `FindIndexer` shows while it
@@ -27,6 +29,10 @@ extension BackgroundOperation: FindActivity {}
     /// The pane a search goes to: the tab's active pane, or the panel's part.
     var searchedPane: () -> PaneViewModel? = { nil }
 
+    /// The code pane the surface shows, when it shows one (#41): the bar then
+    /// stands over its code and searches the text on screen, not the dump.
+    var searchedCode: () -> CodePaneView? = { nil }
+
     init(surface: DocumentSurface, host: MainViewController?) {
         self.surface = surface
         self.host = host
@@ -46,7 +52,12 @@ extension BackgroundOperation: FindActivity {}
         // running stops being shown — count and greys together (§11). Its set
         // stays: the file has not moved under it, so a results panel listing it
         // is still telling the truth, until the next search replaces it.
-        bar.onPatternEdited = { [weak self] in self?.searchedPane()?.endMatchHighlighting() }
+        bar.onPatternEdited = { [weak self] in
+            guard let self else { return }
+            if let code = self.searchedCode() { code.finder.endHighlighting() } else {
+                self.searchedPane()?.endMatchHighlighting()
+            }
+        }
         // Keeping a pattern needs the one thing the bar has not got — a name —
         // so the bar hands over what the field describes and a sheet asks for
         // the rest (§11).
@@ -70,7 +81,7 @@ extension BackgroundOperation: FindActivity {}
     func show() {
         guard let surface else { return }
         let wasShown = isShown
-        surface.showFindBar(bar)
+        let profileChanged = place(on: surface)
         // The bar lives in the hierarchy between shows, hidden. A layer colour
         // is resolved when it is assigned, and what reaches a view that nobody
         // is drawing is not something to rely on — so the bar re-resolves its
@@ -78,11 +89,55 @@ extension BackgroundOperation: FindActivity {}
         bar.refreshThemeColors()
         sync()
         surface.view.layoutSubtreeIfNeeded()
-        if wasShown {
+        if wasShown, !profileChanged {
             bar.focusForEditing()
         } else {
             bar.prepareForShow()
         }
+    }
+
+    /// Puts the bar where the surface's content wants it: over the code of a
+    /// code pane, reading text (#41); across the top of the panes otherwise,
+    /// reading bytes. Returns whether that changed what the bar reads.
+    @discardableResult
+    private func place(on surface: DocumentSurface) -> Bool {
+        let before = bar.profile
+        if let code = searchedCode() {
+            surface.hideFindBar()
+            bar.profile = .code
+            if shownIn !== code { shownIn?.hideFindBar() }
+            code.showFindBar(bar)
+            code.onFindChanged = { [weak self, weak code] in
+                guard let self, let code, self.searchedCode() === code else { return }
+                self.sync()
+            }
+            shownIn = code
+        } else {
+            shownIn?.hideFindBar()
+            shownIn = nil
+            bar.profile = .hexDump
+            surface.showFindBar(bar)
+        }
+        return bar.profile != before
+    }
+
+    /// The code pane the bar stands in now, if any.
+    private weak var shownIn: CodePaneView?
+
+    /// The surface's content was replaced — the tab became a code screen, or
+    /// stopped being one. An open bar follows to where it now belongs.
+    func contentChanged() {
+        guard let surface else { return }
+        guard isShown else {
+            if let shownIn, shownIn !== searchedCode() {
+                shownIn.hideFindBar()
+                self.shownIn = nil
+            }
+            return
+        }
+        let changed = place(on: surface)
+        sync()
+        if changed { bar.prepareForShow() }
     }
 
     /// Done, Esc: the bar goes, and so does every search's showing on this
@@ -91,6 +146,13 @@ extension BackgroundOperation: FindActivity {}
     func hide() {
         host?.notices.dismiss()
         surface?.hideFindBar()
+        if let code = shownIn {
+            code.hideFindBar()
+            shownIn = nil
+            bar.isHidden = true
+            code.focusFoundText()
+            return
+        }
         bar.isHidden = true
         for pane in surface?.panesInMapOrder() ?? [] {
             pane.finder.cancel()
@@ -140,6 +202,13 @@ extension BackgroundOperation: FindActivity {}
     /// nothing at all, and whether its results panel is up (§11). Every
     /// reading is derived on the spot rather than remembered.
     func sync() {
+        if let code = shownIn {
+            bar.apply(FindBarView.PaneContext(
+                count: FindCount.reading(of: code.finder.highlightedMatches,
+                                         current: code.finder.currentIndex),
+                resultsShown: false))
+            return
+        }
         guard let pane = searchedPane() else { return }
         bar.apply(FindBarView.PaneContext(
             count: FindCount.reading(of: pane.highlightedMatchSet, current: pane.currentMatchIndex),
@@ -159,6 +228,7 @@ extension BackgroundOperation: FindActivity {}
     /// Stops every search on this surface: its panes are being rebuilt.
     func cancelAll() {
         for pane in surface?.panesInMapOrder() ?? [] { pane.finder.cancel() }
+        shownIn?.finder.cancel()
     }
 
     // MARK: - Find Next and Find Previous
@@ -190,6 +260,12 @@ extension BackgroundOperation: FindActivity {}
     /// A press of Return or ‹ › (§11): a step through the search already in
     /// hand, or a new search.
     private func runSearch(_ request: FindBarView.Request, direction: SearchDirection) {
+        if case .text(let text, let caseSensitive, let wholeWord) = request {
+            guard let code = shownIn else { return }
+            runCodeSearch(TextQuery(text: text, caseSensitive: caseSensitive, wholeWord: wholeWord),
+                          direction: direction, in: code)
+            return
+        }
         guard let pane = searchedPane(), pane.isOpen, let attempts = attempts(for: request) else { return }
         // A search already running here is stepped rather than started again —
         // including the one a Smart Search settled on, whose attempt is
@@ -448,5 +524,87 @@ extension BackgroundOperation: FindActivity {}
         guard let paneView = host?.filePaneView(for: pane), pane.matchSet != nil else { return }
         paneView.showSearchResults()
         sync()
+    }
+
+    // MARK: - Searching the code (#41)
+
+    /// A press of Return, ‹ › or ⌘G over a code pane: a step through the
+    /// search in hand, or a new search of the text on screen — the C of the
+    /// function, or the description while it is open.
+    private func runCodeSearch(_ query: TextQuery, direction: SearchDirection, in code: CodePaneView) {
+        guard !query.text.isEmpty else { return }
+        host?.notices.dismiss()
+        code.prepareForFind()
+        let finder = code.finder
+        let anchor = code.findAnchor(direction)
+        if finder.hasMatches(for: query), finder.passInFlight == nil {
+            if let step = finder.indexedStep(direction, from: anchor) {
+                land(onCode: step.range, wrapped: step.wrapped, direction: direction, in: code)
+                return
+            }
+            Task { [weak self, weak code] in
+                let outcome = await finder.step(direction, from: anchor)
+                guard let self, let code else { return }
+                switch outcome {
+                case .indexed(let step):
+                    self.land(onCode: step.range, wrapped: step.wrapped, direction: direction, in: code)
+                case .scanned(let range, let wrapped):
+                    self.land(onCode: range, wrapped: wrapped, direction: direction, in: code)
+                case .notFound:
+                    NSSound.beep()
+                    self.handOffFocus(fromCode: code)
+                case .nothing, .cancelled:
+                    break
+                }
+            }
+            return
+        }
+        finder.onFoundSomething = { [weak self] _ in self?.bar.query.recordFoundCodeSearch() }
+        finder.start([query], from: anchor, direction: direction) { [weak self, weak code] outcome in
+            guard let self, let code else { return }
+            switch outcome {
+            case .found(_, _, let range, let wrapped):
+                self.bar.query.recordFoundCodeSearch()
+                self.land(onCode: range, wrapped: wrapped, direction: direction, in: code)
+            case .nothing:
+                // The count says Not Found; the beep says the press was heard.
+                NSSound.beep()
+                self.sync()
+                self.handOffFocus(fromCode: code)
+            case .cancelled, .alreadyRunning:
+                break
+            }
+        }
+    }
+
+    /// Puts the reader on a match in the code, and says so when it wrapped —
+    /// as in the dump.
+    private func land(onCode range: Range<UInt64>, wrapped: Bool, direction: SearchDirection,
+                      in code: CodePaneView) {
+        code.showFindMatch(range)
+        sync()
+        if wrapped { host?.showWrapNotice(direction: direction) }
+        handOffFocus(fromCode: code)
+    }
+
+    /// A search from the bar leaves the keyboard in the field; a ⌘G hands it
+    /// back to where it was.
+    private func handOffFocus(fromCode code: CodePaneView) {
+        if let responder = returnsFocusTo {
+            returnsFocusTo = nil
+            bar.window?.makeFirstResponder(responder)
+        } else if isShown {
+            bar.focusPatternField()
+        } else {
+            code.focusFoundText()
+        }
+    }
+
+    /// ⌘E over a code pane: the text selected in the C or the description
+    /// becomes the pattern. False when the code has nothing selected.
+    func stageCodeSelection() -> Bool {
+        guard let code = searchedCode(), let text = code.findSelection else { return false }
+        bar.stage(SelectionFindPattern(text: text, encoding: .utf8))
+        return true
     }
 }

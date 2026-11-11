@@ -2,6 +2,7 @@ import ALSplitView
 import AppKit
 import AppPalette
 import CodeAnalysis
+import Find
 import HelpBook
 import HelpUI
 import Localization
@@ -59,6 +60,7 @@ import ToolModuleKit
     private let recipes: [AnalysisManifest]
 
     private let functionTable = NSTableView()
+    var functionTableForTests: NSTableView { functionTable }
     private let functionScroll = NSScrollView()
     /// The band under the list's switch: the review's groups as a strip, each
     /// as wide as its share of the module's functions.
@@ -120,7 +122,7 @@ import ToolModuleKit
     private var callersPopover: CodeCallersPopover?
     private let table = CodeListingTableView()
     private let tableScroll = NSScrollView()
-    private let cTextView = CodeTextView()
+    let cTextView = CodeTextView()
     private let cScroll = NSScrollView()
     /// ASM, C or the description: which is on screen.
     private var mode = 1 { didSet { drawModeControls() } }
@@ -145,7 +147,7 @@ import ToolModuleKit
         if let status { moduleLine?.addView(status, in: .leading) }
     }
 
-    private let descriptionView = CodeDescriptionView()
+    let descriptionView = CodeDescriptionView()
     private let diffView = CodeDiffView()
     /// The artifact this pane showed before a later revision of its reading
     /// replaced it: what Diff compares the code against, nil while the pane
@@ -182,6 +184,17 @@ import ToolModuleKit
     private let recipeSpinner = NSProgressIndicator()
     private let codeContent = NSView()
     private var codeStack: NSView?
+    /// Where the surface's Find bar stands over the code or the description
+    /// (#41): across the top of the code area, never over the navigator.
+    let findBarSlot = CodeFindBarSlot()
+    /// The search of the text on screen — the C of the function, or the
+    /// description (#41). The app drives it; the pane keeps its content in
+    /// step with what it shows and draws what it holds.
+    public let finder = TextFindIndexer()
+    /// What `finder` was last given to search: the side and its text.
+    var findSearched: (side: FindSide, text: String)?
+    /// The search's showing changed: the app re-reads its count.
+    public var onFindChanged: (() -> Void)?
     private var descriptionLeading: NSLayoutConstraint?
     private let rightSplit = ALSplitView()
     private let hexDumpBar = CodeDumpBar()
@@ -975,6 +988,7 @@ import ToolModuleKit
     /// made, so the code is never kept waiting for it.
     public func setModuleDescription(_ markdown: String?) {
         descriptionView.show(markdown)
+        findTextMayHaveChanged()
         hasDescription = !(markdown ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if opensOnDescription, hasDescription { showDescription(true) }
         opensOnDescription = false
@@ -3623,6 +3637,13 @@ import ToolModuleKit
         codeContent.addSubview(descriptionView)
         codeContent.addSubview(codeStack)
         self.codeStack = codeStack
+        findBarSlot.translatesAutoresizingMaskIntoConstraints = false
+        codeContent.addSubview(findBarSlot)
+        NSLayoutConstraint.activate([
+            findBarSlot.topAnchor.constraint(equalTo: codeContent.topAnchor),
+            findBarSlot.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
+            findBarSlot.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor)
+        ])
         // The margins yield to a pane narrower than twice the margin — a split
         // view lays a pane it has not sized yet at no width, and two required
         // edges 12 points in would ask for a negative width. The solver then
@@ -3637,7 +3658,7 @@ import ToolModuleKit
         // The top margin, the gap above the bar and the bar's own height yield
         // in a pane laid out with no height, where they would ask for a stack
         // shorter than nothing.
-        let stackTop = codeStack.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: 12)
+        let stackTop = codeStack.topAnchor.constraint(equalTo: findBarSlot.bottomAnchor, constant: 12)
         stackTop.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([stackLeading, stackTrailing, stackTop])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
@@ -3721,7 +3742,7 @@ import ToolModuleKit
         let column = descriptionView.sectionColumn
         column.isHidden = true
         codeContent.addSubview(column)
-        let columnTop = column.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: Self.sectionColumnInset)
+        let columnTop = column.topAnchor.constraint(equalTo: findBarSlot.bottomAnchor, constant: Self.sectionColumnInset)
         let columnBottom = column.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -Self.sectionColumnInset)
         // They yield in a pane laid out with no height, as the stack's do.
         columnTop.priority = NSLayoutConstraint.Priority(999)
@@ -3731,7 +3752,7 @@ import ToolModuleKit
         NSLayoutConstraint.activate([
             descriptionStart,
             descriptionView.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor),
-            descriptionView.topAnchor.constraint(equalTo: codeContent.topAnchor),
+            descriptionView.topAnchor.constraint(equalTo: findBarSlot.bottomAnchor),
             descriptionView.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor)
         ])
         NSLayoutConstraint.activate([
@@ -3812,8 +3833,10 @@ import ToolModuleKit
         ])
         // The module and the function read on one line across the divider, at
         // every zoom: the row is as high as its controls, the module's block
-        // is not.
-        moduleLine.centerYAnchor.constraint(equalTo: titleRow.centerYAnchor).isActive = true
+        // is not. The Find bar stands over the code alone (#41): the
+        // function's line moves down under it, and the module's stays.
+        moduleLine.centerYAnchor.anchorWithOffset(to: titleRow.centerYAnchor)
+            .constraint(equalTo: findBarSlot.heightAnchor).isActive = true
     }
 
     /// The grey line under the module's name: two points under the body.
@@ -4295,6 +4318,7 @@ import ToolModuleKit
         descriptionView.isHidden = segment != Self.descriptionSegment
         refreshDiffVisibility()
         if segment == 1, !showsRevisionDiff { updateC() }
+        findTextMayHaveChanged()
         updateNewMarkBanner()
         currentOccurrence = nil
         drawOccurrenceBar()
@@ -4401,6 +4425,7 @@ import ToolModuleKit
         cTextView.hover(at: nil)
         if cTextView.string != spaced.string { cTextView.textWasReplaced() }
         cTextView.textStorage?.setAttributedString(spaced)
+        findTextMayHaveChanged()
         // Laid out whole, and the view as tall as the text, before anything
         // scrolls in it: the lines are taller than the font's, and a view
         // sized from an estimate clamps a scroll short of where it was asked
@@ -4892,7 +4917,9 @@ import ToolModuleKit
 
     override public func responds(to aSelector: Selector!) -> Bool {
         if aSelector == #selector(findNextMatch) || aSelector == #selector(findPreviousMatch) {
-            return highlightedSymbol != nil && !showsDescription && super.responds(to: aSelector)
+            // While the Find bar is open here, ⌘G is the bar's (#41).
+            return highlightedSymbol != nil && !showsDescription && !isFindBarShown
+                && super.responds(to: aSelector)
         }
         return super.responds(to: aSelector)
     }

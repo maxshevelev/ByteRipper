@@ -6904,6 +6904,12 @@ final class MainViewController: NSViewController {
     /// be the effect that ⌘E exists not to have — the field is where the answer
     /// is, for anyone who opens the bar to look.
     @objc func useSelectionForFind() {
+        // Over a code pane the bar reads text: the selection in the C or the
+        // description is what is taken, never the module's bytes (#41).
+        if frontFind.searchedCode() != nil {
+            _ = frontFind.stageCodeSelection()
+            return
+        }
         let pane = activePane
         guard pane.isOpen, let doc = pane.document else { return }
         let selection = doc.selection
@@ -7908,6 +7914,9 @@ extension MainViewController: NSMenuItemValidation {
              #selector(useSelectionForFind):
             // Both act on the selection, so both are dimmed without one: ⌘E
             // with nothing selected would have nothing to take (§11).
+            if menuItem.action == #selector(useSelectionForFind), let code = frontFind.searchedCode() {
+                return code.findSelection != nil
+            }
             let pane = activePane
             return pane.isOpen && !pane.hexSelection().isEmpty
         case #selector(NSText.paste(_:)):

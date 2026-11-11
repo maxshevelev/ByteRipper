@@ -1,4 +1,5 @@
 import ByteRipperCore
+import Find
 import Foundation
 import Localization
 
@@ -30,6 +31,15 @@ struct FindCount: Equatable {
     /// says the work is still running is the status bar's own operation, which
     /// carries its progress (§11, §14.4).
     static func reading(of set: ByteMatchSet?, current: Int?) -> FindCount? {
+        reading(ofAny: set, current: current)
+    }
+
+    /// The same reading of any search's set — the code panel's text too (#41).
+    static func reading<Query>(of set: MatchSet<Query>?, current: Int?) -> FindCount? {
+        reading(ofAny: set, current: current)
+    }
+
+    private static func reading<Query>(ofAny set: MatchSet<Query>?, current: Int?) -> FindCount? {
         guard let set, set.isComplete else { return nil }
         return FindCount(total: set.total,
                          ordinal: current.map { $0 + 1 },

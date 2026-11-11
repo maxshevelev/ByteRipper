@@ -16,6 +16,7 @@ let package = Package(
         .package(path: "../ALSplitView"),
         .package(path: "../AppPalette"),
         .package(path: "../CodeAnalysis"),
+        .package(path: "../Find"),
         .package(path: "../HelpBook"),
         .package(path: "../HelpUI"),
         .package(path: "../Localization"),
@@ -29,6 +30,7 @@ let package = Package(
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "AppPalette", package: "AppPalette"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "Find", package: "Find"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "HelpUI", package: "HelpUI"),
             .product(name: "Localization", package: "Localization"),
@@ -38,6 +40,7 @@ let package = Package(
             "CodeView",
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "Find", package: "Find"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "HelpUI", package: "HelpUI"),
             .product(name: "TestWindowHiding", package: "TestWindowHiding")
