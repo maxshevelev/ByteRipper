@@ -1,4 +1,5 @@
 import AppKit
+import CodeAnalysis
 import AppPalette
 import Localization
 
@@ -101,6 +102,35 @@ extension ToolRowMarks.Protection {
         switch self {
         case .ibb: return .protectedIBB
         case .firmware: return .protectedFirmware
+        }
+    }
+}
+
+public extension ToolRowMarks.CodeReadiness {
+    /// How far a module's review has got, as its manifest says it.
+    init(_ progress: ReviewProgress) {
+        switch progress {
+        case .mechanical: self = .mechanical
+        case .partial: self = .partial
+        case .complete: self = .complete
+        }
+    }
+
+    /// The SF Symbol drawn in the readiness colour at `pointSize`: the tree's
+    /// badge and the Code panel's title wear the same circle.
+    func image(pointSize: CGFloat) -> NSImage? {
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: words)?
+            .withSymbolConfiguration(.init(pointSize: pointSize, weight: .regular))
+        image?.isTemplate = true
+        return image
+    }
+
+    /// What the circle says, where the module is already open.
+    var words: String {
+        switch self {
+        case .mechanical: return L("Ghidra's analysis only: the module is not reviewed")
+        case .partial: return L("The review is not finished")
+        case .complete: return L("Every function reviewed and the module described")
         }
     }
 }

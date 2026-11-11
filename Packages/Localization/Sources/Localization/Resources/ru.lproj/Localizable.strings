@@ -111,6 +111,9 @@
 "Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it" = "Сохранён разбор кода: только автоматический анализ Ghidra, функции не разобраны. «Открыть с кодом» открывает его.";
 "Code analysis stored: the review is not finished. Open with Code opens it" = "Сохранён разбор кода: разбор не завершён. «Открыть с кодом» открывает его.";
 "Code analysis stored: every function reviewed and the module described. Open with Code opens it" = "Сохранён разбор кода: все функции разобраны, модуль описан. «Открыть с кодом» открывает его.";
+"Ghidra's analysis only: the module is not reviewed" = "Только анализ Ghidra: модуль не разобран";
+"The review is not finished" = "Разбор не завершён";
+"Every function reviewed and the module described" = "Все функции разобраны, модуль описан";
 "EDK2: the code matches EDK2" = "EDK2: код совпадает с EDK2";
 "EDK2 with changes: an EDK2 module changed by %1$@" = "EDK2 с изменениями: модуль EDK2 с изменениями от %1$@";
 "EDK2 with changes: an EDK2 module changed by the firmware vendor" = "EDK2 с изменениями: модуль EDK2, изменённый производителем прошивки";

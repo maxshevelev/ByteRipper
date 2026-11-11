@@ -239,12 +239,7 @@ private struct ChecksumPass: Sendable {
     /// How far each analyzed node's review has got, as the tree's badge draws it.
     private var codeReadiness: [NodeID: ToolRowMarks.CodeReadiness] {
         Dictionary(uniqueKeysWithValues: codeAnalysisNodes.map { node in
-            let readiness: ToolRowMarks.CodeReadiness = switch codeAnalysisManifests[node]?.reviewProgress {
-            case .complete: .complete
-            case .partial: .partial
-            case .mechanical, nil: .mechanical
-            }
-            return (node, readiness)
+            (node, ToolRowMarks.CodeReadiness(codeAnalysisManifests[node]?.reviewProgress ?? .mechanical))
         })
     }
     /// Whose code each analyzed node's module is, as its review set it.

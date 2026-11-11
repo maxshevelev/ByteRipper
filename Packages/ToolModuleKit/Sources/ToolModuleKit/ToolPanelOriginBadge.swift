@@ -11,20 +11,28 @@ import Localization
 /// dashed one, with fainter text, an origin it inferred. `unknown` draws
 /// nothing: a word saying "unknown" beside every module nobody placed would
 /// say nothing the absence does not.
-final class ToolPanelOriginBadge: NSView {
+public final class ToolPanelOriginBadge: NSView {
     private let label = NSTextField(labelWithString: "")
     private let frameLayer = CAShapeLayer()
     private var hue: NSColor = .secondaryLabelColor
     private var inferred = false
 
-    override init(frame: NSRect) {
+    /// The word's size: three quarters of the panel's text by default; a
+    /// header that names the module in its title font passes its own.
+    public var pointSize: CGFloat = ToolPanelOriginBadge.pointSize {
+        didSet { label.font = .systemFont(ofSize: pointSize, weight: .semibold) }
+    }
+
+    public convenience init() { self.init(frame: .zero) }
+
+    override public init(frame: NSRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.addSublayer(frameLayer)
         frameLayer.fillColor = nil
         frameLayer.lineWidth = 1
-        label.font = .systemFont(ofSize: Self.pointSize, weight: .semibold)
+        label.font = .systemFont(ofSize: pointSize, weight: .semibold)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
         addSubview(label)
@@ -38,28 +46,28 @@ final class ToolPanelOriginBadge: NSView {
         setContentCompressionResistancePriority(.required, for: .horizontal)
     }
 
-    override var tag: Int { ToolPanelTable.codeOriginTag }
+    override public var tag: Int { ToolPanelTable.codeOriginTag }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     /// Three quarters of the panel's text: a tag, not a second name.
-    static var pointSize: CGFloat { (ToolPanelFont.size * 0.75).rounded() }
+    public static var pointSize: CGFloat { (ToolPanelFont.size * 0.75).rounded() }
 
     /// The row's selection, as the cell is told it: on a selected row the
     /// badge is drawn in the selection's text colour, as the glyphs beside it
     /// are, since the category's colour does not read on the accent.
-    var backgroundStyle: NSView.BackgroundStyle = .normal {
+    public var backgroundStyle: NSView.BackgroundStyle = .normal {
         didSet { if backgroundStyle != oldValue { needsDisplay = true } }
     }
-    var isEmphasized: Bool { backgroundStyle == .emphasized }
+    public var isEmphasized: Bool { backgroundStyle == .emphasized }
 
     /// The word on the badge, for the tests.
-    var word: String { label.stringValue }
-    var isDashed: Bool { inferred }
+    public var word: String { label.stringValue }
+    public var isDashed: Bool { inferred }
 
     /// Shows `origin`, or hides the badge for nil and `unknown`.
-    func show(_ origin: ModuleOrigin?) {
+    public func show(_ origin: ModuleOrigin?) {
         guard let origin, let word = origin.badgeWord else {
             isHidden = true
             label.stringValue = ""
@@ -76,10 +84,10 @@ final class ToolPanelOriginBadge: NSView {
         needsLayout = true
     }
 
-    override var wantsUpdateLayer: Bool { true }
+    override public var wantsUpdateLayer: Bool { true }
 
     /// The colours are read again on each change of theme.
-    override func updateLayer() {
+    override public func updateLayer() {
         let ink = isEmphasized ? NSColor.alternateSelectedControlTextColor : hue
         effectiveAppearance.performAsCurrentDrawingAppearance {
             frameLayer.strokeColor = ink.cgColor
@@ -88,7 +96,7 @@ final class ToolPanelOriginBadge: NSView {
         }
     }
 
-    override func layout() {
+    override public func layout() {
         super.layout()
         layer?.cornerRadius = 3
         frameLayer.frame = bounds

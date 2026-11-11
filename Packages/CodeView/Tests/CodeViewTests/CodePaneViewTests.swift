@@ -325,6 +325,42 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertGreaterThan(try brightness(), 0.9, "a white page in Light")
     }
 
+    /// Before the module's name the title wears the tree's marks: how far the
+    /// review has got, and whose code the module is.
+    func testTheTitleShowsReadinessAndOriginBeforeTheName() throws {
+        var reviewed = manifest()
+        reviewed.reading = AnalysisReading(project: "p", rev: 3,
+                                           origin: ModuleOrigin(category: .amd, confidence: .inferred))
+        let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 360)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.moduleMarks.origin, "AMD")
+        XCTAssertEqual(view.moduleMarks.readiness, ToolRowMarks.CodeReadiness(reviewed.reviewProgress).words)
+        let name = try XCTUnwrap(first(NSTextField.self, in: view) { $0.stringValue == "CpuPei" && !$0.isHidden })
+        let badge = try XCTUnwrap(first(ToolPanelOriginBadge.self, in: view) { _ in true })
+        let circle = try XCTUnwrap(first(NSImageView.self, in: view) {
+            $0.image?.accessibilityDescription == view.moduleMarks.readiness
+        })
+        let rects = [circle, badge, name].map { view.convert($0.bounds, from: $0) }
+        for (left, right) in zip(rects, rects.dropFirst()) {
+            XCTAssertLessThan(left.maxX, right.minX + 1, "circle, origin, name")
+            XCTAssertEqual(left.midY, right.midY, accuracy: 2, "on one line")
+        }
+        if let folder = ProcessInfo.processInfo.environment["BR_SNAPSHOT_DIR"],
+           let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: folder).appendingPathComponent("code-title.png"))
+        }
+
+        // No review: the empty circle, no origin.
+        let plain = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                 moduleBytes: moduleBytes, hexView: NSView())
+        XCTAssertEqual(plain.moduleMarks.readiness, ToolRowMarks.CodeReadiness.mechanical.words)
+        XCTAssertNil(plain.moduleMarks.origin)
+    }
+
     /// The header reads where the reader is: Back and Forward first, then
     /// the module, its review's revision, ▸ and the function; the versions
     /// are the small grey line under them, ASM/C/Description at the right.
@@ -385,8 +421,15 @@ final class CodePaneViewTests: XCTestCase {
         let nameEdge = view.convert(name.alignmentRect(forFrame: name.bounds), from: name)
         let versionsEdge = view.convert(versionsLine.alignmentRect(forFrame: versionsLine.bounds),
                                         from: versionsLine)
-        XCTAssertEqual(nameEdge.minX, versionsEdge.minX, accuracy: 1,
-                       "the line's icon stands under the module's name")
+        // The title's first mark — the readiness circle before the name —
+        // opens the line, and the versions' icon stands under it.
+        let circle = try XCTUnwrap(first(NSImageView.self, in: view) {
+            $0.image?.accessibilityDescription == view.moduleMarks.readiness
+        })
+        let circleEdge = view.convert(circle.alignmentRect(forFrame: circle.bounds), from: circle)
+        XCTAssertEqual(circleEdge.minX, versionsEdge.minX, accuracy: 1,
+                       "the line's icon stands under the title's first mark")
+        XCTAssertLessThan(circleEdge.maxX, nameEdge.minX, "the mark before the name")
         XCTAssertEqual(rects[0].midY, rects[1].midY, accuracy: 1.5, "the mark is on the function's line")
         XCTAssertEqual(rects[2].midY, rects[1].midY, accuracy: 1.5, "the switch is centred on the header")
         XCTAssertEqual(rects[2].minX - rects[1].maxX, 12, accuracy: 6, "right after the function's name")
@@ -438,10 +481,14 @@ final class CodePaneViewTests: XCTestCase {
         let nameRect = view.convert(name.bounds, from: name)
         let foldRect = view.convert(fold.bounds, from: fold)
         XCTAssertLessThan(analysisRect.midY, nameRect.midY, "the menu is under the name")
-        // The line stands by what it draws: its ground reaches left of the name.
+        // The line stands by what it draws: its ground reaches left with the
+        // title's first mark, the readiness circle before the name.
+        let circle = try XCTUnwrap(first(NSImageView.self, in: view) {
+            $0.image?.accessibilityDescription == view.moduleMarks.readiness
+        })
         XCTAssertEqual(view.convert(analysis.alignmentRect(forFrame: analysis.bounds), from: analysis).minX,
-                       view.convert(name.alignmentRect(forFrame: name.bounds), from: name).minX,
-                       accuracy: 1, "left with the name")
+                       view.convert(circle.alignmentRect(forFrame: circle.bounds), from: circle).minX,
+                       accuracy: 1, "left with the title")
         XCTAssertGreaterThan(analysisRect.minY, view.bounds.midY,
                              "in the header, not in the bar at the bottom")
         XCTAssertLessThan(foldRect.maxY, analysisRect.minY,
@@ -469,8 +516,11 @@ final class CodePaneViewTests: XCTestCase {
         let cell = try XCTUnwrap(list.view(atColumn: 0, row: 0, makeIfNecessary: true)
                                     as? NSTableCellView)
         let field = try XCTUnwrap(cell.textField)
-        let headingLeft = view.convert(heading.alignmentRect(forFrame: heading.bounds),
-                                       from: heading).minX
+        // The heading's line opens with the readiness circle before the name.
+        let circle = try XCTUnwrap(first(NSImageView.self, in: view) {
+            $0.image?.accessibilityDescription == view.moduleMarks.readiness
+        })
+        let headingLeft = view.convert(circle.alignmentRect(forFrame: circle.bounds), from: circle).minX
         let rowTextLeft = view.convert(field.alignmentRect(forFrame: field.bounds),
                                        from: field).minX
         // The by-address table sets its first cell half an intercell gap in

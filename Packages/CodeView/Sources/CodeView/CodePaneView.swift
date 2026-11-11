@@ -319,6 +319,11 @@ import ToolModuleKit
     /// function over the code, kept to follow the zoom. The versions line
     /// under the module follows with `recipeLine`.
     private var nameLabel: NSTextField?
+    /// Before the name, as the UEFI tree shows them beside it: how far the
+    /// module's review has got, and whose code it is.
+    private let readinessMark = NSImageView()
+    private let originBadge = ToolPanelOriginBadge()
+    private var readinessSize: [NSLayoutConstraint] = []
     private var moduleLine: NSStackView?
     private var moduleStatus: NSView?
     private var revisionLabel: NSTextField?
@@ -3182,6 +3187,33 @@ import ToolModuleKit
 
     // MARK: - Building
 
+    /// The readiness circle and the origin badge at the title's size: the
+    /// tree's marks, scaled to the larger words they stand before.
+    private func drawModuleMarks() {
+        let readiness = ToolRowMarks.CodeReadiness(manifest.reviewProgress)
+        let image = readiness.image(pointSize: (ToolPanelFont.titleSize * 0.8).rounded())
+        readinessMark.image = image
+        readinessMark.contentTintColor = RowMarks.codeReviewed
+        readinessMark.imageScaling = .scaleNone
+        readinessMark.translatesAutoresizingMaskIntoConstraints = false
+        // Sized from the picture: a configured symbol's intrinsic size is not it.
+        NSLayoutConstraint.deactivate(readinessSize)
+        let size = image?.size ?? .zero
+        readinessSize = [readinessMark.widthAnchor.constraint(equalToConstant: size.width),
+                         readinessMark.heightAnchor.constraint(equalToConstant: size.height)]
+        NSLayoutConstraint.activate(readinessSize)
+        readinessMark.setContentHuggingPriority(.required, for: .horizontal)
+        readinessMark.setContentCompressionResistancePriority(.required, for: .horizontal)
+        ControlHelp.describe(readinessMark, readiness.words)
+        originBadge.pointSize = (ToolPanelFont.titleSize * 0.75).rounded()
+        originBadge.show(manifest.reading?.origin)
+    }
+
+    /// What the title's marks show, for the tests.
+    var moduleMarks: (readiness: String?, origin: String?) {
+        (readinessMark.image?.accessibilityDescription, originBadge.isHidden ? nil : originBadge.word)
+    }
+
     private func build(hexView: NSView) {
         // The navigator's head says what is being read: the module and the
         // revision of its review. What produced the analysis is the small grey
@@ -3213,8 +3245,10 @@ import ToolModuleKit
         // As wide as its words, so that what follows them follows them; the
         // room left over stays at the line's end.
         moduleWords.setHuggingPriority(.defaultHigh, for: .horizontal)
+        // help: panel.uefi.module-origin
+        drawModuleMarks()
         // Words line up on their baseline; a status beside them has none.
-        let moduleLine = NSStackView(views: [moduleWords])
+        let moduleLine = NSStackView(views: [readinessMark, originBadge, moduleWords])
         moduleLine.orientation = .horizontal
         moduleLine.alignment = .centerY
         moduleLine.spacing = 6
@@ -3780,6 +3814,7 @@ import ToolModuleKit
     private func zoomChanged() {
         emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, functionLabel] { field?.font = ToolPanelFont.title() }
+        drawModuleMarks()
         updateFunctionMark()
         drawRecipeIcon()
         drawRecipeTitle()
