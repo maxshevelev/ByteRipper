@@ -72,6 +72,8 @@ struct PublishJournal: Codable, Sendable {
     var stored: SHA256Digest?
     var review: SHA256Digest?
     var described: SHA256Digest?
+    /// Whose code the module is, as the review document says.
+    var origin: ModuleOrigin?
     var rev: Int?
     var manifest: AnalysisManifest?
     var project: ProjectRecord?
@@ -87,7 +89,7 @@ struct PublishJournal: Codable, Sendable {
 
     var reading: AnalysisReading? {
         guard reviewed, let rev, let review else { return nil }
-        return AnalysisReading(rev: rev, review: review, description: described)
+        return AnalysisReading(rev: rev, review: review, description: described, origin: origin)
     }
 }
 
@@ -185,6 +187,7 @@ extension GhidraHost {
                 let document = try await writer.readObject(journal.document)
                 let review = try await writer.writeObject(ModuleFormat.review(document, of: first))
                 journal.review = review
+                journal.origin = ModuleOrigin.of(reviewDocument: document)
                 journal.keep(review)
                 let description = try await writer.readObject(journal.description)
                 journal.described = description.isEmpty ? nil : try await writer.writeObject(description)
@@ -193,7 +196,7 @@ extension GhidraHost {
                 // The store numbers it: the last one again when nothing changed.
                 journal.rev = try await writer.writeRevision(
                     module: module, reading: AnalysisReading(rev: journal.planned, review: review,
-                                                             description: journal.described),
+                                                             description: journal.described, origin: journal.origin),
                     artifact: code, by: journal.by)
             }
             try await mark(.revision, in: &journal)

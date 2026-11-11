@@ -107,7 +107,7 @@ matters for this module.
 
 - **Origin**, in one line: whose code it is (EDK2, AMI, Insyde, AMD, Intel,
   the OEM), the source path when there is one, how closely the build matches
-  it, and how sure that is.
+  it, and how sure that is — the same as the origin category below.
 - **What is unusual**, only if something is: a dependency the source does not
   declare (the dependency expression is in the firmware file, not in the hashed
   image, so it is "this build's file"), an unusual dispatch, build-time settings
@@ -119,6 +119,50 @@ matters for this module.
 No general explanation of what a PEIM, a DXE driver or the PEI stage is, no
 flash addresses or volume ranges, no dump file name, no repeat of the summary.
 An abbreviation that needs explaining goes to `Terms`.
+
+### The origin category
+
+Beside the description the review sets the module's **origin**: whose code it
+is, as a category the app shows as a badge beside the module's name. It is set
+with `ghidra_describe`'s `origin` — `{category, confidence, vendor}` — alone or
+with a text, published with the review, and read back by `ghidra_description`,
+`code_modules` and `code_query`.
+
+| category | when |
+|---|---|
+| `edk2` | the code matches EDK2 |
+| `edk2_modified` | an EDK2 base with the vendor's changes, its FILE_GUID kept or not |
+| `amd` | AMD AGESA |
+| `intel` | Intel FSP or reference code |
+| `vendor` | the firmware vendor's or the board maker's own code (Insyde, AMI, Lenovo…); `vendor` names it |
+| `unknown` | the evidence does not decide; no confidence |
+
+`confidence` is `established` when the code was compared with the source
+function by function, or the origin is named in the module's own bytes (an
+AGESA debug text, a vendor's copyright string); `inferred` when it is
+concluded from patterns. `vendor` is taken for `vendor` and `edk2_modified`
+only.
+
+The evidence, in this order:
+
+1. **FILE_GUID** against the FILE_GUIDs of EDK2's INF files (`stable202608`).
+   It says where to look, never what the code is: TcgPei, PeiVariable and
+   ReportStatusCodeRouterPei keep EDK2's GUIDs with the vendor's code inside,
+   and a GUID shared by many builds — the VTF GUID `1BA0062E…` of SecCore —
+   says nothing at all. A GUID match alone is never `established`.
+2. **Function by function against the source**: the entry point, the
+   interfaces installed and consumed, the main routines. Matching code is
+   `edk2`; an EDK2 skeleton with routines EDK2 does not have, or with its
+   routines changed, is `edk2_modified`.
+3. **Strings, interfaces and linked libraries in the module's own bytes**:
+   AGESA's debug texts, a vendor's name, a vendor's protocol GUIDs, the
+   library code it links in.
+
+The bytes-only rule above holds here too: what other modules of the image
+are is not evidence for this one. "The other modules are Insyde" does not make
+this module Insyde — HddSpinDownDxe's guess of AMI from its neighbours was
+wrong. The category agrees with the origin line in `What it is`: the same
+code base, said as surely; a review that changes one changes the other.
 
 ### `## What it does`
 

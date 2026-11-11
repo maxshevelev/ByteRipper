@@ -79,11 +79,11 @@ public enum ServerTools {
             holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is \
             Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex \
             view shows (none when read by `module` alone). These are stored observations, not a live \
-            disassembly; the C is Ghidra's reading of the instructions, not the source.
+            disassembly; the C is Ghidra's reading of the instructions, not the source. `origin` is whose code the module is, as its review set it (`ghidra_describe`'s `origin`).
             """,
         modules: """
             The PE32/TE modules of a dump that have a stored code analysis: their image `node`, name, \
-            the analyses (`recipes`, newest first) and how many functions the newest found. The modules \
+            the analyses (`recipes`, newest first), how many functions the newest found, and `origin`, whose code the module is as its review set it (`category`, `confidence`, `vendor`; null while unset). The modules \
             are found by their bytes — the same module in another dump has the same analysis — including \
             those inside compressed sections, which are opened for it: seconds on a large image the first \
             time. Read one with `code_query`.

@@ -43,6 +43,40 @@ final class ReviewProgressTests: XCTestCase {
                        .partial)
     }
 
+    /// The origin rides in the review document and reaches the reading; a
+    /// document without one, or with a word the app does not know, gives none.
+    func testTheOriginIsReadFromTheReviewDocument() throws {
+        func document(_ origin: Any?) throws -> Data {
+            var object: [String: Any] = ["functions": [:], "schema": 1]
+            if let origin { object["origin"] = origin }
+            return try JSONSerialization.data(withJSONObject: object)
+        }
+        XCTAssertEqual(ModuleOrigin.of(reviewDocument: try document(["category": "vendor", "confidence": "inferred",
+                                                                    "vendor": "Insyde"])),
+                       ModuleOrigin(category: .vendor, confidence: .inferred, vendor: "Insyde"))
+        XCTAssertEqual(ModuleOrigin.of(reviewDocument: try document(["category": "edk2_modified",
+                                                                    "confidence": "established"])),
+                       ModuleOrigin(category: .edk2Modified, confidence: .established))
+        XCTAssertNil(ModuleOrigin.of(reviewDocument: try document(nil)))
+        XCTAssertNil(ModuleOrigin.of(reviewDocument: try document(["category": "phoenix", "confidence": "inferred"])))
+    }
+
+    /// `unknown` carries no confidence; it is read as the review set it.
+    func testAnUnknownOriginNeedsNoConfidence() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["origin": ["category": "unknown"]])
+        XCTAssertEqual(ModuleOrigin.of(reviewDocument: data)?.category, .unknown)
+    }
+
+    /// A reading without an origin is written as before: no `origin` key.
+    func testAReadingWithoutAnOriginWritesNoKey() throws {
+        let plain = try JSONEncoder().encode(AnalysisReading(rev: 2, review: digest))
+        XCTAssertFalse(String(decoding: plain, as: UTF8.self).contains("origin"))
+        let placed = AnalysisReading(rev: 2, review: digest,
+                                     origin: ModuleOrigin(category: .amd, confidence: .established))
+        let encoded = try JSONEncoder().encode(placed)
+        XCTAssertEqual(try JSONDecoder().decode(AnalysisReading.self, from: encoded), placed)
+    }
+
     func testTheArtifactsLevelsAreCountedWithALinkAsLibrary() throws {
         let artifact = try JSONSerialization.data(withJSONObject: ["functions": [
             ["entry": "0x10", "review_level": "full"],

@@ -101,6 +101,12 @@ to the Verifier and in anything written into a review.
    follows from the module's own bytes; what depends on the firmware around it
    is a condition, and the one line `Reviewed in: <machine>, board <board>`
    names where the review was made. Never the dump file.
+   Set the module's origin category with `ghidra_describe`'s `origin` by
+   "The origin category" there: the evidence in its order — FILE_GUID, then
+   the code against the source, then strings, interfaces and linked
+   libraries — from the module's own bytes only; a GUID match alone is not
+   `established`, and what the neighbouring modules are proves nothing. It
+   agrees with the origin line in `What it is`.
 7. Before each publish, run `ghidra_publish` with `dry_run: true`. If it would
    change a registry entry or a shared type another review published, stop:
    the real publish would be refused. Propose it if the code proves the shared

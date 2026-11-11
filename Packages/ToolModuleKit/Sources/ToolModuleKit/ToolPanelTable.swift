@@ -151,7 +151,9 @@ import Localization
                 spacer.setContentHuggingPriority(.init(1), for: .horizontal)
                 spacer.setContentCompressionResistancePriority(.init(1), for: .horizontal)
                 codeBadge.setContentHuggingPriority(.required, for: .horizontal)
-                row = NSStackView(views: leading + [field, codeBadge, spacer])
+                let origin = ToolPanelOriginBadge()
+                origin.isHidden = true
+                row = NSStackView(views: leading + [field, codeBadge, origin, spacer])
                 field.setContentHuggingPriority(.defaultHigh, for: .horizontal)
             } else {
                 row = NSStackView(views: leading + [field])
@@ -234,6 +236,8 @@ import Localization
     /// The badge after the name: the code-analysis mark, which belongs to the
     /// module the name denotes rather than to the leading run of storage marks.
     public static let codeBadgeTag = 6_004
+    /// The module's origin, after the code badge (`ToolPanelOriginBadge`).
+    public static let codeOriginTag = 6_005
     /// The readiness circle's size: four fifths of the panel's text.
     static var codeBadgePointSize: CGFloat { (ToolPanelFont.size * 0.8).rounded() }
     private static let codeBadgeSizeID = "ToolPanelTable.codeBadgeSize"
@@ -298,6 +302,7 @@ import Localization
     public static func dress(_ cell: NSTableCellView, with marks: ToolRowMarks) {
         setProblem(marks.problem, on: cell)
         setBadges(marks.roles, on: cell)
+        (cell.viewWithTag(codeOriginTag) as? ToolPanelOriginBadge)?.show(marks.origin)
         ControlHelp.describe(cell, marks.summary)
     }
 

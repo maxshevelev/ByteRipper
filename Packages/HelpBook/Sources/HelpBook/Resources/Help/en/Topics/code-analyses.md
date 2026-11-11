@@ -6,10 +6,13 @@
 @covers settings.code-analysis.server
 @covers agent.review-kit
 @covers settings.code-analysis.review-agents
+@covers panel.uefi.module-origin
 
 An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes; the panel is described on [[topic:code-panel|Code Panel]]. While the module's file is collapsed, the badge stands after the file's name, so a list of collapsed files shows which modules have an analysis; expanding the file moves it to the section that holds the module. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
 
 The badge is a circle that shows how far the module's review has got. An empty circle is Ghidra's automatic analysis alone: nobody has reviewed the module yet. A half-filled circle is a review that is not finished: some function is below the full level, or the module has no description. A filled circle is a finished review: every function is reviewed in full, linked to the registry of library functions or has no body, and the module is described. An analysis published before the review levels were counted shows a half-filled circle until it is published again. A collapsed file that holds several analysed modules shows the badge of the least reviewed one.
+
+After the circle, a reviewed module carries a short word in a coloured frame: whose code the module is, as its review established it. **EDK2** is code that matches EDK2, the open reference code; **EDK2\*** is an EDK2 module with the firmware vendor's changes; **AMD** is AGESA, AMD's platform code; **Intel** is FSP or Intel's reference code; a vendor's name, such as **Insyde** or **Lenovo**, is the firmware vendor's own code. A solid frame on a light background means the origin was established: the code was compared with the source, or the origin is named in the module's own bytes. A dashed frame with paler text means it was inferred from strings, interfaces or the libraries the module links in. A module whose origin the review could not tell, or whose review has not said, has no word. A collapsed file shows the word when every analysed module in it has the same origin.
 
 ## Where the analyses are kept
 

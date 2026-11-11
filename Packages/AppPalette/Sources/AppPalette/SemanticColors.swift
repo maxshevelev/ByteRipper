@@ -139,6 +139,15 @@ public enum RowMarks {
     /// A module's code review readiness, beside its name: the colour the Code
     /// panel gives a reviewed function, so the two say one thing.
     public static let codeReviewed = Sets.codeReviewed.color
+
+    /// A module's origin, on its badge beside the name: whose code it is.
+    /// Five hues far enough apart to tell at a glance, none of them the red,
+    /// orange or green a problem or a verdict wears as a filled glyph.
+    public static let originEDK2 = Sets.originEDK2.color
+    public static let originEDK2Modified = Sets.originEDK2Modified.color
+    public static let originAMD = Sets.originAMD.color
+    public static let originIntel = Sets.originIntel.color
+    public static let originVendor = Sets.originVendor.color
 }
 
 /// What a transient notice draws with — the plate over the window that reports

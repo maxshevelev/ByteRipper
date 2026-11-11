@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Foundation
 import Localization
 import ToolModuleKit
@@ -31,6 +32,8 @@ public enum UEFITreeMarks {
     ///     analysis has got; nil when none is stored (`Design/CODE_PANEL_PLAN.md`).
     ///   - codeInside: the row is shut on images that have one: the least
     ///     reviewed of them (`codeInside(_:isOpen:analyzed:)`).
+    ///   - origin: whose code the module is (`origin(of:isOpen:origins:analyzed:)`);
+    ///     drawn only on a row that wears a code badge.
     public static func marks(
         for node: UEFINode,
         in image: UEFIImage,
@@ -39,6 +42,7 @@ public enum UEFITreeMarks {
         reader: ImageReader? = nil,
         code: ToolRowMarks.CodeReadiness? = nil,
         codeInside: ToolRowMarks.CodeReadiness? = nil,
+        origin: ModuleOrigin? = nil,
         in language: AppLanguage
     ) -> ToolRowMarks {
         var errors: [String] = []
@@ -101,8 +105,24 @@ public enum UEFITreeMarks {
             decompressedFrom: decompressedFrom(node, in: image, in: language),
             opensDecompressed: opens,
             problem: .worst(errors: errors, cautions: cautions),
-            roles: roles
+            roles: roles,
+            origin: code != nil || codeInside != nil ? origin : nil
         )
+    }
+
+    /// The origin a row shows: an image node's own, or — for a shut file or
+    /// section, as `codeInside` — the one every analysed module below shares.
+    /// Modules of different origins under one shut row show none there; the
+    /// rows below say each.
+    public static func origin(of node: UEFINode, isOpen: Bool,
+                              origins: [NodeID: ModuleOrigin], analyzed: Set<NodeID>) -> ModuleOrigin? {
+        if analyzed.contains(node.id) { return origins[node.id] }
+        guard !isOpen, node.kind == .file || node.kind == .section else { return nil }
+        let path = node.id.path
+        let below = analyzed.filter { $0.path.count > path.count && $0.path.starts(with: path) }
+        let found = Set(below.map { origins[$0] })
+        guard found.count == 1, let only = found.first else { return nil }
+        return only
     }
 
     /// Whether a shut row stands for an analyzed image below it: a file, or a

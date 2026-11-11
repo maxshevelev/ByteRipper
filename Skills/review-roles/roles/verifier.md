@@ -147,6 +147,14 @@ main functions linked in the flow. `What it is` is two to four bullets with one
 as a finding ("on this board…"), only as a condition. No dump file, no review
 status. Check its facts against the code as well.
 
+**The origin.** Before closing, check the origin category (`ghidra_description`
+or `code_query`'s `origin`) against its evidence as `reference/description.md`,
+"The origin category", sets it: `established` only where the code was compared
+with the source or the origin is named in the module's own bytes, never on a
+FILE_GUID alone; no conclusion from the neighbouring modules; the same code
+base and certainty as the origin line in `What it is`. A module without a
+category is not closed.
+
 Reply with a numbered list of fixes, each with its address and what you
 observed, or with the closure and the next task the person gave. State a
 finding only as far as you read it, and say what you did not check.

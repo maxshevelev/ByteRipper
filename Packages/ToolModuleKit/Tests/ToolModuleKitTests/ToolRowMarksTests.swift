@@ -1,4 +1,5 @@
 import AppKit
+import CodeAnalysis
 import XCTest
 @testable import ToolModuleKit
 
@@ -153,6 +154,62 @@ final class ToolRowMarksTests: XCTestCase {
         ToolPanelTable.dress(cell, with: .none)
         XCTAssertTrue(code.isHidden)
         XCTAssertNil(code.toolTip)
+    }
+
+    /// The origin stands after the code badge: a framed word, dashed when the
+    /// review only inferred it, none for `unknown`, and gone with the marks.
+    func testTheOriginIsAFramedWordAfterTheCodeBadge() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"), warning: true, badges: true)
+        cell.textField?.stringValue = "CapsulePei"
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 24),
+                              styleMask: [.borderless], backing: .buffered, defer: true)
+        cell.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        window.contentView?.addSubview(cell)
+        let established = ModuleOrigin(category: .edk2Modified, confidence: .established, vendor: "Insyde")
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis(.complete)], origin: established))
+        cell.layoutSubtreeIfNeeded()
+        let badge = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.codeOriginTag) as? ToolPanelOriginBadge)
+        XCTAssertFalse(badge.isHidden)
+        XCTAssertEqual(badge.word, "EDK2*")
+        XCTAssertFalse(badge.isDashed)
+        XCTAssertEqual(badge.toolTip, established.badgeToolTip)
+        XCTAssertTrue(established.badgeToolTip.contains("Insyde"))
+        let stack = try XCTUnwrap(cell.subviews.compactMap { $0 as? NSStackView }.first)
+        let code = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.codeBadgeTag))
+        XCTAssertEqual(stack.arrangedSubviews.firstIndex(of: badge), stack.arrangedSubviews.firstIndex(of: code).map { $0 + 1 })
+        XCTAssertGreaterThan(badge.frame.width, 0)
+        XCTAssertLessThanOrEqual(badge.frame.height, cell.frame.height)
+        Self.snapshot(cell, "origin-established")
+
+        let inferred = ModuleOrigin(category: .vendor, confidence: .inferred, vendor: "Lenovo")
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis(.partial)], origin: inferred))
+        XCTAssertEqual(badge.word, "Lenovo")
+        XCTAssertTrue(badge.isDashed)
+        cell.layoutSubtreeIfNeeded()
+        Self.snapshot(cell, "origin-inferred")
+
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis(.partial)],
+                                                      origin: ModuleOrigin(category: .unknown, confidence: nil)))
+        XCTAssertTrue(badge.isHidden, "unknown draws nothing")
+        ToolPanelTable.dress(cell, with: .none)
+        XCTAssertTrue(badge.isHidden)
+        XCTAssertNil(badge.toolTip)
+    }
+
+    func testEachCategoryHasItsWord() {
+        XCTAssertEqual(ModuleOrigin.Category.allCases.map {
+            ModuleOrigin(category: $0, confidence: .established).badgeWord
+        }, ["EDK2", "EDK2*", "AMD", "Intel", "Vendor", nil])
+    }
+
+    /// Where `BR_SNAPSHOT_DIR` names a folder, a picture of the cell for a
+    /// person to look at; nothing otherwise.
+    private static func snapshot(_ view: NSView, _ name: String) {
+        guard let folder = ProcessInfo.processInfo.environment["BR_SNAPSHOT_DIR"],
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?
+            .write(to: URL(fileURLWithPath: folder).appendingPathComponent(name + ".png"))
     }
 
     /// A shut file holding an analyzed module wears the same badge in the same

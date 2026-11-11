@@ -50,6 +50,11 @@ final class Harvest {
     static final String OPTIONS = "ByteRipper";
     static final String TYPES = "reviewTypes";
     static final String DESCRIPTION = "description";
+    /** Whose code the module is: `{category, confidence, vendor?}` as JSON. */
+    static final String ORIGIN = "origin";
+    static final java.util.List<String> ORIGIN_CATEGORIES =
+        java.util.List.of("edk2", "edk2_modified", "amd", "intel", "vendor", "unknown");
+    static final java.util.List<String> ORIGIN_CONFIDENCES = java.util.List.of("established", "inferred");
     /** The longest description the owner keeps, in UTF-8 bytes. */
     static final int DESCRIPTION_LIMIT = 256 * 1024;
 
@@ -105,8 +110,9 @@ final class Harvest {
         JsonArray types = now.getAsJsonArray("types");
         JsonObject equates = now.getAsJsonObject("equates");
         String description = description(program);
+        JsonObject origin = origin(program);
         boolean reviewed = functions.size() > 0 || comments.size() > 0 || data.size() > 0 || types.size() > 0
-            || equates.size() > 0 || description != null;
+            || equates.size() > 0 || description != null || origin != null;
         JsonObject document = new JsonObject();
         document.add("comments", comments);
         document.add("data", data);
@@ -123,12 +129,34 @@ final class Harvest {
         module.addProperty("program", program.getName());
         module.addProperty("sha256", moduleSha);
         document.add("module", module);
+        // Only when the review said: one that did not harvests to the bytes it
+        // did before an origin was kept.
+        if (origin != null) document.add("origin", origin);
         document.addProperty("project", projectId);
         document.addProperty("schema", 1);
         document.add("types", types);
         Gson gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().serializeNulls().create();
         return new Document((gson.toJson(document) + "\n").getBytes(StandardCharsets.UTF_8), reviewed,
                             description == null ? null : description.getBytes(StandardCharsets.UTF_8));
+    }
+
+    // MARK: - The module's origin
+
+    /** Whose code the module is, as the review set it; null while it has not. */
+    static JsonObject origin(Program program) {
+        String text = program.getOptions(OPTIONS).getString(ORIGIN, null);
+        if (text == null || text.isEmpty()) return null;
+        try {
+            return JsonParser.parseString(text).getAsJsonObject();
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /** Sets the origin; null removes it. Inside a transaction. */
+    static void setOrigin(Program program, JsonObject origin) {
+        Options options = program.getOptions(OPTIONS);
+        if (origin == null) options.removeOption(ORIGIN); else options.setString(ORIGIN, origin.toString());
     }
 
     // MARK: - The module description

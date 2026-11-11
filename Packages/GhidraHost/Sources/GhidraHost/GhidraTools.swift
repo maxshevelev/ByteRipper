@@ -157,11 +157,13 @@ public enum GhidraTools {
         expanded in parentheses at its first mention, routines by what they do rather than by address; no function inventories, \
         decompiler artefacts, revision history or review status — the app and the store hold those. Its \
         sections, in this order, headed exactly so: `# <ModuleName>` and a short summary; `## What it is` \
-        (kind of file, whose, stage of start-up, the board and the module's place in the firmware — never \
-        the dump file it was read from); `## What it does`; `## Execution flow` (the main chains as short ordered walks; the events it registers for, when each fires, what it does; each chain and event links its main function or two, helpers left out); `## Interactions`; \
+        (two to four short bullets: the origin in one line, what is unusual, and one line `Reviewed in: \
+        <machine>, board <board>`; no flash addresses, no dump file); `## What it does`; `## Execution flow` (the main chains as short ordered walks; the events it registers for, when each fires, what it does; each chain and event links its main function or two, helpers left out); `## Interactions`; \
         `## Inside the module`; `## Failures` (codes, messages, what the bench \
         sees); `## Known problems` (with their practical effect); `## Terms` (only the narrow terms specific to this module that the article uses, in full: what each is, where it sits, why it matters here; common terms a technician knows, such as BIOS, USB, CMOS, UEFI, Variable, stay out). A section with nothing to say \
-        yet is left out. A link `[Name](0xADDRESS)` is optional outside `Execution flow`; a sentence must read without it. Say what \
+        yet is left out. Only what the module's own bytes prove is stated as a fact; what depends on the \
+        firmware around it — a file present or absent, who calls it, NVRAM — is written as a condition. \
+        A link `[Name](0xADDRESS)` is optional outside `Execution flow`; a sentence must read without it. Say what \
         is not proven. Markdown: headings, paragraphs, `-` and `1.` lists, tables, fenced code, `code`, \
         **bold**, *italic*, links.
         """
@@ -720,8 +722,8 @@ public enum GhidraTools {
                 title: "Read the module's description",
                 description: """
                     The module's description as the project holds it now: `text` (Markdown, null while \
-                    there is none), its `sections` (the `## ` headings, in order) and its size in \
-                    `bytes`. `section` answers that section's body alone as `text`; `outline: true` leaves \
+                    there is none), its `sections` (the `## ` headings, in order), its size in \
+                    `bytes`, and its `origin` (`category`, `confidence`, `vendor`; null while unset). `section` answers that section's body alone as `text`; `outline: true` leaves \
                     `text` out. Read what `ghidra_describe` is about to change: one section need not cost \
                     the whole description.
                     """,
@@ -1260,6 +1262,14 @@ public enum GhidraTools {
                   + "description. Empty `text` is refused; `delete: true`, without `text`, removes the section "
                   + "named, or the whole description, and the answer says which in `removed`. With `section`, `old_text` and `new_text` change one string inside that section without sending the rest; refused unless `old_text` occurs there exactly once. Up to 256 KiB. The answer names "
                   + "the sections and the size, not the text: `ghidra_description` reads it. "
+                  + "`origin` says whose code the module is — the category the app shows beside the module's "
+                  + "name: `edk2` (the code matches EDK2), `edk2_modified` (an EDK2 base with the vendor's "
+                  + "changes, its FILE_GUID kept or not), `amd` (AGESA), `intel` (FSP or reference code), "
+                  + "`vendor` (the firmware vendor's or the board maker's own; `vendor` names it), `unknown`; "
+                  + "`confidence` is `established` when the code was compared with the source or the origin is "
+                  + "named in the module's own bytes, `inferred` otherwise, and `unknown` takes none. A FILE_GUID "
+                  + "alone does not establish it. Given alone it changes nothing else; null removes it. It is "
+                  + "published with the review, and agrees with the origin line in `What it is`. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
                    "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Execution flow\"."),
@@ -1267,9 +1277,23 @@ public enum GhidraTools {
                    "after": AgentSchema.string("The section this `section` goes just after."),
                    "old_text": AgentSchema.string("A string in `section` to change; it must occur there exactly once. Goes with `new_text`, takes no `text`."),
                    "new_text": AgentSchema.string("What `old_text` becomes; may be empty."),
-                   "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`.")],
+                   "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`."),
+                   "origin": [
+                       "type": ["object", "null"],
+                       "description": "Whose code the module is: `category`, `confidence`, and `vendor` for a `vendor` or `edk2_modified` module. Null removes it.",
+                       "properties": [
+                           "category": AgentSchema.choice(["edk2", "edk2_modified", "amd", "intel", "vendor", "unknown"],
+                                                          "Whose code the module is."),
+                           "confidence": AgentSchema.choice(["established", "inferred"],
+                                                            "established: compared with the source, or named in the module's own bytes; inferred: concluded from strings, interfaces or linked libraries. Not for `unknown`."),
+                           "vendor": AgentSchema.string("The vendor's name, e.g. \"Insyde\", for `vendor` and `edk2_modified`.")
+                       ],
+                       "additionalProperties": false,
+                       "required": ["category"]
+                   ]],
                   required: []) { arguments in
                 var body: [String: JSONValue] = [:]
+                if let origin = arguments.values["origin"] { body["origin"] = origin }
                 if let text = try arguments.optionalString("text") { body["text"] = .string(text) }
                 if let old = try arguments.optionalString("old_text") { body["old_text"] = .string(old) }
                 if let new = try arguments.optionalString("new_text") { body["new_text"] = .string(new) }

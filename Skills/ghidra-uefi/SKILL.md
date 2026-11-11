@@ -113,7 +113,9 @@ proposed for the library registry with whose library it is — `edk2`, `amd`, `i
 by the criteria in "Library functions"; `ghidra_publish` decides, and the module then
 stores a link and no text of it);
 `ghidra_description` and `ghidra_describe` for the module description (the
-whole document, or one `## ` section); `ghidra_publish` at a coherent
+whole document, or one `## ` section) and its origin category (`origin`:
+`edk2`, `edk2_modified`, `amd`, `intel`, `vendor`, `unknown` — the evidence and
+its order are in `reference/description.md`, "The origin category"); `ghidra_publish` at a coherent
 checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a
 review makes of the code".
 

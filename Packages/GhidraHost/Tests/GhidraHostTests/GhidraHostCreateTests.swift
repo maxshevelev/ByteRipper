@@ -1355,6 +1355,71 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(refusal.contains("/PiHob.h/EFI_HOB_HANDOFF_INFO_TABLE"), refusal)
     }
 
+    /// The module's origin is kept beside its description, checked as it is
+    /// given, published in the review document and copied into the reading;
+    /// changed alone it makes a revision of its own.
+    func testAnOriginIsKeptCheckedAndPublishedIntoTheReading() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostOriginTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostOriginTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Module")
+        try await host.take(module)
+        defer { Task { await host.stop(module) } }
+        func post(_ object: [String: Any]) async throws -> [String: Any] {
+            try json(await host.write(module, "/v1/set/description",
+                                      body: try JSONSerialization.data(withJSONObject: object)))
+        }
+        for wrong: [String: Any] in [
+            ["origin": ["category": "ami", "confidence": "inferred"]],
+            ["origin": ["category": "edk2"]],
+            ["origin": ["category": "unknown", "confidence": "inferred"]],
+            ["origin": ["category": "amd", "confidence": "established", "vendor": "Insyde"]],
+            ["origin": ["category": "edk2", "confidence": "sure"]],
+            ["origin": ["category": "edk2", "confidence": "inferred", "guid": "x"]],
+        ] {
+            do { _ = try await post(wrong); XCTFail("\(wrong)") } catch {}
+        }
+        let unset = try json(await host.read(module, "/v1/description"))
+        XCTAssertTrue(unset["origin"] == nil || unset["origin"] is NSNull, "\(unset)")
+
+        // Alone: the description is untouched.
+        _ = try await post(["text": "# M\n\n## What it is\n\n- Insyde.\n"])
+        let set = try await post(["origin": ["category": "vendor", "confidence": "inferred", "vendor": " Insyde "]])
+        XCTAssertEqual(set["origin"] as? [String: String],
+                       ["category": "vendor", "confidence": "inferred", "vendor": "Insyde"])
+        XCTAssertEqual(set["sections"] as? [String], ["What it is"])
+        let first = try await host.publish(module, by: "test")
+        XCTAssertEqual(first.manifest.reading?.origin,
+                       ModuleOrigin(category: .vendor, confidence: .inferred, vendor: "Insyde"))
+        let firstRev = try XCTUnwrap(first.manifest.reading?.rev)
+
+        // Changed alone, it is a revision; with the text, both change.
+        _ = try await post(["origin": ["category": "edk2_modified", "confidence": "established"]])
+        let second = try await host.publish(module, by: "test")
+        XCTAssertEqual(second.manifest.reading?.origin, ModuleOrigin(category: .edk2Modified, confidence: .established))
+        XCTAssertEqual(second.manifest.reading?.rev, firstRev + 1)
+        let again = try await host.publish(module, by: "test")
+        XCTAssertEqual(again.manifest.reading?.rev, firstRev + 1, "nothing changed")
+        _ = try await post(["section": "What it is", "text": "- EDK2.\n", "origin": ["category": "unknown"]])
+        let read = try json(await host.read(module, "/v1/description?section=What%20it%20is"))
+        XCTAssertEqual(read["text"] as? String, "- EDK2.\n")
+        XCTAssertEqual(read["origin"] as? [String: String], ["category": "unknown"])
+        // Null takes it away; the reading then has none.
+        _ = try await post(["origin": NSNull()])
+        let third = try await host.publish(module, by: "test")
+        XCTAssertNil(third.manifest.reading?.origin)
+        XCTAssertEqual(try store.analysis(module: module)?.reading?.rev, third.manifest.reading?.rev)
+    }
+
     func testRemovingADescriptionSectionIsSaidInSoManyWords() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

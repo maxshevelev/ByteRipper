@@ -225,6 +225,58 @@ public struct AnalysisStats: Codable, Equatable, Sendable {
     }
 }
 
+/// Whose code a module is: the category a review gives it from the module's
+/// own bytes (`Skills/ghidra-uefi/reference/description.md`, "Origin"), how
+/// sure that is, and the vendor's name where the category has one. It travels
+/// in the review document (`origin`) and is copied into the reading, so a list
+/// shows it without reading the description.
+public struct ModuleOrigin: Codable, Equatable, Hashable, Sendable {
+    public enum Category: String, Codable, CaseIterable, Sendable {
+        /// The code matches EDK2.
+        case edk2
+        /// An EDK2 module with the vendor's changes, its FILE_GUID kept or not.
+        case edk2Modified = "edk2_modified"
+        /// AMD AGESA.
+        case amd
+        /// Intel FSP or reference code.
+        case intel
+        /// The firmware vendor's or the board maker's own (Insyde, AMI, Lenovo…).
+        case vendor
+        /// The review could not tell.
+        case unknown
+    }
+
+    public enum Confidence: String, Codable, CaseIterable, Sendable {
+        /// Compared with the source, or named in the module's own bytes.
+        case established
+        /// Concluded from patterns: strings, interfaces, linked libraries.
+        case inferred
+    }
+
+    public var category: Category
+    /// Nil for `unknown`: nothing was concluded.
+    public var confidence: Confidence?
+    /// The vendor's name, for `vendor` and `edk2_modified`: "Insyde", "AMI".
+    public var vendor: String?
+
+    public init(category: Category, confidence: Confidence?, vendor: String? = nil) {
+        self.category = category
+        self.confidence = confidence
+        self.vendor = vendor
+    }
+
+    /// The origin a review document carries, when it carries a readable one.
+    public static func of(reviewDocument document: Data) -> ModuleOrigin? {
+        guard let object = try? JSONSerialization.jsonObject(with: document) as? [String: Any],
+              let origin = object["origin"] as? [String: Any],
+              let category = (origin["category"] as? String).flatMap(Category.init(rawValue:)) else { return nil }
+        let confidence = (origin["confidence"] as? String).flatMap(Confidence.init(rawValue:))
+        if confidence == nil, category != .unknown { return nil }
+        let vendor = (origin["vendor"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        return ModuleOrigin(category: category, confidence: confidence, vendor: vendor)
+    }
+}
+
 /// Which reading of a module an artifact renders: its revision in the
 /// module's one history (`Design/GHIDRA_SHARED_PLAN.md` §5.6). A mechanical
 /// artifact — Ghidra and the UEFI pass, nobody's decisions — has none.
@@ -240,12 +292,17 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     /// works and how it is built (`Skills/ghidra-uefi/reference/description.md`)
     /// — as this publish left it; nil while nobody has written one.
     public var description: SHA256Digest?
+    /// Whose code the module is, as the review established it; nil while the
+    /// review has not said, and in everything published before it could.
+    public var origin: ModuleOrigin?
 
-    public init(project: String? = nil, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil) {
+    public init(project: String? = nil, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil,
+                origin: ModuleOrigin? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
         self.description = description
+        self.origin = origin
     }
 
     /// The objects this reading names besides the artifact.

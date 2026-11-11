@@ -4168,6 +4168,8 @@ public class Owner {
         Harvest.sections(text).forEach(sections::add);
         answer.add("sections", sections);
         answer.addProperty("bytes", text == null ? 0 : text.getBytes(StandardCharsets.UTF_8).length);
+        JsonObject origin = Harvest.origin(program);
+        answer.add("origin", origin == null ? com.google.gson.JsonNull.INSTANCE : origin);
         return answer;
     }
 
@@ -4213,7 +4215,61 @@ public class Owner {
         return found;
     }
 
+    /**
+     * The origin a write gives: `{category, confidence, vendor?}`, checked;
+     * JSON null removes it. `vendor` names whose changes or whose code, so it
+     * is taken for `vendor` and `edk2_modified` only; `unknown` takes no
+     * confidence, since nothing was concluded.
+     */
+    private static JsonObject origin(JsonElement given) throws Failure {
+        if (given == null || given.isJsonNull()) return null;
+        if (!given.isJsonObject()) throw new Failure(400, "origin is an object: {category, confidence, vendor}");
+        JsonObject in = given.getAsJsonObject();
+        for (String key : in.keySet()) {
+            if (!java.util.List.of("category", "confidence", "vendor").contains(key)) {
+                throw new Failure(400, "origin takes category, confidence and vendor, not `" + key + "`");
+            }
+        }
+        String category = in.has("category") && !in.get("category").isJsonNull() ? in.get("category").getAsString() : null;
+        if (category == null || !Harvest.ORIGIN_CATEGORIES.contains(category)) {
+            throw new Failure(400, "origin.category is one of " + String.join(", ", Harvest.ORIGIN_CATEGORIES));
+        }
+        String confidence = in.has("confidence") && !in.get("confidence").isJsonNull()
+            ? in.get("confidence").getAsString() : null;
+        if ("unknown".equals(category)) {
+            if (confidence != null) throw new Failure(400, "an unknown origin takes no confidence: nothing was concluded");
+        } else if (confidence == null || !Harvest.ORIGIN_CONFIDENCES.contains(confidence)) {
+            throw new Failure(400, "origin.confidence is " + String.join(" or ", Harvest.ORIGIN_CONFIDENCES)
+                + ": established when the code was compared with the source or the origin is named in the module's"
+                + " own bytes, inferred otherwise");
+        }
+        String vendor = in.has("vendor") && !in.get("vendor").isJsonNull() ? in.get("vendor").getAsString().trim() : null;
+        if (vendor != null && vendor.isEmpty()) vendor = null;
+        if (vendor != null && !category.equals("vendor") && !category.equals("edk2_modified")) {
+            throw new Failure(400, "origin.vendor names the vendor of a `vendor` or `edk2_modified` module only");
+        }
+        if (vendor != null && (vendor.length() > 32 || vendor.contains("\n"))) {
+            throw new Failure(400, "origin.vendor is a name, at most 32 characters on one line");
+        }
+        JsonObject out = new JsonObject();
+        out.addProperty("category", category);
+        if (confidence != null) out.addProperty("confidence", confidence);
+        if (vendor != null) out.addProperty("vendor", vendor);
+        return out;
+    }
+
     private JsonObject setDescription(JsonObject body) throws Exception {
+        // The origin first: checked before anything is written, and alone it
+        // changes nothing else.
+        boolean givesOrigin = body.has("origin");
+        JsonObject origin = givesOrigin ? origin(body.get("origin")) : null;
+        boolean onlyOrigin = givesOrigin && body.keySet().stream().allMatch("origin"::equals);
+        if (onlyOrigin) {
+            Harvest.setOrigin(program, origin);
+            JsonObject answer = description();
+            answer.remove("text");
+            return answer;
+        }
         if (body.has("old_text") || body.has("new_text")) replaceInSection(body);
         boolean delete = body.has("delete") && body.get("delete").getAsBoolean();
         String text = body.has("text") && !body.get("text").isJsonNull() ? body.get("text").getAsString() : null;
@@ -4270,6 +4326,7 @@ public class Owner {
             throw new Failure(413, "a description is at most " + Harvest.DESCRIPTION_LIMIT / 1024 + " KiB");
         }
         Harvest.setDescription(program, next);
+        if (givesOrigin) Harvest.setOrigin(program, origin);
         // The caller has the text it sent, and a whole description is tens of
         // kilobytes: what the write did is enough, and a read gives the rest.
         JsonObject answer = description();

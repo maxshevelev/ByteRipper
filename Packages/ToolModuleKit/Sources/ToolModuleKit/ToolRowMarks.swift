@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Foundation
 import Localization
 
@@ -100,19 +101,24 @@ public struct ToolRowMarks: Hashable, Sendable {
     public var problem: Problem?
     /// At most two are drawn, in this order.
     public var roles: [Role]
+    /// Whose code the module is, as its review set it: a short framed word
+    /// after the code badge. Nil, or `unknown`, draws nothing.
+    public var origin: ModuleOrigin?
 
     public init(
         protection: Protection? = nil,
         decompressedFrom: String? = nil,
         opensDecompressed: Bool = false,
         problem: Problem? = nil,
-        roles: [Role] = []
+        roles: [Role] = [],
+        origin: ModuleOrigin? = nil
     ) {
         self.protection = protection
         self.decompressedFrom = decompressedFrom
         self.opensDecompressed = opensDecompressed
         self.problem = problem
         self.roles = roles
+        self.origin = origin
     }
 
     public static let none = ToolRowMarks()

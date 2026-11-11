@@ -1,6 +1,7 @@
 import ALSplitView
 import AppKit
 import BytePattern
+import CodeAnalysis
 import HelpBook
 import AppPalette
 import HelpUI
@@ -200,6 +201,8 @@ import UEFITool
     /// the tree only reads it while dressing a row.
     /// The image nodes with a stored code analysis, and how far each one's review has got.
     private var codeAnalysis: [NodeID: ToolRowMarks.CodeReadiness] = [:]
+    /// Whose code each analysed module is, as its review set it.
+    private var codeOrigins: [NodeID: ModuleOrigin] = [:]
     /// Whether the file is open for writing. Without it the Fix Checksum menu
     /// item stands down — the module would refuse anyway, but a greyed item
     /// says so before the click.
@@ -775,6 +778,7 @@ import UEFITool
         catalogue: GuidsCatalogue,
         badChecksums: [NodeID: Set<UEFIChecksumField>],
         codeAnalysis: [NodeID: ToolRowMarks.CodeReadiness] = [:],
+        codeOrigins: [NodeID: ModuleOrigin] = [:],
         canWrite: Bool,
         isBuilding: Bool,
         rowsChanged: Bool,
@@ -813,6 +817,7 @@ import UEFITool
         self.catalogue = catalogue
         self.badChecksums = badChecksums
         self.codeAnalysis = codeAnalysis
+        self.codeOrigins = codeOrigins
         self.canWrite = canWrite
         self.isBuilding = isBuilding
         self.meRoots = meRoots
@@ -2746,6 +2751,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                                    code: codeAnalysis[node.id],
                                    codeInside: UEFITreeMarks.codeInside(node, isOpen: isOpen,
                                                                         analyzed: codeAnalysis),
+                                   origin: UEFITreeMarks.origin(of: node, isOpen: isOpen, origins: codeOrigins,
+                                                                analyzed: Set(codeAnalysis.keys)),
                                    in: Localization.appLanguage)
     }
 

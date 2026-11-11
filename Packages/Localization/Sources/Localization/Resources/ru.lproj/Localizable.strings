@@ -111,6 +111,16 @@
 "Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it" = "Сохранён разбор кода: только автоматический анализ Ghidra, функции не разобраны. «Открыть с кодом» открывает его.";
 "Code analysis stored: the review is not finished. Open with Code opens it" = "Сохранён разбор кода: разбор не завершён. «Открыть с кодом» открывает его.";
 "Code analysis stored: every function reviewed and the module described. Open with Code opens it" = "Сохранён разбор кода: все функции разобраны, модуль описан. «Открыть с кодом» открывает его.";
+"EDK2: the code matches EDK2" = "EDK2: код совпадает с EDK2";
+"EDK2 with changes: an EDK2 module changed by %1$@" = "EDK2 с изменениями: модуль EDK2 с изменениями от %1$@";
+"EDK2 with changes: an EDK2 module changed by the firmware vendor" = "EDK2 с изменениями: модуль EDK2, изменённый производителем прошивки";
+"AMD: AGESA code" = "AMD: код AGESA";
+"Intel: FSP or reference code" = "Intel: код FSP или Reference Code";
+"%1$@: the firmware vendor's own code" = "%1$@: собственный код производителя прошивки";
+"The firmware vendor's own code" = "Собственный код производителя прошивки";
+"Origin unknown" = "Происхождение неизвестно";
+"Established: compared with the source, or named in the module's own bytes" = "Установлено: код сверен с исходниками или происхождение названо в байтах самого модуля";
+"Inferred: concluded from strings, interfaces or linked libraries" = "Предположительно: выведено из строк, интерфейсов или встроенных библиотек";
 "A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Внутри есть модуль с сохранённым анализом Ghidra, ещё не разобранный; разверните строку, чтобы перейти к нему.";
 "A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Внутри есть модуль, разбор которого не завершён; разверните строку, чтобы перейти к нему.";
 "A module inside has a fully reviewed code analysis; open the row to reach it" = "Внутри есть полностью разобранный модуль; разверните строку, чтобы перейти к нему.";

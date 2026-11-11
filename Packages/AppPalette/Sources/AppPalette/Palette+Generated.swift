@@ -109,6 +109,31 @@ public extension RowMarks.Sets {
         light: (0.345, 0.337, 0.839, 1.000),
         dark: (0.490, 0.478, 1.000, 1.000))
 
+    static let originAMD = PaletteColor(
+        name: "RowOriginAMD",
+        light: (0.776, 0.157, 0.157, 1.000),
+        dark: (1.000, 0.471, 0.443, 1.000))
+
+    static let originEDK2 = PaletteColor(
+        name: "RowOriginEDK2",
+        light: (0.122, 0.420, 0.800, 1.000),
+        dark: (0.400, 0.651, 1.000, 1.000))
+
+    static let originEDK2Modified = PaletteColor(
+        name: "RowOriginEDK2Modified",
+        light: (0.110, 0.541, 0.600, 1.000),
+        dark: (0.369, 0.800, 0.851, 1.000))
+
+    static let originIntel = PaletteColor(
+        name: "RowOriginIntel",
+        light: (0.208, 0.290, 0.690, 1.000),
+        dark: (0.537, 0.612, 1.000, 1.000))
+
+    static let originVendor = PaletteColor(
+        name: "RowOriginVendor",
+        light: (0.565, 0.247, 0.710, 1.000),
+        dark: (0.800, 0.576, 0.941, 1.000))
+
     static let protectedFirmware = PaletteColor(
         name: "RowProtectedFirmware",
         light: (0.196, 0.678, 0.902, 0.140),
@@ -120,7 +145,7 @@ public extension RowMarks.Sets {
         dark: (1.000, 0.216, 0.373, 0.240))
 
     /// Every row colour set in the catalogue, in its own order.
-    static let all = [codeReviewed, decompressed, protectedFirmware, protectedIBB]
+    static let all = [codeReviewed, decompressed, originAMD, originEDK2, originEDK2Modified, originIntel, originVendor, protectedFirmware, protectedIBB]
 }
 
 public extension NoticeColors.Sets {

@@ -544,7 +544,8 @@ public final class CodeReadings {
             "what": .string(what),
             "module": .string(source.manifest.module.name),
             "sha256": .string(source.manifest.module.sha256.hex),
-            "recipe": .string(source.manifest.recipe.id)
+            "recipe": .string(source.manifest.recipe.id),
+            "origin": originItem(source.manifest.reading?.origin)
         ]
         if let document = source.document { body["document"] = .string(document) }
         if let node = source.node { body["node"] = .string(node) }
@@ -850,7 +851,8 @@ public final class CodeReadings {
                 "module": .string(manifest.module.name),
                 "sha256": .string(manifest.module.sha256.hex),
                 "recipes": .array(recipes.map { .string($0.recipe.id) }),
-                "functions": .int(Int64(manifest.stats.functions))
+                "functions": .int(Int64(manifest.stats.functions)),
+                "origin": originItem(manifest.reading?.origin)
             ]
             if let label = UEFITreeDisplay.nameAfterParent(of: id, in: tree, catalogue: catalogue,
                                                            image: image, in: .english) {
@@ -866,6 +868,15 @@ public final class CodeReadings {
         }
         return ToolQueryTools.stamped(.json(.object(body)), with: document)
     }
+}
+
+/// Whose code a module is, as its review set it: null while it has not.
+private func originItem(_ origin: ModuleOrigin?) -> JSONValue {
+    guard let origin else { return .null }
+    var item: [String: JSONValue] = ["category": .string(origin.category.rawValue)]
+    if let confidence = origin.confidence { item["confidence"] = .string(confidence.rawValue) }
+    if let vendor = origin.vendor { item["vendor"] = .string(vendor) }
+    return .object(item)
 }
 
 /// A function's place in the library registry, as `code_query` answers it.

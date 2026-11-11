@@ -247,6 +247,11 @@ private struct ChecksumPass: Sendable {
             return (node, readiness)
         })
     }
+    /// Whose code each analyzed node's module is, as its review set it.
+    private var codeOrigins: [NodeID: ModuleOrigin] {
+        codeAnalysisManifests.compactMapValues { $0.reading?.origin }
+            .filter { codeAnalysisNodes.contains($0.key) }
+    }
     private var codeAnalysisRequest: Task<Void, Never>?
     /// Which scan is current; a result from an older reading is dropped.
     private var codeAnalysisGeneration = 0
@@ -1184,7 +1189,7 @@ private struct ChecksumPass: Sendable {
         guard let tree, tree.isReady else {
             controller.show(
                 image: nil, tree: tree, focus: nil, detail: .empty, catalogue: guids,
-                badChecksums: checksumProblems, codeAnalysis: codeReadiness,
+                badChecksums: checksumProblems, codeAnalysis: codeReadiness, codeOrigins: codeOrigins,
                 canWrite: !host.isReadOnly,
                 isBuilding: tree != nil, rowsChanged: true,
                 meRoots: meRoots, meFocus: meFocus
@@ -1250,7 +1255,7 @@ private struct ChecksumPass: Sendable {
                 image: image, tree: tree, focus: focus, detail: detail,
                 helpTerm: helpTerm,
                 catalogue: guids,
-                badChecksums: checksumProblems, codeAnalysis: codeReadiness,
+                badChecksums: checksumProblems, codeAnalysis: codeReadiness, codeOrigins: codeOrigins,
                 canWrite: !host.isReadOnly, isBuilding: false,
                 rowsChanged: rowsChanged,
                 meRoots: meRoots, meFocus: meFocus

@@ -1,4 +1,5 @@
 import XCTest
+import CodeAnalysis
 import ToolModuleKit
 import UEFIImage
 @testable import UEFITool
@@ -153,6 +154,33 @@ final class UEFITreeMarksTests: XCTestCase {
         let image = UEFIImage(size: 0x100, roots: [file])
         let shut = UEFITreeMarks.marks(for: file, in: image, codeInside: .complete, in: .english)
         XCTAssertEqual(shut.roles, [.codeAnalysisInside(.complete)])
+    }
+
+    /// A module's origin stands on its own row, and on a shut file whose
+    /// analysed modules all share it; a row without a code badge shows none.
+    func testTheOriginGoesWhereTheCodeBadgeGoes() {
+        let edk2 = ModuleOrigin(category: .edk2, confidence: .established)
+        let amd = ModuleOrigin(category: .amd, confidence: .inferred)
+        let file = UEFINode(id: NodeID([0, 3]), kind: .file, name: "Pei",
+                            header: 0..<0x18, body: 0x18..<0x100)
+        let module = UEFINode(id: NodeID([0, 3, 1]), kind: .section, subtype: 0x10, name: "PE32 image",
+                              header: 0..<4, body: 4..<0x100)
+        let one: Set<NodeID> = [module.id]
+        XCTAssertEqual(UEFITreeMarks.origin(of: module, isOpen: false, origins: [module.id: edk2], analyzed: one), edk2)
+        XCTAssertEqual(UEFITreeMarks.origin(of: file, isOpen: false, origins: [module.id: edk2], analyzed: one), edk2)
+        XCTAssertNil(UEFITreeMarks.origin(of: file, isOpen: true, origins: [module.id: edk2], analyzed: one),
+                     "open, the module's row says it")
+        let two: Set<NodeID> = [module.id, NodeID([0, 3, 2])]
+        XCTAssertNil(UEFITreeMarks.origin(of: file, isOpen: false,
+                                          origins: [module.id: edk2, NodeID([0, 3, 2]): amd], analyzed: two),
+                     "two origins under one shut row")
+        XCTAssertNil(UEFITreeMarks.origin(of: file, isOpen: false, origins: [module.id: edk2], analyzed: two),
+                     "one module below has none")
+
+        let image = UEFIImage(size: 0x100, roots: [file])
+        XCTAssertEqual(UEFITreeMarks.marks(for: module, in: image, code: .complete, origin: amd, in: .english).origin, amd)
+        XCTAssertNil(UEFITreeMarks.marks(for: module, in: image, origin: amd, in: .english).origin,
+                     "no analysis, no origin")
     }
 
     /// Two modules in one shut file: the badge is the less reviewed one's.

@@ -111,6 +111,16 @@
 "Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it" = "Codeanalyse gespeichert: nur die automatische Analyse von Ghidra, die Funktionen sind nicht analysiert. „Mit Code öffnen“ öffnet sie.";
 "Code analysis stored: the review is not finished. Open with Code opens it" = "Codeanalyse gespeichert: Die Analyse ist nicht abgeschlossen. „Mit Code öffnen“ öffnet sie.";
 "Code analysis stored: every function reviewed and the module described. Open with Code opens it" = "Codeanalyse gespeichert: Alle Funktionen sind analysiert, das Modul ist beschrieben. „Mit Code öffnen“ öffnet sie.";
+"EDK2: the code matches EDK2" = "EDK2: Der Code stimmt mit EDK2 überein";
+"EDK2 with changes: an EDK2 module changed by %1$@" = "EDK2 mit Änderungen: ein EDK2-Modul, von %1$@ geändert";
+"EDK2 with changes: an EDK2 module changed by the firmware vendor" = "EDK2 mit Änderungen: ein EDK2-Modul, vom Firmware-Hersteller geändert";
+"AMD: AGESA code" = "AMD: AGESA-Code";
+"Intel: FSP or reference code" = "Intel: FSP- oder Referenzcode";
+"%1$@: the firmware vendor's own code" = "%1$@: eigener Code des Firmware-Herstellers";
+"The firmware vendor's own code" = "Eigener Code des Firmware-Herstellers";
+"Origin unknown" = "Herkunft unbekannt";
+"Established: compared with the source, or named in the module's own bytes" = "Festgestellt: mit dem Quellcode verglichen oder in den eigenen Bytes des Moduls genannt";
+"Inferred: concluded from strings, interfaces or linked libraries" = "Erschlossen: aus Zeichenketten, Schnittstellen oder eingebundenen Bibliotheken gefolgert";
 "A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Darin liegt ein Modul mit gespeicherter automatischer Analyse von Ghidra, noch nicht analysiert; die Zeile aufklappen, um es zu erreichen.";
 "A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Darin liegt ein Modul, dessen Analyse nicht abgeschlossen ist; die Zeile aufklappen, um es zu erreichen.";
 "A module inside has a fully reviewed code analysis; open the row to reach it" = "Darin liegt ein vollständig analysiertes Modul; die Zeile aufklappen, um es zu erreichen.";
