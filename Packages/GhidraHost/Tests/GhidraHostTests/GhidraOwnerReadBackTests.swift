@@ -133,8 +133,12 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                 if kind == "direct" { XCTAssertNotNil(row["target"], "\(row)") }
             }
         }
-        XCTAssertTrue(kinds.contains("direct"), "\(kinds)")
-        XCTAssertTrue(leaf)
+        // Both need a module with direct calls and a leaf, which a small one
+        // (DebugMaskPei: a handful of functions, every call through a table)
+        // does not have: that is the module, not the owner.
+        guard kinds.contains("direct"), leaf else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE has no direct call or no leaf function: \(kinds), leaf \(leaf)")
+        }
     }
 
     /// The forms review found in SecCore, on a copy of its kept project:
@@ -202,7 +206,9 @@ final class GhidraOwnerReadBackTests: XCTestCase {
             }
             if seen { break }
         }
-        XCTAssertTrue(seen, "no address operand in the module")
+        // A small module (DebugMaskPei) holds no `MOV reg,address` at all: the
+        // case cannot be tried there.
+        guard seen else { throw XCTSkip("GHIDRA_TYPE_MODULE holds no MOV of an address into a register") }
     }
 
     /// A released function does not go on citing an entry as its reason; a
