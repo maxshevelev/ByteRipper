@@ -270,10 +270,8 @@ extension BackgroundOperation: FindActivity {}
         let anchor = searchAnchor(in: pane, direction: direction)
         // Started here, not inside the task: the search in hand is this one
         // from the press on, so a second press finds it under way.
-        let search = pane.finder.start(attempts.map(\.query), from: anchor,
-                                       direction: direction, landing: goal == .showTheMatch)
-        Task { [weak self] in
-            let outcome = await search.value
+        pane.finder.start(attempts.map(\.query), from: anchor, direction: direction,
+                          landing: goal == .showTheMatch) { [weak self] outcome in
             guard let self, pane.isOpen else { return }
             switch outcome {
             case .found(let index, _, let range, let wrapped):

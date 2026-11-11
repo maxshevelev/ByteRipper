@@ -161,10 +161,23 @@ public final class FindIndexer<Content: FindContent> {
     /// returns: the search is the first candidate's, covering nothing, and a
     /// second press already finds it under way. The task is the rest — the
     /// pass, then the index.
+    ///
+    /// `then` hears the outcome in the same turn of the main actor that put
+    /// the reader on the match, so what the owner shows with it — the
+    /// encoding a Smart Search settled on — is never a turn behind the match.
+    @discardableResult
     public func start(_ candidates: [Query], from anchor: UInt64, direction: SearchDirection,
-                      landing: Bool = true) -> Task<FindOutcome<Query>, Never> {
-        guard let content, let first = candidates.first else { return Task { .nothing } }
-        guard passInFlight != candidates else { return Task { .alreadyRunning } }
+                      landing: Bool = true,
+                      then: (@MainActor (FindOutcome<Query>) -> Void)? = nil)
+        -> Task<FindOutcome<Query>, Never> {
+        guard let content, let first = candidates.first else {
+            then?(.nothing)
+            return Task { .nothing }
+        }
+        guard passInFlight != candidates else {
+            then?(.alreadyRunning)
+            return Task { .alreadyRunning }
+        }
         cancelNavigation()
         stopIndexing()
         install(placeholder(for: first, in: content))
@@ -177,8 +190,11 @@ public final class FindIndexer<Content: FindContent> {
                                      progress: { activity?.report($0) })
         }
         return Task { @MainActor in
-            await self.finishPass(candidates, scan: scan, flag: flag, activity: activity,
-                                  content: content, landing: landing)
+            let outcome = await self.finishPass(candidates, scan: scan, flag: flag,
+                                                activity: activity, content: content,
+                                                landing: landing)
+            then?(outcome)
+            return outcome
         }
     }
 
