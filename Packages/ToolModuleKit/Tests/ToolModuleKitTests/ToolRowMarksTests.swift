@@ -232,24 +232,6 @@ final class ToolRowMarksTests: XCTestCase {
             .write(to: URL(fileURLWithPath: folder).appendingPathComponent(name + ".png"))
     }
 
-    /// A shut file holding an analyzed module wears the same badge in the same
-    /// place, and says the analysis is further in.
-    func testTheBadgeOnAShutFileSaysTheCodeIsInside() throws {
-        let cell = ToolPanelTable.makeCell(identifier: .init("name"),
-                                           warning: true, badges: true)
-        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisInside(.partial)]))
-
-        let leading = ToolPanelTable.badgeTags.compactMap {
-            cell.viewWithTag($0) as? NSImageView
-        }
-        XCTAssertEqual(leading.map(\.isHidden), [true, true])
-        let code = try XCTUnwrap(
-            cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
-        XCTAssertFalse(code.isHidden)
-        XCTAssertNotEqual(code.toolTip, ToolRowMarks.Role.codeAnalysis(.partial).toolTip)
-        XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisInside(.partial).toolTip)
-    }
-
     /// A module's own file wears the same circle, open or shut, and its words
     /// say the module is this file, not something further in.
     func testTheBadgeOnAModuleFileSaysItIsTheModule() throws {
@@ -261,8 +243,6 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertFalse(code.isHidden)
         XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisModule(.complete).toolTip)
         for readiness in [ToolRowMarks.CodeReadiness.mechanical, .partial, .complete] {
-            XCTAssertNotEqual(ToolRowMarks.Role.codeAnalysisModule(readiness).toolTip,
-                              ToolRowMarks.Role.codeAnalysisInside(readiness).toolTip)
             XCTAssertEqual(ToolRowMarks.Role.codeAnalysisModule(readiness).mark, .codeAnalysis)
         }
     }

@@ -124,9 +124,6 @@
 "Origin unknown" = "Herkunft unbekannt";
 "Established: compared with the source, or named in the module's own bytes" = "Festgestellt: mit dem Quellcode verglichen oder in den eigenen Bytes des Moduls genannt";
 "Inferred: concluded from strings, interfaces or linked libraries" = "Erschlossen: aus Zeichenketten, Schnittstellen oder eingebundenen Bibliotheken gefolgert";
-"A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Darin liegt ein Modul mit gespeicherter automatischer Analyse von Ghidra, noch nicht analysiert; die Zeile aufklappen, um es zu erreichen.";
-"A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Darin liegt ein Modul, dessen Analyse nicht abgeschlossen ist; die Zeile aufklappen, um es zu erreichen.";
-"A module inside has a fully reviewed code analysis; open the row to reach it" = "Darin liegt ein vollständig analysiertes Modul; die Zeile aufklappen, um es zu erreichen.";
 "This module has a stored code analysis, not reviewed; Open with Code on its image opens it" = "Für dieses Modul ist eine automatische Analyse von Ghidra gespeichert, noch nicht analysiert; „Mit Code öffnen“ auf seinem Image öffnet sie.";
 "This module has a stored code analysis, its review not finished; Open with Code on its image opens it" = "Die Analyse dieses Moduls ist nicht abgeschlossen; „Mit Code öffnen“ auf seinem Image öffnet sie.";
 "This module's code analysis is fully reviewed; Open with Code on its image opens it" = "Dieses Modul ist vollständig analysiert; „Mit Code öffnen“ auf seinem Image öffnet sie.";

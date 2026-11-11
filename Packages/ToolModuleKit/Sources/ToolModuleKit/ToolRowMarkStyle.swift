@@ -56,15 +56,14 @@ extension ToolRowMarks.Role {
     /// How far the module's review has got, for a code badge; nil for any other.
     var codeReadiness: ToolRowMarks.CodeReadiness? {
         switch self {
-        case .codeAnalysis(let readiness), .codeAnalysisInside(let readiness),
-             .codeAnalysisModule(let readiness): return readiness
+        case .codeAnalysis(let readiness), .codeAnalysisModule(let readiness): return readiness
         default: return nil
         }
     }
 
     var mark: ToolRowMark {
         switch self {
-        case .codeAnalysis, .codeAnalysisInside, .codeAnalysisModule: return .codeAnalysis
+        case .codeAnalysis, .codeAnalysisModule: return .codeAnalysis
         case .compressed(_, let decoded): return decoded ? .compressed : .compressedUndecoded
         case .holdsChecks: return .holdsChecks
         case .partlyProtected: return .partlyProtected
@@ -86,12 +85,6 @@ extension ToolRowMarks.Role {
             case .mechanical: return L("This module has a stored code analysis, not reviewed; Open with Code on its image opens it")
             case .partial: return L("This module has a stored code analysis, its review not finished; Open with Code on its image opens it")
             case .complete: return L("This module's code analysis is fully reviewed; Open with Code on its image opens it")
-            }
-        case .codeAnalysisInside(let readiness):
-            switch readiness {
-            case .mechanical: return L("A module inside has a stored code analysis, not reviewed; open the row to reach it")
-            case .partial: return L("A module inside has a stored code analysis, its review not finished; open the row to reach it")
-            case .complete: return L("A module inside has a fully reviewed code analysis; open the row to reach it")
             }
         case .compressed(let algorithm, let decoded):
             return decoded

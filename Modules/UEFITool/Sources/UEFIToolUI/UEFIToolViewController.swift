@@ -2762,8 +2762,6 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
                                    isOpen: isOpen, reader: reader,
                                    code: codeAnalysis[node.id],
-                                   codeInside: UEFITreeMarks.codeInside(node, isOpen: isOpen,
-                                                                        analyzed: codeAnalysis, in: image),
                                    codeModule: UEFITreeMarks.codeModule(node, analyzed: codeAnalysis, in: image),
                                    origin: UEFITreeMarks.origin(of: node, origins: codeOrigins,
                                                                 analyzed: Set(codeAnalysis.keys), in: image),

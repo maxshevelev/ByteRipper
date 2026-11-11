@@ -30,8 +30,6 @@ public enum UEFITreeMarks {
     ///     whether a LENV block is stored encoded. Without it those are left off.
     ///   - code: how far the review of this image node's stored code
     ///     analysis has got; nil when none is stored (`Design/CODE_PANEL_PLAN.md`).
-    ///   - codeInside: the row is shut on images that have one: the least
-    ///     reviewed of them (`codeInside(_:isOpen:analyzed:in:)`).
     ///   - codeModule: the row is the FFS file of analysed modules — the
     ///     least reviewed of them (`codeModule(_:analyzed:in:)`), open or shut.
     ///   - origin: whose code the module is (`origin(of:origins:analyzed:in:)`);
@@ -43,7 +41,6 @@ public enum UEFITreeMarks {
         isOpen: Bool = false,
         reader: ImageReader? = nil,
         code: ToolRowMarks.CodeReadiness? = nil,
-        codeInside: ToolRowMarks.CodeReadiness? = nil,
         codeModule: ToolRowMarks.CodeReadiness? = nil,
         origin: ModuleOrigin? = nil,
         moduleInfo: Bool = false,
@@ -101,11 +98,10 @@ public enum UEFITreeMarks {
         if let code {
             roles.insert(.codeAnalysis(code), at: 0)
         } else if let codeModule {
-            // A module's file holding more modules further in, shut: the
-            // least reviewed of all of them.
-            roles.insert(.codeAnalysisModule(min(codeModule, codeInside ?? codeModule)), at: 0)
-        } else if let codeInside {
-            roles.insert(.codeAnalysisInside(codeInside), at: 0)
+            // Only a module's own rows wear a circle — its file and its
+            // image's section; a row that holds modules further in, a volume
+            // or a compressed section, wears none, shut or open.
+            roles.insert(.codeAnalysisModule(codeModule), at: 0)
         }
 
         return ToolRowMarks(
@@ -141,26 +137,6 @@ public enum UEFITreeMarks {
         let path = node.id.path
         return analyzed.filter { $0.key.path.count > path.count && $0.key.path.starts(with: path)
             && moduleFile(of: $0.key, in: tree) == node.id }.values.min()
-    }
-
-    /// Whether a shut row stands for analysed modules further in than its own
-    /// file — a container of modules: a volume's file, a compressed section
-    /// holding a volume — so a list of shut rows says which hold them. A
-    /// section inside a module's file wears nothing: the file above it says.
-    /// It is the least reviewed of them, so a row is not shown done while a
-    /// module under it is not. Open, the row hands the badge to the modules'
-    /// files it shows. A volume or a region does not wear it — every one of
-    /// them would.
-    public static func codeInside(_ node: UEFINode, isOpen: Bool,
-                                  analyzed: [NodeID: ToolRowMarks.CodeReadiness],
-                                  in tree: UEFIImage) -> ToolRowMarks.CodeReadiness? {
-        guard !isOpen, node.kind == .file || node.kind == .section else { return nil }
-        let path = node.id.path
-        return analyzed.filter { entry in
-            guard entry.key.path.count > path.count, entry.key.path.starts(with: path) else { return false }
-            // Its module's file below this row, or no file at all.
-            return moduleFile(of: entry.key, in: tree).map { $0.path.count > path.count } ?? true
-        }.values.min()
     }
 
     /// The origin a row shows: only the module's own file shows it, open or

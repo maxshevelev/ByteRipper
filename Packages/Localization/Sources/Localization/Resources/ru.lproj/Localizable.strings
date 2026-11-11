@@ -124,9 +124,6 @@
 "Origin unknown" = "Происхождение неизвестно";
 "Established: compared with the source, or named in the module's own bytes" = "Установлено: код сверен с исходниками или происхождение названо в байтах самого модуля";
 "Inferred: concluded from strings, interfaces or linked libraries" = "Предположительно: выведено из строк, интерфейсов или встроенных библиотек";
-"A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Внутри есть модуль с сохранённым анализом Ghidra, ещё не разобранный; разверните строку, чтобы перейти к нему.";
-"A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Внутри есть модуль, разбор которого не завершён; разверните строку, чтобы перейти к нему.";
-"A module inside has a fully reviewed code analysis; open the row to reach it" = "Внутри есть полностью разобранный модуль; разверните строку, чтобы перейти к нему.";
 "This module has a stored code analysis, not reviewed; Open with Code on its image opens it" = "У модуля есть сохранённый анализ Ghidra, модуль ещё не разобран; «Открыть с кодом» на его образе открывает анализ.";
 "This module has a stored code analysis, its review not finished; Open with Code on its image opens it" = "Разбор модуля не завершён; «Открыть с кодом» на его образе открывает анализ.";
 "This module's code analysis is fully reviewed; Open with Code on its image opens it" = "Модуль полностью разобран; «Открыть с кодом» на его образе открывает анализ.";
