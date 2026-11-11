@@ -748,9 +748,13 @@ final class MainViewController: NSViewController {
     // across the suite — in a change whose whole point is that nothing moves
     // on screen.
     var panelSplit: ALSplitView { surface.panelSplit }
-    /// The left pane of the minimap split — the mode's content lives here, so
-    /// the minimap panel can share the content area to its right (§19).
+    /// The split of the panes and the minimap, inside the content (§19).
+    var contentSplit: ALSplitView { surface.contentSplit }
+    /// The content beside the tool panel: the Find bar over the panes and the
+    /// minimap.
     var contentHost: NSView { surface.contentHost }
+    /// Where the mode's content — the panes — lives, left of the minimap.
+    var paneHost: NSView { surface.paneHost }
     var minimapView: MinimapView { surface.minimapView }
     var minimapPanel: MinimapPanelView { surface.minimapPanel }
     /// The tab's own tool-module: the panel down the left of the window.
@@ -781,6 +785,7 @@ final class MainViewController: NSViewController {
     static var minimapMaxPanelWidth: CGFloat { DocumentSurface.minimapMaxPanelWidth }
     static var toolPaneIndex: Int { DocumentSurface.toolPaneIndex }
     static var contentPaneIndex: Int { DocumentSurface.contentPaneIndex }
+    static var panesPaneIndex: Int { DocumentSurface.panesPaneIndex }
     static var minimapPaneIndex: Int { DocumentSurface.minimapPaneIndex }
     static var toolDividerIndex: Int { DocumentSurface.toolDividerIndex }
     static var minimapDividerIndex: Int { DocumentSurface.minimapDividerIndex }
@@ -881,8 +886,9 @@ final class MainViewController: NSViewController {
         updateWindowTitle()
     }
 
-    private var contentTopToView: NSLayoutConstraint!
-    private var contentTopToFindBar: NSLayoutConstraint!
+    /// The surface the Find bar stands in: the one in front when it was
+    /// shown — the tab's, or a fragment panel's.
+    private weak var findBarSurface: DocumentSurface?
     private var findTask: Task<Void, Never>?
     /// The active search operation, surfaced in the active pane's status bar
     /// while a search runs (§14.4).
@@ -1078,8 +1084,7 @@ final class MainViewController: NSViewController {
             surface.minimap.followIndexChange()
         }
 
-        findBar.translatesAutoresizingMaskIntoConstraints = false
-        findBar.isHidden = true  // shown by Cmd+F (§11)
+        findBar.isHidden = true  // shown by Cmd+F (§11), in the surface in front
         findBar.onSearch = { [weak self] request, direction in
             self?.findReturnsFocusTo = nil
             self?.runSearch(request, direction: direction)
@@ -1109,21 +1114,19 @@ final class MainViewController: NSViewController {
         findBar.onManageFavorites = {
             (NSApp.delegate as? AppDelegate)?.showFavoritePatternSettings()
         }
-        view.addSubview(findBar)
+        // Parked, hidden, in the tab's own surface: it lives in the hierarchy
+        // between shows, and each show puts it in the surface in front.
+        surface.showFindBar(findBar)
+        surface.hideFindBar()
 
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(contentContainer)
 
-        contentTopToView = contentContainer.topAnchor.constraint(equalTo: view.topAnchor)
-        contentTopToFindBar = contentContainer.topAnchor.constraint(equalTo: findBar.bottomAnchor)
         NSLayoutConstraint.activate([
-            findBar.topAnchor.constraint(equalTo: view.topAnchor),
-            findBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            findBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            contentContainer.topAnchor.constraint(equalTo: view.topAnchor),
             contentContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             contentContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             contentContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            contentTopToView,
         ])
 
         // The tab's own surface: the tool panel, the dump and the minimap in
@@ -1972,7 +1975,7 @@ final class MainViewController: NSViewController {
     func dumpAreaSlack() -> CGFloat {
         let needed = standardContentWidth()
         guard needed > 0 else { return 0 }
-        return max(0, contentHost.frame.width - needed)
+        return max(0, paneHost.frame.width - needed)
     }
 
     /// The same for the dump of `surface`: the tab's own as above, and for a
@@ -1984,7 +1987,7 @@ final class MainViewController: NSViewController {
         guard let paneView = surface.paneViewsInMapOrder().first else { return 0 }
         let needed = paneView.contentFitWidth
         guard needed > 0 else { return 0 }
-        return max(0, surface.contentHost.frame.width - needed)
+        return max(0, surface.paneHost.frame.width - needed)
     }
 
     /// What the window's width must change by for a side panel gaining or
@@ -2444,6 +2447,12 @@ final class MainViewController: NSViewController {
             paneView(for: pane).focusHexView()
         } else {
             activeFilePane?.focusHexView()
+        }
+        // An open Find bar searches the pane in front, so it stands in front
+        // too: over the panel that came up, or back over the tab's panes.
+        if !findBar.isHidden, findBarSurface !== frontSurface {
+            placeFindBar()
+            syncFindBarToActivePane()
         }
         // The minimap button reads the map in front, which has just changed.
         revalidateToolbar()
@@ -6852,9 +6861,7 @@ final class MainViewController: NSViewController {
     /// replaced what was in the field.
     private func showFindBar() {
         let wasHidden = findBar.isHidden
-        contentTopToView.isActive = false
-        contentTopToFindBar.isActive = true
-        findBar.isHidden = false
+        placeFindBar()
         // The bar lives in the hierarchy between shows, hidden. A layer colour
         // is resolved when it is assigned, and what reaches a view that nobody
         // is drawing is not something to rely on — so the bar re-resolves its
@@ -6885,13 +6892,25 @@ final class MainViewController: NSViewController {
         findBar.query.text = text
     }
 
+    /// Puts the Find bar over the content of the surface in front, taking it
+    /// from the one it stood in.
+    private func placeFindBar() {
+        let front = frontSurface
+        if let old = findBarSurface, old !== front { old.hideFindBar() }
+        front.showFindBar(findBar)
+        findBarSurface = front
+    }
+
+    /// The surface the Find bar stands in, for tests.
+    var findBarSurfaceForTests: DocumentSurface? { findBarSurface }
+
     private func hideFindBar() {
         // A plate reporting a search outlives the bar it was about by four
         // seconds otherwise (§11).
         notices.dismiss()
+        findBarSurface?.hideFindBar()
+        findBarSurface = nil
         findBar.isHidden = true
-        contentTopToFindBar.isActive = false
-        contentTopToView.isActive = true
         cancelFind()
         endIndexing()
         // The highlighting ends with the bar, always: Done and Esc mean "I am

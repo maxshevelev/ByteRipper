@@ -215,14 +215,14 @@ final class MinimapTests: XCTestCase {
     func testDividerDragCannotOpenAHiddenMinimap() throws {
         let (_, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        let sv = split.panelSplit
+        let sv = split.contentSplit
 
         XCTAssertFalse(split.minimapPanelVisible, "the minimap starts hidden")
         window.layoutIfNeeded()
 
         // Grab the divider at the trailing edge and drag it well to the left —
         // the gesture that used to open the panel.
-        let dividerX = sv.dividerPosition(at: 0)
+        let dividerX = sv.dividerPosition(at: MainViewController.minimapDividerIndex)
         let start = NSPoint(x: dividerX + sv.dividerThickness / 2, y: sv.bounds.midY)
         let target = NSPoint(x: dividerX - 150, y: sv.bounds.midY)
         sv.mouseDown(with: mouse(.leftMouseDown, at: sv.convert(start, to: nil), window: window))
@@ -300,7 +300,7 @@ final class MinimapTests: XCTestCase {
                       "reduced motion snaps the panel, so there is no animation to sample")
         let (_, window) = try makeController()
         let (controller, _) = try minimapViews(window)
-        let split = controller.panelSplit
+        let split = controller.contentSplit
         let startWidth = window.frame.width
 
         controller.surface.minimap.setPanelVisible(true, animated: true)

@@ -354,7 +354,7 @@ final class ToolPanelTests: XCTestCase {
     func testThePanelSpendsTheDumpsSpareWidthBeforeTheWindowGrows() throws {
         let (controller, window) = try makeController()
         let before = window.frame
-        let contentBefore = controller.contentHost.frame.width
+        let contentBefore = controller.paneHost.frame.width
         let slack = controller.dumpAreaSlack()
         XCTAssertGreaterThan(slack, 0, "the premise: this window is wider than its grid")
         XCTAssertLessThan(slack, StubToolA.preferredPanelWidth,
@@ -368,7 +368,7 @@ final class ToolPanelTests: XCTestCase {
         XCTAssertEqual(window.frame.width,
                        before.width + StubToolA.preferredPanelWidth - slack, accuracy: 2,
                        "the window grows by the panel's width less the room already there")
-        XCTAssertEqual(controller.contentHost.frame.width, contentBefore - slack, accuracy: 2,
+        XCTAssertEqual(controller.paneHost.frame.width, contentBefore - slack, accuracy: 2,
                        "the dump gave up its spare width, and nothing more")
         XCTAssertEqual(controller.dumpAreaSlack(), 0, accuracy: 2,
                        "which is exactly the width its grid needs")
@@ -378,7 +378,7 @@ final class ToolPanelTests: XCTestCase {
 
         XCTAssertEqual(window.frame.width, before.width, accuracy: 2,
                        "closing gives back what opening took, and no more")
-        XCTAssertEqual(controller.contentHost.frame.width, contentBefore, accuracy: 2,
+        XCTAssertEqual(controller.paneHost.frame.width, contentBefore, accuracy: 2,
                        "and the dump has its room back")
     }
 
@@ -395,13 +395,13 @@ final class ToolPanelTests: XCTestCase {
         XCTAssertEqual(controller.dumpAreaSlack(), 0, accuracy: 2, "the premise: no room left")
 
         let before = window.frame
-        let contentBefore = controller.contentHost.frame.width
+        let contentBefore = controller.paneHost.frame.width
         controller.tools.activate(StubToolA.identifier, animated: false)
         window.layoutIfNeeded()
 
         XCTAssertEqual(window.frame.width, before.width + StubToolA.preferredPanelWidth,
                        accuracy: 2, "the window carries all of it")
-        XCTAssertEqual(controller.contentHost.frame.width, contentBefore, accuracy: 2,
+        XCTAssertEqual(controller.paneHost.frame.width, contentBefore, accuracy: 2,
                        "so the dump keeps its width")
     }
 
@@ -415,7 +415,7 @@ final class ToolPanelTests: XCTestCase {
     func testTheMinimapAlsoOpensIntoTheDumpsSpareWidth() throws {
         let (controller, window) = try makeController()
         let before = window.frame.width
-        let contentBefore = controller.contentHost.frame.width
+        let contentBefore = controller.paneHost.frame.width
         let width = controller.minimapPreferredPanelWidth + controller.panelSplit.dividerThickness
         XCTAssertLessThan(width, controller.dumpAreaSlack(),
                           "the premise: the panel fits in the room the window already has")
@@ -425,7 +425,7 @@ final class ToolPanelTests: XCTestCase {
 
         XCTAssertEqual(window.frame.width, before, accuracy: 1,
                        "the room covered it, so the window did not move")
-        XCTAssertEqual(controller.contentHost.frame.width, contentBefore - width, accuracy: 2,
+        XCTAssertEqual(controller.paneHost.frame.width, contentBefore - width, accuracy: 2,
                        "the dump gave the panel its spare width")
 
         controller.surface.minimap.setPanelVisible(false, animated: false)
@@ -433,7 +433,7 @@ final class ToolPanelTests: XCTestCase {
 
         XCTAssertEqual(window.frame.width, before, accuracy: 1,
                        "and hiding it leaves the window where it was")
-        XCTAssertEqual(controller.contentHost.frame.width, contentBefore, accuracy: 2,
+        XCTAssertEqual(controller.paneHost.frame.width, contentBefore, accuracy: 2,
                        "with the room back in the dump")
     }
 
@@ -447,9 +447,11 @@ final class ToolPanelTests: XCTestCase {
         controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
-        let panel = controller.tools.panel.frame
-        let content = controller.contentHost.frame
-        let minimap = controller.minimapPanel.frame
+        // In the window's coordinates: the minimap and the panes sit in the
+        // content's own split, the tool panel in the outer one.
+        let panel = controller.tools.panel.convert(controller.tools.panel.bounds, to: nil)
+        let content = controller.paneHost.convert(controller.paneHost.bounds, to: nil)
+        let minimap = controller.minimapPanel.convert(controller.minimapPanel.bounds, to: nil)
         XCTAssertEqual(panel.minX, 0, accuracy: 1)
         XCTAssertLessThanOrEqual(panel.maxX, content.minX)
         XCTAssertLessThanOrEqual(content.maxX, minimap.minX)

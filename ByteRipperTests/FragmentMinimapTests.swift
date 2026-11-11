@@ -62,7 +62,7 @@ final class FragmentMinimapTests: XCTestCase {
         surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(window.frame.width, before, accuracy: 0.5, "shown")
-        XCTAssertGreaterThanOrEqual(surface.contentHost.frame.width, paneView.contentFitWidth,
+        XCTAssertGreaterThanOrEqual(surface.paneHost.frame.width, paneView.contentFitWidth,
                                     "and the dump still fits its grid")
 
         surface.minimap.setPanelVisible(false, animated: false)
