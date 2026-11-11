@@ -266,7 +266,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 
     /// The occurrence's line in the code's type, the match set off as the
-    /// code sets off a found match.
+    /// code sets off a found match, and in bold: the eye finds it in the line.
     static func line(of hit: TextSearchHit) -> NSAttributedString {
         // The navigator's own type, regular: a line to recognise, not code to
         // read — the code is a click away.
@@ -279,6 +279,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         if end > start {
             let range = NSRange(location: start, length: end - start)
             text.addAttribute(.backgroundColor, value: CodePaneView.findMatchFill, range: range)
+            text.addAttribute(.font, value: CodePaneView.navigatorBoldFont(), range: range)
         }
         return text
     }
