@@ -226,6 +226,60 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(target.fragments.expanded, target.fragments.panel(holding: panes[0]))
     }
 
+    /// Every surface's Find bar comes back as its own (§11): a panel's open
+    /// bar with its pattern, the tab's closed one closed, and each with its
+    /// own case rule — the tab's kept while its bar was closed. A panel taken
+    /// out starts with the rule of the bar it was taken out under.
+    func testEachSurfacesFindBarComesBackWithItsOwnPatternAndCaseRule() async throws {
+        let bytes: [UInt8] = (0..<0x1000).map { UInt8(($0 * 7) & 0xFF) }
+        let a = try tempFile(bytes, "find")
+        let source = shownWindow().mainViewController
+        source.openFiles([a])
+        // Away from whatever the app's standing choice is, so a bar that
+        // merely started from it would be caught.
+        let tabRule = !PatternQueryControls.storedCaseSensitive
+        source.surface.find.caseSensitive = tabRule
+        source.openPart(named: "zone", from: source.windowModel.pane1, source: 0x100..<0x300,
+                        codec: CopyPartCodec())
+        let zoneID = try XCTUnwrap(source.fragments.dock.panels.first)
+        let zone = try XCTUnwrap(source.fragments.pane(zoneID))
+        let zoneSurface = try XCTUnwrap(source.fragments.surface(zoneID))
+        XCTAssertEqual(zoneSurface.find.caseSensitive, tabRule, "a part of File A takes the tab's rule")
+        zoneSurface.find.caseSensitive = !tabRule
+        source.openPart(named: "inner", from: zone, source: 0x40..<0x80, codec: CopyPartCodec())
+        let innerID = try XCTUnwrap(source.fragments.dock.panels.last)
+        XCTAssertEqual(source.fragments.surface(innerID)?.find.caseSensitive, !tabRule,
+                       "a part of a part takes its parent panel's rule")
+        source.fragments.expand(zoneID, animated: false)
+        zoneSurface.find.reopen(text: "BEEF", encoding: .ascii)
+
+        let keeperFolder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: keeperFolder) }
+        let keeper = ContentKeeper(folder: WorkspaceFolder(url: keeperFolder))
+        let tab = await keeper.settledTabs { [source.workspaceTab(keeper: keeper)] }[0]
+        XCTAssertNil(tab.surface.findPattern, "the tab's bar was closed")
+        XCTAssertEqual(tab.surface.findCaseSensitive, tabRule)
+        XCTAssertEqual(tab.fragments.first?.surface.findPattern,
+                       FindPatternState(text: "BEEF", encoding: SearchEncoding.ascii.rawValue))
+        XCTAssertEqual(tab.fragments.first?.surface.findCaseSensitive, !tabRule)
+
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: keeper)
+
+        XCTAssertEqual(issues, [])
+        XCTAssertFalse(target.surface.find.isShown)
+        XCTAssertEqual(target.surface.find.caseSensitive, tabRule)
+        let surfaces = target.fragments.dock.panels.compactMap { target.fragments.surface($0) }
+        guard surfaces.count == 2 else { return XCTFail("both panels come back") }
+        XCTAssertTrue(surfaces[0].find.isShown, "the panel's bar is open again")
+        XCTAssertEqual(surfaces[0].find.openPattern?.text, "BEEF")
+        XCTAssertEqual(surfaces[0].find.openPattern?.encoding, .ascii)
+        XCTAssertEqual(surfaces[0].find.caseSensitive, !tabRule)
+        XCTAssertFalse(surfaces[1].find.isShown)
+        XCTAssertEqual(surfaces[1].find.caseSensitive, !tabRule)
+    }
+
     // MARK: - Parts torn off into tabs
 
     /// A part torn off into a tab, in a window of its own, whose parent is a

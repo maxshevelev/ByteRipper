@@ -177,8 +177,30 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         ControlHelp.describe(caseButton, L("Case Sensitive"))
         caseButton.target = self
         caseButton.action = #selector(caseToggled)
-        caseButton.state = (Self.defaults.object(forKey: Self.caseSensitiveKey) as? Bool ?? false) ? .on : .off
+        caseButton.state = Self.storedCaseSensitive ? .on : .off
         syncCaseButtonAppearance()
+    }
+
+    /// The case rule last chosen anywhere: what a set of these controls starts
+    /// with.
+    static var storedCaseSensitive: Bool {
+        defaults.object(forKey: caseSensitiveKey) as? Bool ?? false
+    }
+
+    /// Whether the case toggle is this set's own (a Find bar's: each surface
+    /// has its own rule, §11) rather than the app's standing choice, re-read
+    /// each time the controls are shown. Either way a toggle is stored as the
+    /// choice the next new set starts with.
+    var keepsOwnCaseRule = false
+
+    /// The toggle's state, whatever the encoding: what a surface keeps and a
+    /// panel taken out of it inherits.
+    var caseRule: Bool {
+        get { caseButton.state == .on }
+        set {
+            caseButton.state = newValue ? .on : .off
+            syncCaseButtonAppearance()
+        }
     }
 
     /// Paints the toggle to match its state (§11): accent-blue and semibold
@@ -236,7 +258,9 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     func reloadStandingChoices() {
         smartButton.state = Self.storedSmartSearch ? .on : .off
         syncSmartButtonAppearance()
-        caseButton.state = (Self.defaults.object(forKey: Self.caseSensitiveKey) as? Bool ?? false) ? .on : .off
+        if !keepsOwnCaseRule {
+            caseButton.state = Self.storedCaseSensitive ? .on : .off
+        }
         syncCaseButtonAppearance()
         updateCaseButtonVisibility()
         rebuildPatternMenu()

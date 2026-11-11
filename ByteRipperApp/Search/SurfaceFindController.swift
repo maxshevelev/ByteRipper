@@ -115,6 +115,13 @@ extension BackgroundOperation: FindActivity {}
         bar.stage(pattern)
     }
 
+    /// Whether the bar matches case — open or closed, the surface's own rule,
+    /// kept in the workspace and inherited by a panel taken out of it.
+    var caseSensitive: Bool {
+        get { bar.query.caseRule }
+        set { bar.query.caseRule = newValue }
+    }
+
     /// The pattern of an open bar, for the workspace.
     var openPattern: (text: String, encoding: SearchEncoding)? {
         isShown ? (bar.query.text, bar.query.currentEncoding()) : nil

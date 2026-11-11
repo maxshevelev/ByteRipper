@@ -160,6 +160,11 @@ import ToolModuleKit
         // The panel's own Find bar, over its dump, parked hidden until ⌘F in
         // the panel (§11). It folds into the pill with the panel.
         surface.find.park()
+        // A panel's bar starts with the case rule of the bar it was taken out
+        // under: the parent's panel, or the tab's for a part of File A or B.
+        if let parent = pane.origin?.parent {
+            surface.find.caseSensitive = (self.surface(holding: parent) ?? host.surface).find.caseSensitive
+        }
         // The pane's title bar goes across the whole panel, over the tool and
         // the map as well as the dump.
         let view = FragmentPanelView(header: paneView.hoistHeader(), content: surface.view)

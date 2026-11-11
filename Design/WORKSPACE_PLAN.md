@@ -25,7 +25,7 @@ and not an app-wide preference:
 | fragment panels and parts | per tab, parent first | `openPart` / `openFragment`, then `fragments.expand` |
 | minimap | visible, render mode, per surface | `setPanelVisible`, `setRenderMode` |
 | tool panel | which tool, its parked state, open UEFI rows | `tools.activate` after `restore(state)` |
-| find bar | visible, pattern text | a new setter on the find bar |
+| find bar | per surface — the tab's and each panel's: the pattern and encoding while open, the case rule open or closed; no search is run | `SurfaceFindController.reopen`, `caseSensitive` |
 | untitled documents | their bytes and name | `openBytes(_:named:origin:)` |
 | the Annotations window | its place among a window's tabs, or a window of its own; the selected cards by annotation id | `NotesWindowController.restore(_:among:)` |
 | undo history | per document — files, untitled documents, parts — both sides, the saved state, the joins, the segments paired with each step | `ContentKeeper.adopt`, `UndoHistory.restore` (`PERSISTENT_UNDO_PLAN.md`) |

@@ -251,6 +251,8 @@ final class FindBarView: NSView {
     }
 
     private func setUpQuery() {
+        // Each surface's bar has its own case rule (§11).
+        query.keepsOwnCaseRule = true
         query.onSubmit = { [weak self] in self?.runSearch(.forward) }
         query.onPicked = { [weak self] in self?.runSearch(.forward, recordingHistory: false) }
         query.onError = { [weak self] message in self?.onError?(message) }
