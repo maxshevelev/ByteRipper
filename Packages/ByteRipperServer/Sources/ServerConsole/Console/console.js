@@ -1350,6 +1350,9 @@
   // review stands; opened, it shows every remark with its thread, and the
   // administrator's say over a remark's status or the whole ticket.
   const TICKET_STATES = [["open", "Open"], ["settled", "Settled"], ["closed", "Closed"], ["all", "All"]];
+  // The same switch sorts the proposals: open waits on votes, settled is
+  // agreed and waits on the module's next publish, closed has ended.
+  const PROPOSAL_STATES = { open: ["open"], settled: ["agreed"], closed: ["applied", "rejected", "withdrawn"] };
   const REMARK_STATUSES = ["open", "answered", "fixed", "wont_fix", "verified"];
 
   function mountTickets(actions) {
@@ -1369,11 +1372,11 @@
         : empty("reviewFindings", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
           "A verifying agent writes a remark on a module's review with ghidra_ticket_remark; the module's ticket is listed here."));
       call("GET", "/admin/api/type-proposals").then((rows) => {
-        const live = rows.filter((p) => p.state === "open" || p.state === "agreed");
-        const recent = rows.filter((p) => !(p.state === "open" || p.state === "agreed")).slice(0, 10);
-        const all = live.concat(recent);
-        fill(proposals.body, all.length ? proposalTable(all)
-          : empty("proposals", "No proposal", "When a module's publish would replace a shared type or a library registry entry, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
+        const shownProposals = rows.filter((p) => state.ticketState === "all"
+          || PROPOSAL_STATES[state.ticketState].includes(p.state));
+        fill(proposals.body, shownProposals.length ? proposalTable(shownProposals)
+          : empty("proposals", state.ticketState === "all" ? "No proposal" : `No ${state.ticketState} proposal`,
+            "When a module's publish would replace a shared type or a library registry entry, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
       }, () => fill(proposals.body, h("div", { class: "muted", text: "This server keeps no type proposals." })));
     }
     return { root, update };
