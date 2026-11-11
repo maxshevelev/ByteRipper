@@ -105,6 +105,21 @@ final class AgentUITests: XCTestCase {
             tab.choose(client)
             XCTAssertEqual(tab.previewText, AgentClientConfiguration.text(for: client))
         }
+        if let path = ProcessInfo.processInfo.environment["BR_SNAPSHOT_DIR"] {
+            let window = NSWindow(contentViewController: tab)
+            defer { window.close() }
+            for client in [AgentClientConfiguration.Client.claudeCode, .cursor] {
+                tab.choose(client)
+                window.setContentSize(tab.view.fittingSize)
+                tab.view.layoutSubtreeIfNeeded()
+                let view = tab.view
+                if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?
+                        .write(to: URL(fileURLWithPath: path).appendingPathComponent("agent-settings-\(client).png"))
+                }
+            }
+        }
     }
 
     /// The relay starts the app only when the client's configuration says

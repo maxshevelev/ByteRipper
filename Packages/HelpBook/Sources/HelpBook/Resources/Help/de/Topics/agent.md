@@ -1,4 +1,4 @@
-@source-sha b9ca2029104206fe78367f80013fc5f7e7c325c210017a6868942f2494caa04f
+@source-sha b945b2b4b1406fbdd9664b7b0d915a27b7975e61c204aa6bc9e2f7b15cf5a019
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -15,7 +15,7 @@ Zu beachten ist jedoch: Die Bytes, die der Agent liest, übermittelt sein Progra
 
 ## Programm des Agenten einrichten
 
-Unter **Einstellungen ▸ Agent** legt das Menü **Konfiguration für:** fest, in welchem Programm der Agent ausgeführt wird. Darunter erscheint der vollständige Konfigurationstext für dieses Programm zusammen mit dem Hinweis, wo er einzutragen ist; **Kopieren** übernimmt ihn in die Zwischenablage.
+Unter **Einstellungen ▸ Agent** legt das Menü **Konfiguration für:** fest, in welchem Programm der Agent ausgeführt wird. Darunter erscheint der vollständige Konfigurationstext für dieses Programm, zusammen mit dem Hinweis, wo er einzutragen ist; die Kopiertaste daneben übernimmt ihn in die Zwischenablage.
 
 - **Claude Code** — ein Befehl für das Terminal. Er muss nur einmal ausgeführt werden; danach steht ByteRipper in Claude Code in jedem Ordner zur Verfügung.
 - **Claude Desktop** — ein JSON-Block für die Konfigurationsdatei `~/Library/Application Support/Claude/claude_desktop_config.json`. Claude Desktop wertet diese Datei beim Start aus.

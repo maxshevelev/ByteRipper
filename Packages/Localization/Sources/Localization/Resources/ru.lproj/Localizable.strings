@@ -1431,7 +1431,7 @@
 "Waiting for a connection." = "Ожидание подключения.";
 "Connected." = "Подключено.";
 "Connections: %1$@." = "Подключений: %1$@.";
-"Copied." = "Скопировано.";
+"Copied" = "Скопировано";
 "Time" = "Время";
 "Tool" = "Инструмент";
 "Arguments" = "Аргументы";
@@ -1466,7 +1466,7 @@
 "Configuration for:" = "Настройка для:";
 "The program the agent runs in, whose configuration is shown below" = "Программа, в которой работает агент; её настройка показана ниже";
 "Configuration text" = "Текст настройки";
-"Copy the text above to the clipboard" = "Скопировать текст выше в буфер обмена";
+"Copy to the clipboard" = "Скопировать в буфер обмена";
 "Log records" = "События журнала";
 "Log" = "Журнал";
 "Show in UEFI Structure" = "Показать в Структуре UEFI";
@@ -1880,7 +1880,10 @@
 "The code of this analysis on the server is damaged." = "Код этого разбора на сервере повреждён.";
 "The code of this analysis in the analysis store on this Mac is damaged." = "Код этого разбора в хранилище разборов на этом Mac повреждён.";
 "Review agents" = "Агенты разбора";
-"This server gives agents the roles of a review pair. Start each in its own Terminal window:" = "Сервер выдаёт агентам роли пары разбора. Каждую роль запустите в отдельном окне Терминала:";
+"This server gives agents the roles of a review pair. Start each in its own Terminal window." = "Сервер выдаёт агентам роли пары разбора. Каждую роль запустите в отдельном окне Терминала.";
+"1. Start Claude Code in Terminal:" = "1. Запустите Claude Code в Терминале:";
+"2. In its session, type the command of the role:" = "2. В открывшейся сессии введите команду роли:";
+"Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown." = "Команды ByteRipper становятся известны Claude Code только после подключения к нему. Поэтому команду вводят в открытой сессии: переданная в claude при запуске, она не распознаётся.";
 "Reviewer: reviews modules and publishes them." = "Reviewer: разбирает модули и публикует их.";
 "Verifier: checks the Reviewer's results and changes nothing." = "Verifier: проверяет результаты Reviewer и ничего не изменяет.";
 "Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows." = "Обеим ролям нужны включённая служба агентов и ByteRipper, добавленный в Claude Code, — как показано в «Настройки ▸ Агент».";

@@ -27,7 +27,7 @@ The bytes an agent reads are, however, passed by the agent's own program to the 
 
 ## Connecting a program
 
-In **Settings ▸ Agent** the menu **Configuration for:** chooses the program the agent runs in. The text that program needs is shown in full below the menu, with a line saying where it goes, and **Copy** puts it on the clipboard:
+In **Settings ▸ Agent** the menu **Configuration for:** chooses the program the agent runs in. The text that program needs is shown in full below the menu, with a line saying where it goes; the copy button beside it puts it on the clipboard:
 
 - **Claude Code** — a command for Terminal. Run once, it registers ByteRipper with Claude Code for every folder.
 - **Claude Desktop** — a JSON block for Claude Desktop's configuration file, `~/Library/Application Support/Claude/claude_desktop_config.json`. Claude Desktop reads it when it starts.

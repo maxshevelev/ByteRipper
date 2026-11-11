@@ -136,25 +136,33 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     private func buildReviewAgents() {
         let title = NSTextField(labelWithString: L("Review agents"))
         title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
-        let intro = small(L("This server gives agents the roles of a review pair. Start each in its own Terminal window:"))
+        let intro = small(L("This server gives agents the roles of a review pair. Start each in its own Terminal window."))
+        func copyable(_ text: String) -> CopyableTextView {
+            CopyableTextView(text: text, copyHelp: L("Copy to the clipboard"))
+        }
         func command(_ text: String, _ role: String) -> NSView {
-            let field = NSTextField(labelWithString: text)
-            field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-            field.isSelectable = true
             let what = small(role)
-            let column = NSStackView(views: [field, what])
+            let column = NSStackView(views: [copyable(text), what])
             column.orientation = .vertical
             column.alignment = .leading
-            column.spacing = 2
-            what.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
+            column.spacing = 4
+            for view in column.arrangedSubviews {
+                view.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
+            }
             return column
         }
+        let start = small(L("1. Start Claude Code in Terminal:"))
+        let claude = copyable(Self.startCommand)
+        let then = small(L("2. In its session, type the command of the role:"))
         let reviewer = command(Self.reviewerCommand, L("Reviewer: reviews modules and publishes them."))
         let verifier = command(Self.verifierCommand,
                                L("Verifier: checks the Reviewer's results and changes nothing."))
+        let why = small(L("Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown."))
         let needs = small(L("Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows."))
-        for view in [title, intro, reviewer, verifier, needs] { reviewAgents.addArrangedSubview(view) }
-        for view in [intro, reviewer, verifier, needs] {
+        let body = [intro, start, claude, then, reviewer, verifier, why, needs]
+        reviewAgents.addArrangedSubview(title)
+        for view in body {
+            reviewAgents.addArrangedSubview(view)
             view.widthAnchor.constraint(equalTo: reviewAgents.widthAnchor).isActive = true
         }
         reviewAgents.orientation = .vertical
@@ -164,10 +172,13 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         reviewAgents.isHidden = true
     }
 
-    /// Typed in Terminal: Claude Code starts with the role's prompt, which
-    /// the app's MCP gives from the server's kit.
-    static let reviewerCommand = #"claude "/mcp__byteripper__reviewer""#
-    static let verifierCommand = #"claude "/mcp__byteripper__verifier""#
+    /// Started in Terminal; the role's prompt is then typed in its session.
+    /// Claude Code knows an MCP server's prompts only after connecting to it,
+    /// so `claude "/mcp__…"` at the start answers "Unknown command".
+    static let startCommand = "claude"
+    /// The role's prompt, which the app's MCP gives from the server's kit.
+    static let reviewerCommand = "/mcp__byteripper__reviewer"
+    static let verifierCommand = "/mcp__byteripper__verifier"
 
     /// Whether the review pair can be started: the server is connected, and
     /// the last fetch of its kit took it — a token without `ghidra.use` is
@@ -182,7 +193,10 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         reviewCheck?.cancel()
         let state = location.state
         guard case .connected = state else {
-            reviewAgents.isHidden = true
+            if !reviewAgents.isHidden {
+                reviewAgents.isHidden = true
+                (view.window?.windowController as? SettingsWindowController)?.fitToCurrentTab()
+            }
             return
         }
         let kit = reviewKit
@@ -192,8 +206,12 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self else { return }
-                self.reviewAgents.isHidden = !Self.showsReviewAgents(state: self.location.state, kitFetched: fetched,
-                                                                     hasKit: current != nil)
+                let hidden = !Self.showsReviewAgents(state: self.location.state, kitFetched: fetched,
+                                                     hasKit: current != nil)
+                guard self.reviewAgents.isHidden != hidden else { return }
+                self.reviewAgents.isHidden = hidden
+                // The block's height comes and goes with it: the window follows.
+                (self.view.window?.windowController as? SettingsWindowController)?.fitToCurrentTab()
             }
         }
     }

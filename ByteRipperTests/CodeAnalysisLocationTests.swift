@@ -213,7 +213,10 @@ final class CodeAnalysisLocationTests: XCTestCase {
         settings.reviewKit = cache(refused: false)
         await wait("the commands") { !settings.reviewAgents.isHidden }
         let texts = Self.labels(in: settings.reviewAgents).map(\.stringValue)
+        XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.startCommand), "\(texts)")
         XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.reviewerCommand), "\(texts)")
+        XCTAssertFalse(texts.contains { $0.hasPrefix("claude \"/") },
+                       "a prompt is typed in the session, never given to claude at the start: \(texts)")
         XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.verifierCommand), "\(texts)")
         settings.view.layoutSubtreeIfNeeded()
         XCTAssertGreaterThan(settings.reviewAgents.frame.height, 60, "the block is laid out, not collapsed")

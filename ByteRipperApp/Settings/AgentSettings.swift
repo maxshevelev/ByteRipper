@@ -136,8 +136,7 @@ final class AgentSettingsViewController: NSViewController {
     private let statusLabel = NSTextField(labelWithString: "")
     private let clientMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     private let destinationLabel = NSTextField(wrappingLabelWithString: "")
-    private let preview = NSTextView()
-    private let copyButton = NSButton(title: "", target: nil, action: nil)
+    private let preview = CopyableTextView(copyHelp: L("Copy to the clipboard"))
     private var observer: NSObjectProtocol?
 
     override func loadView() {
@@ -208,38 +207,14 @@ final class AgentSettingsViewController: NSViewController {
         destinationLabel.font = .systemFont(ofSize: 11)
         destinationLabel.textColor = .secondaryLabelColor
 
-        // Read-only and selectable: the text is to be looked at and copied,
-        // and a person who wants only part of it can select that part.
-        preview.isEditable = false
-        preview.isSelectable = true
-        preview.isRichText = false
-        preview.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        preview.textContainerInset = NSSize(width: 6, height: 6)
-        preview.isVerticallyResizable = true
-        preview.isHorizontallyResizable = true
-        preview.autoresizingMask = [.width]
-        preview.textContainer?.widthTracksTextView = false
-        preview.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
-                                                      height: CGFloat.greatestFiniteMagnitude)
+        // The whole text, wrapped: what is copied is all on screen.
         preview.setAccessibilityLabel(L("Configuration text"))
-        let previewScroll = NSScrollView()
-        previewScroll.documentView = preview
-        previewScroll.hasVerticalScroller = true
-        previewScroll.hasHorizontalScroller = true
-        previewScroll.autohidesScrollers = true
-        previewScroll.borderType = .bezelBorder
-
-        copyButton.title = L("Copy")
-        copyButton.bezelStyle = .rounded
-        copyButton.target = self
-        copyButton.action = #selector(copyConfiguration)
-        ControlHelp.describe(copyButton, L("Copy the text above to the clipboard"))
 
         let help = HelpButton.standard(for: .topic(.agent))
 
         for subview in [enableCheckbox, caption, statusLabel, editsCheckbox, editsCaption,
                         launchCheckbox, launchCaption, limitsGrid, limitsCaption, clientLabel, clientMenu,
-                        destinationLabel, previewScroll, copyButton, help] {
+                        destinationLabel, preview, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
@@ -288,14 +263,10 @@ final class AgentSettingsViewController: NSViewController {
             destinationLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             destinationLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            previewScroll.topAnchor.constraint(equalTo: destinationLabel.bottomAnchor, constant: 8),
-            previewScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            previewScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            previewScroll.heightAnchor.constraint(equalToConstant: 104),
-
-            copyButton.topAnchor.constraint(equalTo: previewScroll.bottomAnchor, constant: 10),
-            copyButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            copyButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            preview.topAnchor.constraint(equalTo: destinationLabel.bottomAnchor, constant: 8),
+            preview.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            preview.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            preview.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -359,17 +330,13 @@ final class AgentSettingsViewController: NSViewController {
 
     private func showClient() {
         destinationLabel.stringValue = client.destination
-        preview.string = AgentClientConfiguration.text(for: client)
+        preview.text = AgentClientConfiguration.text(for: client)
+        // Another client's text has another length: the window follows it.
+        (view.window?.windowController as? SettingsWindowController)?.fitToCurrentTab()
     }
 
     @objc private func clientChanged() {
         showClient()
-    }
-
-    @objc private func copyConfiguration() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(AgentClientConfiguration.text(for: client), forType: .string)
-        statusLabel.stringValue = L("Copied.")
     }
 
     @objc private func editsChanged(_ sender: NSButton) {
@@ -446,6 +413,6 @@ final class AgentSettingsViewController: NSViewController {
     }
 
     /// What the preview shows, and the line above it.
-    var previewText: String { preview.string }
+    var previewText: String { preview.text }
     var destinationText: String { destinationLabel.stringValue }
 }

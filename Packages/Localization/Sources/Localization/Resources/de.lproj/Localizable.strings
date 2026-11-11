@@ -1431,7 +1431,7 @@
 "Waiting for a connection." = "Wartet auf eine Verbindung.";
 "Connected." = "Verbunden.";
 "Connections: %1$@." = "Verbindungen: %1$@.";
-"Copied." = "Kopiert.";
+"Copied" = "Kopiert";
 "Time" = "Zeit";
 "Tool" = "Werkzeug";
 "Arguments" = "Argumente";
@@ -1466,7 +1466,7 @@
 "Configuration for:" = "Konfiguration für:";
 "The program the agent runs in, whose configuration is shown below" = "Das Programm, in dem der Agent läuft; seine Konfiguration steht darunter";
 "Configuration text" = "Konfigurationstext";
-"Copy the text above to the clipboard" = "Den Text oben in die Zwischenablage kopieren";
+"Copy to the clipboard" = "In die Zwischenablage kopieren";
 "Log records" = "Ereignisse des Protokolls";
 "Log" = "Protokoll";
 "Show in UEFI Structure" = "In UEFI-Struktur zeigen";
@@ -1880,7 +1880,10 @@
 "The code of this analysis on the server is damaged." = "Der Code dieser Analyse auf dem Server ist beschädigt.";
 "The code of this analysis in the analysis store on this Mac is damaged." = "Der Code dieser Analyse im Analysespeicher auf diesem Mac ist beschädigt.";
 "Review agents" = "Agenten für die Durchsicht";
-"This server gives agents the roles of a review pair. Start each in its own Terminal window:" = "Dieser Server gibt Agenten die Rollen eines Durchsichtspaars. Starten Sie jede Rolle in einem eigenen Terminalfenster:";
+"This server gives agents the roles of a review pair. Start each in its own Terminal window." = "Dieser Server gibt Agenten die Rollen eines Durchsichtspaars. Starten Sie jede Rolle in einem eigenen Terminalfenster.";
+"1. Start Claude Code in Terminal:" = "1. Claude Code im Terminal starten:";
+"2. In its session, type the command of the role:" = "2. In der geöffneten Sitzung den Befehl der Rolle eingeben:";
+"Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown." = "Claude Code kennt die Befehle von ByteRipper erst, nachdem es sich damit verbunden hat. Der Befehl wird deshalb in der Sitzung eingegeben; beim Start an claude übergeben, ist er unbekannt.";
 "Reviewer: reviews modules and publishes them." = "Reviewer: sieht Module durch und veröffentlicht sie.";
 "Verifier: checks the Reviewer's results and changes nothing." = "Verifier: prüft die Ergebnisse des Reviewers und ändert nichts.";
 "Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows." = "Beide Rollen brauchen den eingeschalteten Agentendienst und ein in Claude Code eingetragenes ByteRipper, wie es „Einstellungen ▸ Agent“ zeigt.";
