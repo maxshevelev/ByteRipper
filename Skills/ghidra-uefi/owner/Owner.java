@@ -307,7 +307,6 @@ public class Owner {
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
                 if (path.equals("/v1/library")) { json(exchange, 200, library()); return; }
-                if (path.equals("/v1/equates-on-memory")) { json(exchange, 200, equatesOnMemory(query)); return; }
                 if (path.equals("/v1/stale-links")) { json(exchange, 200, staleLinks()); return; }
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
@@ -326,9 +325,6 @@ public class Owner {
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 if (path.equals("/v1/types/merge")) { json(exchange, 200, typesMerge(exchange)); return; }
                 if (path.equals("/v1/types/efiapi")) { json(exchange, 200, typesEfiApi(exchange)); return; }
-                // A read with a body: the review document's locals to compare.
-                if (path.equals("/v1/locals/drift")) { json(exchange, 200, localsDrift(body(exchange), false)); return; }
-                if (path.equals("/v1/locals/entries")) { json(exchange, 200, entryLocalsPlacement(body(exchange))); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
@@ -339,7 +335,6 @@ public class Owner {
                     case "/v1/clear/locals" -> write(exchange, this::clearLocals);
                     case "/v1/merge/functions" -> write(exchange, this::mergeFunctions);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
-                    case "/v1/locals/remap" -> write(exchange, body -> localsDrift(body, true));
                     case "/v1/rename/variables" -> batch(exchange, this::renameVariable);
                     case "/v1/set/comments" -> batch(exchange, this::setComment);
                     case "/v1/set/signature" -> write(exchange, this::setSignature);
@@ -634,41 +629,6 @@ public class Owner {
             item.addProperty("name", target.getName());
             links.add(item);
         }
-    }
-
-    /**
-     * Equates on a memory operand: a name on the displacement of `[reg+N]`.
-     * `value` once took these for immediates, so each is a suspect to read;
-     * one set on purpose by `operand` is listed too.
-     */
-    private JsonObject equatesOnMemory(Map<String, String> query) throws Failure {
-        int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 200), 1000);
-        java.util.List<JsonObject> found = new java.util.ArrayList<>();
-        java.util.Iterator<ghidra.program.model.symbol.Equate> equates = program.getEquateTable().getEquates();
-        while (equates.hasNext()) {
-            ghidra.program.model.symbol.Equate equate = equates.next();
-            for (ghidra.program.model.symbol.EquateReference use : equate.getReferences()) {
-                Instruction instruction = program.getListing().getInstructionAt(use.getAddress());
-                int operand = use.getOpIndex();
-                if (instruction == null || operand < 0 || operand >= instruction.getNumOperands()
-                    || isImmediate(instruction, operand)) continue;
-                JsonObject item = new JsonObject();
-                item.addProperty("address", hex(use.getAddress()));
-                item.addProperty("name", equate.getDisplayName());
-                item.addProperty("operand", operand);
-                item.addProperty("text", instruction.toString());
-                Function function = program.getFunctionManager().getFunctionContaining(use.getAddress());
-                if (function != null) item.addProperty("function", function.getName());
-                found.add(item);
-            }
-        }
-        found.sort(java.util.Comparator.comparing(item -> item.get("address").getAsString()));
-        JsonArray page = new JsonArray();
-        for (int i = offset; i < found.size() && i < offset + limit; i++) page.add(found.get(i));
-        JsonObject answer = identity();
-        answer.addProperty("count", found.size());
-        answer.add("equates", page);
-        return answer;
     }
 
     /** An operand that is a constant by itself, not part of a memory reference. */
@@ -5945,289 +5905,8 @@ public class Owner {
     }
 
     /**
-     * The named locals of a review document — `functions`, as a revision
-     * recorded them — against the program as it decompiles now, by first use
-     * (issue 4a9a4484's re-laid frames). A name is bound to a storage, and
-     * anything that lays a frame out again — a calling convention, a callee's
-     * prototype, a type's size — leaves it on the old slot, or on none, while
-     * the value it named has moved: the first use, an instruction address,
-     * does not move. Each recorded local is `intact` (its name on its first
-     * use), `moved` (another local holds its first use now: the target),
-     * `conflict` (that local holds a name the document does not have — one
-     * given after it), `lost` (no local starts there), `merged` (another
-     * recorded name holds that local) or `ambiguous`.
-     *
-     * With `apply`, under the lease, the moved names go to their targets with
-     * their recorded types: the names first put aside, so a name still on
-     * the wrong slot is free, then set one by one through the decompiler, and
-     * read back. A put-aside variable no name came back to is removed: its
-     * slot is unnamed again. A type the program refuses is reported, and the
-     * name is set without it. Nothing is published.
-     */
-    /**
-     * The registry's entries against the functions of this program linked to
-     * them (issue 24c094eb): each entry's locals, placed at the function's
-     * entry plus their first use, compared by placement — is the entry's
-     * storage still that of the local the program starts there? A stack
-     * local (first use 0) is its frame slot and is matched by storage. Body:
-     * `entries`, id to the entry's `version` and `locals`. Read only.
-     */
-    private JsonObject entryLocalsPlacement(JsonObject body) throws Exception {
-        if (!body.has("entries") || !body.get("entries").isJsonObject()) {
-            throw new Failure(400, "entries is the registry entries' locals by id");
-        }
-        JsonObject entries = body.getAsJsonObject("entries");
-        JsonObject document = new JsonObject();
-        JsonObject versions = new JsonObject();
-        int linked = 0;
-        ghidra.program.model.listing.FunctionIterator all = program.getFunctionManager().getFunctions(true);
-        while (all.hasNext()) {
-            Function function = all.next();
-            JsonObject mark = libraryMark(function);
-            if (mark == null || !mark.has("id")) continue;
-            String id = mark.get("id").getAsString();
-            if (!entries.has(id)) continue;
-            linked++;
-            JsonObject entry = entries.getAsJsonObject(id);
-            JsonArray placed = new JsonArray();
-            for (JsonElement element : entry.has("locals") ? entry.getAsJsonArray("locals") : new JsonArray()) {
-                JsonObject theirs = element.getAsJsonObject().deepCopy();
-                // An offset is a 32-bit signed one: 0xFFFFFFFF is a first use
-                // one byte before the entry, as Ghidra keeps it for a local set
-                // in code laid out ahead of the function's start.
-                long offset = (int) relative(theirs.get("first_use").getAsString());
-                if (offset == 0) theirs.add("first_use", com.google.gson.JsonNull.INSTANCE);
-                else theirs.addProperty("first_use", hex(function.getEntryPoint().add(offset)));
-                placed.add(theirs);
-            }
-            if (placed.isEmpty()) continue;
-            JsonObject decisions = new JsonObject();
-            decisions.add("locals", placed);
-            document.add(hex(function.getEntryPoint()), decisions);
-            if (entry.has("version")) versions.add(hex(function.getEntryPoint()), entry.get("version"));
-        }
-        JsonObject request = new JsonObject();
-        request.add("functions", document);
-        request.addProperty("placement", true);
-        JsonObject answer = localsDrift(request, false);
-        for (JsonElement element : answer.getAsJsonArray("functions")) {
-            JsonObject report = element.getAsJsonObject();
-            String at = report.get("entry").getAsString();
-            if (versions.has(at)) report.add("entry_version", versions.get(at));
-        }
-        answer.addProperty("linked", linked);
-        answer.addProperty("compared", document.size());
-        return answer;
-    }
-
-    private JsonObject localsDrift(JsonObject body, boolean apply) throws Exception {
-        if (!body.has("functions") || !body.get("functions").isJsonObject()) {
-            throw new Failure(400, "functions is the review document's functions");
-        }
-        JsonObject recorded = body.getAsJsonObject("functions");
-        // `placement`: the registry's entries against their linked functions
-        // (`entryLocalsPlacement`). A linked function keeps its module's names,
-        // so a name says nothing there: what is compared is whether the entry's
-        // storage is still the storage of the local at its first use.
-        boolean placement = body.has("placement") && body.get("placement").getAsBoolean();
-        if (placement && apply) throw new Failure(400, "a placement is read, never applied");
-        java.util.Set<String> only = new java.util.HashSet<>();
-        if (body.has("only") && body.get("only").isJsonArray()) {
-            for (JsonElement entry : body.getAsJsonArray("only")) {
-                only.add(hex(address(entry.getAsString())));
-            }
-        }
-        JsonArray functions = new JsonArray();
-        java.util.Map<String, Integer> totals = new java.util.TreeMap<>();
-        int intactFunctions = 0;
-        for (String entry : recorded.keySet()) {
-            JsonObject decisions = recorded.getAsJsonObject(entry);
-            if (!decisions.has("locals")) continue;
-            Address at = address(entry);
-            if (!only.isEmpty() && !only.contains(hex(at))) continue;
-            JsonObject report = new JsonObject();
-            report.addProperty("entry", hex(at));
-            Function function = program.getFunctionManager().getFunctionAt(at);
-            java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
-            if (function == null) {
-                report.addProperty("gone", true);
-                counts.merge("lost", decisions.getAsJsonArray("locals").size(), Integer::sum);
-                report.add("counts", counted(counts));
-                counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
-                functions.add(report);
-                continue;
-            }
-            report.addProperty("name", function.getName());
-            // A function linked to a registry entry reads as the entry's text:
-            // a rename here would set it apart from the entry, so its drift
-            // is reported and never applied.
-            JsonObject mark = libraryMark(function);
-            if (mark != null) {
-                JsonObject link = new JsonObject();
-                if (mark.has("id")) link.add("id", mark.get("id"));
-                if (mark.has("version")) link.add("version", mark.get("version"));
-                report.add("library_link", link);
-            }
-            java.util.List<LiveLocal> live = liveLocals(function);
-            if (live == null) {
-                report.addProperty("decompile_error", true);
-                counts.merge("lost", decisions.getAsJsonArray("locals").size(), Integer::sum);
-                report.add("counts", counted(counts));
-                counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
-                functions.add(report);
-                continue;
-            }
-            java.util.Set<String> recordedNames = new java.util.HashSet<>();
-            for (JsonElement element : decisions.getAsJsonArray("locals")) {
-                recordedNames.add(element.getAsJsonObject().get("name").getAsString());
-            }
-            if (decisions.has("params")) {
-                for (JsonElement element : decisions.getAsJsonArray("params")) {
-                    recordedNames.add(element.getAsJsonObject().get("name").getAsString());
-                }
-            }
-            JsonArray items = new JsonArray();
-            java.util.List<JsonObject> moves = new java.util.ArrayList<>();
-            // Which recorded locals came to one local now: a frame laid out
-            // again can merge two slots, and one name cannot go to both.
-            java.util.Map<LiveLocal, java.util.List<JsonObject>> claims = new java.util.IdentityHashMap<>();
-            for (JsonElement element : decisions.getAsJsonArray("locals")) {
-                JsonObject local = element.getAsJsonObject();
-                String name = local.get("name").getAsString();
-                String storage = local.get("storage").getAsString();
-                String firstUse = local.has("first_use") && !local.get("first_use").isJsonNull()
-                    ? local.get("first_use").getAsString() : null;
-                String typeText = local.has("type") ? local.get("type").getAsString() : null;
-                JsonObject item = new JsonObject();
-                item.addProperty("name", name);
-                item.addProperty("storage", storage);
-                item.addProperty("first_use", firstUse);
-                item.addProperty("type", typeText);
-                String status;
-                LiveLocal target = null;
-                if (firstUse == null) {
-                    // A stack variable with no first use is the slot itself.
-                    status = "lost";
-                    for (LiveLocal candidate : live) {
-                        if (candidate.storage().equals(storage)
-                            && (placement || (candidate.name().equals(name) && candidate.named()))) {
-                            status = "intact";
-                        }
-                    }
-                    if (!status.equals("intact")) item.addProperty("why", "no first use recorded: matched by storage only");
-                } else {
-                    String[] why = {null};
-                    target = localFor(live, storage, firstUse, recordedType(typeText), why);
-                    if (target == null) {
-                        status = why[0];
-                        if ("ambiguous".equals(status)) {
-                            // What starts there now, for a reader to tell them apart.
-                            JsonArray there = new JsonArray();
-                            for (LiveLocal candidate : live) {
-                                if (!firstUse.equalsIgnoreCase(candidate.firstUse())) continue;
-                                JsonObject one = new JsonObject();
-                                one.addProperty("name", candidate.name());
-                                one.addProperty("storage", candidate.storage());
-                                one.addProperty("type", candidate.type() == null ? null : candidate.type().getDisplayName());
-                                there.add(one);
-                            }
-                            item.add("candidates", there);
-                        }
-                    } else if (placement) {
-                        status = target.storage().equals(storage) ? "intact" : "moved";
-                    } else if (target.named() && target.name().equals(name)) {
-                        status = "intact";
-                    } else if (target.named() && !recordedNames.contains(target.name())) {
-                        status = "conflict";
-                    } else {
-                        status = "moved";
-                    }
-                }
-                if (target != null && !status.equals("intact")) {
-                    JsonObject now = new JsonObject();
-                    now.addProperty("name", target.name());
-                    now.addProperty("storage", target.storage());
-                    now.addProperty("named", target.named());
-                    now.addProperty("type", target.type() == null ? null : target.type().getDisplayName());
-                    item.add("now", now);
-                }
-                // Where the name sits now, when it sits somewhere else.
-                for (LiveLocal carrier : live) {
-                    if (carrier.name().equals(name) && carrier != target) {
-                        item.addProperty("name_now_on", carrier.storage()
-                            + (carrier.firstUse() == null ? "" : "@" + carrier.firstUse()));
-                        break;
-                    }
-                }
-                item.addProperty("status", status);
-                if (target != null) claims.computeIfAbsent(target, key -> new java.util.ArrayList<>()).add(item);
-                items.add(item);
-            }
-            for (java.util.List<JsonObject> claim : claims.values()) {
-                if (claim.size() < 2) continue;
-                boolean held = claim.stream().anyMatch(item -> item.get("status").getAsString().equals("intact"));
-                for (JsonObject item : claim) {
-                    if (!item.get("status").getAsString().equals("moved")) continue;
-                    // `merged`: another recorded name holds that local; `ambiguous`: several want it.
-                    item.addProperty("status", held ? "merged" : "ambiguous");
-                }
-            }
-            for (JsonElement element : items) {
-                JsonObject item = element.getAsJsonObject();
-                String status = item.get("status").getAsString();
-                if (mark != null && !placement && !status.equals("intact")) {
-                    item.addProperty("drift", status);
-                    item.addProperty("status", "library_link");
-                } else if (status.equals("moved")) {
-                    moves.add(item);
-                }
-            }
-            if (apply && !moves.isEmpty()) {
-                int cleared = applyMoves(function, moves);
-                if (cleared > 0) report.addProperty("cleared", cleared);
-            }
-            for (JsonElement element : items) {
-                JsonObject item = element.getAsJsonObject();
-                String status = item.get("status").getAsString();
-                if (apply && status.equals("moved")) status = item.has("restored") ? "restored" : "refused";
-                counts.merge(status, 1, Integer::sum);
-                if (item.has("type_refused")) counts.merge("type_refused", 1, Integer::sum);
-            }
-            if (apply && report.has("cleared")) counts.merge("cleared", report.get("cleared").getAsInt(), Integer::sum);
-            int notIntact = items.size() - counts.getOrDefault("intact", 0);
-            if (notIntact == 0) {
-                // Not listed, but counted: a function that reads intact now
-                // keeps its locals in `totals`, so a total does not shrink
-                // when names go back.
-                intactFunctions++;
-                counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
-                continue;
-            }
-            JsonArray shown = new JsonArray();
-            for (JsonElement element : items) {
-                if (!element.getAsJsonObject().get("status").getAsString().equals("intact")) shown.add(element);
-            }
-            report.add("locals", shown);
-            report.add("counts", counted(counts));
-            counts.forEach((k, v) -> totals.merge(k, v, Integer::sum));
-            functions.add(report);
-        }
-        JsonObject answer = identity();
-        answer.add("functions", functions);
-        answer.add("totals", counted(totals));
-        answer.addProperty("intact_functions", intactFunctions);
-        answer.addProperty("applied", apply);
-        return answer;
-    }
-
-    private static JsonObject counted(java.util.Map<String, Integer> counts) {
-        JsonObject object = new JsonObject();
-        counts.forEach(object::addProperty);
-        return object;
-    }
-
-    /**
-     * The moved names set on their targets, as `localsDrift` says; each item
+     * The moved names set on their targets (a registry entry's locals placed
+     * by first use); each item
      * says what became of it. Answers how many put-aside slots were left unnamed.
      */
     private int applyMoves(Function function, java.util.List<JsonObject> moves) throws Exception {

@@ -196,10 +196,8 @@ open:
   lays a frame out again — the convention above, a callee's prototype, a
   type's size — leaves the name on the old slot, or on none, while the value
   moved; register and `HASH` names drop too. The first use, an instruction
-  address, does not move: `ghidra_locals_drift` compares a review document's
-  names with the program by it, and with `apply`, under the lease, puts them
-  back. A name given after that document is a conflict and is never
-  overwritten. Nothing is published by it.
+  address, does not move: after such a change, list the locals again and
+  find each name's local by its first use.
 - **A type the program does not hold yet** is not found by `DataTypeParser`
   even when the EDK2 archive has it; resolve it from the archive first.
 - **An anonymous `typedef enum { … } NAME;` is named by where it starts.**

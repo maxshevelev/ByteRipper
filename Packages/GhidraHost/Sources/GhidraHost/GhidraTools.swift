@@ -19,7 +19,6 @@ public enum GhidraTools {
         tools += writeTools(backend)
         tools += libraryTools(backend)
         tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
-        tools.append(localsDriftTool(backend))
         tools.append(reportIssueTool(backend))
         tools.append(issuesTool(backend))
         tools += ticketTools(backend)
@@ -99,7 +98,7 @@ public enum GhidraTools {
         or `ghidra_create`; before the first write take the module into work with `ghidra_take` — one \
         holder at a time writes and publishes a module, and reading needs nothing; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
-        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_equates_on_memory`, `ghidra_type_definition`, \
+        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`. \
@@ -707,12 +706,6 @@ public enum GhidraTools {
                 guard query.count == 1 else { throw AgentToolError("Give `to`, `from` or `function`, one of them.") }
                 return try await answer { try await backend.readCall(module, "xrefs", query: query) }
             },
-            paged("ghidra_equates_on_memory", "equates-on-memory", "List equates on memory operands",
-                  "Equates that sit on a memory operand, usually the displacement of `[reg+N]`: `address`, "
-                  + "`name`, `operand`, `text` (the instruction), `function`. `value` in `ghidra_equate` once "
-                  + "chose these by mistake, so read each one; a name meant for the immediate is removed with "
-                  + "an empty `name` and `operand`, then set again. One set on purpose is listed too. "
-                  + "`count` is how many the module has. Paged."),
             paged("ghidra_data", "data", "List a module's defined data",
                   "The defined data — named globals, GUIDs, tables — with address, name and type. Paged."),
             paged("ghidra_strings", "strings", "List a module's strings",
@@ -1526,54 +1519,6 @@ public enum GhidraTools {
             let module = try module(call.arguments)
             let discard = try call.arguments.bool("discard", default: false)
             return try await answer { try await backend.releaseModule(module, by: "agent", discard: discard) }
-        }
-    }
-
-    static func localsDriftTool(_ backend: GhidraBackend) -> AgentTool {
-        AgentTool(
-            name: "ghidra_locals_drift",
-            title: "Find local names a re-laid frame left behind",
-            description: """
-                Compares the named locals of the module's review document from before revision 3 of the \
-                types (EFIAPI as __cdecl on IA32, issue 4a9a4484) with the program now. A local's name is \
-                bound to its storage. Re-laying a frame — a calling convention, a callee's prototype, a \
-                type's size — leaves the name on the old slot or on none, but its first use, an \
-                instruction address, stays. `baseline` names the reference: `rev`, `recipe` and \
-                `review`; `recipe` picks another. Each function lists the locals that are not intact, by \
-                `status`: `moved` (another local starts at that first use now: `now`), `conflict` (that \
-                local holds a name the document does not have, one given after it: never overwritten), \
-                `lost` (no local starts there), `merged` (another recorded name holds that local: two slots became one) or `ambiguous` (several locals start there, or several names want one). In a function linked to a registry entry (`library_link` on the function) every such local is `library_link`, with what it would be in `drift`: a rename there would set it apart from its entry, so an apply never renames there. `name_now_on` says where \
-                the name sits now. `counts` per function and `totals` count each status; a function that reads \
-                intact is not listed, but its locals count in `totals`, and `intact_functions` says how many. With \
-                `apply: true`, on a module you have in work, every moved name goes to its local with its \
-                recorded type, and each write is read back: `restored`, `refused` (with why), \
-                `type_refused` (the name set without the type) and `cleared` (a slot that held a name \
-                wrongly is unnamed again). Nothing is published: read the instructions, then publish. \
-                `functions` limits it to these entries. With `registry: true`, the reference is the library \
-                registry instead: each entry's locals (storage, and first use as an offset from the entry) \
-                placed at every function of this module linked to it, by placement, not by name — a linked \
-                function keeps its module's names. Per local: `intact` (the entry's storage starts at that \
-                first use), `moved` (another storage does: `now` — the entry names a slot the program no \
-                longer uses), `lost`, `merged` or `ambiguous`; a stack local, first use 0, is its frame slot \
-                and is matched by storage. Each function names its `library_link` and `entry_version`; \
-                `linked` counts the linked functions, `compared` those whose entry records locals. Read only: \
-                an entry is put right by a registry proposal.
-                """,
-            inputSchema: AgentSchema.object([
-                "module": moduleProperty,
-                "apply": AgentSchema.boolean("Put the moved names on their locals; the module must be in work."),
-                "recipe": AgentSchema.string("The recipe whose last publish is the reference; by default the module's before revision 3."),
-                "functions": AgentSchema.strings("Only these function entries."),
-                "registry": AgentSchema.boolean("Compare the registry entries' locals with this module's linked functions instead; read only.")
-            ], required: ["module"]),
-            annotations: .edit
-        ) { call in
-            let module = try module(call.arguments)
-            let request = GhidraHost.LocalsDriftRequest(apply: try call.arguments.bool("apply", default: false),
-                                                        recipe: try call.arguments.optionalString("recipe"),
-                                                        functions: try call.arguments.strings("functions"),
-                                                        registry: try call.arguments.bool("registry", default: false))
-            return try await answer { try await backend.localsDrift(module, request) }
         }
     }
 

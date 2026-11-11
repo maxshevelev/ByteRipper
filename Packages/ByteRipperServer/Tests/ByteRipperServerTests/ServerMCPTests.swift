@@ -94,7 +94,7 @@ final class ServerMCPTests: XCTestCase {
     /// Every owner call a Ghidra tool makes is a route of the bridge: the app
     /// relays a tool to the server by its call name, and a name the server's
     /// lists lack is refused there — `ghidra_flow_override`,
-    /// `ghidra_function_extend` and `ghidra_equates_on_memory` each were, for
+    /// `ghidra_function_extend` and a since removed list tool each were, for
     /// every agent connected through the app. The calls are read from the
     /// tools' source, where each is written once.
     func testEveryCallAGhidraToolMakesIsARouteOfTheBridge() throws {

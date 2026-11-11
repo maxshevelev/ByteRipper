@@ -13,7 +13,7 @@ enum GhidraRoutes {
 
     /// The owner's read calls a client may make (`Design/GHIDRA_SHARED_PLAN.md` §7.1).
     static let reads: [String] = ["hello", "functions", "gaps", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
-                                   "types", "description", "equates-on-memory"]
+                                   "types", "description"]
     /// The owner's write calls, each under the host's lease.
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "delete/function", "set/flow",
                                       "merge/functions", "clear/locals", "rename/variable",
@@ -276,20 +276,6 @@ enum GhidraRoutes {
             let data = try await answer {
                 try await host.write(module, "/v1/\(call)", body: request.body, holder: holder(request))
             }
-            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
-        }
-
-        // The named locals of the review document before revision 3 of the
-        // types against the program now: a read without `apply`; with it a
-        // write under the holder's lease, which publishes nothing.
-        router.add("POST", "\(prefix)/modules/:module/locals-drift", access: .rights([.ghidraUse])) { request in
-            let module = try digest(request.parameters["module"])
-            let body = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
-            let drift = GhidraHost.LocalsDriftRequest(apply: body["apply"] as? Bool ?? false,
-                                                      recipe: body["recipe"] as? String,
-                                                      functions: body["functions"] as? [String] ?? [],
-                                                      registry: body["registry"] as? Bool ?? false)
-            let data = try await answer { try await host.driftOfLocals(module, drift, holder: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 

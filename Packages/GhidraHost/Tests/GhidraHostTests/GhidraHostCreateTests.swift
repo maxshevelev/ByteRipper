@@ -1134,16 +1134,11 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         } catch {
             XCTAssertTrue("\(error)".contains("memory operand"), "\(error)")
         }
-        // Named on purpose by its operand, it is listed as sitting on memory; an immediate is not.
+        // Named on purpose by its operand, it takes; an empty name removes it again.
         let memoryOperand = only.text.prefix { $0 != "[" }.filter { $0 == "," }.count
-        _ = try await post(["address": only.address, "operand": memoryOperand, "name": "DISP_NAME"])
-        func listed() async throws -> [[String: Any]] {
-            try json(await host.read(module, "/v1/equates-on-memory"))["equates"] as? [[String: Any]] ?? []
-        }
-        let memory = try await listed()
-        XCTAssertEqual(memory.first?["address"] as? String, only.address, "\(only.text): \(memory)")
-        XCTAssertEqual(memory.first?["name"] as? String, "DISP_NAME")
-        _ = try await post(["address": only.address, "operand": memory.first?["operand"] as? Int ?? 0, "name": ""])
+        let named = try await post(["address": only.address, "operand": memoryOperand, "name": "DISP_NAME"])
+        XCTAssertEqual(named["operand"] as? Int, memoryOperand, "\(only.text): \(named)")
+        _ = try await post(["address": only.address, "operand": memoryOperand, "name": ""])
         let swept = try await post(["functions": [only.entry], "value": only.value, "name": "DISP_NAME", "dry_run": true])
         for item in swept["applied"] as? [[String: Any]] ?? [] {
             XCTAssertNotEqual(item["address"] as? String, only.address, "\(swept)")
@@ -1152,8 +1147,6 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             let answer = try await post(["address": both.address, "value": both.value, "name": "IMM_NAME"])
             XCTAssertEqual(answer["operand"] as? Int, both.text.filter { $0 == "," }.count,
                            "the last operand is the immediate: \(both.text): \(answer)")
-            let afterImmediate = try await listed()
-            XCTAssertFalse(afterImmediate.contains { $0["name"] as? String == "IMM_NAME" }, "\(afterImmediate)")
         } else {
             print("no instruction here holds one value both ways: \(only.text)")
         }
