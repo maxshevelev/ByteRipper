@@ -2665,6 +2665,16 @@ final class CodePaneViewTests: XCTestCase {
         press(NSHomeFunctionKey, 115)
         XCTAssertEqual(line(text.currentLine), lines[0], "Home: the first line")
 
+        // Half see-through, so a diff row's tint shows under it; a selected
+        // block hides it.
+        XCTAssertEqual(text.currentLineFill.alphaComponent, CodeTextView.currentLineAlpha)
+        XCTAssertLessThan(CodeTextView.currentLineAlpha, 1)
+        XCTAssertTrue(text.showsCurrentLine)
+        text.setSelectedRange(NSRange(location: 0, length: 6))
+        XCTAssertFalse(text.showsCurrentLine, "a selected block hides the line")
+        text.setSelectedRange(NSRange(location: 0, length: 0))
+        XCTAssertTrue(text.showsCurrentLine)
+
         // The listing: its selected instruction in the same colour, the keys too.
         view.restore(function: 0, instruction: 0, showsC: false)
         view.layoutSubtreeIfNeeded()

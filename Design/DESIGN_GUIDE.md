@@ -138,8 +138,10 @@ a cut's offset and description.
 A view that is read and not edited has no caret. The line the reader is on
 is marked instead with `CodeColors.currentLine`, Xcode's current-line colour,
 across the whole width. That line is the one last clicked, or the selected
-row of a list of lines. It is drawn under everything else on the line, and the
-text keeps its own colours on it. **↑ ↓** move it a line, **Page Up** and
+row of a list of lines. The band is half see-through (`currentLineAlpha`), drawn
+over a diff's row tints and under a highlighted name, so a red or green row
+stays red or green. The text keeps its own colours on it. While a block of text
+is selected, the band is hidden. **↑ ↓** move it a line, **Page Up** and
 **Page Down** a screen, **Home** and **End** to the first and the last line.
 The C (`CodeTextView`) and the ASM listing (`CodeListingTableView`,
 `CodeListingRowView`) follow this rule.

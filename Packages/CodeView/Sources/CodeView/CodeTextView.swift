@@ -257,20 +257,6 @@ final class CodeTextView: NSTextView {
         super.drawBackground(in: rect)
         guard let layoutManager, let textContainer else { return }
         let origin = textContainerOrigin
-        // The current line, under everything: the whole width of the view.
-        if let currentLine, NSMaxRange(currentLine) <= (string as NSString).length {
-            let glyphs = layoutManager.glyphRange(forCharacterRange: currentLine, actualCharacterRange: nil)
-            if glyphs.length > 0 {
-                let first = layoutManager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
-                let last = layoutManager.lineFragmentRect(forGlyphAt: NSMaxRange(glyphs) - 1, effectiveRange: nil)
-                let band = NSRect(x: bounds.minX, y: first.minY + origin.y,
-                                  width: bounds.width, height: last.maxY - first.minY)
-                if band.intersects(rect) {
-                    CodeColors.currentLine.setFill()
-                    band.fill()
-                }
-            }
-        }
         func boxes(_ range: NSRange, inset: CGFloat, radius: CGFloat, fill: NSColor) {
             guard range.location + range.length <= (string as NSString).length else { return }
             let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
@@ -284,11 +270,46 @@ final class CodeTextView: NSTextView {
             }
         }
         for tint in rowTints { boxes(tint.range, inset: 0, radius: 0, fill: tint.color) }
+        drawCurrentLine(in: rect, layoutManager: layoutManager, origin: origin)
         guard !highlighted.isEmpty else { return }
         let fill = highlightFill
         for range in highlighted {
             boxes(range, inset: highlightInset, radius: CodeColors.symbolHighlightRadius, fill: fill)
         }
+    }
+
+    /// The current line, over the diff's row tints and under a highlighted
+    /// name: half see-through, so a red or green row stays red or green with
+    /// the band on it. A selected block hides it — the selection is then
+    /// where the reader is.
+    private func drawCurrentLine(in rect: NSRect, layoutManager: NSLayoutManager, origin: NSPoint) {
+        guard let currentLine, showsCurrentLine, NSMaxRange(currentLine) <= (string as NSString).length else { return }
+        let glyphs = layoutManager.glyphRange(forCharacterRange: currentLine, actualCharacterRange: nil)
+        guard glyphs.length > 0 else { return }
+        let first = layoutManager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+        let last = layoutManager.lineFragmentRect(forGlyphAt: NSMaxRange(glyphs) - 1, effectiveRange: nil)
+        let band = NSRect(x: bounds.minX, y: first.minY + origin.y, width: bounds.width, height: last.maxY - first.minY)
+        guard band.intersects(rect) else { return }
+        currentLineFill.setFill()
+        band.fill(using: .sourceOver)
+    }
+
+    /// Whether the band is drawn: not while a block of the text is selected.
+    var showsCurrentLine: Bool { currentLine != nil && selectedRange().length == 0 }
+
+    /// The band's fill: reads as `CodeColors.currentLine` over plain code, and
+    /// adds its colour to a diff row's tint instead of covering it.
+    static let currentLineAlpha: CGFloat = 0.5
+    var currentLineFill: NSColor {
+        CodeColors.laidOver(NSColor.textBackgroundColor, alpha: Self.currentLineAlpha, toReadAs: CodeColors.currentLine)
+            .withAlphaComponent(Self.currentLineAlpha)
+    }
+
+    /// A selection that starts or ends shows or hides the band.
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        let had = selectedRange().length > 0
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        if had != (selectedRange().length > 0) { needsDisplay = true }
     }
 
     /// How much of the highlight's colour a box lays down — one value over
