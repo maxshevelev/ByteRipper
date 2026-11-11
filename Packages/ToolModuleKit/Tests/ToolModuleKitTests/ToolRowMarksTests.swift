@@ -249,6 +249,23 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisInside(.partial).toolTip)
     }
 
+    /// A module's own file wears the same circle, open or shut, and its words
+    /// say the module is this file, not something further in.
+    func testTheBadgeOnAModuleFileSaysItIsTheModule() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"),
+                                           warning: true, badges: true)
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisModule(.complete)]))
+        let code = try XCTUnwrap(
+            cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
+        XCTAssertFalse(code.isHidden)
+        XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisModule(.complete).toolTip)
+        for readiness in [ToolRowMarks.CodeReadiness.mechanical, .partial, .complete] {
+            XCTAssertNotEqual(ToolRowMarks.Role.codeAnalysisModule(readiness).toolTip,
+                              ToolRowMarks.Role.codeAnalysisInside(readiness).toolTip)
+            XCTAssertEqual(ToolRowMarks.Role.codeAnalysisModule(readiness).mark, .codeAnalysis)
+        }
+    }
+
     /// The FIT panel's existing call still shows the red octagon, even on a
     /// cell last dressed with a caution.
     func testTheOldWarningCallStillShowsAnError() throws {

@@ -139,74 +139,118 @@ final class UEFITreeMarksTests: XCTestCase {
         XCTAssertTrue(UEFITreeMarks.marks(for: node, in: image, in: .english).roles.isEmpty)
     }
 
-    /// A shut PEIM wears the badge of the image in it; open, it hands it on.
-    func testAShutFileWearsTheBadgeOfTheModuleInIt() {
-        let imageID = NodeID([0, 3, 1])
-        let file = UEFINode(id: NodeID([0, 3]), kind: .file, name: "CpuPei",
-                            header: 0..<0x18, body: 0x18..<0x100)
-        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [imageID: .complete]
+    /// A tree of one volume `[0]` holding a PEIM file `[0, 0]` with its
+    /// image `[0, 0, 1]`, and a file `[0, 1]` holding a compressed section
+    /// `[0, 1, 0]` with a volume whose file `[0, 1, 0, 0, 0]` holds the image
+    /// `[0, 1, 0, 0, 0, 0]`.
+    private func tree() -> UEFIImage {
+        func section(_ path: [Int], _ subtype: UInt8, _ name: String, children: [UEFINode] = []) -> UEFINode {
+            UEFINode(id: NodeID(path), kind: .section, subtype: subtype, name: name,
+                     header: 0..<4, body: 4..<0x100, children: children)
+        }
+        func file(_ path: [Int], _ name: String, children: [UEFINode]) -> UEFINode {
+            UEFINode(id: NodeID(path), kind: .file, name: name, header: 0..<0x18, body: 0x18..<0x100,
+                     children: children)
+        }
+        let peim = file([0, 0], "CpuPei", children: [section([0, 0, 0], 0x1B, "PEI dependency"),
+                                                     section([0, 0, 1], 0x10, "PE32 image")])
+        let inner = file([0, 1, 0, 0, 0], "Dxe", children: [section([0, 1, 0, 0, 0, 0], 0x10, "PE32 image")])
+        let innerVolume = UEFINode(id: NodeID([0, 1, 0, 0]), kind: .volume, name: "FV",
+                                   header: 0..<0x48, body: 0x48..<0x100, children: [inner])
+        let container = file([0, 1], "Volume image",
+                             children: [section([0, 1, 0], 0x01, "Compressed section", children: [innerVolume])])
+        let volume = UEFINode(id: NodeID([0]), kind: .volume, name: "FV", header: 0..<0x48, body: 0x48..<0x100,
+                              children: [peim, container])
+        return UEFIImage(size: 0x100, roots: [volume])
+    }
 
-        XCTAssertEqual(UEFITreeMarks.codeInside(file, isOpen: false, analyzed: analyzed), .complete)
-        XCTAssertNil(UEFITreeMarks.codeInside(file, isOpen: true, analyzed: analyzed))
-        XCTAssertNil(UEFITreeMarks.codeInside(file, isOpen: false, analyzed: [NodeID([0, 4, 1]): .complete]),
+    /// A PEIM's file is the module: it wears the module's badge open and shut,
+    /// and the image in it keeps its own.
+    func testAModuleFileKeepsItsBadgeOpenOrShut() throws {
+        let image = tree()
+        let file = try XCTUnwrap(image.node(NodeID([0, 0])))
+        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [NodeID([0, 0, 1]): .complete]
+
+        XCTAssertEqual(UEFITreeMarks.moduleFile(of: NodeID([0, 0, 1]), in: image), file.id)
+        XCTAssertEqual(UEFITreeMarks.codeModule(file, analyzed: analyzed, in: image), .complete)
+        XCTAssertNil(UEFITreeMarks.codeInside(file, isOpen: false, analyzed: analyzed, in: image),
+                     "its own module is not inside it")
+        XCTAssertNil(UEFITreeMarks.codeModule(file, analyzed: [NodeID([0, 1, 0, 0, 0, 0]): .complete], in: image),
                      "an analysis in another file")
 
-        let image = UEFIImage(size: 0x100, roots: [file])
-        let shut = UEFITreeMarks.marks(for: file, in: image, codeInside: .complete, in: .english)
-        XCTAssertEqual(shut.roles, [.codeAnalysisInside(.complete)])
+        let marks = UEFITreeMarks.marks(for: file, in: image, codeModule: .complete, in: .english)
+        XCTAssertEqual(marks.roles, [.codeAnalysisModule(.complete)])
     }
 
-    /// A module's origin stands on its own row, and on a shut file whose
-    /// analysed modules all share it; a row without a code badge shows none.
-    func testTheOriginGoesWhereTheCodeBadgeGoes() {
+    /// A section inside a module's file wears nothing: the file says it.
+    func testASectionInAModuleFileWearsNothing() throws {
+        let image = tree()
+        let dependency = try XCTUnwrap(image.node(NodeID([0, 0, 0])))
+        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [NodeID([0, 0, 1]): .partial]
+        XCTAssertNil(UEFITreeMarks.codeInside(dependency, isOpen: false, analyzed: analyzed, in: image))
+        XCTAssertNil(UEFITreeMarks.codeModule(dependency, analyzed: analyzed, in: image))
+    }
+
+    /// A file or a compressed section that holds modules' files further in
+    /// wears the inside badge while shut, and hands it on when opened.
+    func testAShutContainerWearsTheBadgeOfTheModulesInIt() throws {
+        let image = tree()
+        let container = try XCTUnwrap(image.node(NodeID([0, 1])))
+        let compressed = try XCTUnwrap(image.node(NodeID([0, 1, 0])))
+        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [NodeID([0, 1, 0, 0, 0, 0]): .partial]
+
+        XCTAssertEqual(UEFITreeMarks.codeInside(container, isOpen: false, analyzed: analyzed, in: image), .partial)
+        XCTAssertNil(UEFITreeMarks.codeInside(container, isOpen: true, analyzed: analyzed, in: image))
+        XCTAssertNil(UEFITreeMarks.codeModule(container, analyzed: analyzed, in: image),
+                     "the module's file is deeper")
+        XCTAssertEqual(UEFITreeMarks.codeInside(compressed, isOpen: false, analyzed: analyzed, in: image), .partial)
+        XCTAssertNil(UEFITreeMarks.codeInside(compressed, isOpen: true, analyzed: analyzed, in: image))
+
+        let marks = UEFITreeMarks.marks(for: container, in: image, codeInside: .partial, in: .english)
+        XCTAssertEqual(marks.roles, [.codeAnalysisInside(.partial)])
+    }
+
+    /// Two modules' images in one file: the file wears the less reviewed one.
+    func testAModuleFileShowsItsLeastReviewedImage() throws {
+        let image = tree()
+        let file = try XCTUnwrap(image.node(NodeID([0, 0])))
+        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [NodeID([0, 0, 1]): .complete,
+                                                              NodeID([0, 0, 0]): .mechanical]
+        XCTAssertEqual(UEFITreeMarks.codeModule(file, analyzed: analyzed, in: image), .mechanical)
+    }
+
+    /// The origin stands only on the module's own file, open or shut; the
+    /// image and the containers above the file show none.
+    func testTheOriginStandsOnlyOnTheModuleFile() throws {
+        let image = tree()
+        let file = try XCTUnwrap(image.node(NodeID([0, 0])))
+        let module = try XCTUnwrap(image.node(NodeID([0, 0, 1])))
+        let container = try XCTUnwrap(image.node(NodeID([0, 1])))
         let edk2 = ModuleOrigin(category: .edk2, confidence: .established)
-        let amd = ModuleOrigin(category: .amd, confidence: .inferred)
-        let file = UEFINode(id: NodeID([0, 3]), kind: .file, name: "Pei",
-                            header: 0..<0x18, body: 0x18..<0x100)
-        let module = UEFINode(id: NodeID([0, 3, 1]), kind: .section, subtype: 0x10, name: "PE32 image",
-                              header: 0..<4, body: 4..<0x100)
-        let one: Set<NodeID> = [module.id]
-        XCTAssertEqual(UEFITreeMarks.origin(of: module, isOpen: false, origins: [module.id: edk2], analyzed: one), edk2)
-        XCTAssertEqual(UEFITreeMarks.origin(of: file, isOpen: false, origins: [module.id: edk2], analyzed: one), edk2)
-        XCTAssertNil(UEFITreeMarks.origin(of: file, isOpen: true, origins: [module.id: edk2], analyzed: one),
-                     "open, the module's row says it")
-        let two: Set<NodeID> = [module.id, NodeID([0, 3, 2])]
-        XCTAssertNil(UEFITreeMarks.origin(of: file, isOpen: false,
-                                          origins: [module.id: edk2, NodeID([0, 3, 2]): amd], analyzed: two),
-                     "two origins under one shut row")
-        XCTAssertNil(UEFITreeMarks.origin(of: file, isOpen: false, origins: [module.id: edk2], analyzed: two),
-                     "one module below has none")
+        let origins = [module.id: edk2, NodeID([0, 1, 0, 0, 0, 0]): edk2]
+        let analyzed = Set(origins.keys)
 
-        let image = UEFIImage(size: 0x100, roots: [file])
-        XCTAssertEqual(UEFITreeMarks.marks(for: module, in: image, code: .complete, origin: amd, in: .english).origin, amd)
-        XCTAssertNil(UEFITreeMarks.marks(for: module, in: image, origin: amd, in: .english).origin,
+        XCTAssertEqual(UEFITreeMarks.origin(of: file, origins: origins, analyzed: analyzed, in: image), edk2)
+        XCTAssertNil(UEFITreeMarks.origin(of: module, origins: origins, analyzed: analyzed, in: image),
+                     "the image keeps only its circle")
+        XCTAssertNil(UEFITreeMarks.origin(of: container, origins: origins, analyzed: analyzed, in: image),
+                     "a container is not the module")
+
+        XCTAssertEqual(UEFITreeMarks.marks(for: file, in: image, codeModule: .complete, origin: edk2,
+                                           in: .english).origin, edk2)
+        XCTAssertNil(UEFITreeMarks.marks(for: module, in: image, code: .complete, origin: edk2, in: .english).origin,
+                     "no origin on the image row")
+        XCTAssertNil(UEFITreeMarks.marks(for: file, in: image, origin: edk2, in: .english).origin,
                      "no analysis, no origin")
-    }
-
-    /// Two modules in one shut file: the badge is the less reviewed one's.
-    func testAShutFileShowsItsLeastReviewedModule() {
-        let file = UEFINode(id: NodeID([0, 3]), kind: .file, name: "Two",
-                            header: 0..<0x18, body: 0x18..<0x100)
-        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [NodeID([0, 3, 1]): .complete,
-                                                              NodeID([0, 3, 2]): .mechanical]
-        XCTAssertEqual(UEFITreeMarks.codeInside(file, isOpen: false, analyzed: analyzed), .mechanical)
-    }
-
-    /// A compressed section still shut inside an open file holds the badge
-    /// until it opens on the image.
-    func testAShutSectionInAFileHoldsTheBadgeToo() {
-        let compressed = UEFINode(id: NodeID([0, 3, 0]), kind: .section, subtype: 0x01,
-                                  name: "Compressed section", header: 0..<4, body: 4..<0x100)
-        let analyzed: [NodeID: ToolRowMarks.CodeReadiness] = [NodeID([0, 3, 0, 0, 2]): .partial]
-        XCTAssertEqual(UEFITreeMarks.codeInside(compressed, isOpen: false, analyzed: analyzed), .partial)
-        XCTAssertNil(UEFITreeMarks.codeInside(compressed, isOpen: true, analyzed: analyzed))
     }
 
     /// A shut volume would wear it for nearly every module: it does not.
     func testAVolumeWearsNoBadgeForWhatItHolds() {
         let volume = UEFINode(id: NodeID([0]), kind: .volume, name: "FV",
                               header: 0..<0x48, body: 0x48..<0x100)
-        XCTAssertNil(UEFITreeMarks.codeInside(volume, isOpen: false, analyzed: [NodeID([0, 3, 1]): .partial]))
+        let image = UEFIImage(size: 0x100, roots: [volume])
+        XCTAssertNil(UEFITreeMarks.codeInside(volume, isOpen: false, analyzed: [NodeID([0, 3, 1]): .partial],
+                                              in: image))
     }
 
     /// The analyzed image itself wears its own badge, not the inside one.
@@ -216,6 +260,6 @@ final class UEFITreeMarksTests: XCTestCase {
         let image = UEFIImage(size: 0x100, roots: [node])
         let marks = UEFITreeMarks.marks(for: node, in: image, code: .mechanical, in: .english)
         XCTAssertEqual(marks.roles, [.codeAnalysis(.mechanical)])
-        XCTAssertNil(UEFITreeMarks.codeInside(node, isOpen: false, analyzed: [node.id: .mechanical]))
+        XCTAssertNil(UEFITreeMarks.codeInside(node, isOpen: false, analyzed: [node.id: .mechanical], in: image))
     }
 }

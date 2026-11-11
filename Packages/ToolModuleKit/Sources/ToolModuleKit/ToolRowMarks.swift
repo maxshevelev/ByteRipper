@@ -78,6 +78,10 @@ public struct ToolRowMarks: Hashable, Sendable {
         /// analyzed. The badge moves down to the module as the rows open; it
         /// shows the least reviewed module below.
         case codeAnalysisInside(CodeReadiness)
+        /// The FFS file of a module with a stored code analysis: the file is
+        /// the module, so it wears the badge open or shut, beside the image
+        /// row that opens the code.
+        case codeAnalysisModule(CodeReadiness)
         /// Holds compressed data — `decoded` when this project opens it.
         case compressed(algorithm: String, decoded: Bool)
         /// Holds what other structures are checked against: protected ranges,

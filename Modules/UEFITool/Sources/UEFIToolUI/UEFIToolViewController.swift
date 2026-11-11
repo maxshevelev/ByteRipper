@@ -2750,9 +2750,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                                    isOpen: isOpen, reader: reader,
                                    code: codeAnalysis[node.id],
                                    codeInside: UEFITreeMarks.codeInside(node, isOpen: isOpen,
-                                                                        analyzed: codeAnalysis),
-                                   origin: UEFITreeMarks.origin(of: node, isOpen: isOpen, origins: codeOrigins,
-                                                                analyzed: Set(codeAnalysis.keys)),
+                                                                        analyzed: codeAnalysis, in: image),
+                                   codeModule: UEFITreeMarks.codeModule(node, analyzed: codeAnalysis, in: image),
+                                   origin: UEFITreeMarks.origin(of: node, origins: codeOrigins,
+                                                                analyzed: Set(codeAnalysis.keys), in: image),
                                    in: Localization.appLanguage)
     }
 

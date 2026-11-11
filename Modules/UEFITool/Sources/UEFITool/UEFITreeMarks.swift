@@ -31,9 +31,11 @@ public enum UEFITreeMarks {
     ///   - code: how far the review of this image node's stored code
     ///     analysis has got; nil when none is stored (`Design/CODE_PANEL_PLAN.md`).
     ///   - codeInside: the row is shut on images that have one: the least
-    ///     reviewed of them (`codeInside(_:isOpen:analyzed:)`).
-    ///   - origin: whose code the module is (`origin(of:isOpen:origins:analyzed:)`);
-    ///     drawn only on a row that wears a code badge.
+    ///     reviewed of them (`codeInside(_:isOpen:analyzed:in:)`).
+    ///   - codeModule: the row is the FFS file of analysed modules — the
+    ///     least reviewed of them (`codeModule(_:analyzed:in:)`), open or shut.
+    ///   - origin: whose code the module is (`origin(of:origins:analyzed:in:)`);
+    ///     drawn only on a module's file.
     public static func marks(
         for node: UEFINode,
         in image: UEFIImage,
@@ -42,6 +44,7 @@ public enum UEFITreeMarks {
         reader: ImageReader? = nil,
         code: ToolRowMarks.CodeReadiness? = nil,
         codeInside: ToolRowMarks.CodeReadiness? = nil,
+        codeModule: ToolRowMarks.CodeReadiness? = nil,
         origin: ModuleOrigin? = nil,
         in language: AppLanguage
     ) -> ToolRowMarks {
@@ -96,6 +99,10 @@ public enum UEFITreeMarks {
         // no other role badge, so this only matters if a future mark joins one.
         if let code {
             roles.insert(.codeAnalysis(code), at: 0)
+        } else if let codeModule {
+            // A module's file holding more modules further in, shut: the
+            // least reviewed of all of them.
+            roles.insert(.codeAnalysisModule(min(codeModule, codeInside ?? codeModule)), at: 0)
         } else if let codeInside {
             roles.insert(.codeAnalysisInside(codeInside), at: 0)
         }
@@ -106,36 +113,64 @@ public enum UEFITreeMarks {
             opensDecompressed: opens,
             problem: .worst(errors: errors, cautions: cautions),
             roles: roles,
-            origin: code != nil || codeInside != nil ? origin : nil
+            origin: codeModule != nil ? origin : nil
         )
     }
 
-    /// The origin a row shows: an image node's own, or — for a shut file or
-    /// section, as `codeInside` — the one every analysed module below shares.
-    /// Modules of different origins under one shut row show none there; the
-    /// rows below say each.
-    public static func origin(of node: UEFINode, isOpen: Bool,
-                              origins: [NodeID: ModuleOrigin], analyzed: Set<NodeID>) -> ModuleOrigin? {
-        if analyzed.contains(node.id) { return origins[node.id] }
-        guard !isOpen, node.kind == .file || node.kind == .section else { return nil }
-        let path = node.id.path
-        let below = analyzed.filter { $0.path.count > path.count && $0.path.starts(with: path) }
-        let found = Set(below.map { origins[$0] })
-        guard found.count == 1, let only = found.first else { return nil }
-        return only
+    /// The row that stands for an analysed image's module: its FFS file,
+    /// the nearest file above the image. Nil for an image no file holds.
+    public static func moduleFile(of image: NodeID, in tree: UEFIImage) -> NodeID? {
+        var path = image.path
+        while !path.isEmpty {
+            path.removeLast()
+            let id = NodeID(path)
+            if tree.node(id)?.kind == .file { return id }
+        }
+        return nil
     }
 
-    /// Whether a shut row stands for an analyzed image below it: a file, or a
-    /// section in one, so a list of shut files says which modules are
-    /// analyzed. A volume or a region does not wear it — every one of them
-    /// would. Open, the row hands the badge down to what it shows.
-    /// It says the least reviewed of them, so a shut file is not shown done
-    /// while a module in it is not.
+    /// The badge a module's own file wears — the nearest file above an
+    /// analysed image — open or shut: the file is the module, and opening it
+    /// to read its sections does not make it less so. The least reviewed of
+    /// its modules, should it hold more than one image.
+    public static func codeModule(_ node: UEFINode, analyzed: [NodeID: ToolRowMarks.CodeReadiness],
+                                  in tree: UEFIImage) -> ToolRowMarks.CodeReadiness? {
+        guard node.kind == .file else { return nil }
+        let path = node.id.path
+        return analyzed.filter { $0.key.path.count > path.count && $0.key.path.starts(with: path)
+            && moduleFile(of: $0.key, in: tree) == node.id }.values.min()
+    }
+
+    /// Whether a shut row stands for analysed modules further in than its own
+    /// file — a container of modules: a volume's file, a compressed section
+    /// holding a volume — so a list of shut rows says which hold them. A
+    /// section inside a module's file wears nothing: the file above it says.
+    /// It is the least reviewed of them, so a row is not shown done while a
+    /// module under it is not. Open, the row hands the badge to the modules'
+    /// files it shows. A volume or a region does not wear it — every one of
+    /// them would.
     public static func codeInside(_ node: UEFINode, isOpen: Bool,
-                                  analyzed: [NodeID: ToolRowMarks.CodeReadiness]) -> ToolRowMarks.CodeReadiness? {
+                                  analyzed: [NodeID: ToolRowMarks.CodeReadiness],
+                                  in tree: UEFIImage) -> ToolRowMarks.CodeReadiness? {
         guard !isOpen, node.kind == .file || node.kind == .section else { return nil }
         let path = node.id.path
-        return analyzed.filter { $0.key.path.count > path.count && $0.key.path.starts(with: path) }.values.min()
+        return analyzed.filter { entry in
+            guard entry.key.path.count > path.count, entry.key.path.starts(with: path) else { return false }
+            // Its module's file below this row, or no file at all.
+            return moduleFile(of: entry.key, in: tree).map { $0.path.count > path.count } ?? true
+        }.values.min()
+    }
+
+    /// The origin a row shows: only the module's own file shows it, open or
+    /// shut — the one every analysed image whose module the file is shares.
+    /// The image's row, and the rows that hold several modules, show none.
+    public static func origin(of node: UEFINode, origins: [NodeID: ModuleOrigin],
+                              analyzed: Set<NodeID>, in tree: UEFIImage) -> ModuleOrigin? {
+        guard node.kind == .file else { return nil }
+        let own = analyzed.filter { moduleFile(of: $0, in: tree) == node.id }
+        let found = Set(own.map { origins[$0] })
+        guard found.count == 1, let only = found.first else { return nil }
+        return only
     }
 
     /// Which of a node's checksums is wrong, since "invalid" alone leaves the

@@ -127,6 +127,9 @@
 "A module inside has a stored code analysis, not reviewed; open the row to reach it" = "Darin liegt ein Modul mit gespeicherter automatischer Analyse von Ghidra, noch nicht analysiert; die Zeile aufklappen, um es zu erreichen.";
 "A module inside has a stored code analysis, its review not finished; open the row to reach it" = "Darin liegt ein Modul, dessen Analyse nicht abgeschlossen ist; die Zeile aufklappen, um es zu erreichen.";
 "A module inside has a fully reviewed code analysis; open the row to reach it" = "Darin liegt ein vollständig analysiertes Modul; die Zeile aufklappen, um es zu erreichen.";
+"This module has a stored code analysis, not reviewed; Open with Code on its image opens it" = "Für dieses Modul ist eine automatische Analyse von Ghidra gespeichert, noch nicht analysiert; „Mit Code öffnen“ auf seinem Image öffnet sie.";
+"This module has a stored code analysis, its review not finished; Open with Code on its image opens it" = "Die Analyse dieses Moduls ist nicht abgeschlossen; „Mit Code öffnen“ auf seinem Image öffnet sie.";
+"This module's code analysis is fully reviewed; Open with Code on its image opens it" = "Dieses Modul ist vollständig analysiert; „Mit Code öffnen“ auf seinem Image öffnet sie.";
 "A FIT needs at least one microcode entry." = "Eine FIT braucht mindestens einen Microcode-Eintrag.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Eine Datei ist immer nur an einer Stelle geöffnet, hier also nicht zusätzlich. Zeigen Sie sie dort, wo sie ist, oder bewegen Sie jenen Bereich in diesen Tab.";
 "A second header entry, where there may be only one" = "Ein zweiter Kopfeintrag, obwohl es nur einen geben darf";
