@@ -591,11 +591,14 @@ enum Timestamps {
 /// How far a module's review has got, by its stored analysis alone: what a
 /// list of modules shows without reading every artifact.
 public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
-    /// Ghidra's analysis and the UEFI pass: nobody's review.
+    /// Ghidra's analysis and the UEFI pass: nobody's review. A published
+    /// revision stays here while it holds only what machines wrote — the
+    /// registry's links and the pass's signatures: no function full, no
+    /// description, no origin.
     case mechanical
-    /// A review is published, and something is still short: a function below
-    /// the bar, no description, or levels not counted (a manifest written
-    /// before they were).
+    /// A review has done something of its own, and something is still short:
+    /// a function below the bar, no description, or levels not counted (a
+    /// manifest written before they were).
     case partial
     /// Every function full, linked to the registry or bodiless, and the
     /// module described.
@@ -610,6 +613,10 @@ public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
 public extension AnalysisManifest {
     var reviewProgress: ReviewProgress {
         guard let reading else { return .mechanical }
+        let described = reading.description != nil || reading.origin != nil
+        if let levels = stats.reviewLevels, !described, (levels[ReviewLevel.full.rawValue] ?? 0) == 0 {
+            return .mechanical
+        }
         guard let levels = stats.reviewLevels, reading.description != nil else { return .partial }
         let short = levels.contains { level, count in count > 0 && !ReviewProgress.done.contains(level) }
         return short ? .partial : .complete

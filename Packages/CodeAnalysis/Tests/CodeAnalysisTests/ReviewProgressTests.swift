@@ -32,6 +32,20 @@ final class ReviewProgressTests: XCTestCase {
                        .partial)
     }
 
+    /// A revision published with only the registry's links and the UEFI
+    /// pass's signatures is nobody's review yet (AmdMemAm4RnPei rev 1).
+    func testAPublishOfMachineWorkAloneIsMechanical() {
+        let machine = ["decompiled": 16, "library": 11, "partial": 1, "full": 0]
+        XCTAssertEqual(manifest(levels: machine, reading: AnalysisReading(rev: 1)).reviewProgress, .mechanical)
+        XCTAssertEqual(manifest(levels: machine, reading: AnalysisReading(rev: 1, description: digest)).reviewProgress,
+                       .partial, "a description is the review's own")
+        XCTAssertEqual(manifest(levels: ["decompiled": 16, "full": 1], reading: AnalysisReading(rev: 1)).reviewProgress,
+                       .partial, "a function brought to full is the review's own")
+        XCTAssertEqual(manifest(levels: machine, reading: AnalysisReading(
+            rev: 1, origin: ModuleOrigin(category: .amd, confidence: .inferred))).reviewProgress,
+                       .partial, "an origin is the review's own")
+    }
+
     func testNoDescriptionIsPartial() {
         XCTAssertEqual(manifest(levels: ["full": 10], reading: AnalysisReading(rev: 3)).reviewProgress, .partial)
     }
