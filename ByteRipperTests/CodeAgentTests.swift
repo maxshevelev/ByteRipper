@@ -3,6 +3,7 @@ import ByteRipperCore
 import CodeAnalysis
 import CodeView
 import HTTPService
+import ToolModuleKit
 import XCTest
 import UEFIImage
 @testable import UEFIToolUI
@@ -400,6 +401,55 @@ final class CodeAgentTests: XCTestCase {
         try await until { annotation()?.code?.functionName == "LoadMicrocode" }
         XCTAssertEqual(annotation()?.code?.label, "CpuPei ▸ LoadMicrocode")
         XCTAssertEqual(annotation()?.title, "Mine")
+    }
+
+    /// A described module's file wears the (i). A click shows the popover at
+    /// once wherever the window's focus is — up the responder chain from
+    /// another view the click once reached nothing — fills in the summary,
+    /// and opens the code it loaded meanwhile.
+    func testTheInfoButtonShowsTheSummaryAndOpensTheCode() async throws {
+        let store = try ContentStore(root: root)
+        let stored = try XCTUnwrap(try store.analysis(module: SHA256Digest(data: Self.teModule())))
+        let description = try store.putObject(Data("""
+        # CpuPei
+
+        Loads the **processor's** microcode in `PEI`.
+
+        ## What it is
+        """.utf8))
+        try store.putAnalysis(module: stored.module, recipe: stored.recipe, artifact: Data(Self.artifact.utf8),
+                              reading: AnalysisReading(rev: 1, description: description))
+
+        let controller = try open()
+        _ = try await moduleNode()
+        controller.tools.activate(UEFIToolModule.identifier, animated: false)
+        window?.layoutIfNeeded()
+        let session = try XCTUnwrap(controller.tools.session as? UEFIToolSession)
+        let panel = try XCTUnwrap(controller.tools.panel)
+        func outline() -> NSOutlineView? { descendants(of: panel, NSOutlineView.self).first }
+        func info() -> ToolPanelModuleInfoButton? {
+            outline()?.expandItem(nil, expandChildren: true)
+            window?.layoutIfNeeded()
+            return descendants(of: panel, ToolPanelModuleInfoButton.self).first { !$0.isHidden }
+        }
+        try await until { info() != nil }
+        let button = try XCTUnwrap(info(), "the module's file wears the (i)")
+        XCTAssertEqual(button.color, .linkColor)
+
+        window?.makeFirstResponder(nil)
+        button.performClick(nil)
+        let popover = try XCTUnwrap(session.moduleSummaryPopover, "the popover shows at once")
+        XCTAssertTrue(popover.isShown)
+        XCTAssertEqual(popover.shownName, "CpuPei")
+        try await until { popover.shownSummary != nil && popover.canOpenCode }
+        XCTAssertEqual(popover.shownSummary, "Loads the processor's microcode in PEI.")
+        XCTAssertFalse(popover.isLoadingSummary)
+        XCTAssertFalse(popover.isLoadingCode)
+
+        XCTAssertNil(controller.fragments.expanded)
+        popover.clickOpen()
+        try await until { controller.fragments.expanded != nil }
+        XCTAssertNotNil(controller.fragments.expanded, "Open with Code opened the code panel")
     }
 
     func testACodeAnnotationIsKeptBetweenLaunches() throws {

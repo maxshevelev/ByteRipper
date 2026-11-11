@@ -2340,34 +2340,46 @@ private struct ChecksumPass: Sendable {
     }
 
     // help: panel.uefi.module-summary
-    /// A module file's (i): the summary of image `nodeID`'s description, in
-    /// a popover beside `view`. The code is made ready while the description
-    /// is read, from the analysis and the index the tree already holds, so
-    /// the popover's **Open with Code** opens it without reading the store's
-    /// manifests again.
+    /// A module file's (i): a popover beside `view`, at once, with the module's
+    /// name. The summary of image `nodeID`'s description and the code are
+    /// loaded together, each showing as progress until it comes; the code
+    /// from the analysis and the index the tree already holds, so
+    /// **Open with Code** opens what is loaded and reads nothing again.
     func showModuleSummary(for nodeID: NodeID, beside view: NSView) {
         guard let tree, tree.isReady, let root = UEFIToolModule.codeAnalysisRoot,
               let manifest = codeAnalysisManifests[nodeID], let digest = manifest.reading?.description
         else { return }
-        let index = codeAnalysisIndex
-        let opening = Task {
-            try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: root, preferred: manifest, index: index)
-        }
+        // The module's name as its analysis has it — the description's title;
+        // the file's only where the analysis has none.
         let image = tree.image()
-        let name = UEFITreeMarks.moduleFile(of: nodeID, in: image).flatMap { image.node($0) }
-            .map { $0.displayName(in: Localization.appLanguage) } ?? manifest.module.name
-        Task { [weak self] in
+        let name = manifest.module.name.isEmpty
+            ? UEFITreeMarks.moduleFile(of: nodeID, in: image).flatMap { image.node($0) }
+                .map { $0.displayName(in: Localization.appLanguage) } ?? ""
+            : manifest.module.name
+        let popover = controller.showModuleSummary(name: name, beside: view)
+        let index = codeAnalysisIndex
+        Task { [weak self, weak popover] in
             let text = await Task.detached(priority: .userInitiated) { () -> String? in
                 guard let store = try? ContentStore(root: root, create: false),
                       let data = try? store.object(digest) else { return nil }
                 return String(data: data, encoding: .utf8)
             }.value
-            guard let self else { return }
-            let summary = text.flatMap { ModuleSummary.of(description: $0) }
-                ?? L("The module's description has no summary.")
-            self.controller.showModuleSummary(name: name, summary: summary, beside: view) { [weak self] in
-                self?.open(opening, at: nil)
+            guard self != nil, let popover else { return }
+            popover.showSummary(text.flatMap { ModuleSummary.of(description: $0) }
+                ?? L("The module's description has no summary."))
+        }
+        Task { [weak self, weak popover] in
+            do {
+                let opening = try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: root,
+                                                                preferred: manifest, index: index)
+                guard let popover else { return }
+                popover.codeReady { [weak self] in self?.present(opening, at: nil) }
+            } catch let failure as UEFICodeOpening.Failure {
+                popover?.codeFailed(failure.message)
+            } catch {
+                popover?.codeFailed("\(error)")
             }
+            _ = self
         }
     }
 
@@ -2380,20 +2392,28 @@ private struct ChecksumPass: Sendable {
             defer { self?.controller.endBusy() }
             do {
                 let opening = try await opening.value
-                guard let self else { return }
-                guard let opener = self.host as? any CodePartOpening else {
-                    self.fail(L("The code panel is not available."))
-                    return
-                }
-                opener.openCode(named: opening.partName, linkedTo: opening.source,
-                                manifest: opening.manifest, artifact: opening.artifact,
-                                recipes: opening.recipes, codec: opening.codec, at: location)
+                self?.present(opening, at: location)
             } catch let failure as UEFICodeOpening.Failure {
                 self?.fail(failure.message)
             } catch {
                 self?.fail("\(error)")
             }
         }
+    }
+
+    /// The popover a module file's (i) opened, while it is the last one —
+    /// for the app's tests, which drive the click.
+    public var moduleSummaryPopover: ToolPanelModuleSummaryPopover? { controller.moduleSummaryPopover }
+
+    /// Opens the code panel on `opening`, already loaded.
+    private func present(_ opening: UEFICodeOpening, at location: CodeLocation?) {
+        guard let opener = host as? any CodePartOpening else {
+            fail(L("The code panel is not available."))
+            return
+        }
+        opener.openCode(named: opening.partName, linkedTo: opening.source,
+                        manifest: opening.manifest, artifact: opening.artifact,
+                        recipes: opening.recipes, codec: opening.codec, at: location)
     }
 
     /// Opens a node of the tree — or its body alone — as a panel of its own, so

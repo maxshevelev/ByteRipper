@@ -287,24 +287,44 @@ final class ToolRowMarksTests: XCTestCase {
         let views = row.arrangedSubviews
         XCTAssertEqual(views.firstIndex(of: info), try XCTUnwrap(views.firstIndex(of: origin)) + 1)
 
+        XCTAssertEqual(info.color, .linkColor, "a link's colour, as the CPUID's (i)")
         cell.backgroundStyle = .emphasized
-        XCTAssertEqual(info.contentTintColor, .alternateSelectedControlTextColor)
+        XCTAssertEqual(info.color, .alternateSelectedControlTextColor)
         cell.backgroundStyle = .normal
-        XCTAssertEqual(info.contentTintColor, .secondaryLabelColor)
+        XCTAssertEqual(info.color, .linkColor)
     }
 
-    /// The popover says the module's name and summary, and its button opens
-    /// the code it was given.
-    func testTheSummaryPopoverOpensTheCodeItWasGiven() throws {
+    /// The popover shows at once with the module's name, progress where the
+    /// summary and the code are still loading, and opens the code once it is
+    /// loaded.
+    func testTheSummaryPopoverShowsProgressUntilItsPartsAreLoaded() {
         var opened = 0
-        let popover = ToolPanelModuleSummaryPopover(name: "PeiVariable", summary: "Reads variables.") { opened += 1 }
+        let popover = ToolPanelModuleSummaryPopover(name: "PeiVariable")
         popover.loadView()
-        let fields = popover.view.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue)
-        XCTAssertEqual(fields, ["PeiVariable", "Reads variables."])
-        let button = try XCTUnwrap(popover.view.subviews.compactMap { $0 as? NSButton }
-            .first { $0.title == L("Open with Code") })
-        button.performClick(nil)
+        XCTAssertEqual(popover.shownName, "PeiVariable")
+        XCTAssertNil(popover.shownSummary)
+        XCTAssertTrue(popover.isLoadingSummary)
+        XCTAssertTrue(popover.isLoadingCode)
+        XCTAssertFalse(popover.canOpenCode)
+        popover.clickOpen()
+        XCTAssertEqual(opened, 0, "nothing to open yet")
+
+        popover.showSummary("Reads variables.")
+        XCTAssertEqual(popover.shownSummary, "Reads variables.")
+        XCTAssertFalse(popover.isLoadingSummary)
+        popover.codeReady { opened += 1 }
+        XCTAssertFalse(popover.isLoadingCode)
+        XCTAssertTrue(popover.canOpenCode)
+        popover.clickOpen()
         XCTAssertEqual(opened, 1)
+    }
+
+    func testAFailedLoadSaysWhyAndCannotOpen() {
+        let popover = ToolPanelModuleSummaryPopover(name: "PeiVariable")
+        popover.loadView()
+        popover.codeFailed("The code analysis could not be read.")
+        XCTAssertFalse(popover.isLoadingCode)
+        XCTAssertFalse(popover.canOpenCode)
     }
 
     /// The FIT panel's existing call still shows the red octagon, even on a

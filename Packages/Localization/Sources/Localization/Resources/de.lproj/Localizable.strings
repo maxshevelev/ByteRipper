@@ -1957,3 +1957,5 @@
 "Shows the module's summary from its description" = "Zeigt die Kurzbeschreibung des Moduls aus seiner Beschreibung";
 "Opens the module's bytes and its code" = "Öffnet die Bytes des Moduls und seinen Code";
 "The module's description has no summary." = "Die Beschreibung des Moduls enthält keine Kurzbeschreibung.";
+"Reading the module's description" = "Die Beschreibung des Moduls wird gelesen";
+"Loading the module's code" = "Der Code des Moduls wird geladen";

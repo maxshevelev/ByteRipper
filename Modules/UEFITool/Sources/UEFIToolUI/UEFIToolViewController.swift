@@ -2732,6 +2732,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             ?? ToolPanelTable.makeCell(identifier: identifier,
                                        warning: identifier == Column.name,
                                        badges: identifier == Column.name)
+        // The (i) answers here, wherever the window's focus is: up the
+        // responder chain it reached this controller only from its own panel.
+        (cell.viewWithTag(ToolPanelTable.codeInfoTag) as? NSButton)?.target = self
         cell.textField?.stringValue = text(for: node, in: identifier)
         // Set per row, not once when the cell is made: a reused cell carries
         // the font it was made with, and the zoom moves under it.
@@ -3131,13 +3134,14 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         onOpenNode?(target.id, target.body)
     }
 
-    /// Shows `summary` of module `name` beside `view`; its button opens the
-    /// code through `open`.
-    func showModuleSummary(name: String, summary: String, beside view: NSView, open: @escaping () -> Void) {
+    /// Shows the summary popover of module `name` beside `view` at once;
+    /// what is still loading fills it as it comes.
+    func showModuleSummary(name: String, beside view: NSView) -> ToolPanelModuleSummaryPopover {
         moduleSummaryPopover?.close()
-        let popover = ToolPanelModuleSummaryPopover(name: name, summary: summary, openCode: open)
+        let popover = ToolPanelModuleSummaryPopover(name: name)
         moduleSummaryPopover = popover
         popover.show(relativeTo: view.bounds, of: view)
+        return popover
     }
 
     @objc private func openWithCodeClicked(_ sender: NSMenuItem) {

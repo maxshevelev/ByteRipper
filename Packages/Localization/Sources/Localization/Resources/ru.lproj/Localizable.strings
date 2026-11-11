@@ -1957,3 +1957,5 @@
 "Shows the module's summary from its description" = "Показывает краткое изложение из описания модуля";
 "Opens the module's bytes and its code" = "Открывает байты модуля и его код";
 "The module's description has no summary." = "В описании модуля нет краткого изложения.";
+"Reading the module's description" = "Чтение описания модуля";
+"Loading the module's code" = "Загрузка кода модуля";
