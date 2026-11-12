@@ -117,10 +117,12 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         setUpSmartButton()
         setUpWordButton()
         applyProfile()
+        findPasteboardWatch = FindPasteboard.observe { [weak self] in self?.findPasteboardChanged() }
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        for token in findPasteboardWatch { NotificationCenter.default.removeObserver(token) }
     }
 
     /// Whether this search matches bytes exactly. Only the encodings whose case
@@ -315,6 +317,15 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// The find pasteboard's change count when this field last saw it: its own
     /// writes, and what it took from there (`FindPasteboard`).
     private var findPasteboardSeen = FindPasteboard.changeCount
+    private var findPasteboardWatch: [NSObjectProtocol] = []
+
+    /// Another field searched, or ⌘E, or another app: a field on screen takes
+    /// the string at once, so the fields shown hold one pattern. A hidden
+    /// one takes it as it opens.
+    private func findPasteboardChanged() {
+        guard patternField.window != nil, !patternField.isHiddenOrHasHiddenAncestor else { return }
+        adoptFindPasteboard()
+    }
 
     /// Takes the find pasteboard's string into the field, as if typed, when
     /// it is new to this field — another search in the app, or another app,

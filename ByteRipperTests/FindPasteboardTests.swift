@@ -128,6 +128,47 @@ final class FindPasteboardTests: XCTestCase {
                       "and ⌘G looks for what the field holds")
     }
 
+    // MARK: - One pattern on screen
+
+    /// A string another field of the app searched for is in an open bar at
+    /// once, without the bar being opened again.
+    func testAnOpenBarTakesAStringSearchedForElsewhereAtOnce() throws {
+        let (controller, window, url) = try makeController(Array("xxBIOSxx".utf8))
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        try bar(window).setPatternTextForTests("EFI")
+
+        FindPasteboard.write("BIOS")
+
+        XCTAssertEqual(try bar(window).patternTextForTests, "BIOS")
+    }
+
+    /// Another app's string reaches an open bar when the app comes back to
+    /// the front.
+    func testAnOpenBarTakesAnotherAppsStringOnReturn() throws {
+        let (controller, window, url) = try makeController(Array("xxBIOSxx".utf8))
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        try bar(window).setPatternTextForTests("EFI")
+        writeElsewhere("BIOS")
+
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
+
+        XCTAssertEqual(try bar(window).patternTextForTests, "BIOS")
+    }
+
+    /// A shut bar is not filled behind the reader's back: it takes the string
+    /// as it opens, over its history.
+    func testAShutBarTakesTheStringAsItOpens() throws {
+        let (controller, window, url) = try makeController(Array("xxBIOSxx".utf8))
+        defer { cleanup(controller, url) }
+        FindPasteboard.write("BIOS")
+
+        controller.findPattern()
+
+        XCTAssertEqual(try bar(window).patternTextForTests, "BIOS")
+    }
+
     // MARK: - Find Next and Find Previous
 
     /// ⌘G with the bar shut finds the find string's next match, opens the bar

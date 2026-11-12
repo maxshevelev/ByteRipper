@@ -3,6 +3,7 @@ import ByteRipperCore
 import CodeView
 import Find
 import Localization
+import ToolModuleKit
 
 /// The search status bar operation is what a `FindIndexer` shows while it
 /// scans: its progress, and its (×).
@@ -665,24 +666,29 @@ extension BackgroundOperation: FindActivity {}
         guard let code = searchedCode(),
               case .text(let text, let caseSensitive, let wholeWord) = navigatorQuery.searchRequest()
         else { return }
+        // The find string: the bar over the code, and every other field on
+        // screen, take it from there (`FindPasteboard`).
         navigatorQuery.noteSearchStarted(recording: recording)
-        // One pattern for every function and for the function (#41).
-        bar.query.text = text
         code.searchAllFunctions(TextQuery(text: text, caseSensitive: caseSensitive, wholeWord: wholeWord))
     }
 
     /// ⌘⇧F: the Search tab in front, its field holding the pattern — the
-    /// selected C, or what the bar over the code holds — ready to type over.
+    /// selected C, else the find string when it is new to the field (a search
+    /// elsewhere, ⌘E, another app), else what the open bar over the code
+    /// holds, else what it held, else the last code search — ready to type
+    /// over.
     func showSearchInFunctions(window: NSWindow?) {
         guard let code = searchedCode() else { return }
         attachCodeSearch()
         code.showSearchTab(true)
         if let selected = code.findSelection, !selected.contains("\n"), !code.selectionIsFindMatch {
             navigatorQuery.text = selected
-        } else if !bar.query.text.isEmpty {
+        } else if navigatorQuery.adoptFindPasteboard() {
+            // A search elsewhere, ⌘E, or another app.
+        } else if isShown, !bar.query.text.isEmpty {
             navigatorQuery.text = bar.query.text
         } else if navigatorQuery.text.isEmpty {
-            navigatorQuery.text = CodeFindHistoryStore.mostRecent?.pattern ?? ""
+            navigatorQuery.text = FindPasteboard.string ?? CodeFindHistoryStore.mostRecent?.pattern ?? ""
         }
         window?.makeFirstResponder(navigatorQuery.patternField)
         navigatorQuery.patternField.currentEditor()?.selectAll(nil)

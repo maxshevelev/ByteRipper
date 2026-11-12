@@ -65,6 +65,7 @@ import UEFITool
     private let stopButton = NSButton()
     private let meNote = NSTextField(labelWithString: "")
     private var observer: NSObjectProtocol?
+    private var findPasteboardWatch: [NSObjectProtocol] = []
 
     /// What the status line says when there is something to say.
     enum Status: Equatable {
@@ -108,6 +109,12 @@ import UEFITool
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reload() }
         }
+        findPasteboardWatch = FindPasteboard.observe { [weak self] in
+            // The fields shown keep one pattern; a hidden bar takes it as it
+            // is opened (`FindPasteboard`).
+            guard let self, self.window != nil, !self.isHiddenOrHasHiddenAncestor else { return }
+            self.adoptFindPasteboard()
+        }
         reload()
     }
 
@@ -115,6 +122,7 @@ import UEFITool
 
     deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        for token in findPasteboardWatch { NotificationCenter.default.removeObserver(token) }
     }
 
     // MARK: - Layout

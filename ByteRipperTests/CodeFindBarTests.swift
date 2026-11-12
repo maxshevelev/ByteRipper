@@ -243,14 +243,32 @@ final class CodeFindBarTests: XCTestCase {
         XCTAssertEqual(code.findSelection, "Status", "the occurrence is selected in the C")
     }
 
-    /// A pattern typed in the Search tab is the bar's too.
+    /// A pattern searched for in the Search tab is the bar's too: at once
+    /// while the bar is open, as it opens while it is shut — through the find
+    /// pasteboard, as every field's.
     func testTheSearchTabsPatternIsTheBars() throws {
         let (controller, _) = try codeTab()
         controller.findInFunctions()
         let query = controller.frontFind.navigatorQuery
         query.text = "Check"
         query.onSubmit?()
-        XCTAssertEqual(controller.findBar.query.text, "Check")
+        controller.findPattern()
+        XCTAssertEqual(controller.findBar.query.text, "Check", "a shut bar, as it opens")
+
+        query.text = "Read"
+        query.onSubmit?()
+        XCTAssertEqual(controller.findBar.query.text, "Read", "an open bar, at once")
+    }
+
+    /// A pattern searched for in the bar is in the Search tab's field at once.
+    func testTheBarsPatternIsTheSearchTabs() throws {
+        let (controller, _) = try codeTab()
+        controller.findInFunctions()
+        let query = controller.frontFind.navigatorQuery
+        controller.findPattern()
+        controller.findBar.setPatternTextForTests("Check")
+        controller.findBar.pressFindForTests(.forward)
+        XCTAssertEqual(query.text, "Check")
     }
 
     /// Over a dump there are no functions: the command is off.

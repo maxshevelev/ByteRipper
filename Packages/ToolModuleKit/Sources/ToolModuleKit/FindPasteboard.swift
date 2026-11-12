@@ -15,6 +15,12 @@ import AppKit
 /// "Last saw" belongs to the field, not to this type: one field's search is
 /// something every other field has not seen yet, and a single shared mark
 /// would let the first field to look take it from all the rest.
+///
+/// The fields on screen keep one pattern: a string written here is posted as
+/// `didChange`, and so is the app's coming back to the front, when another app
+/// may have written one. A field shown then takes it as it would on opening;
+/// a hidden field waits for its opening, where its own history would
+/// otherwise overwrite it.
 @MainActor public enum FindPasteboard {
     /// The pasteboard itself. A seam for the tests, which must not write into
     /// the find string of the Mac they run on.
@@ -30,14 +36,31 @@ import AppKit
     }
 
     /// Puts `text` on the pasteboard and returns its change count, for the
-    /// writer to remember as seen — its own string is not news to it. Leaves an
-    /// empty string, and one that is already there, as they are.
+    /// writer to remember as seen — its own string is not news to it. An empty
+    /// string writes nothing. The string already there is written again: a
+    /// search run with it is news to a field on screen that holds another.
     @discardableResult
     public static func write(_ text: String) -> Int {
-        guard !text.isEmpty, text != string else { return changeCount }
+        guard !text.isEmpty else { return changeCount }
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        return changeCount
+        let written = changeCount
+        NotificationCenter.default.post(name: didChange, object: nil)
+        return written
+    }
+
+    /// Posted after a string is written here by the app, and when the app
+    /// comes to the front: the find string may be new to the fields on screen.
+    public static let didChange = Notification.Name("ByteRipperFindPasteboardDidChange")
+
+    /// Calls `body` on every `didChange` and every return of the app to the
+    /// front. Keep the tokens; give them to `NotificationCenter` to stop.
+    public static func observe(_ body: @escaping @MainActor () -> Void) -> [NSObjectProtocol] {
+        [didChange, NSApplication.didBecomeActiveNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { body() }
+            }
+        }
     }
 
     /// The search string, if it has changed since `seen`; nil if it has not or

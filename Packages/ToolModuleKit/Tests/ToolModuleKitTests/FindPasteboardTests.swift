@@ -48,14 +48,18 @@ final class FindPasteboardTests: XCTestCase {
         XCTAssertEqual(FindPasteboard.take(ifChangedSince: &second), "_FVH")
     }
 
-    /// Nothing is written for an empty string or for the one already there —
-    /// a search run again is not news to anyone.
-    func testTheSameStringOrNoneIsNotWritten() {
-        var seen = FindPasteboard.write("$FPT")
+    /// Nothing is written for an empty string. The one already there is
+    /// written again — a field that holds another takes it — and is not news
+    /// to the writer.
+    func testNoneIsNotWrittenAndTheSameStringIsWrittenAgain() {
+        FindPasteboard.write("$FPT")
+        var other = FindPasteboard.changeCount
         let count = FindPasteboard.changeCount
-        XCTAssertEqual(FindPasteboard.write("$FPT"), count)
         XCTAssertEqual(FindPasteboard.write(""), count)
+        var seen = FindPasteboard.write("$FPT")
+        XCTAssertNotEqual(seen, count)
         XCTAssertNil(FindPasteboard.take(ifChangedSince: &seen))
+        XCTAssertEqual(FindPasteboard.take(ifChangedSince: &other), "$FPT")
         XCTAssertEqual(FindPasteboard.string, "$FPT")
     }
 }
