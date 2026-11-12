@@ -4,7 +4,12 @@ import AppKit
 /// underline under the pointer, as links in an IDE do. The underline is a
 /// temporary attribute of the layout, not of the text, so the C itself is
 /// never rewritten for it.
-final class CodeTextView: NSTextView {
+final class CodeTextView: NSTextView, FindBoxHost {
+    /// A search's matches, drawn as Xcode draws them (`FindBoxes`).
+    var findBoxes: [NSRange] = [] {
+        didSet { if findBoxes != oldValue { needsDisplay = true } }
+    }
+
     private var hovered: NSRange?
     private var tracking: NSTrackingArea?
 
@@ -276,6 +281,7 @@ final class CodeTextView: NSTextView {
         }
         for tint in rowTints { boxes(tint.range, inset: 0, radius: 0, fill: tint.color) }
         drawCurrentLine(in: rect, layoutManager: layoutManager, origin: origin)
+        FindBoxes.draw(findBoxes, in: self, dirtyRect: rect)
         guard !highlighted.isEmpty else { return }
         let fill = highlightFill
         for range in highlighted {

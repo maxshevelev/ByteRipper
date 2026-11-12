@@ -717,7 +717,17 @@ extension CodeDescriptionView: NSOutlineViewDataSource, NSOutlineViewDelegate {
     }
 }
 
-final class DescriptionTextView: NSTextView {
+final class DescriptionTextView: NSTextView, FindBoxHost {
+    /// A search's matches, drawn as Xcode draws them (`FindBoxes`).
+    var findBoxes: [NSRange] = [] {
+        didSet { if findBoxes != oldValue { needsDisplay = true } }
+    }
+
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        FindBoxes.draw(findBoxes, in: self, dirtyRect: rect)
+    }
+
     /// What stands over the text. Under it the text leaves the arrow alone: it
     /// hears the pointer's moves too, and setting its I-beam at each one fights
     /// the button's arrow.

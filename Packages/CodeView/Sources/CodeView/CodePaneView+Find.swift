@@ -189,19 +189,14 @@ extension CodePaneView {
         let ranges = findMatchRanges
         for side in [FindSide.c, .description] {
             let view = findTextView(side)
-            guard let layout = view.layoutManager else { continue }
+            guard let host = view as? FindBoxHost else { continue }
             let length = (view.string as NSString).length
-            layout.removeTemporaryAttribute(.backgroundColor,
-                                            forCharacterRange: NSRange(location: 0, length: length))
             let barMatches = side == findSearched?.side && findSearched?.text == view.string
                 ? ranges : []
             let shown = barMatches.isEmpty ? searchTabMatches(side) : barMatches
             // The match under the yellow plate has no grey of its own.
             let plated = findPlate.excludedRange(in: view)
-            for range in shown where NSMaxRange(range) <= length && range != plated {
-                layout.addTemporaryAttribute(.backgroundColor, value: Self.findMatchFill,
-                                             forCharacterRange: range)
-            }
+            host.findBoxes = shown.filter { NSMaxRange($0) <= length && $0 != plated }
         }
     }
 
@@ -231,21 +226,9 @@ extension CodePaneView {
         return (findPlate.textView === cTextView ? .c : .description, range)
     }
 
-    /// The ranges the side's text view has under the find fill.
+    /// The ranges the side's text view draws a match's grey round.
     func paintedFindRanges(_ side: FindSide) -> [NSRange] {
-        let view = findTextView(side)
-        guard let layout = view.layoutManager else { return [] }
-        var found: [NSRange] = []
-        var index = 0
-        let length = (view.string as NSString).length
-        while index < length {
-            var effective = NSRange()
-            let value = layout.temporaryAttribute(.backgroundColor, atCharacterIndex: index,
-                                                  effectiveRange: &effective)
-            if value != nil { found.append(effective) }
-            index = max(NSMaxRange(effective), index + 1)
-        }
-        return found
+        (findTextView(side) as? FindBoxHost)?.findBoxes ?? []
     }
 }
 

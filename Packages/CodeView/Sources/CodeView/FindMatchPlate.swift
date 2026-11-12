@@ -172,3 +172,34 @@ final class PlateLayoutManager: NSLayoutManager {
         container.replaceLayoutManager(PlateLayoutManager())
     }
 }
+
+/// A text view that draws a search's matches itself, as Xcode does: a
+/// rounded grey plate round each, as tall as the text, under the glyphs —
+/// not a temporary background, which fills the line's full height and runs
+/// square into its neighbours.
+protocol FindBoxHost: NSTextView {
+    /// The matches, in ascending order; the yellow plate's is left out.
+    var findBoxes: [NSRange] { get set }
+}
+
+@MainActor
+enum FindBoxes {
+    static let radius: CGFloat = 3.5
+
+    /// Draws the matches of `view` that fall in `dirtyRect`.
+    static func draw(_ ranges: [NSRange], in view: NSTextView, dirtyRect: NSRect) {
+        guard !ranges.isEmpty, let layout = view.layoutManager, let container = view.textContainer else { return }
+        let origin = view.textContainerOrigin
+        let glyphs = layout.glyphRange(forBoundingRect: dirtyRect.offsetBy(dx: -origin.x, dy: -origin.y),
+                                       in: container)
+        let shown = layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        CodePaneView.findMatchFill.setFill()
+        for range in ranges {
+            if NSMaxRange(range) < shown.location { continue }
+            if range.location > NSMaxRange(shown) { break }
+            for plate in FindMatchPlate.plates(for: range, in: view) where plate.intersects(dirtyRect) {
+                NSBezierPath(roundedRect: plate, xRadius: radius, yRadius: radius).fill()
+            }
+        }
+    }
+}
