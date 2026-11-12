@@ -157,6 +157,20 @@ final class PlateLayoutManager: NSLayoutManager {
         }
     }
 
+    /// The text's own backgrounds first — a code span's, a diff's tint, the
+    /// selection — then the search's matches over them, then the glyphs.
+    override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
+        // Drawing is the main thread's: the text view draws it.
+        MainActor.assumeIsolated {
+            guard let container = textContainers.first, let view = container.textView as? FindBoxHost,
+                  !view.findBoxes.isEmpty else { return }
+            let shown = boundingRect(forGlyphRange: glyphsToShow, in: container)
+                .offsetBy(dx: origin.x, dy: origin.y)
+            FindBoxes.draw(view.findBoxes, in: view, dirtyRect: shown)
+        }
+    }
+
     override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int,
                                           forCharacterRange charRange: NSRange, color: NSColor) {
         if let unfilledRange, NSIntersectionRange(charRange, unfilledRange) == charRange, charRange.length > 0 {

@@ -281,7 +281,6 @@ final class CodeTextView: NSTextView, FindBoxHost {
         }
         for tint in rowTints { boxes(tint.range, inset: 0, radius: 0, fill: tint.color) }
         drawCurrentLine(in: rect, layoutManager: layoutManager, origin: origin)
-        FindBoxes.draw(findBoxes, in: self, dirtyRect: rect)
         guard !highlighted.isEmpty else { return }
         let fill = highlightFill
         for range in highlighted {

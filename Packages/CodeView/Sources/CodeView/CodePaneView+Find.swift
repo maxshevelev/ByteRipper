@@ -214,9 +214,14 @@ extension CodePaneView {
         }
     }
 
-    /// The dump's match grey (`HexTheme.matchFill`): one colour for a found
-    /// thing, whatever it was found in.
-    static let findMatchFill = NSColor.unemphasizedSelectedTextBackgroundColor
+    /// A found match's grey: see-through, so it lies over whatever the text
+    /// is marked with — a code span's background, a diff's tint — and the
+    /// marking shows through it. On plain text it reads as the dump's grey.
+    static let findMatchFill = NSColor(name: "CodeFindMatch") { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor.white.withAlphaComponent(0.2)
+            : NSColor.black.withAlphaComponent(0.14)
+    }
 
     // MARK: - For tests
 
