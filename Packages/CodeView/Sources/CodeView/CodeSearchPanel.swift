@@ -424,9 +424,16 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     /// into it: the rest gives way to an ellipsis, so the match is in the
     /// three lines shown.
     static let leadingContext = 32
+    /// A result line's grey: darker than the secondary label's, which reads
+    /// faint over a long list, and still apart from the bold match.
+    static let hitText = NSColor(name: "CodeSearchHitText") { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor.white.withAlphaComponent(0.72)
+            : NSColor.black.withAlphaComponent(0.68)
+    }
 
-    /// The occurrence's line in the navigator's type and the text's colour,
-    /// the match in bold: the eye finds it in the line. A match
+    /// The occurrence's line in the navigator's type, in `hitText`, the
+    /// match in bold and the text's colour: the eye finds it in the line. A match
     /// far into a long line is brought forward, the start cut to "…".
     static func line(of hit: TextSearchHit) -> NSAttributedString {
         // A tab — after a list's bullet in the description — reads as a
@@ -447,7 +454,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
             end -= removed
         }
         let text = NSMutableAttributedString(string: shown as String, attributes: [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
+            .font: CodePaneView.navigatorFont(), .foregroundColor: Self.hitText
         ])
         if end > start {
             text.addAttributes([.font: CodePaneView.navigatorBoldFont(),
