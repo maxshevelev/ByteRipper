@@ -2535,11 +2535,6 @@ import ToolModuleKit
         Self.functionMark(state.group(of: index), library: state.librarySection(of: index))
     }
 
-    /// A function's entry as the panel writes an address.
-    func navigatorAddress(of index: Int) -> String {
-        model.displayAddress(model.functions[index].entry)
-    }
-
     /// A function's name as the navigator writes it.
     func navigatorName(of index: Int) -> String {
         let function = model.functions[index]

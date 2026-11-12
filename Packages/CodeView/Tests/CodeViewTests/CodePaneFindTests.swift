@@ -297,6 +297,21 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 0)))
     }
 
+    /// The chevron closes a group and opens it again.
+    func testAGroupClosesAndOpens() async throws {
+        let (pane, _) = try paneInWindow()
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true))
+        try await waitForSearch(pane)
+        let panel = pane.searchPanel
+        let first = try XCTUnwrap(panel.items.first)
+        panel.toggle(first)
+        XCTAssertFalse(panel.outline.isItemExpanded(first))
+        XCTAssertEqual(panel.outline.numberOfRows, 3, "First, Second and its one line")
+        panel.toggle(first)
+        XCTAssertTrue(panel.outline.isItemExpanded(first))
+        XCTAssertEqual(panel.outline.numberOfRows, 7)
+    }
+
     /// The description is searched with the functions, listed first, and its
     /// occurrence opens the description on the match. The scope narrows the
     /// search to one or the other.
@@ -305,10 +320,21 @@ final class CodePaneFindTests: XCTestCase {
         pane.setModuleDescription("# CpuPei\n\nReads the Status of the CPU.")
         pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true, wholeWord: true))
         try await waitForSearch(pane)
-        XCTAssertEqual(pane.searchResultsForTests.map(\.function), [L("Description"), "First", "Second"])
+        XCTAssertEqual(pane.searchResultsForTests.map(\.function), ["CpuPei", "First", "Second"],
+                       "the description under the module's name")
         XCTAssertEqual(pane.searchResultsForTests[0].lines, ["Reads the Status of the CPU."])
         XCTAssertEqual(pane.searchSummaryForTests,
                        L("%1$@ results in %2$@ functions and the description", "6", "2"))
+
+        let outline = pane.searchPanel.outline
+        let row = try XCTUnwrap(outline.view(atColumn: 0, row: 0, makeIfNecessary: true) as? CodeNavigatorCell)
+        XCTAssertEqual(row.iconName, "book")
+        let words = try XCTUnwrap(row.textField?.attributedStringValue)
+        XCTAssertTrue(words.string.hasSuffix("CpuPei " + L("Description")))
+        XCTAssertNotNil(words.attribute(.attachment, at: 0, effectiveRange: nil), "the module's badge before its name")
+        let description = (words.string as NSString).range(of: L("Description"))
+        XCTAssertEqual(words.attribute(.foregroundColor, at: description.location, effectiveRange: nil) as? NSColor,
+                       .secondaryLabelColor)
 
         pane.chooseSearchRowForTests(1)
         XCTAssertTrue(pane.showsDescription)
@@ -320,7 +346,7 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual(pane.searchResultsForTests.map(\.function), ["First", "Second"])
         pane.setSearchScopeForTests(everywhere: false, functions: false)
         try await waitForSearch(pane)
-        XCTAssertEqual(pane.searchResultsForTests.map(\.function), [L("Description")])
+        XCTAssertEqual(pane.searchResultsForTests.map(\.function), ["CpuPei"])
         XCTAssertEqual(pane.searchSummaryForTests, L("%1$@ results in the description", "1"))
     }
 

@@ -1,6 +1,8 @@
 import AppKit
+import AppPalette
 import Find
 import Localization
+import ToolModuleKit
 
 /// The navigator's Search tab (#41): one search over the C of every function
 /// of the module and its description, the occurrences listed as a tree, and a
@@ -59,12 +61,12 @@ extension CodePaneView {
             let items = result.groups.map { group -> CodeSearchPanel.GroupItem in
                 switch group.id {
                 case .description:
-                    return CodeSearchPanel.GroupItem(target: .description, name: L("Description"),
-                                                     detail: self.manifest.module.name, hits: group.hits)
+                    return CodeSearchPanel.GroupItem(target: .description, name: self.manifest.module.name,
+                                                     detail: L("Description"),
+                                                     nameMark: self.searchModuleMark(), hits: group.hits)
                 case .function(let index):
                     return CodeSearchPanel.GroupItem(
                         target: group.id, name: self.navigatorName(of: index),
-                        detail: self.navigatorAddress(of: index),
                         mark: self.navigatorMark(of: index), hits: group.hits)
                 }
             }
@@ -102,11 +104,21 @@ extension CodePaneView {
         showFindPlate(range, in: view)
     }
 
+    /// The module's review badge, as the navigator's head draws it, in the
+    /// navigator's size: what stands before the module's name in the tab.
+    func searchModuleMark() -> NSImage? {
+        let readiness = ToolRowMarks.CodeReadiness(manifest.reviewProgress)
+        let configuration = NSImage.SymbolConfiguration(pointSize: CodePaneView.navigatorSize, weight: .regular)
+            .applying(.init(paletteColors: [RowMarks.codeReviewed]))
+        return NSImage(systemSymbolName: readiness.symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
+    }
+
     // MARK: - For tests
 
 
-    /// The tab's tree: each group's name — a function's, or "Description" —
-    /// and its occurrences' lines.
+    /// The tab's tree: each group's name — a function's, or the module's for
+    /// the description — and its occurrences' lines.
     public var searchResultsForTests: [(function: String, lines: [String])] {
         searchPanel.items.map { ($0.name, $0.children.map(\.hit.lineText)) }
     }

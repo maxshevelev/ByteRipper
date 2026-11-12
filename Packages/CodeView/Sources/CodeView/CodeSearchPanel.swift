@@ -37,18 +37,23 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     final class GroupItem {
         let target: Target
         let name: String
-        /// Grey after the name: the function's address, the module's name.
+        /// Grey after the name: "Description" after the module's name; a
+        /// function has none — its address says nothing about its C.
         let detail: String
         /// The mark the Functions list draws for a function
         /// (`CodeNavigatorCell`); nil for the description, which has a book.
         let mark: String?
+        /// A mark inside the name, before it: the description's module wears
+        /// its review badge, as the navigator's head draws it.
+        let nameMark: NSImage?
         let children: [HitItem]
         init(target: Target, name: String, detail: String = "", mark: String? = nil,
-             hits: [TextSearchHit]) {
+             nameMark: NSImage? = nil, hits: [TextSearchHit]) {
             self.target = target
             self.name = name
             self.detail = detail
             self.mark = mark
+            self.nameMark = nameMark
             children = hits.map { HitItem(target: target, hit: $0) }
         }
     }
@@ -273,23 +278,25 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
                 ?? CodeNavigatorCell(identifier: id)
             cell.showsDisclosure(true)
             cell.showsCalls(expandable: true, expanded: outlineView.isItemExpanded(group))
-            cell.onToggle = { [weak outlineView, weak cell] in
-                guard let outlineView else { return }
-                if outlineView.isItemExpanded(group) {
-                    outlineView.collapseItem(group)
-                } else {
-                    outlineView.expandItem(group)
-                }
-                cell?.showsCalls(expandable: true, expanded: outlineView.isItemExpanded(group))
-            }
+            cell.onToggle = { [weak self] in self?.toggle(group) }
             if group.target == .description {
-                cell.showsSymbol("book.closed")
+                cell.showsSymbol("book")
             } else {
                 cell.showsIcon(group.mark)
             }
-            let line = NSMutableAttributedString(string: group.name, attributes: [
+            let line = NSMutableAttributedString()
+            if let image = group.nameMark {
+                let attachment = NSTextAttachment()
+                attachment.image = image
+                let font = CodePaneView.navigatorBoldFont()
+                attachment.bounds = NSRect(x: 0, y: (font.capHeight - image.size.height) / 2,
+                                           width: image.size.width, height: image.size.height)
+                line.append(NSAttributedString(attachment: attachment))
+                line.append(NSAttributedString(string: " ", attributes: [.font: font]))
+            }
+            line.append(NSAttributedString(string: group.name, attributes: [
                 .font: CodePaneView.navigatorBoldFont(), .foregroundColor: NSColor.labelColor
-            ])
+            ]))
             if !group.detail.isEmpty {
                 line.append(NSAttributedString(string: " " + group.detail, attributes: [
                     .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
@@ -357,6 +364,21 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         guard width != measuredWidth, outline.numberOfRows > 0 else { return }
         measuredWidth = width
         outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
+    }
+
+    /// Opens or closes a group, its rows sliding in or out as the Functions
+    /// list's do; the chevron has already turned.
+    func toggle(_ group: GroupItem) {
+        let opening = !outline.isItemExpanded(group)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.allowsImplicitAnimation = true
+            if opening {
+                outline.animator().expandItem(group)
+            } else {
+                outline.animator().collapseItem(group)
+            }
+        }
     }
 
     /// The zoom changed: the rows are made again in the new size and
