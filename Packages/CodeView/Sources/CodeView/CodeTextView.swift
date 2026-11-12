@@ -231,6 +231,11 @@ final class CodeTextView: NSTextView {
     /// line: the lines are taller than the font's, and the box goes round
     /// the glyphs, not the whole line.
     var highlightInset: CGFloat = 0
+    /// The match a find's yellow plate stands on: its highlight box is not
+    /// drawn, so no grey shows round the yellow.
+    var plateRange: NSRange? {
+        didSet { if plateRange != oldValue { needsDisplay = true } }
+    }
 
     func highlight(_ ranges: [NSRange]) {
         guard let storage = textStorage else { return }
@@ -274,6 +279,9 @@ final class CodeTextView: NSTextView {
         guard !highlighted.isEmpty else { return }
         let fill = highlightFill
         for range in highlighted {
+            // A box under the plate — the match's own, or a name the match
+            // is part of — would show round the yellow.
+            if let plateRange, NSIntersectionRange(range, plateRange).length > 0 { continue }
             boxes(range, inset: highlightInset, radius: CodeColors.symbolHighlightRadius, fill: fill)
         }
     }

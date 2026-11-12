@@ -4297,6 +4297,8 @@ import ToolModuleKit
         // shows the hand; no underline over every call.
         cTextView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         cTextView.drawsBackground = false
+        PlateLayoutManager.install(in: cTextView)
+        PlateLayoutManager.install(in: descriptionView.textView)
         cTextView.font = Self.codeFont()
         cTextView.textContainerInset = NSSize(width: 8, height: 8)
         cTextView.isVerticallyResizable = true

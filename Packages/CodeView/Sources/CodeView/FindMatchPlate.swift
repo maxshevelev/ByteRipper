@@ -15,6 +15,9 @@ final class FindMatchPlate: NSView {
     private(set) var range: NSRange?
     /// The text the plate was put on: another text is no place for it.
     private var shownText = ""
+    /// The plate came or went: the greys drawn under a match are drawn again,
+    /// without it or with it.
+    var onChange: (() -> Void)?
 
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -30,10 +33,17 @@ final class FindMatchPlate: NSView {
         // The glyphs drawn on the plate are dark, whatever their syntax
         // colour: the yellow is light in both appearances.
         layout.addTemporaryAttribute(.foregroundColor, value: Self.ink, forCharacterRange: range)
+        // Nothing grey is drawn under the yellow: the layout manager fills no
+        // background there — the selection's, which the plate shows — and
+        // the name highlight and the find grey leave the match out.
+        (layout as? PlateLayoutManager)?.unfilledRange = range
+        (view as? CodeTextView)?.plateRange = range
         frame = view.bounds
         autoresizingMask = [.width, .height]
         if superview !== view { view.addSubview(self) }
         needsDisplay = true
+        view.needsDisplay = true
+        onChange?()
     }
 
     /// Takes the plate away and gives the match its own colours back.
@@ -44,9 +54,16 @@ final class FindMatchPlate: NSView {
             layout.removeTemporaryAttribute(.foregroundColor, forCharacterRange:
                 NSRange(location: 0, length: (view.string as NSString).length))
         }
+        let had = range != nil
+        if let view = textView {
+            (view.layoutManager as? PlateLayoutManager)?.unfilledRange = nil
+            (view as? CodeTextView)?.plateRange = nil
+            view.needsDisplay = true
+        }
         range = nil
         textView = nil
         removeFromSuperview()
+        if had { onChange?() }
     }
 
     /// The text may have been replaced, or the selection moved: the plate
@@ -54,6 +71,12 @@ final class FindMatchPlate: NSView {
     func check() {
         guard let view = textView, let range else { return }
         if view.string != shownText || view.selectedRange() != range { hide() }
+    }
+
+    /// The match the greys leave out in `view`: the plate's, while it
+    /// stands there.
+    func excludedRange(in view: NSTextView) -> NSRange? {
+        isShown && textView === view ? range : nil
     }
 
     /// Whether the plate is on a match now.
@@ -66,10 +89,6 @@ final class FindMatchPlate: NSView {
     static let fill = NSColor(srgbRed: 1.0, green: 0.98, blue: 0.52, alpha: 1)
     static let edge = NSColor(srgbRed: 0.78, green: 0.72, blue: 0.18, alpha: 0.55)
     static let padding = NSSize(width: 1.5, height: 1)
-    /// How far past the match the box under the plate is cleared: the name
-    /// highlight's two points and its half-point edge.
-    static let clearance: CGFloat = 2.5
-
     /// The plates over `range`, one per line it runs over: from the font's
     /// ascender to its descender around the line's baseline.
     static func plates(for range: NSRange, in view: NSTextView) -> [NSRect] {
@@ -100,38 +119,9 @@ final class FindMatchPlate: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let view = textView, let range, let layout = view.layoutManager,
-              let container = view.textContainer,
               NSMaxRange(range) <= (view.string as NSString).length else { return }
         let glyphRange = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-        // Under the plate the match's grey and its selection are drawn the
-        // line's full height and would show above and below the yellow: that
-        // box goes back to the code's background first.
-        // The C draws no background of its own: the code area's is the text
-        // background.
-        (view.drawsBackground ? view.backgroundColor : NSColor.textBackgroundColor).setFill()
         let origin = view.textContainerOrigin
-        // As wide as the name highlight's box (two points past the word, and
-        // a half for its edge): what the C draws round a selected name.
-        var cleared: [NSRect] = []
-        layout.enumerateEnclosingRects(forGlyphRange: glyphRange,
-                                       withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
-                                       in: container) { box, _ in
-            // Out to whole pixels: an edge on a half pixel blends with the
-            // grey under it and draws a hairline frame.
-            let wide = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -Self.clearance, dy: -0.5)
-            cleared.append(self.backingAlignedRect(wide, options: .alignAllEdgesOutward))
-        }
-        for box in cleared { box.fill() }
-        // The neighbours' glyphs the clearing reached are drawn back, on the
-        // plain background.
-        NSGraphicsContext.saveGraphicsState()
-        let clip = NSBezierPath()
-        for box in cleared { clip.appendRect(box) }
-        clip.addClip()
-        let lines = layout.glyphRange(forBoundingRect: cleared.reduce(NSRect.null) { $0.union($1) }
-                                        .offsetBy(dx: -origin.x, dy: -origin.y), in: container)
-        layout.drawGlyphs(forGlyphRange: lines, at: origin)
-        NSGraphicsContext.restoreGraphicsState()
         for plate in Self.plates(for: range, in: view) where plate.insetBy(dx: -4, dy: -4).intersects(dirtyRect) {
             let path = NSBezierPath(roundedRect: plate, xRadius: Self.radius, yRadius: Self.radius)
             NSGraphicsContext.saveGraphicsState()
@@ -148,5 +138,37 @@ final class FindMatchPlate: NSView {
             path.stroke()
         }
         layout.drawGlyphs(forGlyphRange: glyphRange, at: origin)
+    }
+}
+
+/// The layout manager of a text a find's plate can stand on: it fills no
+/// background under the plate's match. The selection is drawn the line's full
+/// height, grey while the keyboard is in the Find bar, and would show above
+/// and below the yellow; no colour of the text view's says otherwise for a
+/// selection drawn inactive.
+final class PlateLayoutManager: NSLayoutManager {
+    /// The characters whose background is not filled; nil fills everything.
+    var unfilledRange: NSRange? {
+        didSet {
+            guard unfilledRange != oldValue else { return }
+            for range in [oldValue, unfilledRange].compactMap({ $0 }) {
+                invalidateDisplay(forCharacterRange: range)
+            }
+        }
+    }
+
+    override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int,
+                                          forCharacterRange charRange: NSRange, color: NSColor) {
+        if let unfilledRange, NSIntersectionRange(charRange, unfilledRange) == charRange, charRange.length > 0 {
+            return
+        }
+        super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: color)
+    }
+
+    /// Puts one in `view`'s place, keeping its text: made once, as the view
+    /// is set up, before any temporary attribute is laid on.
+    static func install(in view: NSTextView) {
+        guard let container = view.textContainer, !(view.layoutManager is PlateLayoutManager) else { return }
+        container.replaceLayoutManager(PlateLayoutManager())
     }
 }

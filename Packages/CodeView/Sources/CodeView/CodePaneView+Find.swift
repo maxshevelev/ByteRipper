@@ -140,6 +140,7 @@ extension CodePaneView {
 
     private func watchSelectionForFindPlate() {
         guard findPlateWatch.isEmpty else { return }
+        findPlate.onChange = { [weak self] in self?.paintFindMatches() }
         for view in [cTextView, descriptionView.textView] as [NSTextView] {
             findPlateWatch.append(NotificationCenter.default.addObserver(
                 forName: NSTextView.didChangeSelectionNotification, object: view, queue: .main
@@ -195,7 +196,9 @@ extension CodePaneView {
             let barMatches = side == findSearched?.side && findSearched?.text == view.string
                 ? ranges : []
             let shown = barMatches.isEmpty ? searchTabMatches(side) : barMatches
-            for range in shown where NSMaxRange(range) <= length {
+            // The match under the yellow plate has no grey of its own.
+            let plated = findPlate.excludedRange(in: view)
+            for range in shown where NSMaxRange(range) <= length && range != plated {
                 layout.addTemporaryAttribute(.backgroundColor, value: Self.findMatchFill,
                                              forCharacterRange: range)
             }
