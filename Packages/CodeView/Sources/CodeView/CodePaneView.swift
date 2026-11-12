@@ -3969,6 +3969,7 @@ import ToolModuleKit
             if let top { scroll(table, toTop: top) }
         }
         syncingSelection = false
+        searchPanel.zoomChanged()
         drawnC = nil
         drawnDiff = nil
         updateC(keepingPlace: true)

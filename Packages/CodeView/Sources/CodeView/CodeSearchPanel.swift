@@ -299,7 +299,9 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
             return cell
         }
         guard let hit = item as? HitItem else { return nil }
-        let id = NSUserInterfaceItemIdentifier("hit")
+        // The cell's glyph and insets are set as it is made, for one size: a
+        // cell made at another zoom is not taken again.
+        let id = NSUserInterfaceItemIdentifier("hit-\(CodePaneView.navigatorSize)")
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? NSTableCellView ?? {
             let cell = NSTableCellView()
             cell.identifier = id
@@ -355,6 +357,26 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         guard width != measuredWidth, outline.numberOfRows > 0 else { return }
         measuredWidth = width
         outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
+    }
+
+    /// The zoom changed: the rows are made again in the new size and
+    /// measured again, the groups the reader closed staying closed.
+    func zoomChanged() {
+        let closed = items.filter { !outline.isItemExpanded($0) }
+        let top = outline.row(at: NSPoint(x: 0, y: scroll.contentView.bounds.minY))
+        let topItem = top >= 0 ? outline.item(atRow: top) as AnyObject? : nil
+        outline.reloadData()
+        for item in items where !closed.contains(where: { $0 === item }) {
+            outline.expandItem(item)
+        }
+        measuredWidth = 0
+        if outline.numberOfRows > 0 {
+            outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
+        }
+        if let topItem {
+            let row = outline.row(forItem: topItem)
+            if row >= 0 { outline.scroll(outline.rect(ofRow: row).origin) }
+        }
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) { redrawChevron(notification) }

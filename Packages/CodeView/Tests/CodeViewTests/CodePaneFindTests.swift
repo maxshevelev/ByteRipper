@@ -3,6 +3,7 @@ import XCTest
 import CodeAnalysis
 import Find
 import Localization
+import ToolModuleKit
 @testable import CodeView
 
 /// The code panel's side of a search (#41): the bar stands over the code or
@@ -254,6 +255,46 @@ final class CodePaneFindTests: XCTestCase {
 
         pane.searchAllFunctions(TextQuery(text: ""))
         XCTAssertEqual(pane.paintedFindRanges(.c), [])
+    }
+
+    /// The tab's rows follow the zoom, as the Functions list does: the
+    /// names, the occurrences and their rows are drawn at the new size.
+    func testTheTabFollowsTheZoom() async throws {
+        let suite = "CodePaneFindTests.zoom"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let saved = ToolPanelFont.defaults
+        ToolPanelFont.defaults = defaults
+        defer {
+            ToolPanelFont.defaults = saved
+            defaults.removePersistentDomain(forName: suite)
+        }
+        defaults.set(13.0, forKey: ToolPanelFont.zoomSizeKey)
+        let (pane, _) = try paneInWindow()
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true))
+        try await waitForSearch(pane)
+        let outline = pane.searchPanel.outline
+        func sizes() -> (name: CGFloat?, line: CGFloat?, row: CGFloat) {
+            func size(_ row: Int) -> CGFloat? {
+                let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView
+                let text = cell?.textField?.attributedStringValue
+                return (text?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize
+            }
+            return (size(0), size(1), outline.rect(ofRow: 1).height)
+        }
+        let small = sizes()
+        XCTAssertEqual(small.name, CodePaneView.navigatorSize)
+
+        defaults.set(18.0, forKey: ToolPanelFont.zoomSizeKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        pane.layoutSubtreeIfNeeded()
+        let large = sizes()
+        XCTAssertEqual(large.name, CodePaneView.navigatorSize, "the function's name")
+        XCTAssertEqual(large.line, CodePaneView.navigatorSize, "the occurrence's line")
+        XCTAssertGreaterThan(large.name ?? 0, small.name ?? 0)
+        XCTAssertGreaterThan(large.row, small.row, "the row is measured again")
+        XCTAssertEqual(pane.searchResultsForTests.count, 2, "the result stays")
+        XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 0)))
     }
 
     /// The description is searched with the functions, listed first, and its
