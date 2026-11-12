@@ -294,7 +294,9 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
                 let attachment = NSTextAttachment()
                 attachment.image = image
                 let font = CodePaneView.navigatorBoldFont()
-                attachment.bounds = NSRect(x: 0, y: (font.capHeight - image.size.height) / 2,
+                // Centred on the name's capitals, as the badge view stands
+                // beside the heading.
+                attachment.bounds = NSRect(x: 0, y: ((font.capHeight - image.size.height) / 2).rounded(),
                                            width: image.size.width, height: image.size.height)
                 line.append(NSAttributedString(attachment: attachment))
                 line.append(NSAttributedString(string: " ", attributes: [.font: font]))
@@ -427,7 +429,9 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     /// bold and the label's colour: the eye finds it in the line. A match
     /// far into a long line is brought forward, the start cut to "…".
     static func line(of hit: TextSearchHit) -> NSAttributedString {
-        var shown = hit.lineText as NSString
+        // A tab — after a list's bullet in the description — reads as a
+        // space here; one unit for one, so the match's range holds.
+        var shown = hit.lineText.replacingOccurrences(of: "\t", with: " ") as NSString
         var start = min(hit.rangeInLine.lowerBound, shown.length)
         var end = min(hit.rangeInLine.upperBound, shown.length)
         if start > leadingContext + 8 {

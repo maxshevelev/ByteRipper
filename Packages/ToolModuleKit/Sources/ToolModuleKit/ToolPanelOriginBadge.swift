@@ -169,8 +169,12 @@ public extension ToolPanelOriginBadge {
         let inferred = origin.confidence == .inferred
         let hue = origin.category.badgeColor
         let font = NSFont.systemFont(ofSize: pointSize, weight: .semibold)
-        let text = NSAttributedString(string: word, attributes: [.font: font])
-        let size = NSSize(width: ceil(text.size().width) + 8, height: ceil(font.ascender - font.descender) + 1)
+        let ink = inferred ? hue.withAlphaComponent(0.75) : hue
+        let text = NSAttributedString(string: word, attributes: [.font: font, .foregroundColor: ink])
+        let words = text.size()
+        // The frame as the badge view keeps it: four points either side of
+        // the word, and a point and a half above and below its line.
+        let size = NSSize(width: ceil(words.width) + 8, height: ceil(words.height) + 3)
         let image = NSImage(size: size, flipped: false) { rect in
             let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 3, yRadius: 3)
             if !inferred {
@@ -182,9 +186,7 @@ public extension ToolPanelOriginBadge {
             hue.setStroke()
             path.lineWidth = 1
             path.stroke()
-            let ink = inferred ? hue.withAlphaComponent(0.75) : hue
-            NSAttributedString(string: word, attributes: [.font: font, .foregroundColor: ink])
-                .draw(at: NSPoint(x: 4, y: (rect.height - (font.ascender - font.descender)) / 2 - font.descender))
+            text.draw(at: NSPoint(x: (rect.width - words.width) / 2, y: (rect.height - words.height) / 2))
             return true
         }
         image.accessibilityDescription = origin.badgeToolTip

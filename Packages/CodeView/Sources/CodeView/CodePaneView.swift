@@ -3581,8 +3581,10 @@ import ToolModuleKit
                                                                   constant: -6)
         constraints += margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
-        constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
-        constraints += margin(functionScroll.trailingAnchor, functionPane.trailingAnchor, -8)
+        // Edge to edge: the inset list keeps its rows clear of the edges
+        // itself, and a margin of the pane's as well would double it.
+        constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 0)
+        constraints += margin(functionScroll.trailingAnchor, functionPane.trailingAnchor, 0)
         constraints += margin(readinessBar.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(readinessBar.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(searchField.leadingAnchor, navigatorBar.leadingAnchor, 8)
@@ -4022,10 +4024,11 @@ import ToolModuleKit
         (codeLineHeight - NSLayoutManager().defaultLineHeight(for: codeFont())) / 2
     }
 
-    /// How far the inset list (`NSTableView.Style.inset`) puts a row's text
-    /// past where the plain list put it: its padding at the edge, and its
-    /// first cell's own (measured).
-    static let insetListShift: CGFloat = 16
+    /// How far the inset list (`NSTableView.Style.inset`), standing edge to
+    /// edge, puts a row's text past where the plain list, 8 points in, put
+    /// it: its padding at the edge and its first cell's own, less those 8
+    /// (measured).
+    static let insetListShift: CGFloat = 8
 
     /// The navigator's lists read a step smaller than the code beside them:
     /// they are an index to the code, not the text being read. The step

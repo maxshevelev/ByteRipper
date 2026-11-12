@@ -97,7 +97,21 @@ final class FindMatchPlate: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let view = textView, let range, let layout = view.layoutManager,
+              let container = view.textContainer,
               NSMaxRange(range) <= (view.string as NSString).length else { return }
+        let glyphRange = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        // Under the plate the match's grey and its selection are drawn the
+        // line's full height and would show above and below the yellow: that
+        // box goes back to the code's background first.
+        // The C draws no background of its own: the code area's is the text
+        // background.
+        (view.drawsBackground ? view.backgroundColor : NSColor.textBackgroundColor).setFill()
+        let origin = view.textContainerOrigin
+        layout.enumerateEnclosingRects(forGlyphRange: glyphRange,
+                                       withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+                                       in: container) { box, _ in
+            box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -0.5, dy: 0).fill()
+        }
         for plate in Self.plates(for: range, in: view) where plate.insetBy(dx: -4, dy: -4).intersects(dirtyRect) {
             let path = NSBezierPath(roundedRect: plate, xRadius: Self.radius, yRadius: Self.radius)
             NSGraphicsContext.saveGraphicsState()
@@ -113,7 +127,6 @@ final class FindMatchPlate: NSView {
             path.lineWidth = 0.5
             path.stroke()
         }
-        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-        layout.drawGlyphs(forGlyphRange: glyphs, at: view.textContainerOrigin)
+        layout.drawGlyphs(forGlyphRange: glyphRange, at: origin)
     }
 }
