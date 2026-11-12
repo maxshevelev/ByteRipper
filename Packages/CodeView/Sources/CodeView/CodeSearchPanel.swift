@@ -425,8 +425,8 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     /// three lines shown.
     static let leadingContext = 32
 
-    /// The occurrence's line in the navigator's type, grey, the match in
-    /// bold and the label's colour: the eye finds it in the line. A match
+    /// The occurrence's line in the navigator's type and the text's colour,
+    /// the match in bold: the eye finds it in the line. A match
     /// far into a long line is brought forward, the start cut to "…".
     static func line(of hit: TextSearchHit) -> NSAttributedString {
         // A tab — after a list's bullet in the description — reads as a
@@ -447,7 +447,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
             end -= removed
         }
         let text = NSMutableAttributedString(string: shown as String, attributes: [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
         ])
         if end > start {
             text.addAttributes([.font: CodePaneView.navigatorBoldFont(),
