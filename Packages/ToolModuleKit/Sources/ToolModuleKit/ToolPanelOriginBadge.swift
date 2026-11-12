@@ -158,3 +158,36 @@ public extension ModuleOrigin {
         }
     }
 }
+
+public extension ToolPanelOriginBadge {
+    /// The badge as a picture, for a place a view cannot stand — inside a
+    /// line of text, as the code panel's Search tab puts it before a module's
+    /// name. Drawn when it is shown, so the colours follow the theme. Nil for
+    /// no origin and `unknown`, which draw nothing.
+    static func image(for origin: ModuleOrigin?, pointSize: CGFloat) -> NSImage? {
+        guard let origin, let word = origin.badgeWord else { return nil }
+        let inferred = origin.confidence == .inferred
+        let hue = origin.category.badgeColor
+        let font = NSFont.systemFont(ofSize: pointSize, weight: .semibold)
+        let text = NSAttributedString(string: word, attributes: [.font: font])
+        let size = NSSize(width: ceil(text.size().width) + 8, height: ceil(font.ascender - font.descender) + 1)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 3, yRadius: 3)
+            if !inferred {
+                hue.withAlphaComponent(0.12).setFill()
+                path.fill()
+            } else {
+                path.setLineDash([2, 2], count: 2, phase: 0)
+            }
+            hue.setStroke()
+            path.lineWidth = 1
+            path.stroke()
+            let ink = inferred ? hue.withAlphaComponent(0.75) : hue
+            NSAttributedString(string: word, attributes: [.font: font, .foregroundColor: ink])
+                .draw(at: NSPoint(x: 4, y: (rect.height - (font.ascender - font.descender)) / 2 - font.descender))
+            return true
+        }
+        image.accessibilityDescription = origin.badgeToolTip
+        return image
+    }
+}

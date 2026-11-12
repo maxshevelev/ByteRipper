@@ -297,6 +297,25 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 0)))
     }
 
+    /// A module the review placed wears its origin before its name.
+    func testTheDescriptionRowWearsTheModulesOrigin() async throws {
+        var placed = manifest()
+        placed.reading = AnalysisReading(rev: 1, origin: ModuleOrigin(category: .edk2, confidence: .established))
+        let pane = CodePaneView(manifest: placed, artifact: try artifact(), moduleBytes: moduleBytes, hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = pane
+        pane.setModuleDescription("# CpuPei\n\nReads the Status of the CPU.")
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true))
+        try await waitForSearch(pane)
+        let row = try XCTUnwrap(pane.searchPanel.outline.view(atColumn: 0, row: 0, makeIfNecessary: true)
+                                    as? CodeNavigatorCell)
+        let words = try XCTUnwrap(row.textField?.attributedStringValue)
+        let badge = try XCTUnwrap(words.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
+        XCTAssertNotNil(badge.image, "the origin's framed word before the name")
+        XCTAssertTrue(words.string.hasSuffix("CpuPei " + L("Description")))
+    }
+
     /// The chevron closes a group and opens it again.
     func testAGroupClosesAndOpens() async throws {
         let (pane, _) = try paneInWindow()
@@ -331,7 +350,7 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual(row.iconName, "book")
         let words = try XCTUnwrap(row.textField?.attributedStringValue)
         XCTAssertTrue(words.string.hasSuffix("CpuPei " + L("Description")))
-        XCTAssertNotNil(words.attribute(.attachment, at: 0, effectiveRange: nil), "the module's badge before its name")
+        XCTAssertTrue(words.string.hasPrefix("CpuPei"), "no origin: no badge before the name")
         let description = (words.string as NSString).range(of: L("Description"))
         XCTAssertEqual(words.attribute(.foregroundColor, at: description.location, effectiveRange: nil) as? NSColor,
                        .secondaryLabelColor)

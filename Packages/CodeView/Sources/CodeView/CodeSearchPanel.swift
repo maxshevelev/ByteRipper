@@ -44,7 +44,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         /// (`CodeNavigatorCell`); nil for the description, which has a book.
         let mark: String?
         /// A mark inside the name, before it: the description's module wears
-        /// its review badge, as the navigator's head draws it.
+        /// its origin, as the navigator's head draws it.
         let nameMark: NSImage?
         let children: [HitItem]
         init(target: Target, name: String, detail: String = "", mark: String? = nil,
@@ -138,7 +138,9 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         outline.outlineTableColumn = column
         outline.headerView = nil
         outline.rowSizeStyle = .custom
-        outline.style = .plain
+        // The inset list, as the UEFI tree has it: the rows clear of the
+        // panel's edges, and the selection's rounded block the system's own.
+        outline.style = .inset
         outline.backgroundColor = .clear
         // The rows draw their own chevron and inset, as the Functions list's
         // groups do; the outline's own triangle and indent are not used.
@@ -261,7 +263,10 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         let row = CodePaneView.navigatorRowHeight
         guard let hit = item as? HitItem else { return row }
         // A long line wraps: the row is as tall as its lines, three at most.
-        let width = max(40, outlineView.bounds.width - Self.hitInset - Self.hitTrailing - 4)
+        // The cell's width: the column's, which the inset list keeps clear
+        // of the edges.
+        let column = outlineView.numberOfColumns > 0 ? outlineView.rect(ofColumn: 0).width : outlineView.bounds.width
+        let width = max(40, column - Self.hitInset - Self.hitTrailing - 4)
         let measured = Self.line(of: hit.hit)
             .boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
                           options: [.usesLineFragmentOrigin, .usesFontLeading]).height
@@ -352,7 +357,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     static var hitInset: CGFloat {
         glyphInset + CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize) + 5
     }
-    static let hitTrailing: CGFloat = 8
+    static let hitTrailing: CGFloat = 4
     static let hitPadding: CGFloat = 3
 
     /// A width the rows have not been measured at: the lines wrap anew.

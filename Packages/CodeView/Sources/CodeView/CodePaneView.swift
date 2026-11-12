@@ -3409,6 +3409,9 @@ import ToolModuleKit
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         configure(functionTable, identifier: "function")
+        // The inset list, as the UEFI tree has it: the selection is the
+        // system's rounded block, clear of the panel's edges.
+        functionTable.style = .inset
         functionTable.allowsMultipleSelection = true
         functionTable.rowHeight = Self.navigatorRowHeight
         functionTable.menu = rowMenu()
@@ -3552,7 +3555,9 @@ import ToolModuleKit
         ]
         constraints += margin(emptyListLabel.leadingAnchor, functionPane.leadingAnchor, 16)
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
-        constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12)
+        // Where the list's rows start their text: the inset list keeps them
+        // clear of the pane's edge, and the heading keeps to them.
+        constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12 + Self.insetListShift)
         constraints += margin(moduleBlock.trailingAnchor, descriptionButton.leadingAnchor, -6)
         // Against the pane's padding, as the list below it, whether the New
         // badge shows or not: the book does not move.
@@ -4016,6 +4021,11 @@ import ToolModuleKit
     static var codeLinePadding: CGFloat {
         (codeLineHeight - NSLayoutManager().defaultLineHeight(for: codeFont())) / 2
     }
+
+    /// How far the inset list (`NSTableView.Style.inset`) puts a row's text
+    /// past where the plain list put it: its padding at the edge, and its
+    /// first cell's own (measured).
+    static let insetListShift: CGFloat = 16
 
     /// The navigator's lists read a step smaller than the code beside them:
     /// they are an index to the code, not the text being read. The step

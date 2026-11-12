@@ -1,5 +1,4 @@
 import AppKit
-import AppPalette
 import Find
 import Localization
 import ToolModuleKit
@@ -104,14 +103,12 @@ extension CodePaneView {
         showFindPlate(range, in: view)
     }
 
-    /// The module's review badge, as the navigator's head draws it, in the
-    /// navigator's size: what stands before the module's name in the tab.
+    /// The module's origin, as the navigator's head draws it before the
+    /// name — the category's framed word — in the tab's size. Nil when the
+    /// review has not placed the module.
     func searchModuleMark() -> NSImage? {
-        let readiness = ToolRowMarks.CodeReadiness(manifest.reviewProgress)
-        let configuration = NSImage.SymbolConfiguration(pointSize: CodePaneView.navigatorSize, weight: .regular)
-            .applying(.init(paletteColors: [RowMarks.codeReviewed]))
-        return NSImage(systemSymbolName: readiness.symbol, accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration)
+        ToolPanelOriginBadge.image(for: manifest.reading?.origin,
+                                   pointSize: (CodePaneView.navigatorSize * 0.8).rounded())
     }
 
     // MARK: - For tests

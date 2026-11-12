@@ -48,11 +48,11 @@ final class CodeNavigatorHeader: NSTableHeaderView {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: paragraph
         ]
-        let inset = Self.titleInset(in: tableView)
         let height = ceil(font.ascender - font.descender)
         for (index, column) in tableView.tableColumns.enumerated() {
             let rect = headerRect(ofColumn: index)
             guard rect.intersects(dirtyRect) else { continue }
+            let inset = Self.titleInset(in: tableView, column: index)
             let title = NSRect(x: rect.minX + inset, y: rect.midY - height / 2,
                                width: max(0, rect.width - inset - 4), height: height)
             (column.title as NSString).draw(with: title, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
@@ -67,7 +67,15 @@ final class CodeNavigatorHeader: NSTableHeaderView {
 
     /// Where a column's title starts in its header rect: half the gap between
     /// columns — the cell view starts there — then the cell's text inset.
-    static func titleInset(in tableView: NSTableView) -> CGFloat {
-        tableView.intercellSpacing.width / 2 + cellTextInset
+    static func titleInset(in tableView: NSTableView, column: Int = 0) -> CGFloat {
+        // Where the table puts a column's cell inside the column: half the
+        // intercell gap, and in the inset list the row's own padding too.
+        // Read from the table when it has a row, so the style never has to
+        // be known here.
+        guard tableView.numberOfRows > 0, column < tableView.numberOfColumns else {
+            return tableView.intercellSpacing.width / 2 + cellTextInset
+        }
+        let cell = tableView.frameOfCell(atColumn: column, row: 0).minX - tableView.rect(ofColumn: column).minX
+        return cell + cellTextInset
     }
 }

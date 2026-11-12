@@ -765,12 +765,14 @@ final class CodePaneViewTests: XCTestCase {
             // A label's alignment rect starts at its first glyph; its frame
             // is two points further out.
             let textX = cell.convert(field.alignmentRect(forFrame: field.frame), to: navigator).minX
-            let titleX = header.headerRect(ofColumn: column).minX + CodeNavigatorHeader.titleInset(in: navigator)
+            let titleX = header.headerRect(ofColumn: column).minX
+                + CodeNavigatorHeader.titleInset(in: navigator, column: column)
             XCTAssertEqual(titleX, textX, accuracy: 0.5, "the title of column \(column) over its text")
         }
         let text = try XCTUnwrap(navigator.tableColumn(withIdentifier: .init("string-text")))
-        XCTAssertEqual(navigator.rect(ofColumn: 1).maxX, navigator.bounds.maxX, accuracy: 1,
-                       "the text takes the pane's remaining width")
+        // The inset list keeps its padding at the right edge as at the left.
+        XCTAssertEqual(navigator.rect(ofColumn: 1).maxX, navigator.bounds.maxX - navigator.rect(ofColumn: 0).minX,
+                       accuracy: 1, "the text takes the pane's remaining width")
         XCTAssertGreaterThan(text.width, 200)
     }
 
