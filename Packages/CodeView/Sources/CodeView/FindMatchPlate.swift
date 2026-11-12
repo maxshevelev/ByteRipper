@@ -66,6 +66,9 @@ final class FindMatchPlate: NSView {
     static let fill = NSColor(srgbRed: 1.0, green: 0.98, blue: 0.52, alpha: 1)
     static let edge = NSColor(srgbRed: 0.78, green: 0.72, blue: 0.18, alpha: 0.55)
     static let padding = NSSize(width: 1.5, height: 1)
+    /// How far past the match the box under the plate is cleared: the name
+    /// highlight's two points and its half-point edge.
+    static let clearance: CGFloat = 2.5
 
     /// The plates over `range`, one per line it runs over: from the font's
     /// ascender to its descender around the line's baseline.
@@ -107,11 +110,28 @@ final class FindMatchPlate: NSView {
         // background.
         (view.drawsBackground ? view.backgroundColor : NSColor.textBackgroundColor).setFill()
         let origin = view.textContainerOrigin
+        // As wide as the name highlight's box (two points past the word, and
+        // a half for its edge): what the C draws round a selected name.
+        var cleared: [NSRect] = []
         layout.enumerateEnclosingRects(forGlyphRange: glyphRange,
                                        withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
                                        in: container) { box, _ in
-            box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -0.5, dy: 0).fill()
+            // Out to whole pixels: an edge on a half pixel blends with the
+            // grey under it and draws a hairline frame.
+            let wide = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -Self.clearance, dy: -0.5)
+            cleared.append(self.backingAlignedRect(wide, options: .alignAllEdgesOutward))
         }
+        for box in cleared { box.fill() }
+        // The neighbours' glyphs the clearing reached are drawn back, on the
+        // plain background.
+        NSGraphicsContext.saveGraphicsState()
+        let clip = NSBezierPath()
+        for box in cleared { clip.appendRect(box) }
+        clip.addClip()
+        let lines = layout.glyphRange(forBoundingRect: cleared.reduce(NSRect.null) { $0.union($1) }
+                                        .offsetBy(dx: -origin.x, dy: -origin.y), in: container)
+        layout.drawGlyphs(forGlyphRange: lines, at: origin)
+        NSGraphicsContext.restoreGraphicsState()
         for plate in Self.plates(for: range, in: view) where plate.insetBy(dx: -4, dy: -4).intersects(dirtyRect) {
             let path = NSBezierPath(roundedRect: plate, xRadius: Self.radius, yRadius: Self.radius)
             NSGraphicsContext.saveGraphicsState()
