@@ -374,12 +374,16 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 
     /// Opens or closes a group, its rows sliding in or out as the Functions
-    /// list's do; the chevron has already turned.
+    /// list's do; the chevron has already turned. Only the outline animates:
+    /// with implicit animation on, the cells it makes for the rows that come
+    /// into view are laid out under the animation too: an opened group's
+    /// rows fly down from the table's origin, and a closed one's can be left
+    /// at their first frame — no indent, no text. The Functions list had the
+    /// same fault (8b99226f).
     func toggle(_ group: GroupItem) {
         let opening = !outline.isItemExpanded(group)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
-            context.allowsImplicitAnimation = true
             if opening {
                 outline.animator().expandItem(group)
             } else {
