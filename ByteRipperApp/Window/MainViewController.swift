@@ -7298,6 +7298,9 @@ final class MainViewController: NSViewController {
     /// `testTheWholeToolbarFitsTheLaunchWidth`: it opens the window at exactly
     /// this width and fails if AppKit hid anything.
     static let toolbarFitWidth: CGFloat = 850
+    /// A code screen's zoomed height: more than any screen has, so the zoom
+    /// gives it the screen's visible height.
+    static let codeFitHeight: CGFloat = 100_000
 
     /// Ideal content width the window should be when zoomed (double-click on the
     /// title bar / Window > Zoom): the hex grid width for a single pane, or
@@ -7368,6 +7371,11 @@ final class MainViewController: NSViewController {
     }
 
     private func standardPanesHeight() -> CGFloat {
+        // A code screen has no height of its own to fit: its functions are of
+        // every length, and a window that followed the one on screen would jump
+        // at each. It takes the screen's height, as its width takes the code's;
+        // the dump under it, a module's few kilobytes, would make it a strip.
+        if fragments.frontCodePane != nil { return Self.codeFitHeight }
         // A panel that is up is as tall as the part needs — its title bar, the
         // column header, the rows and the status bar — and leaves the peek of
         // the tab's own header showing above it.
@@ -7375,6 +7383,7 @@ final class MainViewController: NSViewController {
             guard let fit = front.paneViewsInMapOrder().first?.contentFitHeight else { return 0 }
             return fit + FragmentPanelLayout.parentPeek
         }
+        if codeScreenView != nil { return Self.codeFitHeight }
         switch mode {
         case .singleFile:
             return activeFilePane?.contentFitHeight ?? 0

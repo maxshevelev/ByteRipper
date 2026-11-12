@@ -386,6 +386,9 @@ final class LinkedPartTests: XCTestCase {
         let zoomed = tab.windowWillUseStandardFrame(tabWindow, defaultFrame: NSRect(x: 0, y: 0, width: 5000, height: 3000))
         let screenWidth = (tabWindow.screen ?? NSScreen.main)?.visibleFrame.width ?? .infinity
         XCTAssertEqual(zoomed.width, min(moved.codeFitWidth, screenWidth), accuracy: 1)
+        // And to the screen's height: the dump under it is a strip.
+        let screenHeight = try XCTUnwrap((tabWindow.screen ?? NSScreen.main)?.visibleFrame.height)
+        XCTAssertEqual(zoomed.height, screenHeight, accuracy: 1)
 
         // A function's comparison is the panel's too, and follows it.
         moved.setComparisonRevision(9, artifact: try artifact("Then"), pinned: true,
