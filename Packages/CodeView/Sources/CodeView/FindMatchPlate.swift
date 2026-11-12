@@ -60,22 +60,60 @@ final class FindMatchPlate: NSView {
     var isShown: Bool { range != nil && superview != nil }
 
     static let ink = NSColor.black
-    static let radius: CGFloat = 3
+    static let radius: CGFloat = 3.5
+    /// Xcode's plate: a pale yellow, a thin darker edge and a soft shadow,
+    /// as tall as the text and a point or two wider — not the line's band.
+    static let fill = NSColor(srgbRed: 1.0, green: 0.98, blue: 0.52, alpha: 1)
+    static let edge = NSColor(srgbRed: 0.78, green: 0.72, blue: 0.18, alpha: 0.55)
+    static let padding = NSSize(width: 1.5, height: 1)
+
+    /// The plates over `range`, one per line it runs over: from the font's
+    /// ascender to its descender around the line's baseline.
+    static func plates(for range: NSRange, in view: NSTextView) -> [NSRect] {
+        guard let layout = view.layoutManager, let container = view.textContainer,
+              let storage = view.textStorage, NSMaxRange(range) <= storage.length, range.length > 0
+        else { return [] }
+        let font = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
+            ?? view.font ?? .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        let origin = view.textContainerOrigin
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var plates: [NSRect] = []
+        var index = glyphs.location
+        while index < NSMaxRange(glyphs) {
+            var lineGlyphs = NSRange()
+            let line = layout.lineFragmentRect(forGlyphAt: index, effectiveRange: &lineGlyphs)
+            let piece = NSIntersectionRange(lineGlyphs, glyphs)
+            guard piece.length > 0 else { break }
+            let box = layout.boundingRect(forGlyphRange: piece, in: container)
+            let baseline = line.minY + layout.location(forGlyphAt: piece.location).y
+            let top = baseline - font.ascender
+            let height = font.ascender - font.descender
+            plates.append(NSRect(x: box.minX + origin.x, y: top + origin.y, width: box.width, height: height)
+                .insetBy(dx: -padding.width, dy: -padding.height))
+            index = NSMaxRange(piece)
+        }
+        return plates
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let view = textView, let range, let layout = view.layoutManager,
-              let container = view.textContainer,
               NSMaxRange(range) <= (view.string as NSString).length else { return }
-        let origin = view.textContainerOrigin
-        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-        NSColor.findHighlightColor.setFill()
-        layout.enumerateEnclosingRects(forGlyphRange: glyphs,
-                                       withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
-                                       in: container) { box, _ in
-            let plate = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2, dy: 0)
-            guard plate.intersects(dirtyRect) else { return }
-            NSBezierPath(roundedRect: plate, xRadius: Self.radius, yRadius: Self.radius).fill()
+        for plate in Self.plates(for: range, in: view) where plate.insetBy(dx: -4, dy: -4).intersects(dirtyRect) {
+            let path = NSBezierPath(roundedRect: plate, xRadius: Self.radius, yRadius: Self.radius)
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+            shadow.shadowBlurRadius = 2
+            shadow.shadowOffset = NSSize(width: 0, height: -0.5)
+            shadow.set()
+            Self.fill.setFill()
+            path.fill()
+            NSGraphicsContext.restoreGraphicsState()
+            Self.edge.setStroke()
+            path.lineWidth = 0.5
+            path.stroke()
         }
-        layout.drawGlyphs(forGlyphRange: glyphs, at: origin)
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        layout.drawGlyphs(forGlyphRange: glyphs, at: view.textContainerOrigin)
     }
 }
