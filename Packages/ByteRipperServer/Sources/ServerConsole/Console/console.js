@@ -1380,6 +1380,7 @@
 
     function update(issues) {
       const shown = issues.filter((issue) => state.resolvedIssues || !issue.resolved);
+      for (const issue of issues) updateDetail(`issue:${issue.id}`, `Report on ${issue.tool}`, () => issueDetail(issue));
       fill(open.body, shown.length ? issueList(shown)
         : empty("check", "No open report", "An agent reports a problem with a tool through ghidra_report_issue; it is listed here."));
     }
@@ -1391,16 +1392,7 @@
       h("thead", {}, h("tr", {},
         h("th", { text: "Reported" }), h("th", { text: "By" }), h("th", { text: "Tool" }), h("th", { text: "Expected" }), h("th", {}))),
       h("tbody", {}, issues.map((issue) => {
-        const part = (label, text) => text ? h("div", { class: "issue-part" }, h("h4", { text: label }), h("pre", { class: "code", text })) : null;
-        const detail = () => h("div", { class: "stack" },
-          h("div", { class: "row" }, h("span", { class: "muted", text: `Reported by ${issue.reporter}, ${when(issue.at)}` }),
-            h("span", { class: "grow" }),
-            issue.resolved ? null : h("button", { class: "btn small", type: "button", onclick: () => resolveIssue(issue) }, icon("check", 14), "Mark resolved")),
-          issue.module ? h("div", { class: "muted", text: `Module ${issue.module}` }) : null,
-          part("Arguments", issue.arguments), part("Answer", issue.answer), part("Expected", issue.expected),
-          part("Note", issue.note),
-          issue.resolved ? part(`Resolved by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null);
-        return detailRow(`issue:${issue.id}`, `Report on ${issue.tool}`, detail, { class: issue.resolved ? "dim" : "" },
+        return detailRow(`issue:${issue.id}`, `Report on ${issue.tool}`, () => issueDetail(issue), { class: issue.resolved ? "dim" : "" },
           h("td", { class: "muted", title: when(issue.at), text: ago(issue.at) }),
           h("td", { text: issue.reporter }),
           h("td", {}, h("code", { text: issue.tool })),
@@ -1409,6 +1401,21 @@
             issue.resolved ? h("span", { class: "pill", title: `${issue.resolved.by}, ${when(issue.resolved.at)}`, text: "Resolved" })
               : iconButton("check", "Mark resolved", () => resolveIssue(issue))));
       }))));
+  }
+
+  function issueDetail(issue) {
+    const part = (label, text) => text ? h("div", { class: "issue-part" }, h("h4", { text: label }), h("pre", { class: "code", text })) : null;
+    return h("div", { class: "stack" },
+      h("div", { class: "sheet-status" },
+        h("span", { class: `pill ${issue.resolved ? "ok" : "danger"}`, text: issue.resolved ? "resolved" : "open" }),
+        h("span", { class: "muted", text: `Reported by ${issue.reporter}, ${when(issue.at)}` }),
+        h("span", { class: "grow" }),
+        decisionButton(issue.resolved ? "Resolved" : "Mark resolved", "check", "", !!issue.resolved, !!issue.resolved,
+          () => resolveIssue(issue))),
+      issue.module ? h("div", { class: "muted", text: `Module ${issue.module}` }) : null,
+      part("Arguments", issue.arguments), part("Answer", issue.answer), part("Expected", issue.expected),
+      part("Note", issue.note),
+      issue.resolved ? part(`Resolved by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null);
   }
 
   async function resolveIssue(issue) {
@@ -1447,12 +1454,16 @@
     function update(tickets) {
       [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.state === state.ticketState));
       const shown = tickets.filter((t) => state.ticketState === "all" || t.state === state.ticketState);
+      // A ticket the switch now hides — closed from the sheet — is drawn there
+      // from what the server says, as one the board still lists.
+      for (const ticket of tickets) updateDetail(`ticket:${ticket.module}`, ticketTitle(ticket), () => ticketDetail(ticket));
       fill(board.body, shown.length ? ticketTable(shown)
         : empty("reviewFindings", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
           "A verifying agent writes a remark on a module's review with ghidra_ticket_remark; the module's ticket is listed here."));
       call("GET", "/admin/api/type-proposals").then((rows) => {
         const shownProposals = rows.filter((p) => state.ticketState === "all"
           || PROPOSAL_STATES[state.ticketState].includes(p.state));
+        for (const p of rows) updateDetail(`proposal:${p.id}`, proposalTitle(p), () => proposalDetail(p, proposalNames(p)));
         fill(proposals.body, shownProposals.length ? proposalTable(shownProposals)
           : empty("proposals", state.ticketState === "all" ? "No proposal" : `No ${state.ticketState} proposal`,
             "When a module's publish would replace a shared type or a library registry entry, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
@@ -1460,6 +1471,10 @@
     }
     return { root, update };
   }
+
+  const proposalNames = (p) => p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
+  const proposalTitle = (p) => `Proposal of ${p.name || "a module"}`;
+  const ticketTitle = (ticket) => `Ticket of ${ticket.name || "a module"}`;
 
   function proposalPill(stateName) {
     const kind = stateName === "open" ? "warn" : stateName === "agreed" || stateName === "applied" ? "ok"
@@ -1473,8 +1488,8 @@
         h("th", { class: "w-who", text: "Module" }), h("th", { text: "Types and entries" }), h("th", { class: "w-state", text: "State" }),
         h("th", { text: "Votes" }), h("th", { text: "Author" }))),
       h("tbody", {}, rows.map((p) => {
-        const names = p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
-        return detailRow(`proposal:${p.id}`, `Proposal of ${p.name || "a module"}`, () => proposalDetail(p, names),
+        const names = proposalNames(p);
+        return detailRow(`proposal:${p.id}`, proposalTitle(p), () => proposalDetail(p, names),
           { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
           whoCell("proposals", p.name || "module", p.module),
           h("td", { class: "mono", text: names.concat(Object.values(p.entries || {}).map((e) => e.name)).join(", ") }),
@@ -1564,6 +1579,13 @@
       })));
   }
 
+  // A decision's button: once that decision is the record's state it is
+  // disabled and says so ("Agreed", "Closed"); `done` marks it as the one taken.
+  function decisionButton(label, iconName, kind, disabled, done, onclick) {
+    return h("button", { class: `btn small ${kind}${done ? " decided" : ""}`, type: "button", disabled, onclick },
+      icon(iconName, 14), label);
+  }
+
   function proposalDetail(p, names) {
     const live = p.state === "open" || p.state === "agreed";
     const decided = p.decided ? h("div", { class: "muted" },
@@ -1571,11 +1593,24 @@
       p.decided.note ? ` — ${p.decided.note}` : "") : null;
     const applied = p.applied ? h("div", { class: "muted",
       text: `Applied ${when(p.applied.at)}${p.applied.revision ? ` by revision ${p.applied.revision}` : ""}${p.applied.version ? `, shared types version ${p.applied.version}` : ""}` }) : null;
-    const buttons = live ? [
-      h("button", { class: "btn small", type: "button", onclick: () => decideProposal(p, true) }, icon("check", 14), "Agree"),
-      h("button", { class: "btn small danger", type: "button", onclick: () => decideProposal(p, false) }, icon("ban", 14), "Reject")] : [];
+    // The decision taken reads on its own button, which no longer acts: an
+    // agreed proposal can still be rejected until its publish applies it.
+    const agreed = p.state === "agreed" || p.state === "applied";
+    const buttons = [
+      decisionButton(agreed ? "Agreed" : "Agree", "check", "", p.state !== "open", agreed, () => decideProposal(p, true)),
+      decisionButton(p.state === "rejected" ? "Rejected" : "Reject", "ban", "danger", !live, p.state === "rejected",
+        () => decideProposal(p, false))];
+    const agrees = p.agrees || [], objections = p.objections || [];
+    const status = h("div", { class: "sheet-status" },
+      proposalPill(p.state),
+      h("span", { class: "ok-text", text: `${agrees.length}/${p.agrees_needed} agree` }),
+      h("span", { class: objections.length ? "danger-text" : "muted", text: `${objections.length} object` }),
+      agrees.length ? h("span", { class: "muted", text: `agreed: ${agrees.join(", ")}` }) : null,
+      objections.length ? h("span", { class: "muted", text: `objected: ${objections.join(", ")}` }) : null,
+      h("span", { class: "grow" }), buttons);
     return h("div", { class: "stack" },
-      h("div", { class: "row" }, h("span", { class: "muted", text: `Proposed ${when(p.at)}` }), h("span", { class: "grow" }), buttons),
+      status,
+      h("div", { class: "row" }, h("span", { class: "muted", text: `Proposed ${when(p.at)}` })),
       decided, applied,
       h("div", { class: "remark" }, h("div", { class: "row" }, h("b", { text: p.author }), h("span", { class: "muted", text: "why" })),
         h("div", { class: "remark-text", text: p.reason })),
@@ -1634,7 +1669,7 @@
         h("th", { class: "num w-n", text: "Open" }), h("th", { class: "num w-n", text: "Remarks" }),
         h("th", { text: "Reviewer" }), h("th", { class: "w-time", text: "Last" }))),
       h("tbody", {}, tickets.map((ticket) => {
-        return detailRow(`ticket:${ticket.module}`, `Ticket of ${ticket.name || "a module"}`, () => ticketDetail(ticket),
+        return detailRow(`ticket:${ticket.module}`, ticketTitle(ticket), () => ticketDetail(ticket),
           { class: ticket.state === "closed" ? "dim" : "" },
           whoCell("layers", ticket.name || "module", ticket.module),
           h("td", {}, ticketPill(ticket.state)),
@@ -1650,11 +1685,19 @@
       ? h("div", { class: "muted" }, `Closed by ${ticket.closed.by}${ticket.closed.forced ? " (forced from the console)" : ""}, ${when(ticket.closed.at)}`,
         ticket.closed.note ? ` — ${ticket.closed.note}` : "")
       : null;
-    const force = ticket.closed
-      ? h("button", { class: "btn small", type: "button", onclick: () => forceTicket(ticket, false) }, icon("refresh", 14), "Open again")
-      : h("button", { class: "btn small", type: "button", onclick: () => forceTicket(ticket, true) }, icon("check", 14), "Close");
+    const closed = ticket.state === "closed";
+    const remarks = ticket.remarks || [];
+    const status = h("div", { class: "sheet-status" },
+      ticketPill(ticket.state),
+      h("span", { class: ticket.open_remarks ? "danger-text" : "ok-text", text: `${ticket.open_remarks || 0} open` }),
+      h("span", { class: "muted", text: `${remarks.length} ${remarks.length === 1 ? "remark" : "remarks"}` }),
+      ticket.reviewer ? h("span", { class: "muted", text: `reviewer ${ticket.reviewer}` }) : null,
+      h("span", { class: "grow" }),
+      decisionButton(closed ? "Closed" : "Close", "check", "", closed, closed, () => forceTicket(ticket, true)),
+      decisionButton("Open again", "refresh", "", !closed, false, () => forceTicket(ticket, false)));
     return h("div", { class: "stack" },
-      h("div", { class: "row" }, closing || h("span", { class: "muted", text: `Opened ${when(ticket.opened)}` }), h("span", { class: "grow" }), force),
+      status,
+      h("div", { class: "row" }, closing || h("span", { class: "muted", text: `Opened ${when(ticket.opened)}` })),
       (ticket.remarks || []).length ? (ticket.remarks || []).map((remark) => remarkBlock(ticket, remark))
         : h("div", { class: "muted", text: "Closed with no remarks: checked and found right." }));
   }

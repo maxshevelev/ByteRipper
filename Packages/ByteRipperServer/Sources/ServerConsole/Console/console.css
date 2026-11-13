@@ -1223,3 +1223,11 @@ tr.opens.selected td { background: var(--accent-soft); }
 .sheet-body .issue-part pre.code { max-height: none; }
 .sheet-body .type-pair pre.code, .sheet-body .line-diff pre.code.diff { max-height: none; }
 @media (max-width: 760px) { .sheet-backdrop { padding: 12px; } }
+
+/* The sheet's first line: the record's state, its counts, and the decisions
+   — the one taken disabled and named by its outcome. */
+.sheet-status { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); }
+.sheet-status .grow { flex: 1; }
+.btn.decided[disabled] { opacity: 1; background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.btn.danger.decided[disabled] { background: var(--danger-soft); color: var(--danger); }
