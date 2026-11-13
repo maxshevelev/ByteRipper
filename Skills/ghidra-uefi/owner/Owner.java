@@ -1650,13 +1650,8 @@ public class Owner {
         // what a publish would store, before it is stored.
         java.util.Map<String, String> parameters = query(exchange.getRequestURI().getRawQuery());
         boolean dryRun = "1".equals(parameters.get("dry_run"));
-        // `take_type_conflicts`: this publish's version of a conflicting type
-        // replaces the shared one — the explicit exception to "choosing is a
-        // person's", for a layout that was published wrong. An enum is never
-        // taken: a member's value clashing means one of the two is wrong, and
-        // an overwrite would break the module that added the other. With
-        // `dry_run` it answers what would be taken, and nothing is written.
-        boolean take = "1".equals(parameters.get("take_type_conflicts"));
+        // A publish never replaces a shared type: an agreed proposal does,
+        // through `/v1/types/merge`, which the host calls once it is applied.
         // `merge_types=0`: the export only, its conflicts worked out on a copy as
         // a preview's are. The host merges with `/v1/types/merge` once the
         // registry has said yes, so a refused publish leaves the shared
@@ -1679,7 +1674,7 @@ public class Owner {
         try {
             byte[] artifact = exportArtifact();
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
-            Merge merge = mergeReviewTypes(!dryRun && mergeTypes, take);
+            Merge merge = mergeReviewTypes(!dryRun && mergeTypes, false);
             exchange.getResponseHeaders().set("X-Owner-Dry-Run", Boolean.toString(dryRun));
             exchange.getResponseHeaders().set("X-Owner-Types-Merged", Boolean.toString(!dryRun && mergeTypes));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -1717,7 +1712,10 @@ public class Owner {
      * the current version the server hands over while it decides a publish,
      * and keeps as the next version when the merge changed it; without it,
      * the archive beside the projects, as before versions. `take_type_conflicts=1`
-     * as there. Merging again what is merged changes nothing.
+     * is sent by the host alone, to apply a proposal agreed on the server: this
+     * review's version of each conflicting type replaces the shared one. An
+     * enum is never taken: a member's value clashing means one of the two is
+     * wrong. Merging again what is merged changes nothing.
      */
     private JsonObject typesMerge(HttpExchange exchange) throws Exception {
         requireLease(exchange);
@@ -2561,8 +2559,7 @@ public class Owner {
 
     /**
      * The shared archive's copy of a type replaced by this review's. The only
-     * caller is a publish with `take_type_conflicts`, which is the person's
-     * choice made explicit; a type the archive cannot replace — one another
+     * caller is the merge that applies an agreed proposal; a type the archive cannot replace — one another
      * type still holds — stops the publish with 409 rather than leaving half
      * of a correction behind.
      */

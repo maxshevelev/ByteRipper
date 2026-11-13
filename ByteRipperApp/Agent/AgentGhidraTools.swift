@@ -96,9 +96,8 @@ struct CurrentGhidraBackend: GhidraBackend {
     // defaults for them — those are `GhidraBackendWithoutServer`'s — so one
     // left out fails to compile; before, `ghidra_type_uses`, `ghidra_forget`
     // and the type proposals answered "no server" here while there was one.
-    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
-                        takeLibrary: LibraryTake) async throws -> Data {
-        try await resolve().publishPreview(module, takeTypeConflicts: takeTypeConflicts, takeLibrary: takeLibrary)
+    func publishPreview(_ module: SHA256Digest, entryReasons: [String: String]) async throws -> Data {
+        try await resolve().publishPreview(module, entryReasons: entryReasons)
     }
     func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? {
         try await resolve().ownerHasUnpublishedWrites(module)

@@ -387,14 +387,16 @@ extension RemoteStore: AnalysisWriter {
 
     public func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                                     take: LibraryTake) async throws -> LibraryWriteResult {
-        try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take)
+        // An agreed proposal is applied by the server that keeps the proposals;
+        // over the wire only the reasons go, and a conflict stays one.
+        try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, entryReasons: take.entryReasons)
     }
 
     public func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
                                       proposals: [LibraryProposal],
                                       take: LibraryTake) async throws -> LibraryWriteResult {
-        try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take,
-                                    dryRun: true)
+        try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals,
+                                    entryReasons: take.entryReasons, dryRun: true)
     }
 
     public func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]? {

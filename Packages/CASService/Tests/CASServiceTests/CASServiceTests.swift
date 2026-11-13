@@ -392,8 +392,9 @@ final class CASServiceTests: XCTestCase {
     }
 
     /// An offer through the server is the store's own call: an entry, then a
-    /// conflict from another module, taken only with a reason; the history is
-    /// served, and the feed reports a registry change even with no module's.
+    /// conflict from another module, which stays one — an offer replaces
+    /// nothing; the history is served, and the feed reports a registry change
+    /// even with no module's.
     func testTheLibraryRegistryIsServedAndAChangeIsInTheFeed() async throws {
         let hello = try await remote.hello()
         let added = try await remote.putLibraryEntries(module: module("czn").sha256, rev: 33, by: "agent",
@@ -403,56 +404,30 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(index, try served.libraryIndex())
         let id = try XCTUnwrap(index.entries.keys.first)
 
+        // A dry run crosses the wire too, and writes nothing.
+        let dry = try await remote.putLibraryEntries(module: module("czn").sha256, rev: 34, by: "agent",
+                                                     proposals: [try libraryProposal("SetMem")], dryRun: true)
+        XCTAssertEqual(dry.unchanged.count, 1)
+        let afterDry = try await remote.libraryIndex()
+        XCTAssertEqual(afterDry, index)
+
         let conflict = try await remote.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
                                                           proposals: [try libraryProposal("FillBytes")])
         XCTAssertEqual(conflict.conflicts.map(\.proposedName), ["FillBytes"])
-        do {
-            _ = try await remote.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
-                                                   proposals: [try libraryProposal("FillBytes")], take: .all(""))
-            XCTFail("took a conflict without a reason")
-        } catch RemoteStore.Failure.refused(let status, _, _) {
-            XCTAssertEqual(status, 409)
-        }
+        let kept = try await remote.libraryIndex()
+        XCTAssertEqual(kept.entries[id]?.name, "SetMem", "a conflict replaces nothing")
         let changes = try await remote.changes(since: hello.seq, epoch: hello.epoch, wait: 0)
         XCTAssertEqual(changes.library, true)
         XCTAssertEqual(changes.modules, [], "the registry changed, no module did")
 
-        try await remote.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
-                                           proposals: [try libraryProposal("FillBytes")],
-                                           take: .all("the Renoir review names it as EDK2 does"))
+        // A rename crosses the wire and is the entry's next version.
+        _ = try await remote.renameLibraryEntry(id: id, name: "FillBytes", reason: "the Renoir review names it as EDK2 does",
+                                            by: "agent", module: module("rn").sha256)
         let history = try await remote.libraryHistory(id: id)
         XCTAssertEqual(history?.versions.map(\.version), [1, 2])
-        XCTAssertEqual(history?.versions.last?.reason, "the Renoir review names it as EDK2 does")
+        XCTAssertEqual(history?.versions.last?.reason, "the Renoir review names it as EDK2 does (was SetMem)")
         let missing = try await remote.libraryHistory(id: "0-0000000000000000-0000000000000000")
         XCTAssertNil(missing)
-
-        // A take by id, each with its own reason, crosses the wire too.
-        try await remote.putLibraryEntries(module: module("czn").sha256, rev: 34, by: "agent",
-                                           proposals: [try libraryProposal("SetMemTyped")],
-                                           take: .these([id: "the Czn review types the length"]))
-        let typed = try await remote.libraryHistory(id: id)
-        XCTAssertEqual(typed?.versions.last?.reason, "the Czn review types the length")
-
-        // A dry run crosses the wire too, and writes nothing.
-        let beforeDry = try await remote.libraryIndex()
-        let dry = try await remote.putLibraryEntries(module: module("czn").sha256, rev: 35, by: "agent",
-                                                     proposals: [try libraryProposal("SetMemTyped")],
-                                                     dryRun: true)
-        XCTAssertEqual(dry.unchanged.count, 1)
-        let afterDry = try await remote.libraryIndex()
-        XCTAssertEqual(afterDry, beforeDry)
-
-        // A take of an entry already settled is refused by name.
-        do {
-            _ = try await remote.putLibraryEntries(module: module("czn").sha256, rev: 35, by: "agent",
-                                                   proposals: [try libraryProposal("SetMemTyped")],
-                                                   take: .these([id: "already ours"]))
-            XCTFail("a take of a settled entry passed in silence")
-        } catch RemoteStore.Failure.refused(let status, let message, _) {
-            XCTAssertEqual(status, 409)
-            XCTAssertTrue(message.contains("is not in conflict in this publish"), message)
-            XCTAssertTrue(message.contains("SetMemTyped is at version 3"), message)
-        }
     }
 
     /// A mirror copies the index when it connects, and again when the feed
@@ -466,14 +441,10 @@ final class CASServiceTests: XCTestCase {
 
         let following = Task { try await mirror.follow(wait: 20) }
         try await Task.sleep(nanoseconds: 200_000_000)
-        // A change made on the entry's current version is its next one; a
-        // review made on nothing would be a conflict, and the entry would stay.
-        var better = try libraryProposal("SetMemBetter")
-        better.basedOn = better.body.key
-        better.base = 1
-        try await remote.putLibraryEntries(module: module("czn").sha256, rev: 34, by: "agent",
-                                           proposals: [better],
-                                           take: .these([better.body.key: "a better name"]))
+        // A rename is the entry's next version.
+        let id = try XCTUnwrap(try served.libraryIndex().entries.keys.first)
+        _ = try await remote.renameLibraryEntry(id: id, name: "SetMemBetter", reason: "a better name", by: "agent",
+                                            module: module("czn").sha256)
         _ = try await following.value
         XCTAssertEqual(try store.libraryIndex().entries.values.first?.name, "SetMemBetter")
     }

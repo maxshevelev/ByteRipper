@@ -250,7 +250,7 @@ final class GhidraHostLibraryTests: XCTestCase {
         let editedOther = try await read(other, there)
         XCTAssertEqual(state(editedOther), "edited")
         let moved = try await host.publish(other, by: "agent", options: .init(
-            takeLibrary: LibraryTake.none.with(entryReasons: [id: "the holder's remark says more"])))
+            entryReasons: [id: "the holder's remark says more"]))
         XCTAssertEqual(moved.library?.updated.map(\.version), [2])
         XCTAssertEqual(moved.library?.conflicts.count, 0)
         XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 2)
@@ -590,7 +590,7 @@ final class GhidraHostLibraryTests: XCTestCase {
         // It only adds: published, it is the next version, from a module that did
         // not write the first.
         let improved = try await host.publish(other, by: "agent", options: .init(
-            takeLibrary: LibraryTake.none.with(entryReasons: [added.id: "the holder's step says more"])))
+            entryReasons: [added.id: "the holder's step says more"]))
         XCTAssertEqual(improved.library?.updated.map(\.version), [added.version + 1], "\(String(describing: improved.library))")
         XCTAssertEqual(improved.library?.conflicts, [])
         let improvedCode = try store.artifact(for: improved.manifest)
@@ -728,7 +728,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(typed)
     }
 
-    func testATakeLeavesNoConflictCopyInTheSharedArchive() async throws {
+    func testAnAgreedReplacementLeavesNoConflictCopyInTheSharedArchive() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
         }
@@ -737,7 +737,8 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostTakeTests"),
+                                                   idle: 300, holder: "GhidraHostTakeTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
@@ -752,7 +753,8 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         _ = try await host.publish(module, by: nil)
         try await define("typedef struct _TAKE_ITEM { int A; int B; } TAKE_ITEM;")
         try await define("typedef struct _TAKE_HOLDER { TAKE_ITEM *Item; int Extra; } TAKE_HOLDER;")
-        let taken = try await host.publish(module, by: nil, options: .init(takeTypeConflicts: true))
+        _ = try await host.agreedByAdministrator(module, holder: "GhidraHostTakeTests", reason: "B follows A")
+        let taken = try await host.publish(module, by: nil)
         XCTAssertFalse(taken.typeConflictsTaken.isEmpty)
         let shown = try await host.read(module, "/v1/type?name=TAKE_HOLDER")
         let text = String(decoding: shown, as: UTF8.self)
@@ -948,7 +950,8 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let projects = directory.appendingPathComponent("projects")
         let host = GhidraHost(configuration: .init(projectsRoot: projects, idle: 300,
-                                                   holder: "GhidraHostTypeVersionTests"),
+                                                   holder: "GhidraHostTypeVersionTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
@@ -1005,8 +1008,9 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual(try store.journals().count, 0)
         try copyIsCurrent()
 
-        // The person's choice: an administrator's take is the next version.
-        let taken = try await host.publish(module, by: "person", options: .init(takeTypeConflicts: true))
+        // An agreed proposal is the next version.
+        _ = try await host.agreedByAdministrator(module, holder: "GhidraHostTypeVersionTests", reason: "More is read at +8")
+        let taken = try await host.publish(module, by: "person")
         XCTAssertFalse(taken.typeConflictsTaken.isEmpty)
         let third = try versions()
         XCTAssertEqual(third.map(\.version), [1, 2, 3])

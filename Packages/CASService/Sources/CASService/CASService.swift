@@ -169,9 +169,13 @@ public struct CASService: Sendable {
                 result.updated = [change]
                 return .json(result)
             }
+            // An offer adds, or completes, or conflicts: what an entry says is
+            // replaced by an agreed proposal, which the module's next publish
+            // applies inside the server, never by an offer.
             let result = try Self.answer {
                 try store.putLibraryEntries(module: put.module, rev: put.rev, by: put.by,
-                                            proposals: put.proposals, take: put.decision,
+                                            proposals: put.proposals,
+                                            take: LibraryTake.none.with(entryReasons: put.entryReasons ?? [:]),
                                             dryRun: dryRun)
             }
             if !dryRun { await feed.rescan() }

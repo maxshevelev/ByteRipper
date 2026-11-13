@@ -135,8 +135,10 @@ review documents.
   2026-11-05; the same rule holds for the shared type archive): new is accepted,
   the same changes nothing, what only adds is the next version from any module
   on any version, and a replacement of what the entry says refuses the whole
-  publish and names who wrote it. Only an administrator replaces
-  (`take_library_conflicts`, `take_type_conflicts`, rename, take-out, split, restore).
+  publish and names who wrote it. A replacement of what an entry or a shared
+  type says is a proposal's alone: agents vote, or an administrator decides on
+  the console, and the module's next publish applies it (2026-11-13). Rename,
+  take-out, split and restore are an administrator's.
   The next version reaches every reader at once: readers read the entry.
 - **Readers see that a function is the registry's**: the artifact records
   `library_entry` (the entry, its version, and whether the function is the

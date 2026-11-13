@@ -620,9 +620,8 @@ history keeps it. They run on the store's directory.
   narrower name.
 - `byteripper-cas library-rename <id> <name>` narrows the name of a whole entry.
 - A text is replaced only by a proposal (below): agents vote, or the person agrees it on
-  the server's console, and the module's next publish applies it. A publish that asks to
-  replace — `take_type_conflicts`, `take_library_conflicts` — is refused, the
-  administrator's too.
+  the server's console, and the module's next publish applies it. There is no other way
+  to replace a shared type or a registry entry, the administrator's included.
 
 **A refusal for a replacement.** `library.conflicts` means this module's review would
 replace what the registry says. Read the entry's review (`library_registry` with its

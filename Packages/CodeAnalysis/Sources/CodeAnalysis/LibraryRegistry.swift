@@ -999,7 +999,7 @@ extension ContentStore {
                 // A review that differs reaches here. What only adds to the entry
                 // is its next version, from any module and on any version it was
                 // made on; anything else replaces what the entry says, which only
-                // an administrator's decision takes.
+                // an agreed proposal takes.
                 conflicting.insert(id)
                 let taken = take.all ? allReason : reasons[id]
                 let recordsOnly = LibraryProposal.sameReview(heldObject, proposal.entry)
@@ -1012,8 +1012,7 @@ extension ContentStore {
                                                   changed: LibraryProposal.changedFields(from: heldObject, to: proposal.entry)))
                     settled[id] = "this module's review replaces what the entry says: "
                         + "if the entry is the wrong one, propose this module's review with `ghidra_type_propose` — two "
-                        + "other agents agreeing apply it at the next publish — or the person takes it, with "
-                        + "`take_library_conflicts`, in the server's console (Activity, the module in work, its conflicts button)"
+                        + "other agents agreeing, or an administrator on the console's Proposals page, apply it at the next publish"
                     continue
                 }
                 // Past here sameReview means only what the review lacked gets

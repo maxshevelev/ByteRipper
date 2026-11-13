@@ -254,18 +254,17 @@ public struct RemoteStore: Sendable {
         }
     }
 
-    /// `ContentStore.putLibraryEntries` on the server.
+    /// `ContentStore.putLibraryEntries` on the server: an offer, which adds
+    /// or completes and is told of its conflicts. What an entry says is
+    /// replaced only by an agreed proposal, inside the server.
     @discardableResult
     public func putLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                                  take: LibraryTake = .none, dryRun: Bool = false)
+                                  entryReasons: [String: String] = [:], dryRun: Bool = false)
         async throws -> LibraryWriteResult {
         let body = try encoder.encode(ServedStoreProtocol.PutLibrary(
             module: module, rev: rev, by: by, proposals: proposals,
-            take: take.all ? true : nil, reason: take.all ? take.reason : nil,
-            takeIDs: take.all ? nil : (take.ids.isEmpty ? nil : take.ids.sorted()),
-            reasons: take.all || take.ids.isEmpty ? nil : take.reasons,
             dryRun: dryRun ? true : nil,
-            entryReasons: take.entryReasons.isEmpty ? nil : take.entryReasons))
+            entryReasons: entryReasons.isEmpty ? nil : entryReasons))
         return try await json("POST", "library", body: body)
     }
 

@@ -231,7 +231,7 @@ final class LibraryRegistryTests: XCTestCase {
         let text = try XCTUnwrap(String(data: try JSONEncoder().encode(sent), encoding: .utf8))
         XCTAssertTrue(text.contains("entry_reasons"), text)
         let read = try JSONDecoder().decode(ServedStoreProtocol.PutLibrary.self, from: try JSONEncoder().encode(sent))
-        XCTAssertEqual(read.decision, LibraryTake.none.with(entryReasons: ["a": "why a"]))
+        XCTAssertEqual(read.entryReasons, ["a": "why a"])
     }
 
     func testAReasonIsForAnEntryThePublishMoves() throws {

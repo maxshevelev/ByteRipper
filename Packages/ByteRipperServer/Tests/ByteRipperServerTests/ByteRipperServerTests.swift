@@ -9,7 +9,7 @@ import XCTest
 
 final class ServerCommandTests: XCTestCase {
     /// The route reads the reasons for the entries a publish moves from the
-    /// body, whichever way the conflicts are decided.
+    /// body: all a publish carries for the registry.
     func testAPublishRouteReadsTheEntryReasons() throws {
         func request(_ query: [String: String], _ body: [String: Any]?) throws -> HTTPRequest {
             var request = HTTPRequest(method: "POST", path: "/x", query: query, headers: [:],
@@ -18,19 +18,8 @@ final class ServerCommandTests: XCTestCase {
             return request
         }
         let reasons = ["a": "why a"]
-        XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], nil)), .none)
-        XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], ["entry_reasons": reasons])),
-                       LibraryTake.none.with(entryReasons: reasons))
-        // A publish no longer replaces: asking to is refused, whichever way
-        // it asks; the reasons for additions still pass.
-        XCTAssertNoThrow(try GhidraRoutes.refuseTakes(try request([:], ["entry_reasons": reasons])))
-        for (query, body) in [(["take_library_conflicts": "1", "library_reason": "all"], nil),
-                              (["take_type_conflicts": "1"], nil),
-                              ([:], ["take_library_conflicts": ["b"], "library_reasons": ["b": "why b"]])] as [([String: String], [String: Any]?)] {
-            XCTAssertThrowsError(try GhidraRoutes.refuseTakes(try request(query, body))) { error in
-                XCTAssertTrue("\(error)".contains("ghidra_type_propose"), "\(error)")
-            }
-        }
+        XCTAssertEqual(GhidraRoutes.entryReasons(try request([:], nil)), [:])
+        XCTAssertEqual(GhidraRoutes.entryReasons(try request([:], ["entry_reasons": reasons])), reasons)
     }
 
     /// A home no configuration file is in, so the defaults are the defaults.
@@ -477,15 +466,11 @@ final class ServerTests: XCTestCase {
         XCTAssertEqual(page, 200, "the console's page")
 
         // A shared definition is replaced by a proposal alone: the console's
-        // routes that published replacing them are gone, and a publish that
-        // asks to replace is refused, the administrator's too.
+        // routes that published replacing them are gone.
         for (method, path) in [("GET", "conflicts"), ("POST", "publish-taking-conflicts")] {
             let (gone, _) = try await call(method, "admin/api/leases/\(closed.hex)/\(path)", admin)
             XCTAssertEqual(gone, 404, path)
         }
-        let (taking, said) = try await call("POST", "ghidra/v1/modules/\(closed.hex)/publish?take_type_conflicts=1", admin)
-        XCTAssertEqual(taking, 400, String(decoding: said, as: UTF8.self))
-        XCTAssertTrue(String(decoding: said, as: UTF8.self).contains("ghidra_type_propose"), String(decoding: said, as: UTF8.self))
 
         // The review board over HTTP: a verifier's remark, the reviewer's fix,
         // the reviewer refused the closing, another agent closes; the console
@@ -670,14 +655,6 @@ final class ServerTests: XCTestCase {
             XCTAssertTrue(words.contains("admin"), words)
             let reached = try await call("POST", path, admin, body: body).0
             XCTAssertNotEqual(reached, 403, path)
-        }
-        // A publish that asks to replace a registry entry is refused for
-        // every token alike: that is a proposal's.
-        for token in [app, admin] {
-            let (refused, words) = try await call("POST", "ghidra/v1/modules/\(someModule)/publish", token,
-                                                  body: Data(#"{"take_library_conflicts":["a"],"library_reasons":{"a":"why"}}"#.utf8))
-            XCTAssertEqual(refused, 400, words)
-            XCTAssertTrue(words.contains("ghidra_type_propose"), words)
         }
         // Every write past a publish is an administrator's, a citation in the
         // registry and a bundle among them: the app's token, which may write,

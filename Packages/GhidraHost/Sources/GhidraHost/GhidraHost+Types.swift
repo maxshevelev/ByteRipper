@@ -126,18 +126,16 @@ extension GhidraHost {
     /// The publish's types decided while it holds the store: merged into a
     /// copy of the current version, refused when one would replace a type the
     /// archive holds, and the next version when the copy changed.
-    func decideTypes(_ module: SHA256Digest, language: String, take: Bool,
-                     by: String?) async throws
+    func decideTypes(_ module: SHA256Digest, language: String, by: String?) async throws
         -> (merged: TypesMerged, bits: String, version: TypeArchiveVersion?, proposals: [String]) {
         let bits = Self.archiveBits(language: language)
         var (folder, current) = try await archiveWorkingCopy(bits: bits)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let path = take ? "/v1/types/merge?take_type_conflicts=1" : "/v1/types/merge"
-        var merged = TypesMerged(try await typesCall(module, path, body: try JSONSerialization.data(
+        var merged = TypesMerged(try await typesCall(module, "/v1/types/merge", body: try JSONSerialization.data(
             withJSONObject: ["archive": folder.path])))
         var proposals: [String] = []
         let replacements = merged.replacements
-        if !replacements.isEmpty, !take,
+        if !replacements.isEmpty,
            let agreed = try await agreedReplacement(module, replacements: replacements) {
             // What the agents agreed is taken, on a fresh copy of the version
             // the refused merge read.

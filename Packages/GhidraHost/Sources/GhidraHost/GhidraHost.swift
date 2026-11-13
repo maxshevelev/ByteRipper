@@ -119,18 +119,16 @@ public actor GhidraHost {
         }
     }
 
-    /// What a publish may decide beyond storing the review.
+    /// What a publish carries beyond the review. A publish never replaces a
+    /// shared type or a registry entry: only an agreed proposal does, applied
+    /// by the module's next publish.
     public struct PublishOptions: Equatable, Sendable {
-        /// Replace the shared copy of each conflicting type with this module's.
-        public var takeTypeConflicts: Bool
-        /// Which conflicting library entries this module's review makes the
-        /// entry's next version — all of them with one reason, or those it
-        /// names, each with its own.
-        public var takeLibrary: LibraryTake
+        /// Why this review adds to each entry it moves, by id: kept in the
+        /// entry's history.
+        public var entryReasons: [String: String]
 
-        public init(takeTypeConflicts: Bool = false, takeLibrary: LibraryTake = .none) {
-            self.takeTypeConflicts = takeTypeConflicts
-            self.takeLibrary = takeLibrary
+        public init(entryReasons: [String: String] = [:]) {
+            self.entryReasons = entryReasons
         }
     }
 
@@ -532,8 +530,7 @@ public actor GhidraHost {
         let state = try project.state()
         // The export only: the review's types are merged once the registry has
         // said yes, so a refused publish leaves the shared archive as it was.
-        let path = "/v1/publish?merge_types=0" + (options.takeTypeConflicts ? "&take_type_conflicts=1" : "")
-        let (exported, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
+        let (exported, headers) = try await Self.call(record.port, "POST", "/v1/publish?merge_types=0", timeout: 3600)
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
         guard let artifact = try JSONSerialization.jsonObject(with: exported) as? [String: Any] else {
@@ -560,14 +557,12 @@ public actor GhidraHost {
         }
         // The revision this publish would be, as the store numbers them.
         let next = ((try await writer.latestRevision(module: module))?.rev ?? 0) + 1
-        // A replacement of registry entries agents agreed is this publish's
-        // decision, as an administrator's take would be — when the person
-        // made none, and only for what the voters read.
-        var take = options.takeLibrary
+        // A replacement of registry entries is an agreed proposal's, and only
+        // for what the voters read.
+        var take = LibraryTake.none.with(entryReasons: options.entryReasons)
         var libraryProposals: [String] = []
-        if !take.all, take.reasons.isEmpty,
-           let agreed = try await agreedLibraryTake(module, raw: exported, offer: offer.proposals, reviewed: reviewed) {
-            take = LibraryTake.these(agreed.reasons).with(entryReasons: options.takeLibrary.entryReasons)
+        if let agreed = try await agreedLibraryTake(module, raw: exported, offer: offer.proposals, reviewed: reviewed) {
+            take = LibraryTake.these(agreed.reasons).with(entryReasons: options.entryReasons)
             libraryProposals = agreed.proposals
         }
         // The registry decides first, on everything this publish offers: the
@@ -593,7 +588,7 @@ public actor GhidraHost {
         // before anything is written.
         let types = writer.keepsTypeArchives && reviewed
             ? try await decideTypes(module, language: program["language"] as? String ?? "unknown",
-                                    take: options.takeTypeConflicts, by: by)
+                                    by: by)
             : nil
         // Both said yes: the journal goes down before the first write.
         let identity = ModuleIdentity(sha256: module, size: state.module.size, name: state.module.name,
@@ -608,7 +603,7 @@ public actor GhidraHost {
             && (stored?.artifact.sha256.hex == last?.artifact || stored?.relinkedFrom?.hex == last?.artifact)
         var journal = PublishJournal(
             id: "\(Self.journalStamp())-\(module.hex.prefix(16))", module: module, by: by, startedAt: Self.now(),
-            planned: next, reviewed: reviewed, takeTypeConflicts: options.takeTypeConflicts,
+            planned: next, reviewed: reviewed, takeTypeConflicts: false,
             take: take, offered: offered,
             exported: try await writer.writeObject(exported), document: try await writer.writeObject(document),
             description: try await writer.writeObject(description), identity: identity, recipe: recipe,
@@ -860,19 +855,13 @@ public actor GhidraHost {
     /// merging into the shared archive, and the counts, the revision it would
     /// become and those conflicts come back. The export is the cost a publish
     /// already pays; this one pays it to look first.
-    ///
-    /// With `conflictTexts`, each library conflict also carries what the entry
-    /// says now and what this module would make it say, field by field — what
-    /// an administrator reads before taking it (`conflict_fields`).
-    public func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false,
-                 takeLibrary: LibraryTake = .none, holder: String? = nil,
-                 conflictTexts: Bool = false) async throws -> Data {
+    public func preview(_ module: SHA256Digest, entryReasons: [String: String] = [:],
+                        holder: String? = nil) async throws -> Data {
         try tellClosed(module, holder: holder)
         let project = self.project(module)
         let record = try await owner(of: module)
         let state = try project.state()
-        let path = takeTypeConflicts ? "/v1/publish?dry_run=1&take_type_conflicts=1" : "/v1/publish?dry_run=1"
-        let (raw, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
+        let (raw, headers) = try await Self.call(record.port, "POST", "/v1/publish?dry_run=1", timeout: 3600)
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
         guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
@@ -917,11 +906,11 @@ public actor GhidraHost {
         // An agreed proposal that covers every replacement is what the
         // publish would apply: the preview says so, as the publish decides it.
         var agreedProposals: [String]?
-        if writer.keepsTypeArchives, !replacing.isEmpty, !takeTypeConflicts {
+        if writer.keepsTypeArchives, !replacing.isEmpty {
             agreedProposals = try? await agreedReplacement(module, replacements: replacing)
             if let agreedProposals { preview["types_agreed"] = agreedProposals }
         }
-        if writer.keepsTypeArchives, !replacing.isEmpty, !takeTypeConflicts, agreedProposals == nil {
+        if writer.keepsTypeArchives, !replacing.isEmpty, agreedProposals == nil {
             let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
                                    uniquingKeysWith: { first, _ in first })
             preview["types_refused"] = Self.typeRefusal(replacing, origins: typeOrigins, names: names, version: nil,
@@ -949,12 +938,11 @@ public actor GhidraHost {
         do {
             let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
                                               artifact: raw)
-            // An agreed proposal is the publish's decision when the person made
-            // none: the preview answers what that publish would do.
-            var takeLibrary = takeLibrary
-            if !takeLibrary.all, takeLibrary.reasons.isEmpty,
-               let agreed = try await agreedLibraryTake(module, raw: raw, offer: offer.proposals, reviewed: reviewed) {
-                takeLibrary = LibraryTake.these(agreed.reasons).with(entryReasons: takeLibrary.entryReasons)
+            // An agreed proposal is the publish's decision: the preview answers
+            // what that publish would do.
+            var takeLibrary = LibraryTake.none.with(entryReasons: entryReasons)
+            if let agreed = try await agreedLibraryTake(module, raw: raw, offer: offer.proposals, reviewed: reviewed) {
+                takeLibrary = LibraryTake.these(agreed.reasons).with(entryReasons: entryReasons)
                 preview["library_agreed"] = agreed.proposals
             }
             var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
@@ -972,10 +960,6 @@ public actor GhidraHost {
                     module: module, rev: revision, by: nil, proposals: offered,
                     take: takeLibrary)
                 preview["library"] = try Self.plain(would)
-                if conflictTexts, !would.conflicts.isEmpty {
-                    preview["conflict_fields"] = try await Self.conflictFields(would.conflicts, offered: offered,
-                                                                               writer: writer)
-                }
                 if let refusal = would.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
                     preview["library_refused"] = refusal
                 } else if reviewed {

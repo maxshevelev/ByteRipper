@@ -28,7 +28,7 @@ final class RenameVariableItemsTests: XCTestCase {
         func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data {
             Data()
         }
-        func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data { Data() }
+        func publishPreview(_ module: SHA256Digest, entryReasons: [String: String]) async throws -> Data { Data() }
         func takeModule(_ module: SHA256Digest) async throws -> Data { Data() }
         func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data { Data() }
         func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data { Data() }

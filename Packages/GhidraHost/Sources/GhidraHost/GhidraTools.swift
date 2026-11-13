@@ -1453,15 +1453,15 @@ public enum GhidraTools {
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
-            let libraryTake = LibraryTake.none.with(entryReasons: try Self.entryReasons(call.arguments))
+            let entryReasons = try Self.entryReasons(call.arguments)
             let full = try call.arguments.bool("full", default: false)
             if try call.arguments.bool("dry_run", default: false) {
                 let reply = try await answer {
-                    try await backend.publishPreview(module, takeTypeConflicts: false, takeLibrary: libraryTake)
+                    try await backend.publishPreview(module, entryReasons: entryReasons)
                 }
                 return full ? reply : Self.compactPublish(reply)
             }
-            let options = GhidraHost.PublishOptions(takeLibrary: libraryTake)
+            let options = GhidraHost.PublishOptions(entryReasons: entryReasons)
             let reply = try await answer { try await backend.publishModule(module, by: "agent", options: options) }
             return full ? reply : Self.compactPublish(reply)
         }

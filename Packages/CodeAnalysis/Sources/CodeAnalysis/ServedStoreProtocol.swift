@@ -82,19 +82,15 @@ public enum ServedStoreProtocol {
     }
 
     /// A publish's offer to the library registry: `ContentStore.putLibraryEntries`.
+    /// It adds, completes or is told of a conflict; it never replaces an
+    /// entry — an agreed proposal does, inside the server.
     public struct PutLibrary: Codable, Equatable, Sendable {
         public var module: SHA256Digest
         public var rev: Int?
         public var by: String?
         public var proposals: [LibraryProposal]
-        /// Take every conflict, with `reason`; a client of the first form
-        /// sends this and nothing else.
-        public var take: Bool?
+        /// Why a rename is made.
         public var reason: String?
-        /// Take the entries named, each with its own reason — the second form,
-        /// which a server that predates it ignores. Nil for a take of all.
-        public var takeIDs: [String]?
-        public var reasons: [String: String]?
         /// Why this offer adds to the entries it moves, by id, in the review's words.
         public var entryReasons: [String: String]?
         /// Answer what the offer would do and write nothing.
@@ -107,10 +103,8 @@ public enum ServedStoreProtocol {
         public var change: LibraryChange?
 
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                    take: Bool? = nil, reason: String? = nil,
-                    takeIDs: [String]? = nil, reasons: [String: String]? = nil,
-                    dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil, change: LibraryChange? = nil,
-                    entryReasons: [String: String]? = nil) {
+                    reason: String? = nil, dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil,
+                    change: LibraryChange? = nil, entryReasons: [String: String]? = nil) {
             self.entryReasons = entryReasons
             self.change = change
             self.renameID = renameID
@@ -119,27 +113,12 @@ public enum ServedStoreProtocol {
             self.rev = rev
             self.by = by
             self.proposals = proposals
-            self.take = take
             self.reason = reason
-            self.takeIDs = takeIDs
-            self.reasons = reasons
             self.dryRun = dryRun
         }
 
-        /// The decision this offer carries, as the store takes it.
-        public var decision: LibraryTake {
-            var decided = take == true ? LibraryTake.all(reason ?? "") : .none
-            if let ids = takeIDs {
-                var reasons = reasons ?? [:]
-                for id in ids { reasons[id] = reasons[id] ?? "" }
-                decided = .these(reasons)
-            }
-            return decided.with(entryReasons: entryReasons ?? [:])
-        }
-
         private enum CodingKeys: String, CodingKey {
-            case module, rev, by, proposals, take, reason, reasons, change
-            case takeIDs = "take_ids"
+            case module, rev, by, proposals, reason, change
             case entryReasons = "entry_reasons"
             case dryRun = "dry_run"
             case renameID = "rename_id"

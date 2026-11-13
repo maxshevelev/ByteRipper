@@ -213,16 +213,15 @@ enum GhidraRoutes {
 
         router.add("POST", "\(prefix)/modules/:module/publish", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
-            // A shared type or a registry entry is replaced by a proposal
-            // alone — agents' votes, or an administrator's decision on the
-            // console's Proposals page — never by a publish that asks to.
-            try Self.refuseTakes(request)
-            let options = GhidraHost.PublishOptions(takeLibrary: Self.libraryTake(request))
+            // A shared type or a registry entry is replaced by an agreed
+            // proposal alone, which the publish applies; a publish carries no
+            // replacement of its own.
+            let options = GhidraHost.PublishOptions(entryReasons: Self.entryReasons(request))
             // `dry_run`: what the publish would store, exported and answered —
             // nothing is written, so the store's right is not needed for it.
             if let dryRun = request.query["dry_run"], dryRun != "0", !dryRun.isEmpty {
                 let data = try await answer {
-                    try await host.preview(module, takeLibrary: options.takeLibrary, holder: holder(request))
+                    try await host.preview(module, entryReasons: options.entryReasons, holder: holder(request))
                 }
                 return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
             }
@@ -324,31 +323,16 @@ enum GhidraRoutes {
     /// What a publish carries for the registry: the reasons this review adds
     /// to each entry it moves (`{"entry_reasons": {"<id>": "…"}}`), kept in
     /// the entry's history. An addition, never a replacement.
-    static func libraryTake(_ request: HTTPRequest) -> LibraryTake {
-        let asked = request.body.isEmpty ? nil : try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body)
-        return LibraryTake.none.with(entryReasons: asked?.entryReasons ?? [:])
+    static func entryReasons(_ request: HTTPRequest) -> [String: String] {
+        let asked = request.body.isEmpty ? nil : try? JSONDecoder().decode(PublishBody.self, from: request.body)
+        return asked?.entryReasons ?? [:]
     }
 
-    /// A publish that asks to replace a shared definition is refused, saying
-    /// where that is decided now.
-    static func refuseTakes(_ request: HTTPRequest) throws {
-        let asked = request.body.isEmpty ? nil : try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body)
-        let taking = request.query["take_type_conflicts"] != nil || request.query["take_library_conflicts"] != nil
-            || !(asked?.takeLibraryConflicts ?? []).isEmpty
-        guard taking else { return }
-        throw HTTPError(.badRequest, "a publish no longer replaces a shared type or a registry entry: propose the "
-            + "module's definitions with ghidra_type_propose; agents vote, or an administrator decides on the "
-            + "console's Proposals page, and the module's next publish applies an agreed proposal")
-    }
-
-    /// A publish's body: the reasons for the entries it adds to, and — only to
-    /// be refused — the replacement a publish used to ask for.
-    struct PublishLibraryTake: Decodable {
-        var takeLibraryConflicts: [String]?
+    /// A publish's body: the reasons for the entries it adds to.
+    struct PublishBody: Decodable {
         var entryReasons: [String: String]?
 
         private enum CodingKeys: String, CodingKey {
-            case takeLibraryConflicts = "take_library_conflicts"
             case entryReasons = "entry_reasons"
         }
     }

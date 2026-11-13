@@ -20,7 +20,8 @@ final class GhidraHostCandidateTests: XCTestCase {
             .appendingPathComponent("GhidraHostCandidateTests-\(label)-\(UUID().uuidString)", isDirectory: true)
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         _ = try await host.createCached(module: image, name: "Module")
@@ -196,7 +197,8 @@ final class GhidraHostCandidateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
@@ -302,7 +304,8 @@ final class GhidraHostCandidateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
@@ -373,26 +376,21 @@ final class GhidraHostCandidateTests: XCTestCase {
         let row = (bound["results"] as? [[String: Any]] ?? []).first
         XCTAssertEqual(row?["marked"] as? Bool, true, "\(bound)")
 
-        // A rename replaces what the entry says, so it is an administrator's
-        // decision. It is the entry's next version: the id and the bytes stay, and
-        // the function stays bound in both modules.
+        // A rename replaces what the entry says, so it is a proposal's. Agreed,
+        // it is the entry's next version: the id and the bytes stay, and the
+        // function stays bound in both modules.
         _ = try await host.publish(other, by: "agent")
         _ = try await host.write(reviewed, "/v1/rename/function", body: body([
             "address": pair.0, "name": "ShortBodyRenamed", "by": "agent", "reason": "the review knows better"]))
-        // What an administrator reads before deciding: the entry's field as it
-        // is and as the review would make it.
-        let asked = try json(await host.preview(reviewed, conflictTexts: true))
-        let fields = try XCTUnwrap((asked["conflict_fields"] as? [String: Any])?[id] as? [[String: String]], "\(asked)")
-        let named = try XCTUnwrap(fields.first { $0["field"] == "name" }, "\(fields)")
-        XCTAssertEqual(named["held"], "ShortBodyForTheTest")
-        XCTAssertEqual(named["offered"], "ShortBodyRenamed")
-        if let c = fields.first(where: { $0["field"] == "function" }) {
-            XCTAssertTrue(c["offered"]?.contains("ShortBodyRenamed(") == true, "the function is shown as its C: \(c)")
+        do {
+            _ = try await host.publish(reviewed, by: "agent")
+            XCTFail("a rename of an entry is not a publish's to make")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409, "\(error)")
         }
-        let unasked = try json(await host.preview(reviewed))
-        XCTAssertNil(unasked["conflict_fields"], "only when asked")
-        let renamed = try await host.publish(reviewed, by: "agent", options: .init(
-            takeLibrary: .these([id: "the review knows better"])))
+        _ = try await host.agreedByAdministrator(reviewed, holder: "GhidraHostCandidateTests",
+                                                 reason: "the review knows better")
+        let renamed = try await host.publish(reviewed, by: "agent")
         XCTAssertEqual(renamed.library?.updated.map(\.id), [id], "\(String(describing: renamed.library))")
         let held = try store.libraryIndex().entries[id]
         XCTAssertEqual(held?.name, "ShortBodyRenamed")
@@ -413,7 +411,8 @@ final class GhidraHostCandidateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
@@ -446,7 +445,8 @@ final class GhidraHostCandidateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let module = SHA256Digest(data: image)
@@ -493,7 +493,8 @@ final class GhidraHostCandidateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
@@ -553,7 +554,8 @@ final class GhidraHostCandidateTests: XCTestCase {
             .appendingPathComponent("GhidraHostCandidateTests-fid-\(UUID().uuidString)", isDirectory: true)
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostCandidateTests"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
                               writer: store)
         let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
         let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
@@ -862,8 +864,9 @@ final class GhidraHostCandidateTests: XCTestCase {
         try JSONSerialization.data(withJSONObject: index, options: [.sortedKeys]).write(to: url)
         let before = try XCTUnwrap(try store.libraryIndex().entries[id])
 
-        let taken = try await host.publish(reviewed, by: "admin", options: .init(
-            takeLibrary: .these([id: "the module's review taken over the older one"])))
+        _ = try await host.agreedByAdministrator(reviewed, holder: "GhidraHostCandidateTests",
+                                                 reason: "the module's review taken over the older one")
+        let taken = try await host.publish(reviewed, by: "admin")
         XCTAssertEqual(taken.manifest.reading?.rev, rev, "nothing of the module changed: the store keeps its revision")
         let after = try XCTUnwrap(try store.libraryIndex().entries[id])
         XCTAssertEqual(after.version, before.version + 1, "the take is the entry's next version: \(String(describing: taken.library))")
