@@ -1414,7 +1414,11 @@ public enum GhidraTools {
                 wrote the shared copy: `ghidra_type_definition` shows both; bring the module's type in line \
                 with the shared one. Avoid changing what another review wrote unless the code proves it \
                 wrong; when it does, propose the replacement with `ghidra_type_propose`: two other agents \
-                agreeing apply it at the next publish, and the person can decide it in the console. A name withdrawn from \
+                agreeing apply it at the next publish, and the person can decide it in the console. A type this \
+                module wrote into the archive itself, which no other module of its size holds — no published \
+                review, no running program, no project with unpublished writes — is corrected without a vote: \
+                the publish takes it and says so in `types_taken_as_origin`; with another holder the refusal \
+                names it. A name withdrawn from \
                 the archive does not refuse: it is listed in `type_conflicts`, its `type_conflict_origins` \
                 saying `withdrawn`, and stays in this module only. \
                 A function of the registry that became dirty — written on since it was bound — offers \
@@ -1427,7 +1431,11 @@ public enum GhidraTools {
                 function stays dirty, and `conflicts` names the entry, its version, what would change and \
                 the module that wrote it. Take the entry's text with `ghidra_library_apply` and \
                 `take_text`, make the addition over it, and publish again — or, if the code proves the entry \
-                wrong, propose this module's review with `ghidra_type_propose`, as for a shared type. A \
+                wrong, propose this module's review with `ghidra_type_propose`, as for a shared type. An \
+                entry whose current version this module wrote, which no other module of its size holds — no \
+                published review linking it, no module one of its bodies came from, no project with \
+                unpublished writes — is corrected without a vote, as a shared type is: the publish takes it \
+                and says so in `library_taken_as_origin`; with another holder the refusal names it. A \
                 dirty function short of the \
                 bar of a finished function is refused the same way. Each version names its `module` and \
                 `reason` in the entry's history; `entry_reasons`, an object of entry id to why, says it \
@@ -1438,7 +1446,7 @@ public enum GhidraTools {
                 By default the answer carries only what the publish changed; `full: true` adds the list of \
                 entries it left as they were. `dry_run: true` answers the same without storing: the \
                 artifact's counts, the revision it would become, the description's size, the type \
-                conflicts with `types_refused` when they would refuse the publish (or `types_agreed`, the agreed proposals the publish would apply instead), `types_version` when the publish would make a new version of the shared types, and `library`, what the registry would do — with an agreed proposal's entries taken, named in `library_agreed` — with the refusal in \
+                conflicts with `types_refused` when they would refuse the publish (or `types_agreed`, the agreed proposals the publish would apply instead), `types_version` when the publish would make a new version of the shared types, and `library`, what the registry would do — with an agreed proposal's entries taken, named in `library_agreed`, or the author's own corrections in `library_taken_as_origin` — with the refusal in \
                 `library_refused`. \
                 The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the \
                 owner also writes the program out when it idles out, is stopped or gets a signal — not \

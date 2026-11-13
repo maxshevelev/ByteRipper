@@ -362,6 +362,17 @@ final class GhidraHostCandidateTests: XCTestCase {
         XCTAssertEqual(dry["links"] as? Int, links.filter { $0["registry"] != nil }.count, "\(dry)")
         XCTAssertLessThan(try XCTUnwrap(Int(id.split(separator: "-")[0], radix: 16)), 4, id)
 
+        // The author corrects its own entry while no other module holds it: no
+        // vote, and the answer says so.
+        _ = try await host.write(reviewed, "/v1/rename/function", body: body([
+            "address": pair.0, "name": "ShortBodyCorrected", "by": "agent", "reason": "the author's correction"]))
+        let own = try json(await host.preview(reviewed))
+        XCTAssertEqual(own["library_taken_as_origin"] as? [String], ["ShortBodyForTheTest"], "\(own)")
+        XCTAssertNil(own["library_refused"], "\(own)")
+        let corrected = try await host.publish(reviewed, by: "agent")
+        XCTAssertEqual(corrected.libraryTakenAsOrigin, ["ShortBodyForTheTest"])
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.name, "ShortBodyCorrected")
+
         // Nothing links by itself: the entry is a candidate, and the review binds it.
         let plain = try json(await host.library(other, .init(action: .apply)))
         let results = plain["results"] as? [[String: Any]] ?? []
@@ -384,9 +395,11 @@ final class GhidraHostCandidateTests: XCTestCase {
             "address": pair.0, "name": "ShortBodyRenamed", "by": "agent", "reason": "the review knows better"]))
         do {
             _ = try await host.publish(reviewed, by: "agent")
-            XCTFail("a rename of an entry is not a publish's to make")
+            XCTFail("a rename of an entry another module links is not a publish's to make")
         } catch let error as GhidraHostError {
             XCTAssertEqual(error.status, 409, "\(error)")
+            // The author's own entry, but another module links it: the refusal names it.
+            XCTAssertTrue("\(error)".contains("other modules hold them") && "\(error)".contains("Other"), "\(error)")
         }
         _ = try await host.agreedByAdministrator(reviewed, holder: "GhidraHostCandidateTests",
                                                  reason: "the review knows better")

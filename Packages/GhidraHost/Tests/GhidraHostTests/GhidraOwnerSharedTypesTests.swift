@@ -56,4 +56,53 @@ final class GhidraOwnerSharedTypesTests: XCTestCase {
         let now = try json(await host.read(reader, "/v1/type?name=PROBE_SHARED_RECORD"))
         XCTAssertEqual(now["same"] as? Bool, true, "\(now)")
     }
+
+    /// The author corrects its own shared type without a vote while no other
+    /// module holds it; once another publishes it, the same change is refused
+    /// naming that module (the person's rule of 2026-11-13).
+    func testTheAuthorCorrectsItsOwnTypeUntilAnotherHoldsIt() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerAuthorTypes-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraOwnerAuthorTypes"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let reader = SHA256Digest(data: images[0]), writer = SHA256Digest(data: images[1])
+        _ = try await host.createCached(module: images[0], name: "Reader")
+        _ = try await host.createCached(module: images[1], name: "Writer")
+        defer { Task { await host.stop(reader); await host.stop(writer) } }
+        _ = try await host.read(writer, "/v1/hello")
+        _ = try await host.read(reader, "/v1/hello")
+        try await host.take(writer)
+        func define(_ c: String) async throws {
+            _ = try await host.write(writer, "/v1/type", body: body(["c": c, "description": "Only this test's."]))
+        }
+        try await define("typedef struct _PROBE_OWN { UINT32 First; UINT32 Second; } PROBE_OWN;")
+        _ = try await host.publish(writer, by: "agent")
+
+        // Its own, nobody else's: taken.
+        try await define("typedef struct _PROBE_OWN { UINT64 Whole; } PROBE_OWN;")
+        let corrected = try await host.publish(writer, by: "agent")
+        XCTAssertTrue(corrected.typesTakenAsOrigin.contains("PROBE_OWN"), "\(corrected.typesTakenAsOrigin)")
+        XCTAssertNotNil(corrected.typesVersion)
+
+        // Another module takes it and publishes it.
+        try await host.take(reader)
+        _ = try await host.write(reader, "/v1/type", body: body(["name": "PROBE_OWN", "take_shared": true]))
+        _ = try await host.publish(reader, by: "agent")
+        try await define("typedef struct _PROBE_OWN { UINT16 Half; UINT16 Rest; UINT32 Tail; } PROBE_OWN;")
+        do {
+            _ = try await host.publish(writer, by: "agent")
+            XCTFail("a type another module holds needs a vote")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409, "\(error)")
+            XCTAssertTrue(error.message.contains("Reader"), error.message)
+        }
+    }
 }

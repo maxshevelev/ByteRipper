@@ -682,6 +682,8 @@ review kit) — and every such agent's vote counts the same.
 | a new type or entry, the same one | nobody needs to | the publish takes it |
 | a type's addition — an enum member, a comment or description, a real name for a placeholder, a placeholder (`Unknown…[N]`, `field_0x…`, untyped bytes) cut into fields that stay inside its bytes, named fields at their place and size, the size unchanged | nobody needs to | the publish makes the shared types' next version |
 | an entry's addition — a comment or a plate where it had none, a name or a type for a Ghidra placeholder, an equate or a label it did not name | nobody needs to | the publish makes the entry's next version |
+| a type's replacement by the module that wrote it into the shared types, when no other module of its size holds it (no published review, no running program, no project with unpublished writes) | nobody needs to: the author corrects its own error | the publish takes it, `types_taken_as_origin` |
+| an entry's replacement by the module that wrote its current version, when no other module of its size holds it (no published review linking it, no module one of its bodies came from, no project with unpublished writes) | nobody needs to: the author corrects its own error | the publish takes it, `library_taken_as_origin` |
 | a replacement — anything else: a type's named field moved, resized, retyped or renamed, its size changed; an entry's name, signature, convention, a parameter, or any text it holds | two agents, by vote, or the person | a proposal; or the person in the console |
 
 **A proposal.** Only the module's holder proposes, with the module in work and its publish

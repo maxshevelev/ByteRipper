@@ -687,6 +687,23 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// Another module of `module`'s size, `Reader`, publishes a review that
+    /// holds `names`: a replacement of them is a vote's from then on, even
+    /// from the module that wrote them.
+    private func heldByAReader(_ names: [String], like module: SHA256Digest, host: GhidraHost,
+                               store: ContentStore) async throws {
+        let language = try json(await host.read(module, "/v1/hello"))["language"] as? String ?? ""
+        let reader = ModuleIdentity(sha256: SHA256Digest(data: Data("Reader".utf8)), size: 6, name: "Reader",
+                                    language: language)
+        let review = try JSONSerialization.data(withJSONObject: [
+            "schema": 1, "functions": [:], "comments": [], "data": [:],
+            "types": names.map { ["name": $0, "c": "typedef struct _\($0) { int Unknown00; } \($0);"] }])
+        _ = try store.putAnalysis(
+            module: reader, recipe: AnalysisRecipe(id: "code-v10-test", exporter: 10, ghidra: "12.2", script: "ExportCode.java"),
+            artifact: try JSONSerialization.data(withJSONObject: ["functions": [], "types": []]),
+            reading: AnalysisReading(rev: 1, review: try store.putObject(review)))
+    }
+
     /// A real publish into a store keeping parted objects: the artifact comes
     /// back whole, and a second publish shares what did not change.
     func testAPublishIntoAPartedStoreReadsBack() async throws {
@@ -842,7 +859,9 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual(published.typeConflicts, [])
         let shown = String(decoding: try await host.read(module, "/v1/type?name=TC_C"), as: UTF8.self)
         XCTAssertTrue(shown.contains("Now explained."), shown)
-        // A layout that differs is still a conflict, and refuses the publish.
+        // A layout that differs is still a conflict, and refuses the publish
+        // once another module holds the type.
+        try await heldByAReader(["TC_C"], like: module, host: host, store: store)
         try await define(["c": "typedef struct _TC_C { int Leaf; int More; } TC_C;"])
         do {
             _ = try await host.publish(module, by: nil)
@@ -850,6 +869,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         } catch let error as GhidraHostError {
             XCTAssertEqual(error.status, 409)
             XCTAssertTrue("\(error)".contains("_TC_C"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Reader"), "\(error)")
         }
     }
 
@@ -967,7 +987,9 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual(after.count, 2)
         XCTAssertTrue(!Set(after[1].amended).isDisjoint(with: ["CUT_PPI", "_CUT_PPI"]), "\(after[1])")
 
-        // Function1C moved: a field the shared copy names is a replacement.
+        // Function1C moved: a field the shared copy names is a replacement,
+        // a vote's once another module holds the type.
+        try await heldByAReader(["CUT_PPI"], like: module, host: host, store: store)
         try await define("typedef struct _CUT_PPI { unsigned int Size; unsigned char Unknown04[8]; void *Function0C; "
             + "unsigned char Unknown10[4]; void *Function14; void *Function18; void *Function20; void *Function1C; } CUT_PPI;")
         do {
@@ -976,6 +998,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         } catch let error as GhidraHostError {
             XCTAssertEqual(error.status, 409)
             XCTAssertTrue("\(error)".contains("CUT_PPI"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Reader"), "\(error)")
         }
         XCTAssertEqual(try versions().count, 2, "nothing written")
 
@@ -1049,7 +1072,9 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(!Set(second[1].amended).isDisjoint(with: ["TV_ITEM", "_TV_ITEM"]), "\(second[1])")
         try copyIsCurrent()
 
-        // A layout that differs: refused, and nothing of the store changes.
+        // A layout that differs, with another module holding the type:
+        // refused, and nothing of the store changes.
+        try await heldByAReader(["TV_ITEM"], like: module, host: host, store: store)
         let revision = try await store.latestRevision(module: module)
         let index = try store.libraryIndex()
         try await define("typedef struct _TV_ITEM { int Size; int Count; int More; } TV_ITEM;")
@@ -1060,6 +1085,7 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             XCTAssertEqual(error.status, 409)
             XCTAssertTrue("\(error)".contains("_TV_ITEM"), "\(error)")
             XCTAssertTrue("\(error)".contains("Nothing was written"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Reader"), "\(error)")
         }
         XCTAssertEqual(try versions().map(\.version), [1, 2])
         let after = try await store.latestRevision(module: module)

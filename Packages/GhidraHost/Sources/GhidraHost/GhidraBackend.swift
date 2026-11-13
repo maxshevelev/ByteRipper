@@ -121,6 +121,10 @@ public struct PublishAnswer: Codable, Sendable {
     public var typesError: String?
     /// The shared types' version the publish made, when it changed the archive.
     public var typesVersion: Int?
+    /// The shared types the publish replaced without a vote, as their author.
+    public var typesTakenAsOrigin: [String]?
+    /// The registry entries the publish replaced without a vote, as their author.
+    public var libraryTakenAsOrigin: [String]?
     /// EDK2 functions whose `Evidence:` line does not hold at the pinned tag.
     public var evidence: [GhidraHost.EvidenceWarning]?
     public var evidenceUnchecked: String?
@@ -138,6 +142,8 @@ public struct PublishAnswer: Codable, Sendable {
         projectError = publication?.projectError
         typesError = publication?.typesError
         typesVersion = publication?.typesVersion
+        typesTakenAsOrigin = publication.flatMap { $0.typesTakenAsOrigin.isEmpty ? nil : $0.typesTakenAsOrigin }
+        libraryTakenAsOrigin = publication.flatMap { $0.libraryTakenAsOrigin.isEmpty ? nil : $0.libraryTakenAsOrigin }
         evidence = publication.map(\.evidence).flatMap { $0.isEmpty ? nil : $0 }
         evidenceUnchecked = publication?.evidenceUnchecked
         evidenceChecked = publication.flatMap { $0.evidenceChecked > 0 ? $0.evidenceChecked : nil }
@@ -155,6 +161,8 @@ public struct PublishAnswer: Codable, Sendable {
         case projectError = "project_error"
         case typesError = "types_error"
         case typesVersion = "types_version"
+        case typesTakenAsOrigin = "types_taken_as_origin"
+        case libraryTakenAsOrigin = "library_taken_as_origin"
         case evidence
         case evidenceUnchecked = "evidence_unchecked"
         case evidenceChecked = "evidence_checked"

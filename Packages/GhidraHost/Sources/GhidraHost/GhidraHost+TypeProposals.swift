@@ -216,6 +216,63 @@ extension GhidraHost {
         return (reasons, ids.sorted())
     }
 
+    /// The decision the author's own correction makes for the registry: every
+    /// entry the publish would replace has this module as its source, and no
+    /// other module of its size holds it. Nil when there is nothing to
+    /// replace or another module wrote one of them; `blocking` names the other
+    /// holders when they are what stops it.
+    func originLibraryTake(_ module: SHA256Digest, raw: Data, offer: [LibraryProposal], reviewed: Bool)
+        async throws -> (reasons: [String: String], names: [String], blocking: [String: [String]])? {
+        let now = try await libraryReplacements(module, raw: raw, offer: offer, reviewed: reviewed)
+        guard !now.isEmpty, now.values.allSatisfy({ $0.heldBy == module.hex }) else { return nil }
+        let bits = moduleBits(module) == 32 ? "Ia32" : "X64"
+        let blocking = await otherEntryHolders(Array(now.keys), module: module, bits: bits)
+        guard blocking.isEmpty else { return ([:], [], blocking) }
+        let names = now.values.map(\.name).sorted()
+        let reason = "taken from the module that wrote it, no other \(bits) module holding it"
+        return (Dictionary(uniqueKeysWithValues: now.keys.map { ($0, reason) }), names, [:])
+    }
+
+    /// The other modules of this size that hold any of the entries `ids`, by
+    /// the entry's name: a published review with a link to it, a module one of
+    /// its bodies came from, and — since what it holds cannot be seen without
+    /// opening it — a project with writes the store has not got. Erring that
+    /// way makes a proposal, never an unwarned replacement.
+    func otherEntryHolders(_ ids: [String], module: SHA256Digest, bits: String) async -> [String: [String]] {
+        guard let index = try? await writer.readLibraryIndex() else {
+            return Dictionary(uniqueKeysWithValues: ids.map { ($0, ["the registry could not be read"]) })
+        }
+        let wanted = Set(ids)
+        func name(_ id: String) -> String { index.entries[id]?.name ?? id }
+        var holders: [String: Set<String>] = [:]
+        let manifests = (try? await writer.newestAnalyses()) ?? []
+        let width = Dictionary(manifests.map { ($0.module.sha256, Self.archiveBits(language: $0.module.language ?? "")) },
+                               uniquingKeysWith: { first, _ in first })
+        let label = Dictionary(manifests.map { ($0.module.sha256, $0.module.name) }, uniquingKeysWith: { first, _ in first })
+        // A body's module of unknown size is counted: it may be this size.
+        for id in ids {
+            for variant in index.entries[id]?.variants ?? [] where variant.module != module
+                && (width[variant.module] ?? bits) == bits {
+                holders[name(id), default: []].insert(label[variant.module] ?? variant.module.hex)
+            }
+        }
+        for manifest in manifests where manifest.module.sha256 != module && width[manifest.module.sha256] == bits {
+            guard let data = try? await writer.readObject(manifest.artifact.sha256),
+                  let artifact = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
+            for function in artifact["functions"] as? [[String: Any]] ?? [] {
+                guard let id = function["registry"] as? String, wanted.contains(id) else { continue }
+                holders[name(id), default: []].insert(manifest.module.name)
+            }
+        }
+        for project in GhidraProject.all(in: configuration.projectsRoot) where project.module != module {
+            guard let state = try? project.state(), (Self.typedIa32(state) ? "Ia32" : "X64") == bits,
+                  await holdsUnpublishedWrites(project.module) else { continue }
+            let shown = (label[project.module] ?? state.module.name) + " (unpublished writes)"
+            for id in ids { holders[name(id), default: []].insert(shown) }
+        }
+        return holders.mapValues { $0.sorted() }
+    }
+
     /// The reason an entry's history keeps for a replacement agents agreed.
     static func takenReason(_ proposal: TypeProposalBook.Proposal) -> String {
         let agreed = proposal.decided?.forced == true
@@ -319,47 +376,72 @@ extension GhidraHost {
         Task.detached { [self] in
             let server = TicketBook.Caller(author: "byteripper-server", holder: "server")
             for proposal in proposals {
-                let names = proposal.names.filter { name in
-                    !(name.hasPrefix("_") && proposal.names.contains(String(name.dropFirst())))
-                }
-                var told: Set<String> = [module.hex]
+                let names = Self.untaggedNames(proposal.names)
                 let text = Self.appliedRemark(proposal, names: names, version: version)
-                func tell(_ other: SHA256Digest, revision: Int?, name: String?) async {
-                    guard told.insert(other.hex).inserted else { return }
-                    var revision = revision, name = name
-                    if revision == nil || name == nil, let state = try? await project(other).state() {
+                for told in await appliedRecipients(proposal, module: module, relinked: relinked) {
+                    var revision = told.revision, name = told.name
+                    if revision == nil || name == nil, let state = try? await project(told.module).state() {
                         revision = revision ?? state.published?.rev
                         name = name ?? state.module.name
                     }
                     _ = try? await tickets.add(
                         TicketBook.NewRemark(severity: .misleading, text: text, revision: revision),
-                        module: other.hex, name: name, reviewer: nil, by: server)
-                }
-                // The modules that wrote the shared copies, whether or not
-                // their code uses them: their definitions are the ones replaced.
-                let writers = Set(proposal.origins.values).union((proposal.entries ?? [:]).values.compactMap(\.heldBy))
-                for origin in writers.sorted() {
-                    if let other = SHA256Digest(hex: origin.lowercased()) { await tell(other, revision: nil, name: nil) }
-                }
-                if !(proposal.entries ?? [:]).isEmpty {
-                    for row in relinked { await tell(row.module, revision: nil, name: nil) }
-                }
-                // The modules whose program holds a replaced type, whether or
-                // not their C prints it: their next publish reads the old copy
-                // as a replacement. Only the review document lists a type the
-                // C never names; the analysis lists those it prints.
-                for holder in await reviewTypeHolders(names) {
-                    await tell(holder.module, revision: holder.revision, name: holder.name)
-                }
-                for name in names {
-                    guard let data = try? await typeUses(name: name, limit: 1),
-                          let answer = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-                    for row in answer["modules"] as? [[String: Any]] ?? [] {
-                        guard let text = row["module"] as? String, let other = SHA256Digest(hex: text) else { continue }
-                        await tell(other, revision: row["revision"] as? Int, name: row["name"] as? String)
-                    }
+                        module: told.module.hex, name: name, reviewer: nil, by: server)
                 }
             }
         }
+    }
+
+    /// A proposal's names without a tag whose typedef is listed beside it.
+    static func untaggedNames(_ names: [String]) -> [String] {
+        names.filter { !($0.hasPrefix("_") && names.contains(String($0.dropFirst()))) }
+    }
+
+    /// The modules an applied proposal is told to, each once, the publishing
+    /// module never: the writers of the shared copies it replaced, the modules
+    /// relinked to its entries, and every module that holds or names a
+    /// replaced type. Only modules of the proposal's size: an Ia32 module's
+    /// type of the same name is the Ia32 archive's, and the replacement left
+    /// it as it was. A module whose size is not known here is told.
+    func appliedRecipients(_ proposal: TypeProposalBook.Proposal, module: SHA256Digest,
+                           relinked: [ContentStore.Relinked] = []) async -> [(module: SHA256Digest, revision: Int?, name: String?)] {
+        let manifests = (try? await writer.newestAnalyses()) ?? []
+        var width = Dictionary(manifests.map { ($0.module.sha256, Self.archiveBits(language: $0.module.language ?? "")) },
+                               uniquingKeysWith: { first, _ in first })
+        var told: Set<SHA256Digest> = [module]
+        var recipients: [(module: SHA256Digest, revision: Int?, name: String?)] = []
+        func tell(_ other: SHA256Digest, revision: Int?, name: String?) {
+            if width[other] == nil, let state = try? project(other).state() {
+                width[other] = Self.typedIa32(state) ? "Ia32" : "X64"
+            }
+            guard (width[other] ?? proposal.bits) == proposal.bits, told.insert(other).inserted else { return }
+            recipients.append((other, revision, name))
+        }
+        let names = Self.untaggedNames(proposal.names)
+        // The modules that wrote the shared copies, whether or not
+        // their code uses them: their definitions are the ones replaced.
+        let writers = Set(proposal.origins.values).union((proposal.entries ?? [:]).values.compactMap(\.heldBy))
+        for origin in writers.sorted() {
+            if let other = SHA256Digest(hex: origin.lowercased()) { tell(other, revision: nil, name: nil) }
+        }
+        if !(proposal.entries ?? [:]).isEmpty {
+            for row in relinked { tell(row.module, revision: nil, name: nil) }
+        }
+        // The modules whose program holds a replaced type, whether or
+        // not their C prints it: their next publish reads the old copy
+        // as a replacement. Only the review document lists a type the
+        // C never names; the analysis lists those it prints.
+        for holder in await reviewTypeHolders(names) {
+            tell(holder.module, revision: holder.revision, name: holder.name)
+        }
+        for name in names {
+            guard let data = try? await typeUses(name: name, limit: 1),
+                  let answer = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            for row in answer["modules"] as? [[String: Any]] ?? [] {
+                guard let text = row["module"] as? String, let other = SHA256Digest(hex: text) else { continue }
+                tell(other, revision: row["revision"] as? Int, name: row["name"] as? String)
+            }
+        }
+        return recipients
     }
 }

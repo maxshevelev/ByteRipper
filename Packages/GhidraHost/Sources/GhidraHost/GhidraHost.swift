@@ -91,6 +91,12 @@ public actor GhidraHost {
         public var typesError: String?
         /// The shared types' version this publish made, when its types changed the archive.
         public var typesVersion: Int?
+        /// The shared types this publish replaced without a vote: its module
+        /// wrote them and no other module of its size holds them.
+        public var typesTakenAsOrigin: [String] = []
+        /// The registry entries this publish replaced without a vote: its
+        /// module wrote them and no other module of its size holds them.
+        public var libraryTakenAsOrigin: [String] = []
         /// The kept project the store holds for this revision now.
         public var project: ProjectRecord?
         /// Why the project could not be kept: the revision is stored either way,
@@ -584,9 +590,20 @@ public actor GhidraHost {
         // for what the voters read.
         var take = LibraryTake.none.with(entryReasons: options.entryReasons)
         var libraryProposals: [String] = []
+        // Or the author's own correction: entries this module wrote, which no
+        // other module of its size holds, are taken without a vote.
+        var libraryTakenAsOrigin: [String] = []
+        var libraryBlocking: [String: [String]] = [:]
         if let agreed = try await agreedLibraryTake(module, raw: exported, offer: offer.proposals, reviewed: reviewed) {
             take = LibraryTake.these(agreed.reasons).with(entryReasons: options.entryReasons)
             libraryProposals = agreed.proposals
+        } else if let own = try await originLibraryTake(module, raw: exported, offer: offer.proposals,
+                                                        reviewed: reviewed) {
+            libraryBlocking = own.blocking
+            if !own.reasons.isEmpty {
+                take = LibraryTake.these(own.reasons).with(entryReasons: options.entryReasons)
+                libraryTakenAsOrigin = own.names
+            }
         }
         // The registry decides first, on everything this publish offers: the
         // review's candidates, and the changes to entries its functions link to.
@@ -596,13 +613,13 @@ public actor GhidraHost {
         let completion = try await Self.completions(exported, offer: offer.proposals, offered: offered,
                                                     reviewed: reviewed, take: take, writer: writer)
         if let refusal = LibraryRefusal.refusal(completion.refused) {
-            throw GhidraHostError(.refused, refusal, status: 409)
+            throw GhidraHostError(.refused, refusal + Self.holdersNote(libraryBlocking), status: 409)
         }
         offered += completion.proposals
         let would = offered.isEmpty ? nil : try await writer.previewLibraryEntries(
             module: module, rev: next - 1, by: by, proposals: offered, take: take)
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
-            throw GhidraHostError(.refused, refusal, status: 409)
+            throw GhidraHostError(.refused, refusal + Self.holdersNote(libraryBlocking), status: 409)
         }
         let evidence = evidenceCheck(offered)
         let program = artifact["program"] as? [String: Any] ?? [:]
@@ -656,6 +673,8 @@ public actor GhidraHost {
                                       libraryError: journal.libraryError, staleLinks: await staleLinks(port: record.port))
         publication.typesError = journal.typesError
         publication.typesVersion = journal.typesVersion?.version
+        publication.typesTakenAsOrigin = types?.takenAsOrigin ?? []
+        publication.libraryTakenAsOrigin = libraryTakenAsOrigin
         publication.project = journal.project
         publication.projectError = journal.projectError
         publication.evidence = evidence.warnings
@@ -947,18 +966,32 @@ public actor GhidraHost {
             agreedProposals = try? await agreedReplacement(module, replacements: replacing)
             if let agreedProposals { preview["types_agreed"] = agreedProposals }
         }
-        if writer.keepsTypeArchives, !replacing.isEmpty, agreedProposals == nil {
+        let previewBits = Self.archiveBits(language: (artifact["program"] as? [String: Any])?["language"] as? String ?? "")
+        // The author's own types, which no other module of this size holds:
+        // the publish takes them without a vote.
+        var takenAsOrigin = false
+        var blocking: [String: [String]] = [:]
+        if writer.keepsTypeArchives, !replacing.isEmpty, agreedProposals == nil,
+           Self.ownTypes(replacing, origins: typeOrigins, module: module) {
+            blocking = await otherTypeHolders(replacing, module: module, bits: previewBits)
+            if blocking.isEmpty {
+                takenAsOrigin = true
+                preview["types_taken_as_origin"] = replacing
+            }
+        }
+        if writer.keepsTypeArchives, !replacing.isEmpty, agreedProposals == nil, !takenAsOrigin {
             let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
                                    uniquingKeysWith: { first, _ in first })
             preview["types_refused"] = Self.typeRefusal(replacing, origins: typeOrigins, names: names, version: nil,
-                                                        bits: Self.archiveBits(language: (artifact["program"] as? [String: Any])?["language"] as? String ?? ""))
+                                                        bits: previewBits) + Self.holdersNote(blocking)
         }
         // The version of the shared types the publish would make, as its answer
         // says it: merged into a throwaway copy of the current version, and
         // nothing stored. Absent when the types add nothing, as in a publish.
-        if writer.keepsTypeArchives, reviewed, replacing.isEmpty || agreedProposals != nil {
+        if writer.keepsTypeArchives, reviewed, replacing.isEmpty || agreedProposals != nil || takenAsOrigin {
             let language = (artifact["program"] as? [String: Any])?["language"] as? String ?? ""
-            if let next = try? await wouldBeTypeVersion(module, language: language, take: agreedProposals != nil) {
+            if let next = try? await wouldBeTypeVersion(module, language: language,
+                                                        take: agreedProposals != nil || takenAsOrigin) {
                 preview["types_version"] = next
             }
         }
@@ -987,9 +1020,17 @@ public actor GhidraHost {
             // An agreed proposal is the publish's decision: the preview answers
             // what that publish would do.
             var takeLibrary = LibraryTake.none.with(entryReasons: entryReasons)
+            var libraryBlocking: [String: [String]] = [:]
             if let agreed = try await agreedLibraryTake(module, raw: raw, offer: offer.proposals, reviewed: reviewed) {
                 takeLibrary = LibraryTake.these(agreed.reasons).with(entryReasons: entryReasons)
                 preview["library_agreed"] = agreed.proposals
+            } else if let own = try await originLibraryTake(module, raw: raw, offer: offer.proposals,
+                                                            reviewed: reviewed) {
+                libraryBlocking = own.blocking
+                if !own.reasons.isEmpty {
+                    takeLibrary = LibraryTake.these(own.reasons).with(entryReasons: entryReasons)
+                    preview["library_taken_as_origin"] = own.names
+                }
             }
             var offered = try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module)
             let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
@@ -1000,14 +1041,14 @@ public actor GhidraHost {
             if let unchecked = evidence.unchecked { preview["evidence_unchecked"] = unchecked }
             if evidence.checked > 0 { preview["evidence_checked"] = evidence.checked }
             if let refusal = LibraryRefusal.refusal(completion.refused) {
-                preview["library_refused"] = refusal
+                preview["library_refused"] = refusal + Self.holdersNote(libraryBlocking)
             } else if !offered.isEmpty {
                 let would = try await writer.previewLibraryEntries(
                     module: module, rev: revision, by: nil, proposals: offered,
                     take: takeLibrary)
                 preview["library"] = try Self.plain(would)
                 if let refusal = would.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
-                    preview["library_refused"] = refusal
+                    preview["library_refused"] = refusal + Self.holdersNote(libraryBlocking)
                 } else if reviewed {
                     links.formUnion(Self.wouldLink(offered, would: would).compactMap(Self.addressValue))
                 }

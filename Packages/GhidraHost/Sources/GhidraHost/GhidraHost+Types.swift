@@ -127,7 +127,7 @@ extension GhidraHost {
     /// copy of the current version, refused when one would replace a type the
     /// archive holds, and the next version when the copy changed.
     func decideTypes(_ module: SHA256Digest, language: String, by: String?) async throws
-        -> (merged: TypesMerged, bits: String, version: TypeArchiveVersion?, proposals: [String]) {
+        -> (merged: TypesMerged, bits: String, version: TypeArchiveVersion?, proposals: [String], takenAsOrigin: [String]) {
         let bits = Self.archiveBits(language: language)
         var (folder, current) = try await archiveWorkingCopy(bits: bits)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -145,15 +145,101 @@ extension GhidraHost {
                                                      body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
             proposals = agreed
         }
+        // The author corrects its own type: one this module wrote and no other
+        // module of this size holds is taken without a vote. A vote is for a
+        // change that could reach another module.
+        var takenAsOrigin: [String] = []
+        var blocking: [String: [String]] = [:]
+        if !merged.replacements.isEmpty, proposals.isEmpty,
+           Self.ownTypes(merged.replacements, origins: merged.origins, module: module) {
+            let replacements = merged.replacements
+            blocking = await otherTypeHolders(replacements, module: module, bits: bits)
+            if blocking.isEmpty {
+                try? FileManager.default.removeItem(at: folder)
+                (folder, current) = try await archiveWorkingCopy(bits: bits)
+                merged = TypesMerged(try await typesCall(module, "/v1/types/merge?take_type_conflicts=1",
+                                                         body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
+                takenAsOrigin = replacements
+            }
+        }
         if !merged.replacements.isEmpty {
             let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
                                    uniquingKeysWith: { first, _ in first })
             throw GhidraHostError(.refused, Self.typeRefusal(merged.replacements, origins: merged.origins, names: names,
-                                                             version: current?.version, bits: bits), status: 409)
+                                                             version: current?.version, bits: bits)
+                                  + Self.holdersNote(blocking), status: 409)
         }
-        let version = try await nextTypeVersion(bits: bits, folder: folder, after: current, answer: merged,
-                                                by: by, module: module)
-        return (merged, bits, version, proposals)
+        let version = try await nextTypeVersion(
+            bits: bits, folder: folder, after: current, answer: merged, by: by, module: module,
+            reason: takenAsOrigin.isEmpty ? nil
+                : "taken from the module that wrote them, no other \(bits) module holding them: "
+                    + takenAsOrigin.joined(separator: ", "))
+        return (merged, bits, version, proposals, takenAsOrigin)
+    }
+
+    /// Whether every replaced type was written into the shared archive by
+    /// `module` itself. A structure's tag (`_PROBE`) is its typedef's type:
+    /// the archive records the writer of one of the two.
+    static func ownTypes(_ names: [String], origins: [String: String], module: SHA256Digest) -> Bool {
+        func origin(_ name: String) -> SHA256Digest? {
+            let twin = name.hasPrefix("_") ? String(name.dropFirst()) : "_" + name
+            return SHA256Digest(hex: origins[name] ?? origins[twin] ?? "")
+        }
+        return !names.isEmpty && names.allSatisfy { origin($0) == module }
+    }
+
+    /// The other modules of this size that hold any of `names`, by name: a
+    /// published review whose program holds it or whose C names it, a running
+    /// owner whose program holds it now, and — since what it holds cannot be
+    /// seen without opening it — a project not running with writes the store
+    /// has not got. Erring that way makes a proposal, never an unwarned
+    /// replacement.
+    func otherTypeHolders(_ names: [String], module: SHA256Digest, bits: String) async -> [String: [String]] {
+        var holders: [String: Set<String>] = [:]
+        var published: Set<SHA256Digest> = []
+        let manifests = (try? await writer.newestAnalyses()) ?? []
+        let width = Dictionary(manifests.map { ($0.module.sha256, Self.archiveBits(language: $0.module.language ?? "")) },
+                               uniquingKeysWith: { first, _ in first })
+        let label = Dictionary(manifests.map { ($0.module.sha256, $0.module.name) }, uniquingKeysWith: { first, _ in first })
+        for name in names {
+            for holder in await reviewTypeHolders([name]) where holder.module != module && width[holder.module] == bits {
+                holders[name, default: []].insert(holder.name)
+                published.insert(holder.module)
+            }
+            if let data = try? await typeUses(name: name, limit: 10_000),
+               let modules = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["modules"] as? [[String: Any]] {
+                for row in modules {
+                    guard let hex = row["module"] as? String, let digest = SHA256Digest(hex: hex), digest != module,
+                          width[digest] == bits else { continue }
+                    holders[name, default: []].insert(row["name"] as? String ?? hex)
+                }
+            }
+        }
+        for project in GhidraProject.all(in: configuration.projectsRoot) where project.module != module {
+            guard let state = try? project.state(), (Self.typedIa32(state) ? "Ia32" : "X64") == bits else { continue }
+            let shown = label[project.module] ?? state.module.name
+            if let record = await runningOwner(project) {
+                for name in names {
+                    let query = "/v1/type?name=" + (name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)
+                    guard let data = try? await Self.call(record.port, "GET", query, timeout: 30).data,
+                          let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                          answer["program"] is [String: Any] else { continue }
+                    holders[name, default: []].insert(shown)
+                }
+            } else if await holdsUnpublishedWrites(project.module) {
+                for name in names { holders[name, default: []].insert(shown + " (unpublished writes)") }
+            }
+        }
+        return holders.mapValues { $0.sorted() }
+    }
+
+    /// What a refusal adds when the module wrote the types itself: who else
+    /// holds them, and so why a vote is needed.
+    static func holdersNote(_ holders: [String: [String]]) -> String {
+        guard !holders.isEmpty else { return "" }
+        let listed = holders.keys.sorted().map { "\($0): \(holders[$0]!.joined(separator: ", "))" }
+        return " This module wrote them, but other modules hold them, so a change needs a vote — "
+            + listed.joined(separator: "; ") + "."
     }
 
     /// The version `decideTypes` would make, worked out on a copy and with
