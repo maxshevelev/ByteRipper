@@ -690,6 +690,115 @@ extension LibraryProposal {
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
     }
 
+    /// The fields of a review that its function's head line prints: what a
+    /// review may change of an entry and still leave its body's C the entry's.
+    public static let headFields: Set<String> = ["calling_convention", "signature", "return_type", "params"]
+
+    /// The held entry with only the proposal's head: its convention, signature,
+    /// return type and parameters, and in the C its prototype line, with the
+    /// warning of a convention nobody names gone when the proposal's C has
+    /// none. Everything below the head — the body's C as the entry's module
+    /// printed it, the temporaries that module could name apart, its labels,
+    /// constants, equates and instructions — stays the entry's, and the C says
+    /// it is still that module's reading (`function.source`). Nil when the
+    /// review changes anything but the head, which is then a body's edit and
+    /// goes as the module offers it, or when the head is the entry's already.
+    public static func keepingEntryText(_ proposal: Data, in held: Data, heldSource: LibrarySource) -> Data? {
+        guard var object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
+              let offered = (try? JSONSerialization.jsonObject(with: proposal)) as? [String: Any],
+              var function = object["function"] as? [String: Any], let old = function["c"] as? String,
+              let offeredFunction = offered["function"] as? [String: Any], let new = offeredFunction["c"] as? String
+        else { return nil }
+        let changed = Set(changedFields(from: held, to: proposal)).subtracting(["body", "constants", "function", "equates"])
+        guard !changed.isEmpty, changed.isSubset(of: headFields), nameChanges(from: held, to: proposal).isEmpty,
+              let heldHead = CHead(old), let offeredHead = CHead(new) else { return nil }
+        let text = old as NSString
+        var removed: NSRange?
+        if !offeredHead.warns, let warning = heldHead.warning { removed = warning }
+        let prototype = (new as NSString).substring(with: offeredHead.prototype)
+        let shrink = removed?.length ?? 0
+        let start = heldHead.prototype.location - shrink
+        let delta = prototype.utf16.count - heldHead.prototype.length - shrink
+        var c = text.replacingCharacters(in: heldHead.prototype, with: prototype)
+        if let removed { c = (c as NSString).replacingCharacters(in: removed, with: "") }
+        // Each place the C names — a span, a call site, a field, the folded
+        // warning — moves with the text: those of the prototype come from the
+        // proposal's line, those of the removed warning go, the rest shift.
+        func moved(_ held: Any?, offered: Any?) -> [[Any]]? {
+            guard held != nil || offered != nil else { return nil }
+            var rows: [[Any]] = []
+            for row in held as? [[Any]] ?? [] {
+                guard let at = row.first as? Int else { continue }
+                if let removed, NSLocationInRange(at, removed) { continue }
+                if NSLocationInRange(at, heldHead.prototype) { continue }
+                var row = row
+                if at >= NSMaxRange(heldHead.prototype) {
+                    row[0] = at + delta
+                } else if let removed, at >= NSMaxRange(removed) {
+                    row[0] = at - shrink
+                }
+                rows.append(row)
+            }
+            for row in offered as? [[Any]] ?? [] {
+                guard let at = row.first as? Int, NSLocationInRange(at, offeredHead.prototype) else { continue }
+                var row = row
+                row[0] = at - offeredHead.prototype.location + start
+                rows.append(row)
+            }
+            return rows.sorted { ($0.first as? Int ?? 0) < ($1.first as? Int ?? 0) }
+        }
+        function["c"] = c
+        for key in ["c_spans", "c_sites", "c_fields"] {
+            function[key] = moved(function[key], offered: offeredFunction[key])
+        }
+        if var folded = function["c_unreachable"] as? [Any], let at = folded.first as? Int {
+            if at >= NSMaxRange(heldHead.prototype) {
+                folded[0] = at + delta
+            } else if let removed, at >= NSMaxRange(removed) {
+                folded[0] = at - shrink
+            }
+            function["c_unreachable"] = folded
+        }
+        function["signature"] = offeredFunction["signature"]
+        if function["source"] == nil {
+            var origin: [String: Any] = ["module": heldSource.module.hex, "address": heldSource.address]
+            origin["rev"] = heldSource.rev
+            function["source"] = origin
+        }
+        object["function"] = function
+        for key in headFields { object[key] = offered[key] }
+        return try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    /// Where a function's C has its head: the prototype line just above the
+    /// body's opening brace, and the line warning that no convention is named.
+    /// Ranges in UTF-16 units, as the exporter counts the C's places.
+    struct CHead {
+        let prototype: NSRange
+        let warning: NSRange?
+        var warns: Bool { warning != nil }
+
+        init?(_ c: String) {
+            let text = c as NSString
+            let brace = text.range(of: "\n{\n")
+            guard brace.location != NSNotFound else { return nil }
+            var end = brace.location
+            while end > 0, CharacterSet.whitespacesAndNewlines.contains(UnicodeScalar(text.character(at: end - 1)) ?? " ") {
+                end -= 1
+            }
+            var line = text.lineRange(for: NSRange(location: max(end - 1, 0), length: 0))
+            // A long prototype the printer wrapped goes on indented.
+            while line.location > 0, line.length > 0, [0x20, 0x09].contains(text.character(at: line.location)) {
+                line = text.lineRange(for: NSRange(location: line.location - 1, length: 0))
+            }
+            guard end > line.location else { return nil }
+            prototype = NSRange(location: line.location, length: end - line.location)
+            let head = NSRange(location: 0, length: line.location)
+            let pattern = try? NSRegularExpression(pattern: #"(?m)^[ \t]*/\*\s*WARNING: Unknown calling convention[^\n]*\*/[ \t]*\n"#)
+            warning = pattern?.firstMatch(in: c, range: head)?.range
+        }
+    }
+
     /// Whether the entry object holds the function a reader is shown.
     static func hasFunction(_ data: Data) -> Bool {
         ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["function"] != nil

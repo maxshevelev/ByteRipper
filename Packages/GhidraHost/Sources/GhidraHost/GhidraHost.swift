@@ -746,13 +746,25 @@ public actor GhidraHost {
     /// registry, whatever its project still holds: it is offered only when it is
     /// the entry's own review, which completes an older entry. One whose entry
     /// was taken out is the module's own again, whatever was written on it.
+    ///
+    /// A review that changes only an entry's head — its convention, signature,
+    /// return type, parameters — offers the entry's own C under the new head
+    /// (`LibraryProposal.keepingEntryText`): the body as the entry's module
+    /// printed it, not as this module's decompiler does, which may not tell
+    /// the same temporaries apart.
     static func withoutLinked(_ proposals: [LibraryProposal], writer: any AnalysisWriter) async throws -> [LibraryProposal] {
-        guard proposals.contains(where: { $0.linked || $0.basedOn != nil }) else { return proposals }
+        guard !proposals.isEmpty else { return proposals }
         let index = try await writer.readLibraryIndex()
+        guard !index.entries.isEmpty else { return proposals }
         var kept: [LibraryProposal] = []
-        for proposal in proposals {
+        for var proposal in proposals {
             if let based = proposal.basedOn, index.entries[based] == nil,
                index.takenOut?.contains(where: { $0.value.id == based }) == true { continue }
+            if !proposal.linked, let (_, held) = index.entry(for: proposal.body),
+               let kept = LibraryProposal.keepingEntryText(proposal.entry, in: try await writer.readObject(held.entry),
+                                                           heldSource: held.source) {
+                proposal.entry = kept
+            }
             guard proposal.linked else { kept.append(proposal); continue }
             guard let (_, held) = index.entry(for: proposal.body) else { continue }
             if LibraryProposal.sameReview(try await writer.readObject(held.entry), proposal.entry) { kept.append(proposal) }
