@@ -3786,14 +3786,28 @@ final class CodePaneViewTests: XCTestCase {
         view.showDescription(true)
         view.layoutSubtreeIfNeeded()
         let column = try XCTUnwrap(view.descriptionView.sectionColumn as? SectionColumnView)
-        XCTAssertFalse(column.drawsBackground)
-        for name in [NSAppearance.Name.aqua, .darkAqua] {
+        XCTAssertTrue(column.drawsBackground)
+        XCTAssertEqual(column.backgroundColor, NSColor.tertiarySystemFill)
+        // Drawn, not only set: over the text's white or black the column reads
+        // darker or lighter, in each appearance.
+        for (name, darker) in [(NSAppearance.Name.aqua, true), (.darkAqua, false)] {
             let appearance = try XCTUnwrap(NSAppearance(named: name))
-            column.appearance = appearance
-            var expected: CGColor?
-            appearance.performAsCurrentDrawingAppearance { expected = NSColor.tertiarySystemFill.cgColor }
-            XCTAssertEqual(column.fillColor, expected, "\(name.rawValue)")
-            XCTAssertGreaterThan(column.fillColor?.alpha ?? 0, 0, "\(name.rawValue): the fill shows")
+            let page = FilledTestView(frame: NSRect(x: 0, y: 0, width: 120, height: 60))
+            page.appearance = appearance
+            let probe = SectionColumnView(frame: NSRect(x: 0, y: 0, width: 60, height: 60))
+            page.addSubview(probe)
+            let rep = try XCTUnwrap(page.bitmapImageRepForCachingDisplay(in: page.bounds))
+            page.cacheDisplay(in: page.bounds, to: rep)
+            let scale = rep.pixelsWide / 120
+            func brightness(_ x: Int) throws -> CGFloat {
+                try XCTUnwrap(rep.colorAt(x: x * scale, y: 30 * scale)?.usingColorSpace(.sRGB)).brightnessComponent
+            }
+            let inColumn = try brightness(30), onPage = try brightness(90)
+            if darker {
+                XCTAssertLessThan(inColumn, onPage - 0.02, "\(name.rawValue): \(inColumn) on \(onPage)")
+            } else {
+                XCTAssertGreaterThan(inColumn, onPage + 0.02, "\(name.rawValue): \(inColumn) on \(onPage)")
+            }
         }
     }
 
@@ -5695,4 +5709,12 @@ final class CodeReadinessBarTests: XCTestCase {
     }
 
 
+}
+
+/// The text's background, drawn, for a test of what lies over it.
+private final class FilledTestView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.textBackgroundColor.setFill()
+        dirtyRect.fill()
+    }
 }

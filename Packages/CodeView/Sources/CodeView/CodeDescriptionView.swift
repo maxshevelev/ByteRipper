@@ -118,7 +118,6 @@ import ToolModuleKit
         ControlHelp.describe(outline, L("Sections of the description"))
         sectionColumn.documentView = outline
         sectionColumn.hasVerticalScroller = true
-        sectionColumn.drawsBackground = false
         sectionColumn.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(scroll)
@@ -861,38 +860,19 @@ final class DescriptionTextView: NSTextView, FindBoxHost {
 /// longer stood apart from the text it lists. A system fill is translucent and
 /// made to sit over content — darker over light, lighter over dark — the
 /// fill the panes' headers use, at the same tertiary weight.
+///
+/// The scroll view draws it as its own background, a dynamic colour AppKit
+/// resolves for each appearance. A colour on its layer does not last: AppKit
+/// clears a scroll view's layer background on its next update.
 final class SectionColumnView: NSScrollView {
-    static let cornerRadius: CGFloat = 8
+    static let fill = NSColor.tertiarySystemFill
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = Self.cornerRadius
-        layer?.masksToBounds = true
-        applyFill()
+        drawsBackground = true
+        backgroundColor = Self.fill
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been used") }
-
-    /// A layer's colour is a CGColor, fixed when it is set: resolved in this
-    /// view's own appearance, and again whenever that changes.
-    private func applyFill() {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = NSColor.tertiarySystemFill.cgColor
-        }
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        applyFill()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        applyFill()
-    }
-
-    /// The fill as last resolved, for a test.
-    var fillColor: CGColor? { layer?.backgroundColor }
 }
