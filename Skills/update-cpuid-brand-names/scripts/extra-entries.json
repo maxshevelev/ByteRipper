@@ -3,6 +3,552 @@
   "entries": [
     {
       "cpuids": [
+        "50662"
+      ],
+      "codeNames": [
+        "Broadwell DE"
+      ],
+      "cores": [
+        "Broadwell"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "V1"
+      ],
+      "segments": [
+        "Server",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon D-1520"
+        },
+        {
+          "name": "Intel Xeon D-1540"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "processors"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| BDX-DE         | V1       | 06-56-02/10 | 0000001a | 0000001c | Xeon D-1520/40"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/products/sku/87038/intel-xeon-processor-d1520-6m-cache-2-20-ghz/ordering.html",
+          "quote": "Xeon D-1520: SR29B, stepping V1 (ARK ordering tab)"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/products/sku/87039/intel-xeon-processor-d1540-12m-cache-2-00-ghz/ordering.html",
+          "quote": "Xeon D-1540: SR29A, stepping V1 (ARK ordering tab)"
+        }
+      ],
+      "note": "Intel's microcode notes name 06-56-02 Broadwell-DE V1, the Xeon D-1520 and D-1540; ARK gives their codes at V1. The article lists both under 606C1 (Ice Lake D), where rule 6 takes them out."
+    },
+    {
+      "cpuids": [
+        "60660"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_CANNONLAKE_A0\t\t0x60660"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_CANNONLAKE_L\t\tIFM(6, 0x66) /* Palm Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 60660."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu60660_plat80_ver0000000C_2016-08-21_PRD_B3C8D44D.bin"
+        }
+      ],
+      "note": "coreboot names 60660 Cannon Lake A0; the microcode notes name only 06-66-03 (D0), and its public microcode is dated 2016. No models."
+    },
+    {
+      "cpuids": [
+        "60661"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_CANNONLAKE_B0\t\t0x60661"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_CANNONLAKE_L\t\tIFM(6, 0x66) /* Palm Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 60661."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu60661_plat80_ver0000000E_2017-01-28_PRD_398CC081.bin"
+        }
+      ],
+      "note": "coreboot names 60661 Cannon Lake B0; not in Intel's lists. No models."
+    },
+    {
+      "cpuids": [
+        "60662"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_CANNONLAKE_C0\t\t0x60662"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_CANNONLAKE_L\t\tIFM(6, 0x66) /* Palm Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 60662."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu60662_plat80_ver00000022_2017-11-29_PRD_D6CC7995.bin"
+        }
+      ],
+      "note": "coreboot names 60662 Cannon Lake C0; not in Intel's lists. No models."
+    },
+    {
+      "cpuids": [
+        "60663"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "D0"
+      ],
+      "segments": [
+        "Mobile"
+      ],
+      "processors": [
+        {
+          "name": "Intel Core i3-8121U"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "segments"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| CNL-U          | D0       | 06-66-03/80 |          | 0000002a | Core Gen8 Mobile"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_CANNONLAKE_L\t\tIFM(6, 0x66) /* Palm Cove */"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/products/sku/136863/intel-core-i38121u-processor-4m-cache-up-to-3-20-ghz/specifications.html",
+          "quote": "Intel Core i3-8121U: Code Name Products formerly Cannon Lake"
+        }
+      ],
+      "note": "Intel's microcode notes name 06-66-03 Cannon Lake U D0. ARK's one Cannon Lake model is the i3-8121U, with no ordering tab, so its S-SPEC is not known; Intel's code-name page for Cannon Lake is gone. Intel's list of processors by CPUID has no 06_66H row."
+    },
+    {
+      "cpuids": [
+        "606A0"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_X\t\t\tIFM(6, 0x6A) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 606A0."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu606A0_plat97_ver0000001F_2019-07-22_PRD_776B0020.bin"
+        }
+      ],
+      "note": "Model 0x6A is Ice Lake-SP (the kernel); Intel's list has only 606A6, and nothing names a stepping or model for 606A0. No models."
+    },
+    {
+      "cpuids": [
+        "606A4"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_X\t\t\tIFM(6, 0x6A) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 606A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu606A4_plat87_ver0B000280_2020-08-17_PRD_5E6AE35E.bin"
+        }
+      ],
+      "note": "As 606A0: Intel's list has only 606A6; nothing names a stepping or model for 606A4. No models."
+    },
+    {
+      "cpuids": [
+        "606A5"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| ICX-SP         | C0       | 06-6a-05/87 |          | 0c0002f0 | Xeon Scalable Gen3"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_X\t\t\tIFM(6, 0x6A) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 606A5."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu606A5_plat87_ver0C0002F0_2021-03-08_PRD_F6B24822.bin"
+        }
+      ],
+      "note": "Intel's microcode notes name 06-6a-05 ICX-SP C0, but its list of processors by CPUID has only 606A6, and no model on ARK gives C0. No models."
+    },
+    {
+      "cpuids": [
+        "606A6"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [
+        "3rd Generation Intel Xeon Scalable Processors",
+        "Intel Xeon W Processor"
+      ],
+      "steppings": [
+        "D2",
+        "M1"
+      ],
+      "segments": [
+        "Server",
+        "Workstation"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon Platinum 8352M"
+        },
+        {
+          "name": "Intel Xeon Platinum 8362"
+        },
+        {
+          "name": "Intel Xeon Platinum 8368"
+        },
+        {
+          "name": "Intel Xeon Platinum 8358"
+        },
+        {
+          "name": "Intel Xeon Platinum 8352Y"
+        },
+        {
+          "name": "Intel Xeon Platinum 8368Q"
+        },
+        {
+          "name": "Intel Xeon Platinum 8352S"
+        },
+        {
+          "name": "Intel Xeon Platinum 8358P"
+        },
+        {
+          "name": "Intel Xeon Platinum 8352V"
+        },
+        {
+          "name": "Intel Xeon Platinum 8380"
+        },
+        {
+          "name": "Intel Xeon Platinum 8351N"
+        },
+        {
+          "name": "Intel Xeon Platinum 8360Y"
+        },
+        {
+          "name": "Intel Xeon Gold 6312U"
+        },
+        {
+          "name": "Intel Xeon Gold 6334"
+        },
+        {
+          "name": "Intel Xeon Gold 6326"
+        },
+        {
+          "name": "Intel Xeon Gold 6342"
+        },
+        {
+          "name": "Intel Xeon Gold 6338T"
+        },
+        {
+          "name": "Intel Xeon Gold 6336Y"
+        },
+        {
+          "name": "Intel Xeon Gold 6348"
+        },
+        {
+          "name": "Intel Xeon Gold 6346"
+        },
+        {
+          "name": "Intel Xeon Gold 6330"
+        },
+        {
+          "name": "Intel Xeon Gold 6338"
+        },
+        {
+          "name": "Intel Xeon Gold 6330N"
+        },
+        {
+          "name": "Intel Xeon Gold 6354"
+        },
+        {
+          "name": "Intel Xeon Gold 6314U"
+        },
+        {
+          "name": "Intel Xeon Gold 6338N"
+        },
+        {
+          "name": "Intel Xeon Gold 5315Y"
+        },
+        {
+          "name": "Intel Xeon Gold 5317"
+        },
+        {
+          "name": "Intel Xeon Gold 5318N"
+        },
+        {
+          "name": "Intel Xeon Gold 5318S"
+        },
+        {
+          "name": "Intel Xeon Gold 5318Y"
+        },
+        {
+          "name": "Intel Xeon Gold 5320"
+        },
+        {
+          "name": "Intel Xeon Gold 5320T"
+        },
+        {
+          "name": "Intel Xeon Silver 4309Y"
+        },
+        {
+          "name": "Intel Xeon Silver 4310"
+        },
+        {
+          "name": "Intel Xeon Silver 4310T"
+        },
+        {
+          "name": "Intel Xeon Silver 4314"
+        },
+        {
+          "name": "Intel Xeon Silver 4316"
+        },
+        {
+          "name": "Intel Xeon W-3323"
+        },
+        {
+          "name": "Intel Xeon W-3335"
+        },
+        {
+          "name": "Intel Xeon W-3345"
+        },
+        {
+          "name": "Intel Xeon W-3365"
+        },
+        {
+          "name": "Intel Xeon W-3375"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_6AH | 6 | Ice Lake Xeon-SP | 3rd Gen Intel Xeon Scalable processor family | Server, Workstation | 606A6"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| ICX-SP         | Dx/M1    | 06-6a-06/87 | 0d000421 | 0d000433 | Xeon Scalable Gen3"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/codename/74979/products-formerly-ice-lake.html",
+          "quote": "Products formerly Ice Lake: the Xeon Platinum 83xx, Gold 63xx/53xx, Silver 43xx and Xeon W-3300; each ordering tab gives its code at D2 or M1 (ark-sspec.json)"
+        }
+      ],
+      "note": "The article lists Ice Lake Xeon-SP under 606AX by series only. Intel's list gives its one production CPUID, 606A6; ARK gives D2 (XCC) or M1 (MCC), both 06-6a-06 in the microcode notes."
+    },
+    {
+      "cpuids": [
         "706A0"
       ],
       "codeNames": [

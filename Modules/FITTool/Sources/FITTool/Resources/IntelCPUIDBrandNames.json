@@ -4743,14 +4743,6 @@
       ],
       "processors": [
         {
-          "name": "Intel Xeon D-1520",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1540",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1702",
           "sSpec": [
             "SRLC5",
@@ -10738,6 +10730,588 @@
           ]
         }
       ]
+    },
+    {
+      "cpuids": [
+        "50662"
+      ],
+      "codeNames": [
+        "Broadwell DE"
+      ],
+      "cores": [
+        "Broadwell"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "V1"
+      ],
+      "segments": [
+        "Server",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon D-1520",
+          "sSpec": [
+            "SR29B"
+          ],
+          "sSpecSource": {
+            "SR29B": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon D-1540",
+          "sSpec": [
+            "SR29A"
+          ],
+          "sSpecSource": {
+            "SR29A": "ark"
+          }
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "60660"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "60661"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "60662"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "60663"
+      ],
+      "codeNames": [
+        "Cannon Lake"
+      ],
+      "cores": [
+        "Palm Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "D0"
+      ],
+      "segments": [
+        "Mobile"
+      ],
+      "processors": [
+        {
+          "name": "Intel Core i3-8121U",
+          "sSpec": []
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "606A0"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "606A4"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "606A5"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "606A6"
+      ],
+      "codeNames": [
+        "Ice Lake Xeon-SP"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [
+        "3rd Generation Intel Xeon Scalable Processors",
+        "Intel Xeon W Processor"
+      ],
+      "steppings": [
+        "D2",
+        "M1"
+      ],
+      "segments": [
+        "Server",
+        "Workstation"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon Platinum 8352M",
+          "sSpec": [
+            "SRKYF"
+          ],
+          "sSpecSource": {
+            "SRKYF": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8362",
+          "sSpec": [
+            "SRKY3"
+          ],
+          "sSpecSource": {
+            "SRKY3": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8368",
+          "sSpec": [
+            "SRKH8"
+          ],
+          "sSpecSource": {
+            "SRKH8": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8358",
+          "sSpec": [
+            "SRKJ1"
+          ],
+          "sSpecSource": {
+            "SRKJ1": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8352Y",
+          "sSpec": [
+            "SRKHG"
+          ],
+          "sSpecSource": {
+            "SRKHG": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8368Q",
+          "sSpec": [
+            "SRKHX"
+          ],
+          "sSpecSource": {
+            "SRKHX": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8352S",
+          "sSpec": [
+            "SRKJ8"
+          ],
+          "sSpecSource": {
+            "SRKJ8": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8358P",
+          "sSpec": [
+            "SRKJ0"
+          ],
+          "sSpecSource": {
+            "SRKJ0": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8352V",
+          "sSpec": [
+            "SRKJ2"
+          ],
+          "sSpecSource": {
+            "SRKJ2": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8380",
+          "sSpec": [
+            "SRKHR"
+          ],
+          "sSpecSource": {
+            "SRKHR": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8351N",
+          "sSpec": [
+            "SRKJ3"
+          ],
+          "sSpecSource": {
+            "SRKJ3": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Platinum 8360Y",
+          "sSpec": [
+            "SRKHF"
+          ],
+          "sSpecSource": {
+            "SRKHF": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6312U",
+          "sSpec": [
+            "SRKXC"
+          ],
+          "sSpecSource": {
+            "SRKXC": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6334",
+          "sSpec": [
+            "SRKXQ"
+          ],
+          "sSpecSource": {
+            "SRKXQ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6326",
+          "sSpec": [
+            "SRKXK"
+          ],
+          "sSpecSource": {
+            "SRKXK": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6342",
+          "sSpec": [
+            "SRKXA"
+          ],
+          "sSpecSource": {
+            "SRKXA": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6338T",
+          "sSpec": [
+            "SRKXF"
+          ],
+          "sSpecSource": {
+            "SRKXF": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6336Y",
+          "sSpec": [
+            "SRKXB"
+          ],
+          "sSpecSource": {
+            "SRKXB": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6348",
+          "sSpec": [
+            "SRKHP"
+          ],
+          "sSpecSource": {
+            "SRKHP": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6346",
+          "sSpec": [
+            "SRKHN"
+          ],
+          "sSpecSource": {
+            "SRKHN": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6330",
+          "sSpec": [
+            "SRKHM"
+          ],
+          "sSpecSource": {
+            "SRKHM": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6338",
+          "sSpec": [
+            "SRKJ9"
+          ],
+          "sSpecSource": {
+            "SRKJ9": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6330N",
+          "sSpec": [
+            "SRKH9"
+          ],
+          "sSpecSource": {
+            "SRKH9": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6354",
+          "sSpec": [
+            "SRKH7"
+          ],
+          "sSpecSource": {
+            "SRKH7": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6314U",
+          "sSpec": [
+            "SRKHL"
+          ],
+          "sSpecSource": {
+            "SRKHL": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 6338N",
+          "sSpec": [
+            "SRKY2"
+          ],
+          "sSpecSource": {
+            "SRKY2": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5315Y",
+          "sSpec": [
+            "SRKXR"
+          ],
+          "sSpecSource": {
+            "SRKXR": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5317",
+          "sSpec": [
+            "SRKXM"
+          ],
+          "sSpecSource": {
+            "SRKXM": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5318N",
+          "sSpec": [
+            "SRKXG"
+          ],
+          "sSpecSource": {
+            "SRKXG": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5318S",
+          "sSpec": [
+            "SRKXD"
+          ],
+          "sSpecSource": {
+            "SRKXD": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5318Y",
+          "sSpec": [
+            "SRKXE"
+          ],
+          "sSpecSource": {
+            "SRKXE": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5320",
+          "sSpec": [
+            "SRKWU"
+          ],
+          "sSpecSource": {
+            "SRKWU": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Gold 5320T",
+          "sSpec": [
+            "SRKXJ"
+          ],
+          "sSpecSource": {
+            "SRKXJ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Silver 4309Y",
+          "sSpec": [
+            "SRKXS"
+          ],
+          "sSpecSource": {
+            "SRKXS": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Silver 4310",
+          "sSpec": [
+            "SRKXN"
+          ],
+          "sSpecSource": {
+            "SRKXN": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Silver 4310T",
+          "sSpec": [
+            "SRKXP"
+          ],
+          "sSpecSource": {
+            "SRKXP": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Silver 4314",
+          "sSpec": [
+            "SRKXL"
+          ],
+          "sSpecSource": {
+            "SRKXL": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon Silver 4316",
+          "sSpec": [
+            "SRKXH"
+          ],
+          "sSpecSource": {
+            "SRKXH": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon W-3323",
+          "sSpec": [
+            "SRKWT"
+          ],
+          "sSpecSource": {
+            "SRKWT": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon W-3335",
+          "sSpec": [
+            "SRKWS"
+          ],
+          "sSpecSource": {
+            "SRKWS": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon W-3345",
+          "sSpec": [
+            "SRKSU"
+          ],
+          "sSpecSource": {
+            "SRKSU": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon W-3365",
+          "sSpec": [
+            "SRKSW"
+          ],
+          "sSpecSource": {
+            "SRKSW": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon W-3375",
+          "sSpec": [
+            "SRKSX"
+          ],
+          "sSpecSource": {
+            "SRKSX": "ark"
+          }
+        }
+      ],
+      "source": "extra"
     },
     {
       "cpuids": [
