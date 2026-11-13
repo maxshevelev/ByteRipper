@@ -24,7 +24,7 @@ public enum GhidraTools {
         tools += ticketTools(backend)
         tools += typeProposalTools(backend)
         // Compact by default, `verbose` for the owner's answer as it is.
-        return tools.map(compacted)
+        return tools.map { compacted($0) }
     }
 
     /// A report about a tool, for whoever maintains them: kept on the
