@@ -1965,6 +1965,11 @@
 "The first %1$@ results in %2$@ functions — refine the pattern" = "Nicht alle Treffer angezeigt: %1$@, Funktionen: %2$@. Präzisieren Sie das Muster.";
 "%1$@ results in the description" = "Treffer in der Beschreibung: %1$@";
 "%1$@ results in %2$@ functions and the description" = "Treffer: %1$@, Funktionen: %2$@, dazu in der Beschreibung";
+"The first %1$@ results in 1 function — refine the pattern" = "Nicht alle Treffer angezeigt: %1$@, Funktionen: 1. Präzisieren Sie das Muster.";
+"1 result in the description" = "Treffer in der Beschreibung: 1";
+"%1$@ results in 1 function and the description" = "Treffer: %1$@, Funktionen: 1, dazu in der Beschreibung";
+"1 result in 1 function" = "Treffer: 1, Funktionen: 1";
+"%1$@ results in 1 function" = "Treffer: %1$@, Funktionen: 1";
 "Everywhere" = "Überall";
 "In Functions" = "In Funktionen";
 "In the Description" = "In der Beschreibung";

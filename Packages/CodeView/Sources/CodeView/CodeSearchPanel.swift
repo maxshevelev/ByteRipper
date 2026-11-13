@@ -213,17 +213,30 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 
     static func summary(of items: [GroupItem], truncated: Bool) -> String {
-        let hits = String(items.reduce(0) { $0 + $1.children.count })
-        let functions = items.filter { if case .function = $0.target { true } else { false } }.count
-        let inDescription = items.contains { $0.target == .description }
-        if items.isEmpty { return L("No results") }
+        summary(hits: items.reduce(0) { $0 + $1.children.count },
+                functions: items.filter { if case .function = $0.target { true } else { false } }.count,
+                inDescription: items.contains { $0.target == .description },
+                truncated: truncated)
+    }
+
+    /// The line over the tree for these counts. One result, or one function,
+    /// is said in the singular: each count has a key of its own for one.
+    static func summary(hits: Int, functions: Int, inDescription: Bool, truncated: Bool) -> String {
+        let count = String(hits), names = String(functions)
+        if hits == 0 { return L("No results") }
         if truncated {
-            return L("The first %1$@ results in %2$@ functions — refine the pattern", hits, String(functions))
+            return functions == 1
+                ? L("The first %1$@ results in 1 function — refine the pattern", count)
+                : L("The first %1$@ results in %2$@ functions — refine the pattern", count, names)
         }
         switch (functions, inDescription) {
-        case (0, _): return L("%1$@ results in the description", hits)
-        case (_, true): return L("%1$@ results in %2$@ functions and the description", hits, String(functions))
-        default: return L("%1$@ results in %2$@ functions", hits, String(functions))
+        case (0, _):
+            return hits == 1 ? L("1 result in the description") : L("%1$@ results in the description", count)
+        case (1, true): return L("%1$@ results in 1 function and the description", count)
+        case (_, true): return L("%1$@ results in %2$@ functions and the description", count, names)
+        case (1, false):
+            return hits == 1 ? L("1 result in 1 function") : L("%1$@ results in 1 function", count)
+        default: return L("%1$@ results in %2$@ functions", count, names)
         }
     }
 

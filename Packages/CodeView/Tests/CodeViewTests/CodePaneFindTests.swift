@@ -367,7 +367,24 @@ final class CodePaneFindTests: XCTestCase {
         pane.setSearchScopeForTests(everywhere: false, functions: false)
         try await waitForSearch(pane)
         XCTAssertEqual(pane.searchResultsForTests.map(\.function), ["CpuPei"])
-        XCTAssertEqual(pane.searchSummaryForTests, L("%1$@ results in the description", "1"))
+        XCTAssertEqual(pane.searchSummaryForTests, L("1 result in the description"))
+    }
+
+    /// One result, or one function, is said in the singular.
+    func testTheSummarySaysOneInTheSingular() {
+        func line(_ hits: Int, _ functions: Int, description: Bool = false, truncated: Bool = false) -> String {
+            CodeSearchPanel.summary(hits: hits, functions: functions, inDescription: description, truncated: truncated)
+        }
+        XCTAssertEqual(line(0, 0), "No results")
+        XCTAssertEqual(line(1, 1), "1 result in 1 function")
+        XCTAssertEqual(line(3, 1), "3 results in 1 function")
+        XCTAssertEqual(line(3, 2), "3 results in 2 functions")
+        XCTAssertEqual(line(1, 0, description: true), "1 result in the description")
+        XCTAssertEqual(line(2, 0, description: true), "2 results in the description")
+        XCTAssertEqual(line(2, 1, description: true), "2 results in 1 function and the description")
+        XCTAssertEqual(line(5, 2, description: true), "5 results in 2 functions and the description")
+        XCTAssertEqual(line(5000, 1, truncated: true), "The first 5000 results in 1 function — refine the pattern")
+        XCTAssertEqual(line(5000, 7, truncated: true), "The first 5000 results in 7 functions — refine the pattern")
     }
 
     /// An occurrence is bold, with no fill under it; a match far into a

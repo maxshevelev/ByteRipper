@@ -1965,6 +1965,11 @@
 "The first %1$@ results in %2$@ functions — refine the pattern" = "Показаны не все совпадения: %1$@, функций: %2$@. Уточните шаблон.";
 "%1$@ results in the description" = "Совпадений в описании: %1$@";
 "%1$@ results in %2$@ functions and the description" = "Совпадений: %1$@, функций: %2$@, а также в описании";
+"The first %1$@ results in 1 function — refine the pattern" = "Показаны не все совпадения: %1$@, функций: 1. Уточните шаблон.";
+"1 result in the description" = "Совпадений в описании: 1";
+"%1$@ results in 1 function and the description" = "Совпадений: %1$@, функций: 1, а также в описании";
+"1 result in 1 function" = "Совпадений: 1, функций: 1";
+"%1$@ results in 1 function" = "Совпадений: %1$@, функций: 1";
 "Everywhere" = "Везде";
 "In Functions" = "В функциях";
 "In the Description" = "В описании";
