@@ -2,7 +2,7 @@
   "source": {
     "url": "https://comsystem-tlt.ru/obzori/primenenie-cpuid-na-praktike-dlja-zameni-soc--kombajnov-",
     "title": "Применение CPUID на практике для замены SoC-комбайнов",
-    "retrieved": "2026-11-07"
+    "retrieved": "2026-11-13"
   },
   "about": "CPUID (family-model-stepping, as a microcode update's header and its file name write it) to the processors sold with it. An X in a CPUID stands for any one hexadecimal digit. The list is the source's and is not complete; a CPUID can appear in more than one entry. An entry with source \"extra\" is not the article's: it is from Skills/update-cpuid-brand-names/scripts/extra-entries.json, which gives each fact's page. sSpec lists the article's codes and those added from sSpecSources; sSpecSource says, for each added code, which.",
   "sSpecSources": {
@@ -2963,34 +2963,6 @@
           "sSpec": []
         },
         {
-          "name": "Intel Core i9-7960X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i9-7940X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i9-7920X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i9-7900X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-7820X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-7800X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-7740X",
-          "sSpec": []
-        },
-        {
           "name": "Intel Core i7-7640X",
           "sSpec": []
         }
@@ -4729,23 +4701,7 @@
       ],
       "processors": [
         {
-          "name": "Intel Xeon D-1513N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1518",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1520",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1521",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1523N",
           "sSpec": []
         },
         {
@@ -4753,59 +4709,7 @@
           "sSpec": []
         },
         {
-          "name": "Intel Xeon D-1527",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1528",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1529",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1531",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1533N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1537",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1539",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1540",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1541",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1543N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1548",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1553N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1557",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1559",
           "sSpec": []
         },
         {
@@ -4817,31 +4721,7 @@
           "sSpec": []
         },
         {
-          "name": "Intel Xeon D-1567",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1571",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1573N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1577",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1581",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1587",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1602",
           "sSpec": []
         },
         {
@@ -4849,35 +4729,7 @@
           "sSpec": []
         },
         {
-          "name": "Intel Xeon D-1622",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1623N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1627",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1632",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1633N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1637",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1649N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1653N",
           "sSpec": []
         },
         {
@@ -5099,58 +4951,6 @@
             "SRLBP": "intel",
             "SRM15": "intel"
           }
-        },
-        {
-          "name": "Intel Xeon D-2123IT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2141I",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2142IT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2143IT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2145NT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2146NT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2161I",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2163IT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2166NT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2173IT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2177NT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2183IT",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-2187NT",
-          "sSpec": []
         },
         {
           "name": "Intel Xeon D-2191",
@@ -6278,19 +6078,7 @@
       ],
       "processors": [
         {
-          "name": "Intel Core i7-8665U",
-          "sSpec": []
-        },
-        {
           "name": "Intel Core i7-8557U",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8850H",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8809G",
           "sSpec": []
         },
         {
@@ -6298,43 +6086,11 @@
           "sSpec": []
         },
         {
-          "name": "Intel Core i7-8750H",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8709G",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8706G",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8705G",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8700B",
-          "sSpec": []
-        },
-        {
           "name": "Intel Core i7-8569U",
           "sSpec": []
         },
         {
-          "name": "Intel Core i7-8650U",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8565U",
-          "sSpec": []
-        },
-        {
           "name": "Intel Core i7-8560U",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8559U",
           "sSpec": []
         },
         {
@@ -6354,10 +6110,6 @@
           "sSpecSource": {
             "SREKN": "intel"
           }
-        },
-        {
-          "name": "Intel Core i7-8550U",
-          "sSpec": []
         },
         {
           "name": "Intel Core i5-8310Y",
@@ -6892,26 +6644,6 @@
         },
         {
           "name": "Intel Core i5-10110Y",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8500Y",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i5-8310Y",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i5-8210Y",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i5-8200Y",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core m3-8100Y",
           "sSpec": []
         }
       ]
@@ -8488,10 +8220,6 @@
           }
         },
         {
-          "name": "Intel Xeon E-2278G",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon E-2284G",
           "sSpec": []
         },
@@ -8503,10 +8231,6 @@
           "sSpecSource": {
             "SRF7C": "wikipedia"
           }
-        },
-        {
-          "name": "Intel Xeon E-2288G",
-          "sSpec": []
         },
         {
           "name": "Intel Core i7-8700K",

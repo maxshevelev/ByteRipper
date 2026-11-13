@@ -92,6 +92,12 @@ stepping only where a page ties it to the CPUID. Its models' codes go in
 `ark-sspec.json` like any others. `import.py` refuses an extra entry once the
 article has the CPUID: then take it out.
 
+6. A model the article lists under a CPUID it is not sold on is taken out of
+   that entry: when it has no code there, ARK gives it steppings none of
+   which is the entry's, and another entry of it, whose stepping ARK gives,
+   has its codes. The log names each (`moved:`); a model is never taken out
+   of the table, and one without an ARK record is never moved.
+
 Every added code is listed in `sSpecSource` with where it came from (`ark`,
 `wikipedia`, and from `found-sspec.json`: `intel`, `database`, `marking`); `sSpecSources` at the top says which revisions and pages.
 

@@ -330,6 +330,7 @@ def enrich(entries, cache=None, log=print):
     # ARK.
     with open(ARK_FILE, encoding="utf-8") as f:
         ark = json.load(f)
+    ark_by_model = {item["model"]: item["specs"] for item in ark["models"]}
     for item in ark["models"]:
         if item["model"] not in places:
             log(f"  ark: {item['model']} is not in the table")
@@ -447,6 +448,29 @@ def enrich(entries, cache=None, log=print):
                         if not [c for c in p["sSpec"] if c not in p.get("sSpecSource", {})]:
                             add(p, code, "wikipedia")
                     counts["wikipedia"] += 1
+
+    # Rule 6: a model the article lists under a CPUID it is not sold on. It
+    # goes when, there, it has no code, ARK gives it steppings none of which
+    # is that entry's, and another entry of it, whose stepping ARK gives, has
+    # its codes — Broadwell-DE Xeon D under Ice Lake D, Skylake-X under
+    # Cascade Lake, Kaby Lake R under Kaby Lake U.
+    moved = []
+    for e in entries:
+        keep = []
+        for p in e["processors"]:
+            name = p["name"]
+            steps = {s["stepping"] for s in ark_by_model.get(name, ()) if s.get("stepping")}
+            placed = any(p2["sSpec"] and steps & entry_steppings(e2, every)
+                         for e2, p2 in places[name] if e2 is not e)
+            if (not p.get("series") and not p["sSpec"] and steps and placed
+                    and not steps & entry_steppings(e, every)):
+                moved.append(f"{name} ({'/'.join(e['cpuids'])}, ARK {'/'.join(sorted(steps))})")
+                continue
+            keep.append(p)
+        e["processors"] = keep
+    for m in moved:
+        log(f"  moved: {m} is under its other CPUID — taken out")
+    counts["moved"] = len(moved)
     found_sources = {
         "intel": {"about": "an Intel document other than ARK's ordering tab (a specification "
                            "update, a datasheet, a product change notification) that gives the "
