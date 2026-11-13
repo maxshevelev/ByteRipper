@@ -1169,3 +1169,21 @@ dialog.wide { width: min(1100px, calc(100vw - 32px)); }
 .type-pair > div { min-width: 0; }
 .type-pair pre.code { border: 1px solid var(--border); border-radius: 10px; max-height: 40vh; overflow: auto; font-size: 12px; }
 @media (max-width: 760px) { .type-pair { grid-template-columns: 1fr; } }
+
+/* A proposal's text against the shared one, as the app's code panel shows a
+   diff: the gutter and the mark in grey, the removed lines on red, the added
+   on green — the panel's colours. */
+:root { --diff-removed: #3b191c; --diff-added: #12311c; --diff-removed-mark: #e98a93; --diff-added-mark: #6acc7b; }
+@media (prefers-color-scheme: light) {
+  :root { --diff-removed: #ffebe9; --diff-added: #e6ffec; --diff-removed-mark: #b31d28; --diff-added-mark: #22863a; }
+}
+.line-diff { margin-top: 8px; min-width: 0; }
+.line-diff .diff-count { font-family: var(--mono); text-transform: none; letter-spacing: 0; font-weight: 500; }
+.line-diff pre.code.diff { margin-top: 6px; padding: 8px 0; border: 1px solid var(--border); border-radius: 10px;
+  max-height: 60vh; overflow: auto; font-size: 12px; }
+.diff-row { display: block; min-width: max-content; padding-right: 18px; }
+.diff-row.removed { background: var(--diff-removed); }
+.diff-row.added { background: var(--diff-added); }
+.diff-gutter, .diff-mark { color: var(--muted); user-select: none; }
+.diff-row.removed .diff-mark { color: var(--diff-removed-mark); }
+.diff-row.added .diff-mark { color: var(--diff-added-mark); }

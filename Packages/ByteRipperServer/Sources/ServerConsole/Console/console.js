@@ -1412,6 +1412,85 @@
       })));
   }
 
+  // A line-by-line diff of two texts, as the app's code panel draws one
+  // (`LineDiff` in CodeAnalysis): Myers' shortest edit script, the removed
+  // lines of a change before the added ones.
+  function lineDiff(oldText, newText) {
+    const split = (text) => {
+      if (!text) return [];
+      const lines = text.replace(/\r\n/g, "\n").split("\n");
+      if (text.endsWith("\n")) lines.pop();
+      return lines;
+    };
+    const a = split(oldText), b = split(newText);
+    const n = a.length, m = b.length, max = n + m;
+    const pairs = [];
+    if (n > 0 && m > 0) {
+      let v = new Array(2 * max + 1).fill(0);
+      const trace = [];
+      let done = false;
+      for (let d = 0; !done && d <= max; d++) {
+        trace.push(v.slice());
+        for (let k = -d; k <= d; k += 2) {
+          const i = k + max;
+          let x = (k === -d || (k !== d && v[i - 1] < v[i + 1])) ? v[i + 1] : v[i - 1] + 1;
+          let y = x - k;
+          while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+          v[i] = x;
+          if (x >= n && y >= m) { done = true; break; }
+        }
+      }
+      let x = n, y = m;
+      for (let depth = trace.length - 1; depth > 0; depth--) {
+        const state = trace[depth];
+        const k = x - y, i = k + max;
+        const pk = (k === -depth || (k !== depth && state[i - 1] < state[i + 1])) ? k + 1 : k - 1;
+        const px = state[pk + max], py = px - pk;
+        while (x > px && y > py) { x--; y--; pairs.push([x, y]); }
+        x = px; y = py;
+      }
+      while (x > 0 && y > 0) { x--; y--; pairs.push([x, y]); }
+      pairs.reverse();
+    }
+    const rows = [];
+    let i = 0, j = 0, added = 0, removed = 0;
+    const flush = (x, y) => {
+      for (; i < x; i++) { rows.push({ kind: "removed", old: i + 1, text: a[i] }); removed++; }
+      for (; j < y; j++) { rows.push({ kind: "added", new: j + 1, text: b[j] }); added++; }
+    };
+    for (const [x, y] of pairs) {
+      flush(x, y);
+      rows.push({ kind: "same", old: x + 1, new: y + 1, text: a[x] });
+      i = x + 1; j = y + 1;
+    }
+    flush(n, m);
+    return { rows, added, removed };
+  }
+
+  // The shared text against the module's, as the app's code panel compares
+  // two revisions: the old line number, the new one, a mark and the line —
+  // what only the shared copy has on red, what only the module offers on
+  // green, the lines both hold as they are.
+  function diffView(oldTitle, oldText, newTitle, newText) {
+    const diff = lineDiff(oldText || "", newText || "");
+    const oldWidth = String(diff.rows.reduce((top, r) => Math.max(top, r.old || 0), 0)).length;
+    const newWidth = String(diff.rows.reduce((top, r) => Math.max(top, r.new || 0), 0)).length;
+    const pad = (value, width) => String(value ?? "").padStart(width, " ");
+    const summary = !oldText && !newText ? "empty on both sides"
+      : !oldText ? `only in ${newTitle}` : !newText ? `only in ${oldTitle}`
+      : diff.added || diff.removed ? `+${diff.added} −${diff.removed}` : "the same";
+    return h("div", { class: "line-diff" },
+      h("div", { class: "codebar-title" }, `${oldTitle} → ${newTitle}`,
+        h("span", { class: "diff-count", text: summary })),
+      h("pre", { class: "code diff" }, diff.rows.map((row) => {
+        const mark = row.kind === "removed" ? "-" : row.kind === "added" ? "+" : " ";
+        return h("div", { class: `diff-row ${row.kind}` },
+          h("span", { class: "diff-gutter", text: ` ${pad(row.old, oldWidth)}  ${pad(row.new, newWidth)} ` }),
+          h("span", { class: "diff-mark", text: `${mark} ` }),
+          h("span", { text: row.text }));
+      })));
+  }
+
   function proposalDetail(p, names) {
     const live = p.state === "open" || p.state === "agreed";
     const decided = p.decided ? h("div", { class: "muted" },
@@ -1430,17 +1509,13 @@
       names.map((name) => h("div", { class: "type-conflict" },
         h("div", { class: "doc-title mono", text: name }),
         h("div", { class: "muted", text: `Shared copy written by ${(p.origins || {})[name] ? String(p.origins[name]).slice(0, 12) : "a module not known here"}` }),
-        h("div", { class: "type-pair" },
-          h("div", {}, h("div", { class: "codebar-title", text: `${p.name || "module"} (proposed)` }), h("pre", { class: "code", text: p.module_c[name] || "—" })),
-          h("div", {}, h("div", { class: "codebar-title", text: "Shared now" }), h("pre", { class: "code", text: p.shared_c[name] || "—" }))))),
+        diffView("Shared now", p.shared_c[name], `${p.name || "module"} (proposed)`, p.module_c[name]))),
       Object.entries(p.entries || {}).sort(([a], [b]) => a.localeCompare(b)).map(([id, entry]) => h("div", { class: "type-conflict" },
         h("div", { class: "doc-title mono", text: `${entry.name} · registry entry ${id}` }),
         h("div", { class: "muted", text: `Version ${entry.version ?? "?"}, the review of ${entry.held_by ? String(entry.held_by).slice(0, 12) : "a module not known here"}${entry.proposed_name && entry.proposed_name !== entry.name ? `; this module names it ${entry.proposed_name}` : ""}` }),
         (entry.fields || []).map((f) => h("div", {},
           h("div", { class: "codebar-title mono", text: f.field }),
-          h("div", { class: "type-pair" },
-            h("div", {}, h("div", { class: "codebar-title", text: `${p.name || "module"} (proposed)` }), h("pre", { class: "code", text: f.offered || "—" })),
-            h("div", {}, h("div", { class: "codebar-title", text: "Entry now" }), h("pre", { class: "code", text: f.held || "—" }))))))),
+          diffView("Entry now", f.held, `${p.name || "module"} (proposed)`, f.offered))))),
       (p.votes || []).map((vote) => h("div", { class: "reply" },
         h("div", { class: "row" }, h("b", { text: vote.agent }),
           h("span", { class: `pill ${vote.choice === "agree" ? "ok" : "danger"}`, text: vote.choice }),
