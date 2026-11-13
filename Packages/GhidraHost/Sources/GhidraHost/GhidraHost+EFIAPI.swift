@@ -20,9 +20,15 @@ extension GhidraHost {
     }
 
     /// Whether the project's program is 32-bit, as the archive it was typed
-    /// with says, or as its phase does when no archive is named.
+    /// with says, or the image's machine, or — a project that recorded
+    /// neither — its phase. The phase alone is a guess: an X64 PEIM exists.
     static func typedIa32(_ state: ProjectState) -> Bool {
-        if let archive = state.archive { return URL(fileURLWithPath: archive).lastPathComponent.hasPrefix("uefi_Ia32-") }
+        if let archive = state.archive {
+            let name = URL(fileURLWithPath: archive).lastPathComponent
+            if name.hasPrefix("uefi_Ia32-") { return true }
+            if name.hasPrefix("uefi_X64-") { return false }
+        }
+        if let bits = state.module.bits { return bits == 32 }
         return state.module.kind == "TE" || state.module.phase == "pei"
     }
 

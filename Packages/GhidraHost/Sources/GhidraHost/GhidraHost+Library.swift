@@ -698,7 +698,8 @@ extension GhidraHost {
         let request = try JSONSerialization.data(withJSONObject: ["bodies": keys.bodies, "shapes": keys.shapes])
         let data = try await Self.call(record.port, "POST", "/v1/library/match", body: request, timeout: 600).data
         struct Answer: Decodable { var hashed: Int; var matches: [LibraryMatch] }
-        let answer = try JSONDecoder().decode(Answer.self, from: data)
+        var answer = try JSONDecoder().decode(Answer.self, from: data)
+        answer.matches = Self.withoutForeign(answer.matches, foreign: foreignEntries(index, for: module))
         let asserts = index.entries.filter { $0.value.role == "assert" }
         let assertKeys = asserts.values.flatMap { $0.variants.map(\.body.key) }.sorted()
         var comparisons: [String: LibraryComparison] = [:]
@@ -738,6 +739,66 @@ extension GhidraHost {
         plan.candidates = attached(plan.candidates)
         plan.declined = attached(plan.declined)
         return (plan, index)
+    }
+
+    /// 32 or 64 for a module with a project here, as its archive or its image
+    /// says; nil for one this host has no project of.
+    func moduleBits(_ module: SHA256Digest) -> Int? {
+        guard let state = try? project(module).state() else { return nil }
+        return Self.typedIa32(state) ? 32 : 64
+    }
+
+    /// The entries made from modules of another width than `module`'s. An
+    /// Ia32 and an X64 function can have the same bytes — `CpuPause`,
+    /// `AsmReadCr0` — and the same body key, but not the same registers,
+    /// stack or convention: an entry of the other width is no match. An entry
+    /// whose modules' width is unknown here is not counted.
+    func foreignEntries(_ index: LibraryIndex, for module: SHA256Digest) -> Set<String> {
+        guard let own = moduleBits(module) else { return [] }
+        var known: [SHA256Digest: Int?] = [:]
+        var foreign: Set<String> = []
+        for (id, entry) in index.entries {
+            for each in [entry.source.module] + entry.variants.map(\.module) {
+                if known[each] == nil { known[each] = .some(moduleBits(each)) }
+                guard let bits = known[each] ?? nil else { continue }
+                if bits != own { foreign.insert(id) }
+                break
+            }
+        }
+        return foreign
+    }
+
+    /// The matches without the entries of another width: neither an exact
+    /// body nor a shape names one. A function already bound to one keeps its
+    /// mark, so the plan still shows where it stands.
+    static func withoutForeign(_ matches: [LibraryMatch], foreign: Set<String>) -> [LibraryMatch] {
+        guard !foreign.isEmpty else { return matches }
+        return matches.map { match in
+            var match = match
+            if let exact = match.exact, foreign.contains(exact), match.mark?.id != exact { match.exact = nil }
+            match.near = match.near?.filter { !foreign.contains($0) || match.mark?.id == $0 }
+            if match.near?.isEmpty == true { match.near = nil }
+            return match
+        }
+    }
+
+    /// What the module offers the registry, without a function whose body,
+    /// variant or base is an entry of the other width: it stays the module's
+    /// own, as a function no entry matched would.
+    func ownWidth(_ proposals: [LibraryProposal], module: SHA256Digest) async throws -> [LibraryProposal] {
+        guard !proposals.isEmpty else { return proposals }
+        let index = try await writer.readLibraryIndex()
+        return Self.ownWidth(proposals, index: index, foreign: foreignEntries(index, for: module))
+    }
+
+    static func ownWidth(_ proposals: [LibraryProposal], index: LibraryIndex, foreign: Set<String>) -> [LibraryProposal] {
+        guard !foreign.isEmpty else { return proposals }
+        return proposals.filter { proposal in
+            if proposal.linked { return true }
+            let named = [proposal.body.isShort ? nil : index.bodies[proposal.body.key],
+                         proposal.variantOf, proposal.basedOn].compactMap { $0 }
+            return !named.contains(where: foreign.contains)
+        }
     }
 
     /// A Codable value as plain JSON objects, to put beside the owner's own.

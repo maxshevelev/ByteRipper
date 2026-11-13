@@ -74,9 +74,14 @@ final class TypeText {
         } else if (base instanceof Enum values) {
             JsonObject members = new JsonObject();
             JsonObject comments = new JsonObject();
+            // Hex in the enum's width, as the C writes it: a signed long read
+            // -9223372036854775794 for X64's EFI_NOT_FOUND, and a JSON double
+            // rounds it. -1 and 0xFFFFFFFF are one value of a four-byte enum.
+            int width = values.getLength();
+            long mask = width >= 8 ? -1L : (1L << (width * 8)) - 1;
             for (long value : values.getValues()) {
                 for (String name : values.getNames(value)) {
-                    members.addProperty(name, value);
+                    members.addProperty(name, "0x" + Long.toHexString(value & mask).toUpperCase());
                     String comment = values.getComment(name);
                     if (comment != null && !comment.isEmpty()) comments.addProperty(name, comment);
                 }

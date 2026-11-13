@@ -105,7 +105,7 @@ decompiler refuses, not a guarantee), `ghidra_rename_variable`
 decompiler shows as two variables is named once with `shared`), `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_code_mode` (a range
 read as 16-bit or 32-bit code — the reset vector's real-mode code in a 32-bit
-module), `ghidra_equate` (a name for a constant an instruction holds: an I/O
+module, an AP's startup in an X64 one — or as 64-bit again in an X64 module), `ghidra_equate` (a name for a constant an instruction holds: an I/O
 port, an MSR, a PCI config address — as an enum member with a comment saying
 what it is and its source, which the app shows when the name is clicked);
 `ghidra_library_candidate` (a reviewed function the module statically links in,

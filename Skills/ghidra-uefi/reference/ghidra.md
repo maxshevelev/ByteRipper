@@ -39,6 +39,7 @@ CAS, and its project lock keeps the owner off the project.
 | a slot the decompiler shows as two variables, one meaning per use | `ghidra_rename_variable` with `shared` — one neutral name for the storage, the meanings in the plate |
 | a name for an I/O port, an MSR, a PCI config address | `ghidra_equate` |
 | 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |
+| 16- or 32-bit code in an X64 module (an AP's startup, S3 resume) | `ghidra_code_mode` with `bits: 16` or `32`; `64` goes back |
 | a linker's clone with arguments in other registers | `ghidra_signature` with `storage` / `return_storage` |
 | a helper that leaves a register its convention says a call destroys (EDX) — the caller's C shows `extraout_EDX` | `ghidra_signature` with `unaffected: ["EDX"]`, proved from every path of the helper and its callees; the program gets `<convention>_keeps_EDX`, `ghidra_function` lists `unaffected_kept`, and the callers' C reads the register across the call. `[]` undoes it |
 | signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
@@ -99,7 +100,10 @@ instructions overlap, and the C is noise. The operand and address size are
 not in the bytes but in the x86 context (`opsize`, `addrsize`): `ghidra_code_mode`
 sets them for [start, end), clears the instructions there, decodes the range
 again from `start` without leaving it, and fixes the bodies of the functions
-it touched. `ghidra_disassembly` marks such instructions `bits: 16`. Real-mode
+it touched. `ghidra_disassembly` marks such instructions `bits: 16`. In an X64
+module the context also holds `longMode`: 16 and 32 clear it, so `0x48` reads
+as `DEC EAX` and not as a REX prefix, and 64 sets it again; an instruction
+decoded in another size than the module's carries `bits`. Real-mode
 segments are not modelled: `cs:[F490h]` names F490h, not CS × 16 + F490h —
 say in a comment where an operand really points. The end of the range is
 where the far jump to protected mode is; the protected-mode code after it

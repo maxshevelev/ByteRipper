@@ -1157,26 +1157,29 @@ public enum GhidraTools {
                   required: ["start", "end"]) { arguments in
                 try optional(arguments, ["start", "end", "reason"])
             },
-            write("ghidra_code_mode", "set/code-mode", "Read a range as 16-bit or 32-bit code",
-                  "Reads the code in [`start`, `end`) as 16-bit or as 32-bit x86. A 32-bit module holds "
-                  + "16-bit code at its reset vector (real mode, before the switch to protected mode), "
-                  + "which Ghidra decodes as 32-bit and so gets wrong: overlapping instructions, nonsense "
-                  + "C. The instructions in the range are cleared and decoded again from `start` in the "
+            write("ghidra_code_mode", "set/code-mode", "Read a range as 16-, 32- or 64-bit code",
+                  "Reads the code in [`start`, `end`) as 16-bit, 32-bit or (in an X64 module) 64-bit x86. "
+                  + "A 32-bit module holds 16-bit code at its reset vector (real mode, before the switch "
+                  + "to protected mode), which Ghidra decodes as 32-bit and so gets wrong: overlapping "
+                  + "instructions, nonsense C. An X64 module holds 16- and 32-bit code where a processor "
+                  + "starts or resumes (an AP's startup, S3 resume) and decodes it in long mode; 64 reads "
+                  + "a range as long mode again. The instructions in the range are cleared and decoded again from `start` in the "
                   + "given size, without leaving the range; functions there get their bodies fixed, and the "
                   + "bytes an instruction reaching past `end` held are decoded again in the mode there. "
                   + "Equates and flow overrides come back as with `ghidra_redecode`; `marks_lost` lists "
                   + "what could not. "
                   + "Addresses stay offsets: real-mode segments are not modelled, so a `cs:[F490h]` "
-                  + "operand names F490h, not where it lands. `ghidra_disassembly` marks 16-bit "
-                  + "instructions `bits: 16`. Defined data in the range is refused: clear it first.",
+                  + "operand names F490h, not where it lands. `ghidra_disassembly` marks an instruction "
+                  + "decoded in another size than the module's with `bits`. Defined data in the range is refused: clear it first.",
                   ["start": AgentSchema.string("The first address of the code, e.g. \"0x9DFE6E0\"."),
                    "end": AgentSchema.string("The first address past it: the range is [start, end)."),
-                   "bits": ["type": "integer", "enum": [16, 32], "description": "The operand and address size."],
+                   "bits": ["type": "integer", "enum": [16, 32, 64],
+                            "description": "The operand and address size; 64 only in an X64 module."],
                    "reason": AgentSchema.string("Why, in a few words: what shows the code is 16-bit.")],
                   required: ["start", "end", "bits"]) { arguments in
                 var body = try optional(arguments, ["start", "end", "reason"])
                 let bits = try arguments.integer("bits")
-                guard bits == 16 || bits == 32 else { throw AgentToolError("`bits` is 16 or 32.") }
+                guard bits == 16 || bits == 32 || bits == 64 else { throw AgentToolError("`bits` is 16, 32 or 64.") }
                 body["bits"] = .int(bits)
                 body["by"] = "agent"
                 return body

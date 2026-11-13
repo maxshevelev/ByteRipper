@@ -148,7 +148,7 @@ extension GhidraHost {
     /// of the module as it is now; nothing is written.
     func libraryReplacements(_ module: SHA256Digest, raw: Data, offer: [LibraryProposal],
                              reviewed: Bool) async throws -> [String: TypeProposalBook.Entry] {
-        var offered = try await Self.withoutLinked(offer, writer: writer)
+        var offered = try await ownWidth(try await Self.withoutLinked(offer, writer: writer), module: module)
         guard !offered.isEmpty || !offer.isEmpty else { return [:] }
         let first = try await Self.completions(raw, offer: offer, offered: offered, reviewed: reviewed, take: .none,
                                                writer: writer)

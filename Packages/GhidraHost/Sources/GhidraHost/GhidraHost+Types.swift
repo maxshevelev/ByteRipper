@@ -201,7 +201,7 @@ extension GhidraHost {
             hold.release()
         }
         let state = try project(module).state()
-        let language = try await ownerLanguage(module) ?? (state.module.kind == "TE" || state.module.phase == "pei"
+        let language = try await ownerLanguage(module) ?? (Self.typedIa32(state)
                                                             ? "x86:LE:32:default" : "x86:LE:64:default")
         let bits = Self.archiveBits(language: language)
         let (folder, current) = try await archiveWorkingCopy(bits: bits)

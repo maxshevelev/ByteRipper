@@ -591,7 +591,7 @@ public actor GhidraHost {
         // The registry decides first, on everything this publish offers: the
         // review's candidates, and the changes to entries its functions link to.
         // A refusal leaves all of it as it was, and stores nothing.
-        var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+        var offered = try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module)
         // A link reads its entry's text: an entry with none learns it from here.
         let completion = try await Self.completions(exported, offer: offer.proposals, offered: offered,
                                                     reviewed: reviewed, take: take, writer: writer)
@@ -989,7 +989,7 @@ public actor GhidraHost {
                 takeLibrary = LibraryTake.these(agreed.reasons).with(entryReasons: entryReasons)
                 preview["library_agreed"] = agreed.proposals
             }
-            var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+            var offered = try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module)
             let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
                                                         take: takeLibrary, writer: writer)
             offered += completion.proposals
@@ -1266,7 +1266,8 @@ public actor GhidraHost {
             return URL(fileURLWithPath: named)
         }
         guard let tag = state.madeWith.types else { return nil }
-        let bits = state.module.kind == "TE" || state.module.phase == "pei" ? "Ia32" : "X64"
+        // The name a moved archive still has, else the machine (an X64 PEIM is not Ia32).
+        let bits = typedIa32(state) ? "Ia32" : "X64"
         let cached = UEFITypes.cacheRoot.appendingPathComponent("uefi_\(bits)-\(tag).gdt")
         return FileManager.default.fileExists(atPath: cached.path) ? cached : nil
     }

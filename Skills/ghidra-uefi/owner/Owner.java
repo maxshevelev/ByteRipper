@@ -680,7 +680,7 @@ public class Owner {
                 Instruction instruction = instructions.next();
                 for (int index = 0; index < instruction.getNumOperands(); index++) {
                     ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(index);
-                    if (scalar == null || (scalar.getUnsignedValue() != value && scalar.getSignedValue() != value)) continue;
+                    if (scalar == null || !holds(scalar, value)) continue;
                     Address at = instruction.getAddress();
                     if (!isImmediate(instruction, index)) {
                         JsonObject item = new JsonObject();
@@ -1395,12 +1395,9 @@ public class Owner {
                 item.addProperty("bytes", "");
             }
             item.addProperty("text", instruction.toString());
-            // Code read as 16-bit in a 32-bit program (set/code-mode) says so.
-            ghidra.program.model.lang.Register opsize = program.getProgramContext().getRegister("opsize");
-            if (opsize != null && program.getDefaultPointerSize() == 4) {
-                java.math.BigInteger mode = instruction.getValue(opsize, false);
-                if (mode != null && mode.signum() == 0) item.addProperty("bits", 16);
-            }
+            // Code read in another mode than the program's (set/code-mode) says so.
+            int bits = codeBits(instruction);
+            if (bits != 0 && bits != program.getDefaultPointerSize() * 8) item.addProperty("bits", bits);
             JsonArray references = new JsonArray();
             for (Reference reference : instruction.getReferencesFrom()) {
                 // A stack or register operand is not a place in the module.
@@ -5243,11 +5240,31 @@ public class Owner {
      * gained instructions has its body fixed. The segment model is left as
      * it is: an address is still an offset, not segment × 16 + offset.
      */
+    /** The mode an instruction was decoded in: 16, 32 or 64; 0 where the language has no such context. */
+    private int codeBits(Instruction instruction) {
+        ghidra.program.model.listing.ProgramContext context = program.getProgramContext();
+        ghidra.program.model.lang.Register longMode = context.getRegister("longMode");
+        if (longMode != null) {
+            java.math.BigInteger mode = instruction.getValue(longMode, false);
+            if (mode != null && mode.signum() != 0) return 64;
+        }
+        ghidra.program.model.lang.Register addrsize = context.getRegister("addrsize");
+        if (addrsize == null) return 0;
+        java.math.BigInteger size = instruction.getValue(addrsize, false);
+        if (size == null) return 0;
+        return size.signum() == 0 ? 16 : 32;
+    }
+
     private JsonObject setCodeMode(JsonObject body) throws Exception {
         Address start = address(required(body, "start"));
         Address end = address(required(body, "end"));
         int bits = integer(body, "bits", 0);
-        if (bits != 16 && bits != 32) throw new Failure(400, "bits is 16 or 32");
+        // An X64 program decodes in long mode: 16- and 32-bit code there (an
+        // AP's startup, an S3 resume) leaves it, and 64 goes back to it.
+        ghidra.program.model.lang.Register longMode = program.getProgramContext().getRegister("longMode");
+        if (bits != 16 && bits != 32 && !(bits == 64 && longMode != null)) {
+            throw new Failure(400, longMode != null ? "bits is 16, 32 or 64" : "bits is 16 or 32");
+        }
         if (end.compareTo(start) <= 0) throw new Failure(400, "end is past start: the range is [start, end)");
         Address last = end.subtract(1);
         if (!program.getMemory().contains(start, last)) {
@@ -5279,9 +5296,14 @@ public class Owner {
         java.util.List<KeptMarks> kept = keepMarks(new ghidra.program.model.address.AddressSet(clearFrom, clearTo));
         program.getListing().clearCodeUnits(clearFrom, clearTo, false);
 
-        java.math.BigInteger value = java.math.BigInteger.valueOf(bits == 16 ? 0 : 1);
-        program.getProgramContext().setValue(addrsize, start, last, value);
-        program.getProgramContext().setValue(opsize, start, last, value);
+        // Long mode's default operand size is 32 bits (REX.W makes 64), its
+        // addresses 64.
+        program.getProgramContext().setValue(addrsize, start, last,
+            java.math.BigInteger.valueOf(bits == 16 ? 0 : bits == 32 ? 1 : 2));
+        program.getProgramContext().setValue(opsize, start, last, java.math.BigInteger.valueOf(bits == 16 ? 0 : 1));
+        if (longMode != null) {
+            program.getProgramContext().setValue(longMode, start, last, java.math.BigInteger.valueOf(bits == 64 ? 1 : 0));
+        }
 
         ghidra.app.cmd.disassemble.DisassembleCommand disassemble =
             new ghidra.app.cmd.disassemble.DisassembleCommand(new ghidra.program.model.address.AddressSet(start), range, true);
@@ -5437,7 +5459,7 @@ public class Owner {
             if (operand < 0 && !isImmediate(instruction, index)) {
                 for (Object object : instruction.getOpObjects(index)) {
                     if (object instanceof ghidra.program.model.scalar.Scalar candidate && (value == null
-                        || candidate.getUnsignedValue() == value || candidate.getSignedValue() == value)) {
+                        || holds(candidate, value))) {
                         inDisplacement = true;
                     }
                 }
@@ -5445,7 +5467,7 @@ public class Owner {
             }
             for (Object object : instruction.getOpObjects(index)) {
                 if (!(object instanceof ghidra.program.model.scalar.Scalar candidate)) continue;
-                if (value == null || candidate.getUnsignedValue() == value || candidate.getSignedValue() == value) {
+                if (value == null || holds(candidate, value)) {
                     scalar = candidate;
                     operand = index;
                     break;
@@ -5543,7 +5565,17 @@ public class Owner {
         return answer;
     }
 
-    /** Removes whatever equate names the operand, and an equate it leaves unused. */
+    /**
+     * Whether an operand holds `value`: as it is, signed, or — for a value
+     * given in 32 bits — sign-extended to 64, as X64 encodes `CMP RAX,
+     * 0xFFFFFFFE` and `MOV RCX,-2`.
+     */
+    static boolean holds(ghidra.program.model.scalar.Scalar scalar, long value) {
+        if (scalar.getUnsignedValue() == value || scalar.getSignedValue() == value) return true;
+        return Long.compareUnsigned(value, 0xFFFFFFFFL) <= 0 && scalar.bitLength() > 32
+            && scalar.getSignedValue() == (long) (int) value;
+    }
+
     /** A constant of the decompiled C, where Ghidra's equate table finds it: by hash. */
     private record CConstant(Address at, long hash) {}
 
@@ -5716,11 +5748,19 @@ public class Owner {
      */
     private long member(ghidra.program.model.data.Enum owner, String name, long held, long signed,
                         String comment) throws Exception {
+        // In the enum's own width: X64 sign-extends `MOV RCX,-2` to 64 bits,
+        // and a four-byte enum holds that as 0xFFFFFFFE, as Ia32's operand
+        // gives it.
+        int width = owner.getLength();
+        long mask = width >= 8 ? -1L : (1L << (width * 8)) - 1;
+        long narrow = held & mask;
+        boolean fits = width >= 8 || Long.compareUnsigned(held, mask) <= 0
+            || (signed < 0 && signed >= -(1L << (width * 8 - 1)));
         if (owner.contains(name)) {
             long member = owner.getValue(name);
-            if (member != held && member != signed) {
+            if ((member & mask) != narrow || !fits) {
                 throw new Failure(409, owner.getName() + "." + name + " is 0x"
-                                  + Long.toHexString(member).toUpperCase() + ", not 0x" + Long.toHexString(held).toUpperCase());
+                                  + Long.toHexString(member & mask).toUpperCase() + ", not 0x" + Long.toHexString(held).toUpperCase());
             }
             if (comment != null && !comment.equals(owner.getComment(name))) {
                 owner.remove(name);
@@ -5728,21 +5768,27 @@ public class Owner {
             }
             return member;
         }
-        long member = held;
-        if (owner.getLength() < 8 && Long.compareUnsigned(held, 0xFFFFFFFFL) > 0) {
-            if (signed >= Integer.MIN_VALUE && signed < 0) member = signed;
-            else throw new Failure(409, owner.getName() + " is " + owner.getLength() + " bytes wide; 0x"
-                                   + Long.toHexString(held).toUpperCase() + " does not fit; an enum"
-                                   + " this call makes for a new name is eight bytes wide for such a value");
+        if (!fits) {
+            throw new Failure(409, owner.getName() + " is " + width + " bytes wide; 0x"
+                              + Long.toHexString(held).toUpperCase() + " does not fit; an enum"
+                              + " this call makes for a new name is eight bytes wide for such a value");
         }
-        if (owner.contains(member)) {
-            throw new Failure(409, owner.getName() + " already names 0x" + Long.toHexString(held).toUpperCase()
-                              + " " + owner.getName(member) + "; one value has one name in an enum");
+        // Stored unsigned, as a C definition's member is (d8b45e1d); an enum
+        // Ghidra holds as signed takes the negative form only.
+        long member = narrow;
+        if (width < 8 && owner.isSigned() && narrow >= (1L << (width * 8 - 1))) member = narrow - (1L << (width * 8));
+        String twin = owner.getName(narrow);
+        if (twin == null && width < 8 && narrow >= (1L << (width * 8 - 1))) {
+            twin = owner.getName(narrow - (1L << (width * 8)));
+        }
+        if (twin != null) {
+            throw new Failure(409, owner.getName() + " already names 0x" + Long.toHexString(narrow).toUpperCase()
+                              + " " + twin + "; one value has one name in an enum");
         }
         String text = comment;
         if (text == null && reviewArchive != null
                 && find(reviewArchive, owner.getName()) instanceof ghidra.program.model.data.Enum shared
-                && shared.contains(name) && shared.getValue(name) == member) {
+                && shared.contains(name) && (shared.getValue(name) & mask) == narrow) {
             text = shared.getComment(name);
         }
         owner.add(name, member, text == null ? "" : text);

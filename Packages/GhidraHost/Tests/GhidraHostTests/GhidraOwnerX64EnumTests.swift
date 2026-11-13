@@ -91,4 +91,79 @@ final class GhidraOwnerX64EnumTests: XCTestCase {
         let read = try await read("/v1/type?name=AMD_PSTATE_MSR")
         XCTAssertFalse("\(read)".contains("-1073676189"), "\(read)")
     }
+
+    /// The listing's rows of the first functions, for a search.
+    private func rows(functions limit: Int) async throws -> [(entry: String, rows: [[String: Any]])] {
+        var found: [(entry: String, rows: [[String: Any]])] = []
+        for function in (try await read("/v1/functions")["functions"] as? [[String: Any]] ?? []).prefix(limit) {
+            guard let entry = function["entry"] as? String else { continue }
+            found.append((entry, try await read("/v1/disassembly/\(entry)")["instructions"] as? [[String: Any]] ?? []))
+        }
+        return found
+    }
+
+    /// X64's `MOV RCX,-2` holds a sign-extended 64-bit immediate: a four-byte
+    /// enum names it with its 32-bit value, stored unsigned, and the value
+    /// given in 32 bits finds the operand.
+    func testASignExtendedImmediateIsAFourByteMember() async throws {
+        var hit: (at: String, value: Int64)?
+        search: for function in try await rows(functions: 300) {
+            for row in function.rows {
+                let text = (row["text"] as? String ?? "")
+                guard text.hasPrefix("MOV R") || text.hasPrefix("CMP R"),
+                      let range = text.range(of: #",-0x[0-9a-f]{1,7}$"#, options: .regularExpression),
+                      let magnitude = Int64(text[range].dropFirst(4), radix: 16) else { continue }
+                hit = (try XCTUnwrap(row["address"] as? String), -magnitude)
+                break search
+            }
+        }
+        let (at, value) = try XCTUnwrap(hit, "no sign-extended negative immediate in the first functions")
+        let narrow = UInt32(truncatingIfNeeded: value)
+        let given = String(format: "0x%X", narrow)
+        try await post("/v1/type", ["c": "typedef enum _PROBE_SMALL { PROBE_ONE = 1 } PROBE_SMALL;"])
+        let named = try await post("/v1/set/equate", [
+            "address": at, "value": given, "name": "PROBE_NEGATIVE", "enum": "PROBE_SMALL"])
+        XCTAssertEqual((named["enum"] as? String)?.hasSuffix("PROBE_SMALL"), true, "\(named)")
+        let type = try await read("/v1/type?name=PROBE_SMALL")
+        let program = try XCTUnwrap(type["program"] as? [String: Any], "\(type)")
+        let values = try XCTUnwrap(program["values"] as? [String: String], "\(program)")
+        XCTAssertEqual(values["PROBE_NEGATIVE"], given, "\(values)")
+        XCTAssertEqual(values["PROBE_ONE"], "0x1", "\(values)")
+        // Named again with the same value: the member is found, not refused.
+        let again = try await post("/v1/set/equate", [
+            "address": at, "value": given, "name": "PROBE_NEGATIVE", "enum": "PROBE_SMALL"])
+        XCTAssertEqual((again["enum"] as? String)?.hasSuffix("PROBE_SMALL"), true, "\(again)")
+    }
+
+    /// 32-bit code in an X64 module is decoded out of long mode — `0x48` is
+    /// `DEC EAX`, not a REX prefix — and 64 reads it as long mode again.
+    func testCodeModeLeavesAndReentersLongMode() async throws {
+        var found: (entry: String, next: String)?
+        for function in try await rows(functions: 300) {
+            guard function.rows.count > 3,
+                  (function.rows[0]["bytes"] as? String ?? "").lowercased().hasPrefix("48"),
+                  let next = function.rows[3]["address"] as? String else { continue }
+            found = (function.entry, next)
+            break
+        }
+        let (entry, end) = try XCTUnwrap(found, "no function starts with a REX.W prefix")
+        let thirtyTwo = try await post("/v1/set/code-mode", ["start": entry, "end": end, "bits": 32])
+        XCTAssertEqual(thirtyTwo["bits"] as? Int, 32, "\(thirtyTwo)")
+        var listed = try await read("/v1/disassembly/\(entry)")["instructions"] as? [[String: Any]] ?? []
+        XCTAssertEqual(listed.first?["text"] as? String, "DEC EAX", "\(listed.prefix(3))")
+        XCTAssertEqual(listed.first?["bits"] as? Int, 32, "\(listed.prefix(3))")
+
+        try await post("/v1/set/code-mode", ["start": entry, "end": end, "bits": 64])
+        listed = try await read("/v1/disassembly/\(entry)")["instructions"] as? [[String: Any]] ?? []
+        XCTAssertNotEqual(listed.first?["text"] as? String, "DEC EAX", "\(listed.prefix(3))")
+        XCTAssertNil(listed.first?["bits"], "\(listed.prefix(3))")
+    }
+
+    /// An eight-byte enum's values read as hex, not as negative longs.
+    func testTypeDefinitionGivesEnumValuesInHex() async throws {
+        let type = try await read("/v1/type?name=EFI_STATUS")
+        let edk2 = try XCTUnwrap((type["program"] ?? type["edk2"]) as? [String: Any], "\(type)")
+        let values = try XCTUnwrap(edk2["values"] as? [String: String], "\(edk2)")
+        XCTAssertEqual(values["EFI_NOT_FOUND"], "0x800000000000000E", "\(values)")
+    }
 }

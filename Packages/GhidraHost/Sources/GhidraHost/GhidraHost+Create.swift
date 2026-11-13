@@ -96,7 +96,8 @@ extension GhidraHost {
         let state = ProjectState(
             schema: 1, project: UUID().uuidString.lowercased(),
             module: .init(sha256: digest.hex, size: blob.count, name: name, kind: kind,
-                          phase: pass == nil ? nil : chosen.rawValue),
+                          phase: pass == nil ? nil : chosen.rawValue,
+                          bits: Self.machine(of: blob) == 0x14C ? 32 : 64),
             program: programName,
             madeWith: .init(ghidra: install.version, types: pass == nil ? nil : UEFITypes.types,
                             passes: pass == nil ? [] : ["ApplyUefi.java"]),

@@ -11,6 +11,9 @@ public struct ProjectState: Codable, Equatable, Sendable {
         public var name: String
         public var kind: String
         public var phase: String?
+        /// 32 or 64, from the image's machine; nil in a project made before
+        /// it was recorded.
+        public var bits: Int? = nil
     }
 
     public struct MadeWith: Codable, Equatable, Sendable {
