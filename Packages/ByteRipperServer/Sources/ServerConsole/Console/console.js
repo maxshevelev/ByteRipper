@@ -486,15 +486,18 @@
 
   // The sidebar's counts, asked every ten seconds on any page: the documents
   // open (and, dimmed, those whose file is missing), the reports not yet
-  // resolved, and the review tickets not yet closed — open (a remark
-  // waits) and settled (every remark verified, the close still to do). A count
-  // whose endpoint does not answer — no Ghidra role — stays empty.
+  // resolved, and what the Review Tickets page holds not yet ended: the
+  // tickets open (a remark waits) and settled (every remark verified, the
+  // close still to do), and the proposals open (votes wait) and agreed (the
+  // module's publish still to apply it), as the page's switch sorts them. A
+  // count whose endpoint does not answer — no Ghidra role — stays empty.
   async function pollCounts() {
     clearTimeout(state.countTimer);
     state.countTimer = null;
     const counts = state.counts;
-    const [status, issues, tickets] = await Promise.allSettled([
-      call("GET", "/admin/api/status"), call("GET", "/admin/api/issues"), call("GET", "/admin/api/tickets")]);
+    const [status, issues, tickets, proposals] = await Promise.allSettled([
+      call("GET", "/admin/api/status"), call("GET", "/admin/api/issues"), call("GET", "/admin/api/tickets"),
+      call("GET", "/admin/api/type-proposals")]);
     if (state.counts !== counts) return;
     const show = (key, value, hot, extra) => {
       const el = counts[key];
@@ -510,8 +513,13 @@
     const board = tickets.status === "fulfilled" && Array.isArray(tickets.value) ? tickets.value : null;
     const waiting = board ? board.filter((ticket) => ticket.state === "open").length : 0;
     const settled = board ? board.filter((ticket) => ticket.state === "settled").length : 0;
-    show("tickets", board ? waiting + settled : null, true);
-    if (counts.tickets) counts.tickets.title = board ? `${waiting} open, ${settled} settled` : "";
+    const book = proposals.status === "fulfilled" && Array.isArray(proposals.value) ? proposals.value : [];
+    const voting = book.filter((p) => PROPOSAL_STATES.open.includes(p.state)).length;
+    const agreed = book.filter((p) => PROPOSAL_STATES.settled.includes(p.state)).length;
+    show("tickets", board ? waiting + settled + voting + agreed : null, true);
+    if (counts.tickets) {
+      counts.tickets.title = board ? `Tickets: ${waiting} open, ${settled} settled. Proposals: ${voting} open, ${agreed} agreed.` : "";
+    }
     if (state.counts === counts && state.session && !document.hidden) state.countTimer = setTimeout(pollCounts, 10000);
   }
 
