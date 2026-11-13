@@ -5694,7 +5694,8 @@ public class Owner {
             }
         }
         if (found == null) {
-            int size = held > 0xFFFFFFFFL ? 8 : 4;
+            // Unsigned: a 64-bit status code (0xA000000000000002) is negative as a long.
+            int size = Long.compareUnsigned(held, 0xFFFFFFFFL) > 0 ? 8 : 4;
             found = manager.resolve(new ghidra.program.model.data.EnumDataType(
                 new ghidra.program.model.data.CategoryPath("/ByteRipper"), name, size, manager),
                 DataTypeConflictHandler.DEFAULT_HANDLER);
@@ -5728,10 +5729,11 @@ public class Owner {
             return member;
         }
         long member = held;
-        if (owner.getLength() < 8 && held > 0xFFFFFFFFL) {
+        if (owner.getLength() < 8 && Long.compareUnsigned(held, 0xFFFFFFFFL) > 0) {
             if (signed >= Integer.MIN_VALUE && signed < 0) member = signed;
             else throw new Failure(409, owner.getName() + " is " + owner.getLength() + " bytes wide; 0x"
-                                   + Long.toHexString(held).toUpperCase() + " does not fit");
+                                   + Long.toHexString(held).toUpperCase() + " does not fit; an enum"
+                                   + " this call makes for a new name is eight bytes wide for such a value");
         }
         if (owner.contains(member)) {
             throw new Failure(409, owner.getName() + " already names 0x" + Long.toHexString(held).toUpperCase()
@@ -7458,6 +7460,7 @@ public class Owner {
                 resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             }
             resolved = keepCategories(resolved, previous);
+            unsignedEnumMembers(resolved, c);
             restoreReferenced(referenced);
             commentsKept = restoreComments(resolved, kept);
             restoreDescriptions(resolved, keptDescriptions);
@@ -7614,6 +7617,48 @@ public class Owner {
      * lines before a member. A comment no member takes is keyed by a NUL and
      * its order, which no member name can be.
      */
+    /**
+     * The members of an enum narrower than eight bytes as the C wrote them.
+     * Ghidra's C parser reads `0xC0010063` as an int and stores it as
+     * -1073676189, so the type printed back `0xFFFFFFFFC0010063` and differed
+     * from the shared copy that holds it positive (issue d8b45e1d). A member
+     * the C did not write negative is stored unsigned; one written `-1` stays.
+     */
+    static void unsignedEnumMembers(DataType type, String c) {
+        DataType base = type instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+            ? def.getBaseDataType() : type;
+        if (!(base instanceof ghidra.program.model.data.Enum values) || values.getLength() >= 8) return;
+        java.util.Set<String> negative = negativeEnumLiterals(c);
+        long mask = (1L << (values.getLength() * 8)) - 1;
+        // Ghidra reads an enum holding any negative member as signed, and then
+        // refuses 0xC0010063: every member goes out before any comes back. A
+        // member the C wrote negative keeps the enum signed, and all as parsed.
+        java.util.Map<String, Long> unsigned = new java.util.LinkedHashMap<>();
+        java.util.Map<String, String> comments = new java.util.HashMap<>();
+        for (String name : values.getNames()) {
+            long value = values.getValue(name);
+            if (value >= 0) continue;
+            if (negative.contains(name)) return;
+            unsigned.put(name, value & mask);
+            comments.put(name, values.getComment(name));
+        }
+        if (unsigned.isEmpty()) return;
+        for (String name : unsigned.keySet()) values.remove(name);
+        for (java.util.Map.Entry<String, Long> member : unsigned.entrySet()) {
+            String comment = comments.get(member.getKey());
+            values.add(member.getKey(), member.getValue(), comment == null ? "" : comment);
+        }
+    }
+
+    /** The members of the C's enum bodies written with a minus: `Name = -1`, `Name = -(2)`. */
+    static java.util.Set<String> negativeEnumLiterals(String c) {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*\\(?\\s*-").matcher(c);
+        while (matcher.find()) names.add(matcher.group(1));
+        return names;
+    }
+
     static java.util.LinkedHashMap<String, String> memberComments(String c) {
         java.util.LinkedHashMap<String, String> found = new java.util.LinkedHashMap<>();
         java.util.regex.Pattern pointer = java.util.regex.Pattern.compile("\\(\\s*\\*\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\)");
