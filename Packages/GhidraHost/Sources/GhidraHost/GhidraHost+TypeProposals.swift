@@ -282,10 +282,33 @@ extension GhidraHost {
             + "`library_registry`): a field, a name or a parameter may have changed."
     }
 
+    /// The modules whose last published review document lists one of `names`
+    /// (or its `_` tag) among the types the review added: what the program
+    /// holds, printed or not. A module whose store holds no such document is
+    /// not among them.
+    func reviewTypeHolders(_ names: [String]) async -> [(module: SHA256Digest, name: String, revision: Int?)] {
+        var wanted = Set<String>()
+        for name in names {
+            wanted.insert(name)
+            wanted.insert(name.hasPrefix("_") ? String(name.dropFirst()) : "_" + name)
+        }
+        guard !wanted.isEmpty, let manifests = try? await writer.newestAnalyses() else { return [] }
+        var holders: [(module: SHA256Digest, name: String, revision: Int?)] = []
+        for manifest in manifests.sorted(by: { $0.module.name < $1.module.name }) {
+            guard let review = manifest.reading?.review, let data = try? await writer.readObject(review),
+                  let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let types = object["types"] as? [[String: Any]],
+                  types.contains(where: { wanted.contains($0["name"] as? String ?? "") }) else { continue }
+            holders.append((manifest.module.sha256, manifest.module.name, manifest.reading?.rev))
+        }
+        return holders
+    }
+
     /// The proposals a finished publish applied marked so, and told on its
     /// ticket every other module that wrote a replaced definition, whose last
-    /// published analysis names a replaced type, or whose links the registry
-    /// moved to a replaced entry's new version.
+    /// published analysis names a replaced type, whose last review holds one
+    /// in its program, or whose links the registry moved to a replaced entry's
+    /// new version.
     func noteProposalsApplied(_ ids: [String], module: SHA256Digest, revision: Int?, version: Int?,
                               relinked: [ContentStore.Relinked] = []) async {
         guard let book = typeProposals, !ids.isEmpty else { return }
@@ -320,6 +343,13 @@ extension GhidraHost {
                 }
                 if !(proposal.entries ?? [:]).isEmpty {
                     for row in relinked { await tell(row.module, revision: nil, name: nil) }
+                }
+                // The modules whose program holds a replaced type, whether or
+                // not their C prints it: their next publish reads the old copy
+                // as a replacement. Only the review document lists a type the
+                // C never names; the analysis lists those it prints.
+                for holder in await reviewTypeHolders(names) {
+                    await tell(holder.module, revision: holder.revision, name: holder.name)
                 }
                 for name in names {
                     guard let data = try? await typeUses(name: name, limit: 1),
