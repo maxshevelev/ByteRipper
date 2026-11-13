@@ -185,7 +185,8 @@ public enum MicrocodeCatalogue {
         vendor: MicrocodeVendor? = nil,
         search: String = "",
         cpuidsInTheImage: Set<UInt32>? = nil,
-        processors: [ProcessorFamily] = ProcessorNames.shipped
+        processors: [ProcessorFamily] = ProcessorNames.shipped,
+        signatures: MicrocodeSignatures = .shipped
     ) -> [MicrocodeCatalogueEntry] {
         let needle = search.trimmingCharacters(in: .whitespaces).uppercased()
         let named = families(named: needle, in: processors)
@@ -201,10 +202,17 @@ public enum MicrocodeCatalogue {
             // the CPUIDs it is sold with. Not the revision or the file name:
             // they are the catalogue's, and matching them is a guess about
             // which the user meant.
-            if entry.cpuidText.hasPrefix(needle) { return true }
+            //
+            // An update with an extended signature table serves each CPUID it
+            // lists, so a search finds it by any of them, not only by the one
+            // its file is named after.
+            let extended = signatures.extendedCPUIDs(of: entry)
+            if entry.cpuidText.hasPrefix(needle) || extended.contains(where: { $0.hasPrefix(needle) }) {
+                return true
+            }
             guard entry.vendor == .intel, !named.isEmpty, let cpuid = entry.cpuid else { return false }
-            let text = MicrocodeHeader.cpuid(cpuid)
-            return named.contains { $0.matches(text) }
+            let served = [MicrocodeHeader.cpuid(cpuid)] + extended
+            return named.contains { family in served.contains { family.matches($0) } }
         }
     }
 

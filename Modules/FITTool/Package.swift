@@ -58,7 +58,10 @@ let package = Package(
             // CPUID to the processors sold with it, so a microcode update can
             // name what it is for. Generated, not edited by hand:
             // `Skills/update-cpuid-brand-names/scripts/import.py` says where it comes from.
-            .copy("Resources/IntelCPUIDBrandNames.json")
+            .copy("Resources/IntelCPUIDBrandNames.json"),
+            // Which microcode updates serve several CPUIDs, read from the
+            // collection's files: `Skills/update-cpuid-brand-names/scripts/microcode_signatures.py`.
+            .copy("Resources/IntelMicrocodeSignatures.json")
         ]),
         .target(name: "FITToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),

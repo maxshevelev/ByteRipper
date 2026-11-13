@@ -914,6 +914,9 @@ final class FITToolFlowTests: XCTestCase {
         let table = sheet.table
         let cell = try XCTUnwrap(table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? FITCatalogueCPUIDCell)
         XCTAssertEqual(cell.textField?.stringValue, "806EA")
+        XCTAssertEqual(table.tableColumns[1].identifier.rawValue, "extended",
+                       "the update's other CPUIDs have a column of their own, after the CPUID")
+        XCTAssertEqual(table.tableColumns[1].title, "Extended CPUIDs")
         XCTAssertFalse(cell.infoButton.isHidden)
         XCTAssertEqual(cell.infoButton.accessibilityLabel(), "Processors")
         cell.layoutSubtreeIfNeeded()

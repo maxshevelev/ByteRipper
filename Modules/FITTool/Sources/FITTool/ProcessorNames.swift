@@ -92,12 +92,17 @@ public struct FITProcessorGroup: Equatable, Sendable {
     /// naming its group, and saying the rest of its note, where the CPUID has
     /// more than one.
     public var lines: [FITProcessorLine]
+    /// The other CPUIDs the newest microcode update for this one also serves,
+    /// from its extended signature table (`MicrocodeSignatures`). Empty when
+    /// the update serves this CPUID alone, or none is known.
+    public var sharesMicrocodeWith: [String] = []
 
     /// One group per signature, in the order the update names them — the
     /// header's own first. A CPUID the table does not know is a group of one
     /// line that says so.
     public static func groups(
         for signatures: [UInt32], in catalogue: [ProcessorFamily] = ProcessorNames.shipped,
+        microcode: MicrocodeSignatures = .shipped,
         language: AppLanguage
     ) -> [FITProcessorGroup] {
         signatures.map { signature in
@@ -136,7 +141,8 @@ public struct FITProcessorGroup: Equatable, Sendable {
                 }
             }
             return FITProcessorGroup(cpuid: cpuid, codeNames: families.flatMap(\.codeNames),
-                                     notes: notes, lines: lines)
+                                     notes: notes, lines: lines,
+                                     sharesMicrocodeWith: microcode.sharing(signature))
         }
     }
 

@@ -27,6 +27,7 @@ scripts/gaps.py         the models still without an S-SPEC, in batches for ARK a
 scripts/merge_ark.py    an agent batch → ark-sspec.json
 scripts/found-sspec.json  codes found by Skills/find-sspec, each with its evidence
 scripts/extra-entries.json  CPUIDs the article lacks, each fact with its page
+scripts/microcode_signatures.py  which microcode updates serve several CPUIDs → IntelMicrocodeSignatures.json
 scripts/pins.py         the pinned Wikipedia revisions and Intel commit, moved forward
 reference/ark-agent-brief.md   the brief an ARK agent is given
 ```
@@ -100,6 +101,15 @@ article has the CPUID: then take it out.
    series ("Xeon D-15", "Core i7-85"); none or several, and it stays. The
    log names each (`moved:`); a model is never taken out of the table, and
    one without an ARK record is never moved.
+
+`microcode_signatures.py` is separate from the table: it reads every Intel file
+of `platomav/CPUMicrocodes` at one commit (≈ 40 MB, `--cache` keeps them),
+takes each update's extended signature table, and writes
+`Modules/FITTool/Sources/FITTool/Resources/IntelMicrocodeSignatures.json` —
+the updates that serve several CPUIDs, with the collection's copies of each.
+The processors popover says "Same microcode as …" from it, and the Add
+Microcode form shows and searches its Extended CPUIDs. Run it with the table,
+or whenever the collection has moved on.
 
 Every added code is listed in `sSpecSource` with where it came from (`ark`,
 `wikipedia`, and from `found-sspec.json`: `intel`, `database`, `marking`); `sSpecSources` at the top says which revisions and pages.

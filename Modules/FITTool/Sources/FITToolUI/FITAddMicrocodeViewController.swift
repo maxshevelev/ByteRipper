@@ -58,6 +58,7 @@ import ToolModuleKit
 
     private enum Column {
         static let cpuid = NSUserInterfaceItemIdentifier("cpuid")
+        static let extended = NSUserInterfaceItemIdentifier("extended")
         static let platform = NSUserInterfaceItemIdentifier("platform")
         static let revision = NSUserInterfaceItemIdentifier("revision")
         static let date = NSUserInterfaceItemIdentifier("date")
@@ -66,7 +67,7 @@ import ToolModuleKit
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 560, height: 460))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 700, height: 460))
 
         // "Intel" in the title and not only in the line below it: the list has
         // no vendor picker any more, so what is being shown has to be said
@@ -115,6 +116,10 @@ import ToolModuleKit
         table.doubleAction = #selector(addClicked)
         // Room for the CPUID and the `ⓘ` after it.
         column(Column.cpuid, L("CPUID"), 92)
+        // The other CPUIDs the file's update serves — its extended signature
+        // table — which the search finds it by too.
+        // help: panel.fit
+        column(Column.extended, L("Extended CPUIDs"), 150)
         // The narrowest column in the form; the word has to be an abbreviation
         // in every language, so it is one the translator chooses.
         column(Column.platform, L("Plat", context: "column"), 46)
@@ -270,6 +275,11 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         cell.textField?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         cell.textField?.textColor = .labelColor
         switch column.identifier {
+        case Column.extended:
+            let extended = MicrocodeSignatures.shipped.extendedCPUIDs(of: entry).joined(separator: ", ")
+            cell.textField?.stringValue = extended
+            cell.textField?.lineBreakMode = .byTruncatingTail
+            cell.toolTip = extended.isEmpty ? nil : extended
         case Column.platform: cell.textField?.stringValue = entry.platformText
         case Column.revision: cell.textField?.stringValue = entry.revisionText
         case Column.date: cell.textField?.stringValue = entry.date

@@ -33,7 +33,13 @@ import Localization
     override func makeContent() -> NSView {
         let body = HelpBodyView()
         body.show(Self.list(group.lines))
-        let notes = group.notes.count == 1 ? group.notes[0] : ""
+        // The CPUIDs its microcode also serves (the update's extended
+        // signature table) are said under what the table says of the group.
+        // help: fit.processors
+        let shared = group.sharesMicrocodeWith.isEmpty ? ""
+            : L("Same microcode as %1$@", group.sharesMicrocodeWith.joined(separator: ", "))
+        let notes = [group.notes.count == 1 ? group.notes[0] : "", shared]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
         let built = HelpPopoverLayout.build(title: HelpPopoverLayout.title(L("CPUID %1$@", group.cpuid)),
                                             body: body,
                                             note: notes.isEmpty ? nil : HelpPopoverLayout.note(notes))

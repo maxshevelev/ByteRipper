@@ -1020,6 +1020,8 @@
 "pre-release" = "предрелиз";
 "r.%1$@" = "r.%1$@";
 "No processor names known for CPUID %1$@" = "Модели процессоров для CPUID %1$@ неизвестны";
+"Same microcode as %1$@" = "Тот же микрокод, что у %1$@";
+"Extended CPUIDs" = "Расширенные CPUID";
 "No processor models known for this CPUID" = "Модели процессоров с этим CPUID неизвестны";
 "platform %1$@" = "платформа %1$@";
 "series, models not listed" = "серия, модели не перечислены";
