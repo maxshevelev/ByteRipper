@@ -341,9 +341,10 @@
     // Which request logs the operator has opened, by token: the page is drawn
     // again on every poll, and a log that shut itself would be unreadable.
     // Which reports the operator has opened, and whether resolved ones show.
-    openIssues: new Set(),
     resolvedIssues: false,
-    openTickets: new Set(),
+    // The record shown in the detail sheet: its key, and how to draw it from
+    // the rows the page last read.
+    detail: null,
     ticketState: "open",
   };
 
@@ -448,6 +449,7 @@
 
   function renderShell(app, path) {
     closeLog();
+    closeDetail();
     const page = PAGES[path];
     const name = state.session.name || "admin";
     state.counts = {};
@@ -1286,6 +1288,86 @@
 
   // ---------- Tokens ----------
 
+  // ---------- The detail sheet ----------
+
+  // A record's whole detail — a report, a ticket, a proposal — in a large
+  // sheet over the content area, opened by a click on its row. The page's
+  // poll draws it again from the rows it reads, so it stays live; Esc, the
+  // close button or a click beside it closes it.
+  let detailRoot = null;
+
+  function openDetail(key, title, build) {
+    state.detail = { key, title, build };
+    if (!detailRoot) {
+      const body = h("div", { class: "sheet-body" });
+      const heading = h("h3", {});
+      const panel = h("div", { class: "sheet", role: "dialog", "aria-modal": "true" },
+        h("div", { class: "sheet-head" }, heading, h("span", { class: "grow" }),
+          iconButton("x", "Close", closeDetail)),
+        body);
+      detailRoot = h("div", { class: "sheet-backdrop", onclick: (event) => { if (event.target === detailRoot) closeDetail(); } }, panel);
+      detailRoot.heading = heading;
+      detailRoot.body = body;
+      document.body.append(detailRoot);
+      placeDetail();
+    }
+    drawDetail(true);
+    markDetailRows();
+  }
+
+  function drawDetail(top) {
+    if (!detailRoot || !state.detail) return;
+    const body = detailRoot.body;
+    const scroll = top ? 0 : body.scrollTop;
+    detailRoot.heading.textContent = state.detail.title;
+    fill(body, state.detail.build());
+    body.scrollTop = scroll;
+  }
+
+  // A page drew its rows again: the open record is drawn from them, if it is
+  // still among them.
+  function updateDetail(key, title, build) {
+    if (!state.detail || state.detail.key !== key) return;
+    state.detail = { key, title, build };
+    drawDetail(false);
+  }
+
+  function closeDetail() {
+    state.detail = null;
+    if (detailRoot) { detailRoot.remove(); detailRoot = null; }
+    markDetailRows();
+  }
+
+  // The sheet covers the content area, not the sidebar.
+  function placeDetail() {
+    if (!detailRoot) return;
+    const main = document.querySelector("main.main");
+    detailRoot.style.left = `${main ? main.getBoundingClientRect().left : 0}px`;
+  }
+
+  function markDetailRows() {
+    for (const row of document.querySelectorAll("tr[data-detail]")) {
+      row.classList.toggle("selected", !!state.detail && row.dataset.detail === state.detail.key);
+    }
+  }
+
+  // A row that opens its record: a click anywhere on it but on a control.
+  function detailRow(key, title, build, props, ...cells) {
+    if (state.detail && state.detail.key === key) queueMicrotask(() => updateDetail(key, title, build));
+    const row = h("tr", { ...props, class: `${props.class || ""} opens${state.detail && state.detail.key === key ? " selected" : ""}`,
+      "data-detail": key,
+      onclick: (event) => {
+        if (event.target.closest("button, a, input, select, label")) return;
+        openDetail(key, title, build);
+      } }, ...cells);
+    return row;
+  }
+
+  window.addEventListener("resize", placeDetail);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && detailRoot && !document.querySelector("dialog[open]")) closeDetail();
+  });
+
   // ---------- Issues ----------
 
   function mountIssues(actions) {
@@ -1308,27 +1390,24 @@
     return h("div", { class: "table-wrap" }, h("table", {},
       h("thead", {}, h("tr", {},
         h("th", { text: "Reported" }), h("th", { text: "By" }), h("th", { text: "Tool" }), h("th", { text: "Expected" }), h("th", {}))),
-      h("tbody", {}, issues.flatMap((issue) => {
-        const opened = state.openIssues.has(issue.id);
-        const flip = () => { if (opened) state.openIssues.delete(issue.id); else state.openIssues.add(issue.id); refresh(); };
-        const row = h("tr", { class: issue.resolved ? "dim" : "" },
+      h("tbody", {}, issues.map((issue) => {
+        const part = (label, text) => text ? h("div", { class: "issue-part" }, h("h4", { text: label }), h("pre", { class: "code", text })) : null;
+        const detail = () => h("div", { class: "stack" },
+          h("div", { class: "row" }, h("span", { class: "muted", text: `Reported by ${issue.reporter}, ${when(issue.at)}` }),
+            h("span", { class: "grow" }),
+            issue.resolved ? null : h("button", { class: "btn small", type: "button", onclick: () => resolveIssue(issue) }, icon("check", 14), "Mark resolved")),
+          issue.module ? h("div", { class: "muted", text: `Module ${issue.module}` }) : null,
+          part("Arguments", issue.arguments), part("Answer", issue.answer), part("Expected", issue.expected),
+          part("Note", issue.note),
+          issue.resolved ? part(`Resolved by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null);
+        return detailRow(`issue:${issue.id}`, `Report on ${issue.tool}`, detail, { class: issue.resolved ? "dim" : "" },
           h("td", { class: "muted", title: when(issue.at), text: ago(issue.at) }),
           h("td", { text: issue.reporter }),
           h("td", {}, h("code", { text: issue.tool })),
           h("td", { text: issue.expected.length > 140 ? issue.expected.slice(0, 140) + "…" : issue.expected }),
           h("td", { class: "actions" },
-            iconButton(opened ? "up" : "down", opened ? "Hide the report" : "Show the whole report", flip),
             issue.resolved ? h("span", { class: "pill", title: `${issue.resolved.by}, ${when(issue.resolved.at)}`, text: "Resolved" })
               : iconButton("check", "Mark resolved", () => resolveIssue(issue))));
-        if (!opened) return [row];
-        const part = (label, text) => text ? h("div", { class: "issue-part" }, h("h4", { text: label }), h("pre", { class: "code", text })) : null;
-        const detail = h("tr", { class: "issue-detail" }, h("td", { colspan: "5" },
-          h("div", { class: "stack" },
-            issue.module ? h("div", { class: "muted", text: `Module ${issue.module}` }) : null,
-            part("Arguments", issue.arguments), part("Answer", issue.answer), part("Expected", issue.expected),
-            part("Note", issue.note),
-            issue.resolved ? part(`Resolved by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null)));
-        return [row, detail];
       }))));
   }
 
@@ -1392,23 +1471,17 @@
     return h("table", { class: "lines" },
       h("thead", {}, h("tr", {},
         h("th", { class: "w-who", text: "Module" }), h("th", { text: "Types and entries" }), h("th", { class: "w-state", text: "State" }),
-        h("th", { text: "Votes" }), h("th", { text: "Author" }), h("th", { class: "w-open" }))),
-      h("tbody", {}, rows.flatMap((p) => {
-        const key = `proposal:${p.id}`;
-        const opened = state.openTickets.has(key);
-        const flip = () => { if (opened) state.openTickets.delete(key); else state.openTickets.add(key); refresh(); };
+        h("th", { text: "Votes" }), h("th", { text: "Author" }))),
+      h("tbody", {}, rows.map((p) => {
         const names = p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
-        const row = h("tr", { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
+        return detailRow(`proposal:${p.id}`, `Proposal of ${p.name || "a module"}`, () => proposalDetail(p, names),
+          { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
           whoCell("proposals", p.name || "module", p.module),
           h("td", { class: "mono", text: names.concat(Object.values(p.entries || {}).map((e) => e.name)).join(", ") }),
           h("td", {}, proposalPill(p.state)),
           h("td", {}, h("span", { class: "ok-text", text: `${p.agrees.length}/${p.agrees_needed} agree` }),
             p.objections.length ? h("span", { class: "danger-text", text: ` · ${p.objections.length} object` }) : null),
-          h("td", {}, h("div", { class: "line-who-title", title: p.author, text: p.author })),
-          h("td", { class: "actions" },
-            h("button", { class: "btn small", type: "button", onclick: flip }, icon(opened ? "up" : "down", 15), opened ? "Hide" : "Open")));
-        if (!opened) return [row];
-        return [row, h("tr", { class: "issue-detail" }, h("td", { colspan: "6" }, proposalDetail(p, names)))];
+          h("td", {}, h("div", { class: "line-who-title", title: p.author, text: p.author })));
       })));
   }
 
@@ -1559,21 +1632,16 @@
       h("thead", {}, h("tr", {},
         h("th", { class: "w-who", text: "Module" }), h("th", { class: "w-state", text: "Review" }),
         h("th", { class: "num w-n", text: "Open" }), h("th", { class: "num w-n", text: "Remarks" }),
-        h("th", { text: "Reviewer" }), h("th", { class: "w-time", text: "Last" }), h("th", { class: "w-open" }))),
-      h("tbody", {}, tickets.flatMap((ticket) => {
-        const opened = state.openTickets.has(ticket.module);
-        const flip = () => { if (opened) state.openTickets.delete(ticket.module); else state.openTickets.add(ticket.module); refresh(); };
-        const row = h("tr", { class: ticket.state === "closed" ? "dim" : "" },
+        h("th", { text: "Reviewer" }), h("th", { class: "w-time", text: "Last" }))),
+      h("tbody", {}, tickets.map((ticket) => {
+        return detailRow(`ticket:${ticket.module}`, `Ticket of ${ticket.name || "a module"}`, () => ticketDetail(ticket),
+          { class: ticket.state === "closed" ? "dim" : "" },
           whoCell("layers", ticket.name || "module", ticket.module),
           h("td", {}, ticketPill(ticket.state)),
           h("td", { class: `num ${ticket.open_remarks ? "danger-text" : ""}`, text: String(ticket.open_remarks || 0) }),
           h("td", { class: "num", text: String((ticket.remarks || []).length) }),
           h("td", {}, h("div", { class: "line-who-title", title: ticket.reviewer || "", text: ticket.reviewer || "—" })),
-          h("td", { class: "muted", title: when(lastActivity(ticket)), text: ago(lastActivity(ticket)) }),
-          h("td", { class: "actions" },
-            h("button", { class: "btn small", type: "button", onclick: flip }, icon(opened ? "up" : "down", 15), opened ? "Hide" : "Open")));
-        if (!opened) return [row];
-        return [row, h("tr", { class: "issue-detail" }, h("td", { colspan: "7" }, ticketDetail(ticket)))];
+          h("td", { class: "muted", title: when(lastActivity(ticket)), text: ago(lastActivity(ticket)) }));
       })));
   }
 
