@@ -916,6 +916,15 @@ public actor GhidraHost {
             preview["types_refused"] = Self.typeRefusal(replacing, origins: typeOrigins, names: names, version: nil,
                                                         bits: Self.archiveBits(language: (artifact["program"] as? [String: Any])?["language"] as? String ?? ""))
         }
+        // The version of the shared types the publish would make, as its answer
+        // says it: merged into a throwaway copy of the current version, and
+        // nothing stored. Absent when the types add nothing, as in a publish.
+        if writer.keepsTypeArchives, reviewed, replacing.isEmpty || agreedProposals != nil {
+            let language = (artifact["program"] as? [String: Any])?["language"] as? String ?? ""
+            if let next = try? await wouldBeTypeVersion(module, language: language, take: agreedProposals != nil) {
+                preview["types_version"] = next
+            }
+        }
         preview["stale_links"] = try Self.plain(await staleLinks(port: record.port))
         if let descriptionDigest {
             preview["description"] = ["sha256": descriptionDigest, "size": description.count]

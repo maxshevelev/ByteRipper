@@ -5360,6 +5360,13 @@ public class Owner {
                 }
             }
         }
+        // A constant the decompiler made of several operands — two 32-bit
+        // compares merged into one 64-bit one — is held by no operand: it is
+        // named on the C's constant itself, by the decompiler's hash of it, as
+        // Ghidra's own Set Equate does in the decompiler window.
+        CConstant constant = null;
+        if (scalar == null && !inDisplacement && value != null && operand < 0) constant = cConstant(at, value);
+        if (constant != null) return applyEquateOnC(body, at, constant, value, name, enumName, comment, enumComment);
         if (scalar == null && inDisplacement) {
             throw new Failure(409, "`" + instruction + "` at " + hex(at) + " holds "
                               + (value == null ? "a constant" : valueText)
@@ -5418,7 +5425,11 @@ public class Owner {
             ghidra.program.model.symbol.Equate plain = table.getEquate(name);
             if (plain != null) {
                 for (ghidra.program.model.symbol.EquateReference reference : plain.getReferences()) {
-                    equate.addReference(reference.getAddress(), reference.getOpIndex());
+                    if (reference.getDynamicHashValue() != 0) {
+                        equate.addReference(reference.getDynamicHashValue(), reference.getAddress());
+                    } else {
+                        equate.addReference(reference.getAddress(), reference.getOpIndex());
+                    }
                 }
                 table.removeEquate(name);
             }
@@ -5441,6 +5452,127 @@ public class Owner {
     }
 
     /** Removes whatever equate names the operand, and an equate it leaves unused. */
+    /** A constant of the decompiled C, where Ghidra's equate table finds it: by hash. */
+    private record CConstant(Address at, long hash) {}
+
+    /**
+     * The constant `value` in the C of the function holding `at`: the one the
+     * p-code at `at` uses, else the function's only one. None when the C
+     * holds no such constant; several where `at` does not single one out are
+     * refused, naming where each is.
+     */
+    private CConstant cConstant(Address at, long value) throws Exception {
+        Function function = program.getFunctionManager().getFunctionContaining(at);
+        if (function == null) return null;
+        DecompileResults results = decompile(function);
+        HighFunction high = results == null ? null : results.getHighFunction();
+        if (high == null) return null;
+        java.util.List<ghidra.program.model.pcode.Varnode> here = new java.util.ArrayList<>();
+        java.util.List<ghidra.program.model.pcode.Varnode> anywhere = new java.util.ArrayList<>();
+        java.util.Iterator<ghidra.program.model.pcode.PcodeOpAST> ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            ghidra.program.model.pcode.PcodeOpAST op = ops.next();
+            for (ghidra.program.model.pcode.Varnode input : op.getInputs()) {
+                if (input == null || !input.isConstant()) continue;
+                int size = input.getSize();
+                long mask = size >= 8 ? -1L : (1L << (size * 8)) - 1;
+                if (input.getOffset() != value && (input.getOffset() & mask) != value) continue;
+                anywhere.add(input);
+                if (op.getSeqnum().getTarget().equals(at)) here.add(input);
+            }
+        }
+        java.util.List<ghidra.program.model.pcode.Varnode> pick = !here.isEmpty() ? here : anywhere;
+        if (pick.isEmpty()) return null;
+        if (pick.size() > 1) {
+            java.util.Set<String> places = new java.util.TreeSet<>();
+            for (ghidra.program.model.pcode.Varnode each : pick) {
+                ghidra.program.model.pcode.PcodeOp user = each.getLoneDescend();
+                places.add(user == null ? "?" : hex(user.getSeqnum().getTarget()));
+            }
+            throw new Failure(409, "the C of " + function.getName() + " holds 0x" + Long.toHexString(value).toUpperCase()
+                + " in " + pick.size() + " places (" + String.join(", ", places)
+                + "), and no operand at " + hex(at) + " holds it: give the address of the one meant");
+        }
+        ghidra.program.model.pcode.DynamicHash hash = new ghidra.program.model.pcode.DynamicHash(pick.get(0), high);
+        if (hash.getHash() == 0) {
+            throw new Failure(409, "the decompiler cannot single out its constant 0x" + Long.toHexString(value).toUpperCase()
+                + " in " + function.getName() + "; nothing was changed");
+        }
+        return new CConstant(hash.getAddress(), hash.getHash());
+    }
+
+    /** `applyEquate` for a constant only the C holds: the same rules, the reference by hash. */
+    private JsonObject applyEquateOnC(JsonObject body, Address asked, CConstant constant, long value, String name,
+                                      String enumName, String comment, String enumComment) throws Exception {
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(constant.at()));
+        answer.addProperty("value", "0x" + Long.toHexString(value).toUpperCase());
+        answer.addProperty("in_c_only", true);
+        if (name.isEmpty()) {
+            dropEquatesOnC(table, constant);
+            answer.addProperty("removed", true);
+            return answer;
+        }
+        ghidra.program.model.data.Enum owner = null;
+        if (enumName != null) {
+            owner = enumFor(enumName, value);
+        } else {
+            for (DataType type : allTypes()) {
+                if (type instanceof ghidra.program.model.data.Enum values && values.contains(name)) {
+                    owner = values;
+                    break;
+                }
+            }
+        }
+        ghidra.program.model.symbol.Equate equate;
+        if (owner != null) {
+            ghidra.program.model.symbol.Equate same = table.getEquate(name);
+            if (same != null && same.getValue() != value) {
+                throw new Failure(409, name + " already stands for 0x" + Long.toHexString(same.getValue()).toUpperCase()
+                    + " on " + same.getReferenceCount() + " operand(s), not 0x" + Long.toHexString(value).toUpperCase()
+                    + "; nothing was changed");
+            }
+            long member = member(owner, name, value, value, comment);
+            if (enumComment != null) owner.setDescription(enumComment.isBlank() ? null : enumComment);
+            Harvest.recordType(program, owner.getName(), ExportCode.typeC(owner));
+            String formatted = ghidra.program.database.symbol.EquateManager
+                .formatNameForEquate(owner.getUniversalID(), member);
+            dropEquatesOnC(table, constant);
+            equate = table.getEquate(formatted);
+            if (equate == null) equate = table.createEquate(formatted, member);
+            answer.addProperty("enum", owner.getName());
+            String kept = owner.getComment(name);
+            if (kept != null && !kept.isEmpty()) answer.addProperty("comment", kept);
+        } else {
+            if (comment != null) throw new Failure(400, "a comment is a member's: name the enum");
+            equate = table.getEquate(name);
+            if (equate != null && equate.getValue() != value) {
+                throw new Failure(409, name + " already stands for 0x" + Long.toHexString(equate.getValue()).toUpperCase());
+            }
+            dropEquatesOnC(table, constant);
+            if (equate == null) equate = table.createEquate(name, value);
+        }
+        equate.addReference(constant.hash(), constant.at());
+        Function function = program.getFunctionManager().getFunctionContaining(asked);
+        if (function != null) decompiled.remove(function.getEntryPoint());
+        answer.addProperty("name", equate.getDisplayName());
+        answer.addProperty("references", equate.getReferenceCount());
+        return answer;
+    }
+
+    private static void dropEquatesOnC(ghidra.program.model.symbol.EquateTable table, CConstant constant)
+            throws Exception {
+        for (ghidra.program.model.symbol.Equate other : table.getEquates(constant.at())) {
+            for (ghidra.program.model.symbol.EquateReference reference : other.getReferences(constant.at())) {
+                if (reference.getDynamicHashValue() != constant.hash()) continue;
+                other.removeReference(constant.hash(), constant.at());
+                if (other.getReferenceCount() == 0) table.removeEquate(other.getName());
+                break;
+            }
+        }
+    }
+
     private static void dropEquates(ghidra.program.model.symbol.EquateTable table, Address at, int operand)
             throws Exception {
         for (ghidra.program.model.symbol.Equate other : table.getEquates(at, operand)) {
@@ -5768,7 +5900,8 @@ public class Owner {
             java.util.List<Object[]> equates = new java.util.ArrayList<>();
             for (ghidra.program.model.symbol.Equate equate : table.getEquates(at)) {
                 for (ghidra.program.model.symbol.EquateReference reference : equate.getReferences(at)) {
-                    equates.add(new Object[] { equate.getName(), equate.getValue(), (int) reference.getOpIndex() });
+                    equates.add(new Object[] { equate.getName(), equate.getValue(), (int) reference.getOpIndex(),
+                                               reference.getDynamicHashValue() });
                 }
             }
             ghidra.program.model.listing.FlowOverride flow = instruction.getFlowOverride();
@@ -5792,6 +5925,20 @@ public class Owner {
                 String name = (String) equate[0];
                 long value = (Long) equate[1];
                 int operand = (Integer) equate[2];
+                long hash = (Long) equate[3];
+                if (hash != 0) {
+                    // A name on the C's constant: the same instruction keeps the
+                    // same p-code, so the hash finds the constant again.
+                    if (!same) { gone.add("equate " + name + " on the C's constant"); continue; }
+                    ghidra.program.model.symbol.Equate target = table.getEquate(name);
+                    if (target == null) target = table.createEquate(name, value);
+                    boolean there = false;
+                    for (ghidra.program.model.symbol.EquateReference reference : target.getReferences(marks.at())) {
+                        if (reference.getDynamicHashValue() == hash) there = true;
+                    }
+                    if (!there) target.addReference(hash, marks.at());
+                    continue;
+                }
                 if (!same || operand >= now.getNumOperands()) {
                     gone.add("equate " + name + " on operand " + operand);
                     continue;
@@ -6212,7 +6359,11 @@ public class Owner {
             answer.addProperty("storage", stale.getVariableStorage().toString());
             answer.addProperty("first_use", stale instanceof Parameter ? null : firstUseOf(function, stale));
             answer.addProperty("parameter", stale instanceof Parameter);
-            answer.addProperty("stale", true);
+            // Found in the table, not among the decompiler's symbols as asked:
+            // whether the C shows it is what the decompiler says now, after the
+            // rename — a first use read differently can land here on a
+            // variable the C prints, and `stale` would then be a false alarm.
+            answer.addProperty("stale", !decompilerShows(function, stale.getName()));
             return answer;
         }
         // A type the variable already has is no change. Given anyway, it locks
@@ -7862,6 +8013,18 @@ public class Owner {
      * empties the whole cache, and a function is decompiled again only when
      * it is read.
      */
+    /** Whether the decompiled function holds a variable of this name. */
+    private boolean decompilerShows(Function function, String name) {
+        DecompileResults results = decompile(function);
+        HighFunction high = results == null ? null : results.getHighFunction();
+        if (high == null) return false;
+        Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+        while (symbols.hasNext()) {
+            if (symbols.next().getName().equals(name)) return true;
+        }
+        return false;
+    }
+
     private DecompileResults decompile(Function function) {
         long now = program.getModificationNumber();
         if (now != decompiledAt) {

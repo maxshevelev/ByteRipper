@@ -849,10 +849,18 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
                 "c": "typedef UINT32 \(function)(UINT32 HookId, UINT32 Reserved0, UINT32 Reserved1);"
                     + " typedef struct _\(entry) { UINT32 HookId; \(function) *Hook; } \(entry);"]))
-            _ = try await host.publish(module, by: "agent")
+            let before = try versions()
+            // The dry run names the version the publish will make, and makes none.
+            let preview = try json(await host.preview(module))
+            XCTAssertEqual(try versions(), before, "\(label): a dry run keeps no version")
+            let first = try await host.publish(module, by: "agent")
             let made = try versions()
             XCTAssertFalse(made.isEmpty, "\(label): the first publish keeps a version")
+            XCTAssertEqual(preview["types_version"] as? Int, first.typesVersion, "\(label): \(preview)")
+            if seed == nil { XCTAssertNotNil(first.typesVersion, label) }
             for round in 1...2 {
+                let dry = try json(await host.preview(module))
+                XCTAssertNil(dry["types_version"], "\(label), round \(round): \(dry)")
                 let again = try await host.publish(module, by: "agent")
                 let kept = try store.typeArchive(bits: bits)?.versions.map { "v\($0.version) added \($0.added) amended \($0.amended)" } ?? []
                 XCTAssertNil(again.typesVersion, "\(label), round \(round): \(kept)")

@@ -77,6 +77,15 @@ name in an enum (an equate shows the first name of its value): a second
 meaning of the same number belongs in another enum. A name given before
 without an enum moves to the member with all its uses.
 
+A constant the decompiler builds from several operands is in none of them. A
+UINT64 compared as two 32-bit halves — PiSmmCommunicationPei's
+`CMP [ESP+0x4],0x534D4D53` and, after three pushes, `CMP [ESP+0x14],0x34365F33` — prints in the C as
+one `0x34365f33534d4d53`, and an equate on either half never shows there.
+Give the whole value instead (`value: "0x34365F33534D4D53"`, at either
+instruction): the name goes on the C's constant itself, by the decompiler's
+hash of it, and the answer says `in_c_only: true`. The listing shows it on no
+operand; the C, and the app's reader, do.
+
 Types are explained the same way: `ghidra_type` with `description` (what the
 type is, where its layout is known from) and `comments` (a field's or an enum
 member's), with the C or with `name` for a type the module holds. The reader

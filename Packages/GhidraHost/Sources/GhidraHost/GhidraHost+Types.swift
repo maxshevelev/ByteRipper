@@ -156,6 +156,27 @@ extension GhidraHost {
         return (merged, bits, version, proposals)
     }
 
+    /// The version `decideTypes` would make, worked out on a copy and with
+    /// nothing written: nil when the merge leaves the archive as it is.
+    func wouldBeTypeVersion(_ module: SHA256Digest, language: String, take: Bool) async throws -> Int? {
+        let bits = Self.archiveBits(language: language)
+        let (folder, current) = try await archiveWorkingCopy(bits: bits)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let merged = TypesMerged(try await typesCall(module, take ? "/v1/types/merge?take_type_conflicts=1" : "/v1/types/merge",
+                                                     body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
+        guard merged.changed else { return nil }
+        if let current {
+            var same = true
+            for (stored, local) in Self.archiveFileNames(bits: bits) {
+                let url = folder.appendingPathComponent(local)
+                let data = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : Data("{}".utf8)
+                if current.files[stored] != SHA256Digest(data: data) { same = false; break }
+            }
+            if same { return nil }
+        }
+        return (current?.version ?? 0) + 1
+    }
+
     static func typeRefusal(_ names: [String], origins: [String: String], names modules: [String: String],
                             version: Int?, bits: String) -> String {
         let listed = names.map { name -> String in
