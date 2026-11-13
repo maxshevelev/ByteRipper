@@ -2968,11 +2968,7 @@
           "sSpec": []
         },
         {
-          "name": "Intel Core i9-9800X",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-7640X",
+          "name": "Intel Core i7-9800X",
           "sSpec": []
         }
       ]
@@ -3159,8 +3155,13 @@
           }
         },
         {
-          "name": "Intel Xeon D-1519",
-          "sSpec": []
+          "name": "Intel Pentium D1519",
+          "sSpec": [
+            "SR2DM"
+          ],
+          "sSpecSource": {
+            "SR2DM": "wikipedia"
+          }
         },
         {
           "name": "Intel Xeon D-1521",
@@ -3206,10 +3207,6 @@
           "sSpecSource": {
             "SR2DG": "ark"
           }
-        },
-        {
-          "name": "Intel Xeon D-1533",
-          "sSpec": []
         },
         {
           "name": "Intel Xeon D-1537",
@@ -3281,15 +3278,6 @@
           ],
           "sSpecSource": {
             "SR2GG": "wikipedia"
-          }
-        },
-        {
-          "name": "Intel Pentium D1519",
-          "sSpec": [
-            "SR2DM"
-          ],
-          "sSpecSource": {
-            "SR2DM": "wikipedia"
           }
         }
       ]
@@ -4760,10 +4748,6 @@
         },
         {
           "name": "Intel Xeon D-1540",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1564N",
           "sSpec": []
         },
         {
@@ -6677,10 +6661,6 @@
             "SRGKT": "ark",
             "SRGSD": "ark"
           }
-        },
-        {
-          "name": "Intel Core i5-10110Y",
-          "sSpec": []
         }
       ]
     },
@@ -8928,6 +8908,15 @@
           "sSpec": [
             "SRH8L"
           ]
+        },
+        {
+          "name": "Intel Xeon W-10855M",
+          "sSpec": [
+            "SRH8M"
+          ],
+          "sSpecSource": {
+            "SRH8M": "ark"
+          }
         }
       ]
     },
@@ -9554,10 +9543,6 @@
           "sSpec": [
             "SRGP1"
           ]
-        },
-        {
-          "name": "Intel Xeon W-10855",
-          "sSpec": []
         },
         {
           "name": "Intel Xeon W-1290E",

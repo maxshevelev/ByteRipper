@@ -77,7 +77,28 @@ CORRECTIONS = {
 
 # Models the page writes that are not a model: "E5-260" is a cut-off number
 # (E5-2603? E5-2608L?) — which one is not ours to guess.
-DROP = {"Intel Xeon E5-260 v3"}
+# Models the page names that Intel never sold under that name, with nothing
+# Intel did sell close enough to stand for them (checked on ARK, 2026-11):
+# the i5-10110Y is an i3 in Intel's line (i3-10110Y), the D-1564N has no
+# neighbour at all.
+DROP = {"Intel Xeon E5-260 v3", "Intel Core i5-10110Y", "Intel Xeon D-1564N"}
+
+# Models the page misnames, each with the model Intel sells under the name
+# closest to it — same number, the prefix or suffix the page lost — read on
+# ARK's ordering tab (2026-11). Each must be met on the page.
+RENAME = {
+    # ARK SKU 189122: "Core i7-9800X X-series", SREZ9, M0. No i9-9800X exists.
+    "Intel Core i9-9800X": "Intel Core i7-9800X",
+    # ARK SKU 121500: the Kaby Lake-X i5-7640X, SR3FR. No i7-7640X exists.
+    "Intel Core i7-7640X": "Intel Core i5-7640X",
+    # ARK SKU 201908: "Xeon W-10855M", SRH8M, R1. No W-10855 exists.
+    "Intel Xeon W-10855": "Intel Xeon W-10855M",
+    # ARK SKU 122998: "Xeon D-1533N", SR3KS, A1. No plain D-1533 exists.
+    "Intel Xeon D-1533": "Intel Xeon D-1533N",
+    # ARK SKU 91559: "Pentium Processor D1519", SR2DM, V2, in the D-1500
+    # family. No Xeon D-1519 exists.
+    "Intel Xeon D-1519": "Intel Pentium D1519",
+}
 
 # Lines the page writes where only a series is named, not its models.
 SERIES = {"Intel Xeon Platinum", "Intel Xeon Platinum 8300", "Intel Xeon Gold 6300",
@@ -182,6 +203,9 @@ def canonical(name):
     return name
 
 
+MET = set()                                       # RENAME and DROP keys the page has
+
+
 def processors(cell):
     """[(name, [sspec])] in the order the page lists them."""
     result = []
@@ -212,7 +236,11 @@ def processors(cell):
                     # J3355/J3355E: the second shares the first's prefix.
                     variant = full.split("/")[0].rsplit(" ", 1)[0] + " " + variant
                 name = canonical(variant)
+                if name in RENAME:
+                    MET.add(name)
+                    name = RENAME[name]
                 if name in DROP:
+                    MET.add(name)
                     continue
                 result.append((name, sspecs))
     return result
@@ -313,6 +341,9 @@ def main(argv):
                                if s),
             "processors": merged(processors(brands)),
         })
+    unmet = (set(RENAME) | DROP) - MET
+    if unmet:
+        sys.exit("renames and drops that match nothing on the page:\n  " + "\n  ".join(sorted(unmet)))
     if CORRECTIONS:
         sys.exit("corrections that match nothing on the page:\n  "
                  + "\n  ".join(CORRECTIONS))

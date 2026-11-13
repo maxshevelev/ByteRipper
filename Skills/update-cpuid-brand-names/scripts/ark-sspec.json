@@ -2245,6 +2245,16 @@
       ]
     },
     {
+      "model": "Intel Core i7-9800X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189122/intel-core-i79800x-xseries-processor-16-5m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ9",
+          "stepping": "M0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i9-10850K",
       "url": "https://www.intel.com/content/www/us/en/products/sku/205904/intel-core-i910850k-processor-20m-cache-up-to-5-20-ghz/ordering.html",
       "specs": [
@@ -3969,6 +3979,16 @@
       "url": null,
       "specs": [],
       "note": "No ARK page for a 'Xeon W-10855'; the product is the W-10855M (SKU 201908: SRH8M, R1, CL8070104398912, Comet Lake H). Not taken for this name, and R1 is not a stepping of A0660/A0661."
+    },
+    {
+      "model": "Intel Xeon W-10855M",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201908/intel-xeon-w10855m-processor-12m-cache-up-to-5-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8M",
+          "stepping": "R1"
+        }
+      ]
     },
     {
       "model": "Intel Xeon W-11155MLE",
