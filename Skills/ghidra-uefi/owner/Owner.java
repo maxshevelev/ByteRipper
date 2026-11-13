@@ -1014,8 +1014,17 @@ public class Owner {
             }
         }
         answer.add("locals", locals);
-        JsonObject leftovers = leftovers(function);
+        // A thunk's locals are its target's: nothing to name here, and no
+        // leftover a review owes.
+        JsonObject leftovers = function.isThunk() ? null : leftovers(function);
         if (leftovers != null) answer.add("leftovers", leftovers);
+        if (function.isThunk() && function.getThunkedFunction(true) != null) {
+            Function target = function.getThunkedFunction(true);
+            JsonObject thunk = new JsonObject();
+            thunk.addProperty("entry", hex(target.getEntryPoint()));
+            thunk.addProperty("name", target.getName());
+            answer.add("thunk_of", thunk);
+        }
         if (!summary) {
             answer.add("equates", equatesIn(function));
             answer.addProperty("c", results != null && results.getDecompiledFunction() != null
@@ -4991,6 +5000,7 @@ public class Owner {
      */
     private JsonObject clearLocals(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
+        refuseThunkVariables(function, "reset");
         java.util.Set<String> only = null;
         if (body.has("names")) {
             only = new java.util.LinkedHashSet<>();
@@ -6144,6 +6154,7 @@ public class Owner {
      */
     private JsonObject renameVariable(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "function"));
+        refuseThunkVariables(function, "named");
         String name = string(body, "name", null);
         String storage = string(body, "storage", null);
         String firstUse = string(body, "first_use", null);
@@ -7987,6 +7998,23 @@ public class Owner {
     private static long relative(String text) {
         return text.startsWith("0x") || text.startsWith("0X")
             ? Long.parseUnsignedLong(text.substring(2), 16) : Long.decode(text);
+    }
+
+    /**
+     * A thunk has no variables of its own: Ghidra answers its parameters,
+     * locals and their namespace with its target's, so a name given to a
+     * thunk's local lands in the target — or clashes there, and the refusal
+     * blamed a name the thunk never held — and a reset would clear the
+     * target's names. The thunk's C is the decompiler's view of one call; no
+     * store keeps it, as a thunk has no body to review.
+     */
+    private void refuseThunkVariables(Function function, String verb) throws Failure {
+        if (!function.isThunk()) return;
+        Function target = function.getThunkedFunction(true);
+        String to = target == null ? "its target" : target.getName() + " (" + hex(target.getEntryPoint()) + ")";
+        throw new Failure(409, function.getName() + " is a thunk of " + to + ": Ghidra keeps a thunk's parameters and "
+            + "locals as its target's, so they cannot be " + verb + " here, and the store keeps no C for a thunk. "
+            + "Name the variables in the target; nothing was changed");
     }
 
     private Function functionAt(String text) throws Failure {

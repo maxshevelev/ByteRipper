@@ -900,6 +900,7 @@ public enum GhidraTools {
             },
             write("ghidra_function_locals_reset", "clear/locals", "Let a function's locals go",
                   "Removes the local variables of the function at `address` — the decompiler's and the "
+                  + "review's; a thunk's are its target's and are refused — "
                   + "review's, or with `names` only those — and decompiles it again, answering what was cleared "
                   + "(`locals`: each one's name, storage, first use and type, to give back what matters with "
                   + "`ghidra_rename_variable`) and whether the C now decompiles (`decompiles`), with the error "
@@ -950,7 +951,7 @@ public enum GhidraTools {
                     an entry did not. A name already held is answered with the holder — its kind, \
                     address, `storage` and `first_use` — and those rename the holder, even one the \
                     decompiler no longer shows (the answer then says `stale: true`); freeing the name \
-                    is what lets the local take it. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed — and so is one it records but cannot use, which the C marks `WARNING: Unable to use type for symbol` (a zero-hash temporary's, typically); such a type already on the local is refused too, not answered `type_unchanged`. \
+                    is what lets the local take it. A thunk — `thunk_of` in `ghidra_function` — has no variables of its own: Ghidra keeps its target's, so naming one of its locals or parameters is refused; name them in the target. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed — and so is one it records but cannot use, which the C marks `WARNING: Unable to use type for symbol` (a zero-hash temporary's, typically); such a type already on the local is refused too, not answered `type_unchanged`. \
                     A wider type takes the storage of the locals it now covers and Ghidra removes them: \
                     `locals_removed` names each with its storage. \
                     The answer gives the `type` the local holds after the call. A type it holds already, by the \

@@ -103,4 +103,40 @@ final class GhidraOwnerMergedConstantTests: XCTestCase {
             XCTAssertEqual(error.status, 409, "\(error)")
         }
     }
+
+    /// A thunk's locals are its target's: naming one, or resetting them, is
+    /// refused as that, not as a clash with a name the target holds, and the
+    /// target keeps its names.
+    func testAThunksLocalsAreRefusedAsItsTargets() async throws {
+        var thunk: (entry: String, target: String)?
+        for function in try await read("/v1/functions")["functions"] as? [[String: Any]] ?? [] {
+            guard let entry = function["entry"] as? String else { continue }
+            let listed = try await read("/v1/disassembly/\(entry)")["instructions"] as? [[String: Any]] ?? []
+            guard listed.count == 1, let text = listed[0]["text"] as? String, text.hasPrefix("JMP") else { continue }
+            let to = (listed[0]["references"] as? [[String: Any]])?.first?["to"] as? String
+            if let to { thunk = (entry, to); break }
+        }
+        let (entry, target) = try XCTUnwrap(thunk, "no function is one JMP")
+        try await post("/v1/set/flow", ["address": entry, "override": "call_return"])
+        let read = try await self.read("/v1/function/\(entry)")
+        let before = try await c(target)
+        let local = (read["locals"] as? [[String: Any]])?.first
+        var rename: [String: Any] = ["function": entry, "name": "EntryStatus",
+                                     "storage": local?["storage"] as? String ?? "EAX:4"]
+        if let first = local?["first_use"] as? String { rename["first_use"] = first }
+        for (path, body) in [("/v1/rename/variable", rename), ("/v1/clear/locals", ["address": entry] as [String: Any])] {
+            do {
+                try await post(path, body)
+                XCTFail("\(path) on a thunk is refused")
+            } catch let error as GhidraHostError {
+                XCTAssertEqual(error.status, 409, "\(error)")
+                XCTAssertTrue("\(error)".contains("is a thunk of"), "\(error)")
+            }
+        }
+        let after = try await c(target)
+        XCTAssertEqual(after, before, "the target keeps its names")
+        XCTAssertEqual(((read["thunk_of"] as? [String: Any])?["entry"] as? String)?.lowercased(), target.lowercased(),
+                       "\(read)")
+        XCTAssertNil(read["leftovers"], "a thunk owes no names: \(read)")
+    }
 }
