@@ -10865,6 +10865,23 @@
     },
     {
       "cpuids": [
+        "B06D0"
+      ],
+      "codeNames": [
+        "Lunar Lake"
+      ],
+      "cores": [
+        "Lion Cove",
+        "Skymont"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "B06F5"
       ],
       "codeNames": [

@@ -165,6 +165,51 @@
     },
     {
       "cpuids": [
+        "B06D0"
+      ],
+      "codeNames": [
+        "Lunar Lake"
+      ],
+      "cores": [
+        "Lion Cove",
+        "Skymont"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_LUNARLAKE_A0_1\t\t0xb06d0"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_LUNARLAKE_M\t\tIFM(6, 0xBD) /* Lion Cove / Skymont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_BDH: stepping 1, Lunar Lake, Core Ultra 5, 7, 9, Mobile, CPUID B06D1 — none for B06D0."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/master/Intel",
+          "quote": "cpuB06D0_plat80_ver0000001A_2024-06-10_PRD_D7BD1337.bin — revision 0x1A, platform 0x80, no extended signature table."
+        }
+      ],
+      "note": "Lunar Lake's stepping ID 0. No source names a model sold as B06D0: Intel's list of processors by CPUID has only B06D1 for 06_BDH, and its one public microcode (0x1A) is dated 2024-06-10, before Lunar Lake's launch. coreboot calls it A0, but also calls B06D1 \"A0_2\" where Intel's notes call it B0, so no stepping is written."
+    },
+    {
+      "cpuids": [
         "B06F5"
       ],
       "codeNames": [
