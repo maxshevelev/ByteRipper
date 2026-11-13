@@ -3,6 +3,538 @@
   "entries": [
     {
       "cpuids": [
+        "206A7"
+      ],
+      "codeNames": [
+        "Sandy Bridge"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen2"
+      ],
+      "steppings": [
+        "D2",
+        "G1",
+        "Q0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SNB            | D2/G1/Q0 | 06-2a-07/12 | 0000002e | 0000002f | Core Gen2"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: SNB), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "206D6"
+      ],
+      "codeNames": [
+        "Sandy Bridge-E/EN/EP"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Xeon E3/E5, Core X"
+      ],
+      "steppings": [
+        "C1",
+        "M0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SNB-E/EN/EP    | C1/M0    | 06-2d-06/6d | 0000061f | 00000621 | Xeon E3/E5, Core X"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: SNB-E/EN/EP), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "206D7"
+      ],
+      "codeNames": [
+        "Sandy Bridge-E/EN/EP"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Xeon E3/E5, Core X"
+      ],
+      "steppings": [
+        "C2",
+        "M1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SNB-E/EN/EP    | C2/M1    | 06-2d-07/6d | 00000718 | 0000071a | Xeon E3/E5, Core X"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: SNB-E/EN/EP), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "30678"
+      ],
+      "codeNames": [
+        "Valleyview (Bay Trail)"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Atom Z series",
+        "Celeron N2xxx, Pentium N35xx"
+      ],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| VLV            | C0       | 06-37-08/02 |          | 00000838 | Atom Z series"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| VLV            | C0       | 06-37-08/0c |          | 00000838 | Celeron N2xxx, Pentium N35xx"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: VLV), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "30679"
+      ],
+      "codeNames": [
+        "Valleyview (Bay Trail)"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Atom E38xx"
+      ],
+      "steppings": [
+        "D0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| VLV            | D0       | 06-37-09/0F | 0000090c | 0000090d | Atom E38xx"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: VLV), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "306A9"
+      ],
+      "codeNames": [
+        "Ivy Bridge"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen3"
+      ],
+      "steppings": [
+        "E1",
+        "L1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| IVB            | E1/L1    | 06-3a-09/12 | 00000020 | 00000021 | Core Gen3"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: IVB), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "306C3"
+      ],
+      "codeNames": [
+        "Haswell"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen4"
+      ],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| HSW            | C0       | 06-3c-03/32 | 00000027 | 00000028 | Core Gen4"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: HSW), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "306D4"
+      ],
+      "codeNames": [
+        "Broadwell U/Y"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen5"
+      ],
+      "steppings": [
+        "E0",
+        "F0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| BDW-U/Y        | E0/F0    | 06-3d-04/c0 | 0000002e | 0000002f | Core Gen5"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: BDW-U/Y), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "306E4"
+      ],
+      "codeNames": [
+        "Ivy Bridge-E/EP"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen3 X Series; Xeon E5 v2"
+      ],
+      "steppings": [
+        "C1",
+        "M1",
+        "S1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| IVB-E/EP       | C1/M1/S1 | 06-3e-04/ed | 0000042d | 0000042e | Core Gen3 X Series; Xeon E5 v2"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: IVB-E/EP), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "306E7"
+      ],
+      "codeNames": [
+        "Ivy Bridge-EX"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Xeon E7 v2"
+      ],
+      "steppings": [
+        "D1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| IVB-EX         | D1       | 06-3e-07/ed | 00000714 | 00000715 | Xeon E7 v2"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: IVB-EX), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "40651"
+      ],
+      "codeNames": [
+        "Haswell U"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen4"
+      ],
+      "steppings": [
+        "C0",
+        "D0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| HSW-U          | C0/D0    | 06-45-01/72 | 00000025 | 00000026 | Core Gen4"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: HSW-U), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "40661"
+      ],
+      "codeNames": [
+        "Haswell H"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen4"
+      ],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| HSW-H          | C0       | 06-46-01/32 | 0000001b | 0000001c | Core Gen4"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: HSW-H), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "40671"
+      ],
+      "codeNames": [
+        "Broadwell H/E3"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Gen5"
+      ],
+      "steppings": [
+        "E0",
+        "G0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| BDW-H/E3       | E0/G0    | 06-47-01/22 | 00000021 | 00000022 | Core Gen5"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: BDW-H/E3), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "406C3"
+      ],
+      "codeNames": [
+        "Cherry Trail (Cherryview)"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Atom X series"
+      ],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| CHV            | C0       | 06-4c-03/01 |          | 00000368 | Atom X series"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: CHV), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "406C4"
+      ],
+      "codeNames": [
+        "Cherry Trail (Cherryview)"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Atom X series"
+      ],
+      "steppings": [
+        "D0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| CHV            | D0       | 06-4c-04/01 |          | 00000411 | Atom X series"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: CHV), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "406D8"
+      ],
+      "codeNames": [
+        "Avoton"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Atom C2xxx"
+      ],
+      "steppings": [
+        "B0",
+        "C0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| AVN            | B0/C0    | 06-4d-08/01 |          | 0000012D | Atom C2xxx"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: AVN), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "50655"
+      ],
+      "codeNames": [
+        "Cascade Lake SP"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Xeon Scalable Gen2"
+      ],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| CLX-SP         | A0       | 06-55-05/b7 |          | 03000010 | Xeon Scalable Gen2"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: CLX-SP), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
         "50662"
       ],
       "codeNames": [
@@ -3008,6 +3540,267 @@
         }
       ],
       "note": "As B06F6: Intel's list gives it with B06F2 and B06F5, Raptor Lake S and Bartlett Lake S; one microcode serves them; no Intel document names its stepping, so no model is listed."
+    },
+    {
+      "cpuids": [
+        "C0652"
+      ],
+      "codeNames": [
+        "Arrow Lake H"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Ultra Processor (Series 2)"
+      ],
+      "steppings": [
+        "A1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| ARL-H          | A1       | 06-c5-02/82 | 00000121 | 00000122 | Core Ultra Processor (Series 2)"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: ARL-H), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "C0662"
+      ],
+      "codeNames": [
+        "Arrow Lake S/HX"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Core Ultra Processor (Series 2)"
+      ],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| ARL-S/HX (8P)  | B0       | 06-c6-02/82 | 00000121 | 00000122 | Core Ultra Processor (Series 2)"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: ARL-S/HX (8P)), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "C06C2"
+      ],
+      "codeNames": [
+        "Panther Lake H"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Core Ultra processor (Series 3)"
+      ],
+      "steppings": [
+        "A0",
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| PTL-H484/PTL-H12Xe | B0/A0| 06-cc-02/94 | 0000011b | 0000011c | Intel Core Ultra processor (Series 3)"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| PTL-H 484/12Xe | A0/B0    | 06-cc-02/90 |          | 0000011b | Intel Core Ultra Processor (Series 3)"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: PTL-H 484/12Xe, PTL-H484/PTL-H12Xe), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "C06C3"
+      ],
+      "codeNames": [
+        "Panther Lake"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Core Ultra processor (Series 3)"
+      ],
+      "steppings": [
+        "A1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| PTL-404/H204   | A1       | 06-cc-03/94 | 0000011b | 0000011c | Intel Core Ultra processor (Series 3)"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| PTL 404        | A1       | 06-cc-03/90 |          | 0000011b | Intel Core Ultra Processor (Series 3)"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: PTL 404, PTL-404/H204), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "C06F1"
+      ],
+      "codeNames": [
+        "Emerald Rapids SP"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Xeon Scalable Gen5"
+      ],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| EMR-SP         | A0       | 06-cf-01/87 | 21000283 | 21000291 | Xeon Scalable Gen5"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: EMR-SP), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "C06F2"
+      ],
+      "codeNames": [
+        "Emerald Rapids SP"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Xeon Scalable Gen5"
+      ],
+      "steppings": [
+        "A1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| EMR-SP         | A1       | 06-cf-02/87 | 210002e0 | 210002f4 | Xeon Scalable Gen5"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: EMR-SP), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "D0651"
+      ],
+      "codeNames": [
+        "Wildcat Lake"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Core Processors (Series 3)"
+      ],
+      "steppings": [
+        "A1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| WCL            | A1       | 06-d5-01/c0 |          | 0000000c | Intel Core Processors (Series 3)"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: WCL), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
+    },
+    {
+      "cpuids": [
+        "D0670"
+      ],
+      "codeNames": [
+        "Bartlett Lake S 12P"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Core Series 2 Processors with P-cores"
+      ],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "productFamilies"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| BTL-S12P       | A0       | 06-d7-00/36 |          | 00000137 | Intel Core Series 2 Processors with P-cores"
+        }
+      ],
+      "note": "From Intel's microcode release notes, which name the code name (abbreviated: BTL-S12P), the steppings and the product line for this CPUID; the article has no row for it. Its models are not listed yet."
     }
   ]
 }
