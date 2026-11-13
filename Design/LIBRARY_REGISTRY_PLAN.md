@@ -138,7 +138,8 @@ review documents.
   publish and names who wrote it. A replacement of what an entry or a shared
   type says is a proposal's alone: agents vote, or an administrator decides on
   the console, and the module's next publish applies it (2026-11-13); a rename
-  is such a replacement. Take-out, split and restore are an administrator's.
+  is such a replacement. Take-out, split and restore are proposals as well,
+  which the server applies the moment they are agreed.
   The next version reaches every reader at once: readers read the entry.
 - **Readers see that a function is the registry's**: the artifact records
   `library_entry` (the entry, its version, and whether the function is the

@@ -21,8 +21,9 @@ extension GhidraHost {
             case candidate
             /// One entry: its review and its history.
             case entry
-            /// A write on the registry itself: `change`.
-            case change
+            /// A citation of a body's constant: `change`, read as a citation. A
+            /// change of the registry itself is a proposal's (`TypeProposalBook`).
+            case cite
         }
 
         public var action: Action
@@ -346,13 +347,14 @@ extension GhidraHost {
         switch request.action {
         case .apply, .decline, .candidate: try requireLease(module, holder: holder)
         case .status, .entry: try tellClosed(module, holder: holder)
-        case .change: break
+        case .cite: break
         }
         switch request.action {
-        case .change:
-            guard let change = request.change else {
-                throw GhidraHostError(.refused, "no change named", status: 400)
+        case .cite:
+            guard var change = request.change else {
+                throw GhidraHostError(.refused, "no citation named", status: 400)
             }
+            change.action = .cite
             let result = try await writer.changeLibrary(change, by: "agent", module: module,
                                                         dryRun: request.dryRun ?? false)
             return try JSONSerialization.data(withJSONObject: try Self.plain(Self.naming(result, module: module, reason: change.reason)),
@@ -556,7 +558,7 @@ extension GhidraHost {
                 continue
             }
             // What only adds to the entry is its next version, from any module; a
-            // replacement only an administrator's decision takes.
+            // replacement only an agreed proposal takes.
             if take.all || take.reasons[id] != nil || LibraryProposal.onlyAdds(to: object, offered: own.entry) {
                 var taken = own
                 taken.basedOn = id

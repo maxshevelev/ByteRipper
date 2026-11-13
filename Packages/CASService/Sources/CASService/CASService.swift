@@ -154,8 +154,11 @@ public struct CASService: Sendable {
         router.add("POST", "\(prefix)/library", access: .rights([.admin])) { request in
             let put = try request.json(ServedStoreProtocol.PutLibrary.self)
             let dryRun = put.dryRun == true
-            if let change = put.change {
-                let result = try Self.answer { try store.changeLibrary(change, by: put.by, changedFrom: put.module, dryRun: dryRun) }
+            // A citation only adds. A change of the registry itself is a
+            // proposal's, which the server applies once agreed.
+            if var citation = put.citation {
+                citation.action = .cite
+                let result = try Self.answer { try store.changeLibrary(citation, by: put.by, changedFrom: put.module, dryRun: dryRun) }
                 if !dryRun { await feed.rescan() }
                 return .json(result)
             }

@@ -269,7 +269,7 @@ public enum GhidraTools {
     private static func change(_ arguments: AgentArguments, _ backend: GhidraBackend,
                                _ change: LibraryChange) async throws -> AgentAnswer {
         let module = try module(arguments)
-        let request = GhidraHost.LibraryRequest(action: .change, dryRun: try arguments.bool("dry_run", default: false),
+        let request = GhidraHost.LibraryRequest(action: .cite, dryRun: try arguments.bool("dry_run", default: false),
                                                 change: change)
         return try await answer { try await backend.library(module, request) }
     }

@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Foundation
 
 /// Agents agreeing a change to a shared definition without the person: a
@@ -20,6 +21,11 @@ import Foundation
 /// is no token per agent. The agents of the modules that use the type are not
 /// waited for: once a replacement is applied, each such module gets a remark
 /// on its ticket.
+///
+/// A change of the registry itself — an entry taken out, a body restored, a
+/// body split off as an entry of its own — is proposed and voted the same
+/// way. It carries no module's text, so nothing waits for a publish: the
+/// server applies it the moment it is agreed.
 ///
 /// One file in the store's private part, `private/type-proposals.json`: it
 /// goes to no client and no mirror.
@@ -120,6 +126,9 @@ public actor TypeProposalBook {
         public let origins: [String: String]
         /// The registry entries the module's publish would replace, by id.
         public let entries: [String: Entry]?
+        /// A change of the registry itself, applied once agreed; `module` is
+        /// where the review found it.
+        public let change: LibraryChange?
         public let author: String
         public let holder: String
         public let reason: String
@@ -139,8 +148,8 @@ public actor TypeProposalBook {
         public var objections: [String] { current.filter { $0.choice == .object }.map(\.agent) }
 
         enum CodingKeys: String, CodingKey {
-            case id, at, module, name, bits, names, origins, entries, author, holder, reason, votes, state, decided
-            case applied
+            case id, at, module, name, bits, names, origins, entries, change, author, holder, reason, votes, state
+            case decided, applied
             case moduleC = "module_c"
             case sharedC = "shared_c"
         }
@@ -189,8 +198,8 @@ public actor TypeProposalBook {
         }
 
         enum Keys: String, CodingKey {
-            case id, at, module, name, bits, names, origins, entries, author, holder, reason, votes, state, decided
-            case applied, agrees, objections
+            case id, at, module, name, bits, names, origins, entries, change, author, holder, reason, votes, state
+            case decided, applied, agrees, objections
             case moduleC = "module_c"
             case sharedC = "shared_c"
             case needed = "agrees_needed"
@@ -217,6 +226,7 @@ public actor TypeProposalBook {
                                     bytes: entry.fields.reduce(0) { $0 + $1.held.utf8.count + $1.offered.utf8.count })
                 }, forKey: .entries)
             }
+            try out.encodeIfPresent(proposal.change, forKey: .change)
             try out.encode(proposal.author, forKey: .author)
             try out.encode(proposal.holder, forKey: .holder)
             try out.encode(proposal.reason, forKey: .reason)
@@ -245,7 +255,8 @@ public actor TypeProposalBook {
             case list
             /// One proposal by `id`.
             case read
-            /// The module's replacements proposed, with `reason`.
+            /// The module's replacements proposed, with `reason` — or, with
+            /// `change`, a change of the registry itself.
             case propose
             /// `choice` on proposal `id`, with `text`.
             case vote
@@ -263,10 +274,13 @@ public actor TypeProposalBook {
         public var view: View?
         /// With `id`: one registry entry of the proposal, in full.
         public var entry: String?
+        /// With `propose`: an entry taken out, a body restored or split off.
+        public var change: LibraryChange?
 
         public init(action: Action, agent: String? = nil, module: String? = nil, id: String? = nil,
                     state: String? = nil, choice: Choice? = nil, text: String? = nil, reason: String? = nil,
-                    view: View? = nil, entry: String? = nil) {
+                    view: View? = nil, entry: String? = nil, change: LibraryChange? = nil) {
+            self.change = change
             self.action = action
             self.agent = agent
             self.module = module
@@ -290,9 +304,12 @@ public actor TypeProposalBook {
         public var sharedC: [String: String]
         public var origins: [String: String]
         public var entries: [String: Entry]
+        public var change: LibraryChange?
 
         public init(module: String, name: String?, bits: String, names: [String], moduleC: [String: String],
-                    sharedC: [String: String], origins: [String: String], entries: [String: Entry] = [:]) {
+                    sharedC: [String: String], origins: [String: String], entries: [String: Entry] = [:],
+                    change: LibraryChange? = nil) {
+            self.change = change
             self.module = module
             self.name = name
             self.bits = bits
@@ -344,12 +361,16 @@ public actor TypeProposalBook {
         guard !reason.isEmpty else {
             throw refused("say why the shared definition is wrong, with the evidence: the voters read it")
         }
+        let module = draft.module.lowercased()
+        if let change = draft.change {
+            return try proposeChange(change, draft: draft, module: module, reason: reason, author: author,
+                                     caller: caller, now: now)
+        }
         guard !draft.names.isEmpty || !draft.entries.isEmpty else {
             throw refused("this module's publish replaces no shared type and no registry entry: there is nothing to "
                 + "propose", status: 409)
         }
-        let module = draft.module.lowercased()
-        if let live = proposals.values.first(where: { $0.module == module && $0.state.isLive }) {
+        if let live = proposals.values.first(where: { $0.module == module && $0.state.isLive && $0.change == nil }) {
             throw refused("proposal \(live.id) for this module is still \(live.state.rawValue): withdraw it first, "
                 + "or let it be decided", status: 409)
         }
@@ -371,8 +392,40 @@ public actor TypeProposalBook {
             id: String(UUID().uuidString.prefix(8)).lowercased(), at: Self.second(now), module: module,
             name: draft.name, bits: draft.bits, names: draft.names.sorted(), moduleC: draft.moduleC,
             sharedC: draft.sharedC, origins: draft.origins,
-            entries: draft.entries.isEmpty ? nil : draft.entries, author: author, holder: caller.holder,
+            entries: draft.entries.isEmpty ? nil : draft.entries, change: nil, author: author, holder: caller.holder,
             reason: Self.cut(reason) ?? reason, votes: [], state: .open, decided: nil, applied: nil)
+        proposals[proposal.id] = proposal
+        try save()
+        return proposal
+    }
+
+    /// A change of the registry proposed: one live proposal per entry or body.
+    private func proposeChange(_ change: LibraryChange, draft: Draft, module: String, reason: String, author: String,
+                               caller: TicketBook.Caller, now: Date) throws -> Proposal {
+        let touched = Set([change.id, change.body].compactMap { $0 })
+        if let other = proposals.values.first(where: { proposal in
+            guard proposal.state.isLive, let held = proposal.change else { return false }
+            return !touched.isDisjoint(with: [held.id, held.body].compactMap { $0 })
+        }) {
+            throw refused("proposal \(other.id) already proposes a change of \(touched.sorted().joined(separator: ", ")): "
+                + "vote on it, or wait until it is decided", status: 409)
+        }
+        let proposal = Proposal(
+            id: String(UUID().uuidString.prefix(8)).lowercased(), at: Self.second(now), module: module,
+            name: draft.name, bits: draft.bits, names: [], moduleC: [:], sharedC: [:], origins: [:],
+            entries: nil, change: change, author: author, holder: caller.holder,
+            reason: Self.cut(reason) ?? reason, votes: [], state: .open, decided: nil, applied: nil)
+        proposals[proposal.id] = proposal
+        try save()
+        return proposal
+    }
+
+    /// An agreed change the registry could not take: closed, saying why.
+    public func notApplied(_ id: String, note: String, now: Date = Date()) throws -> Proposal? {
+        guard var proposal = proposals[id.lowercased()], proposal.state == .agreed else { return nil }
+        proposal.state = .rejected
+        proposal.decided = Decision(by: "byteripper-server", at: Self.second(now),
+                                    note: Self.cut("not applied: " + note), forced: nil)
         proposals[proposal.id] = proposal
         try save()
         return proposal

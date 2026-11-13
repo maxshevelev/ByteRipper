@@ -1479,6 +1479,11 @@
 
   const proposalNames = (p) => p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
   const proposalTitle = (p) => `Proposal of ${p.name || "a module"}`;
+  // A change of the registry itself, in words: what it does to which entry or body.
+  const CHANGE_WORDS = { take_out: "Take out", restore: "Restore", split: "Split off" };
+  const changeText = (c) => [CHANGE_WORDS[c.action] || c.action,
+    c.body ? `body ${c.body}` : null, c.id ? `${c.body ? "of" : "entry"} ${c.id}` : null,
+    c.name ? `as ${c.name}` : null].filter(Boolean).join(" ");
   const ticketTitle = (ticket) => `Ticket of ${ticket.name || "a module"}`;
 
   function proposalPill(stateName) {
@@ -1497,7 +1502,8 @@
         return detailRow(`proposal:${p.id}`, proposalTitle(p), () => proposalDetail(p, names),
           { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
           whoCell("proposals", p.name || "module", p.module),
-          h("td", { class: "mono", text: names.concat(Object.values(p.entries || {}).map((e) => e.name)).join(", ") }),
+          h("td", { class: "mono", text: p.change ? changeText(p.change)
+            : names.concat(Object.values(p.entries || {}).map((e) => e.name)).join(", ") }),
           h("td", {}, proposalPill(p.state)),
           h("td", {}, h("span", { class: "ok-text", text: `${p.agrees.length}/${p.agrees_needed} agree` }),
             p.objections.length ? h("span", { class: "danger-text", text: ` · ${p.objections.length} object` }) : null),
@@ -1598,6 +1604,9 @@
       p.decided.note ? ` — ${p.decided.note}` : "") : null;
     const applied = p.applied ? h("div", { class: "muted",
       text: `Applied ${when(p.applied.at)}${p.applied.revision ? ` by revision ${p.applied.revision}` : ""}${p.applied.version ? `, shared types version ${p.applied.version}` : ""}` }) : null;
+    const change = p.change ? h("div", { class: "type-conflict" },
+      h("div", { class: "doc-title mono", text: changeText(p.change) }),
+      h("div", { class: "muted", text: "A change of the registry itself: the server applies it the moment it is agreed." })) : null;
     // The decision taken reads on its own button, which no longer acts: an
     // agreed proposal can still be rejected until its publish applies it.
     const agreed = p.state === "agreed" || p.state === "applied";
@@ -1619,6 +1628,7 @@
       decided, applied,
       h("div", { class: "remark" }, h("div", { class: "row" }, h("b", { text: p.author }), h("span", { class: "muted", text: "why" })),
         h("div", { class: "remark-text", text: p.reason })),
+      change,
       names.map((name) => h("div", { class: "type-conflict" },
         h("div", { class: "doc-title mono", text: name }),
         h("div", { class: "muted", text: `Shared copy written by ${(p.origins || {})[name] ? String(p.origins[name]).slice(0, 12) : "a module not known here"}` }),
@@ -1641,7 +1651,9 @@
     const done = await dialog({
       icon: agree ? "check" : "ban", tone: agree ? "ok" : "danger",
       title: agree ? `Agree the proposal of ${p.name || "this module"}?` : `Reject the proposal of ${p.name || "this module"}?`,
-      text: agree ? "The module's next publish replaces the shared types with its definitions, as their next version, provided it still defines them as proposed."
+      text: p.change
+        ? (agree ? `The server applies it now: ${changeText(p.change)}.` : "The proposal is closed; the registry stays as it is.")
+        : agree ? "The module's next publish replaces the shared types with its definitions, as their next version, provided it still defines them as proposed."
         : "The proposal is closed; the module's publish stays refused until its types match the shared ones.",
       body: note,
       actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: agree ? "Agree" : "Reject", kind: agree ? "primary" : "danger", value: true, focus: true }],

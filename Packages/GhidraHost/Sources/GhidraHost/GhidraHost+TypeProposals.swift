@@ -51,16 +51,60 @@ extension GhidraHost {
             guard let text = request.module, let module = SHA256Digest(hex: text.trimmingCharacters(in: .whitespaces).lowercased()) else {
                 throw GhidraHostError(.refused, "name the `module`, by the SHA-256 of its bytes", status: 400)
             }
-            let draft = try await proposalDraft(module, holder: holder)
+            let draft: TypeProposalBook.Draft
+            if let change = request.change {
+                draft = try await changeDraft(change, module: module)
+            } else {
+                draft = try await proposalDraft(module, holder: holder)
+            }
             return try encoded(try await book.propose(draft, reason: request.reason ?? "", by: caller))
         case .vote:
             guard let choice = request.choice else {
                 throw GhidraHostError(.refused, "give `choice`: agree or object", status: 400)
             }
-            return try encoded(try await book.vote(try id(), choice: choice, text: request.text, by: caller))
+            let voted = try await book.vote(try id(), choice: choice, text: request.text, by: caller)
+            return try encoded(await applyIfAgreedChange(voted))
         case .withdraw:
             return try encoded(try await book.withdraw(try id(), note: request.text, by: caller))
         }
+    }
+
+    /// An administrator's decision from the console: agreed or rejected,
+    /// whatever the votes; an agreed change of the registry is applied now.
+    public func decideProposal(_ id: String, agree: Bool, note: String?, by: String) async throws -> TypeProposalBook.Proposal {
+        guard let book = typeProposals else {
+            throw GhidraHostError(.install, "this host keeps no type proposals: there is no analysis server to keep them")
+        }
+        return await applyIfAgreedChange(try await book.force(id, agree: agree, note: note, by: by))
+    }
+
+    /// A change of the registry, as a proposal carries it: what the registry
+    /// would do is asked first, and a change it would refuse is not proposed.
+    func changeDraft(_ change: LibraryChange, module: SHA256Digest) async throws -> TypeProposalBook.Draft {
+        guard change.action != .cite else {
+            throw GhidraHostError(.refused, "a citation only adds: give it with `ghidra_library_cite`", status: 400)
+        }
+        var asked = change
+        asked.reason = asked.reason ?? "proposed"
+        _ = try await writer.changeLibrary(asked, by: "agent", module: module, dryRun: true)
+        return TypeProposalBook.Draft(module: module.hex, name: try? project(module).state().module.name, bits: "",
+                                      names: [], moduleC: [:], sharedC: [:], origins: [:], change: change)
+    }
+
+    /// An agreed change of the registry applied: its history keeps the
+    /// proposal's reason and who agreed. One the registry no longer takes is
+    /// closed, saying why.
+    func applyIfAgreedChange(_ proposal: TypeProposalBook.Proposal) async -> TypeProposalBook.Proposal {
+        guard proposal.state == .agreed, var change = proposal.change, let book = typeProposals,
+              let module = SHA256Digest(hex: proposal.module) else { return proposal }
+        change.reason = Self.takenReason(proposal)
+        do {
+            _ = try await writer.changeLibrary(change, by: "agent", module: module, dryRun: false)
+            try await book.markApplied([proposal.id], revision: nil, version: nil)
+        } catch {
+            _ = try? await book.notApplied(proposal.id, note: "\(error)")
+        }
+        return await book.proposal(proposal.id) ?? proposal
     }
 
     /// What the module's publish would replace, read from the module in work:

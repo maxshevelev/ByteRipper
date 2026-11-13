@@ -55,8 +55,8 @@ to the Reviewer.
 - Decisions that belong to the person: which module comes next, and what to
   do about a refused publish. A registry entry or a shared type another review
   published is replaced by proposal and vote under the rule in the ghidra-uefi
-  skill ("Changing a shared definition"), or by the person; renaming, splitting
-  or taking out an entry stays an administrator's.
+  skill ("Changing a shared definition"), or by the person; renaming, splitting,
+  taking out or restoring an entry is a proposal too.
 - Deploys and restarts of the analysis server are not this Mac's: they are
   decided where the server runs. If the server is unreachable or changed under
   a review, tell the person.

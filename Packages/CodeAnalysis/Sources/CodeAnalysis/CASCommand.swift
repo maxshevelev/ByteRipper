@@ -42,9 +42,6 @@ public enum CASCommand {
           recount-stats [--apply]
           drop-earlier-projects [--apply]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
-          library-take-out <id> [--body <key>] --reason <text> [--apply]
-          library-restore <body> --reason <text> [--apply]
-          library-split <id> <body> <name> --reason <text> [--apply]
           put-object <file>
           has-object <sha256>
           get-object <sha256> [--out <file>]
@@ -294,53 +291,6 @@ public enum CASCommand {
             }
             output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
                 .recountStats(dryRun: !apply))
-        case "library-take-out", "library-restore", "library-split":
-            // Changing what the registry says is an administrator's: whoever holds
-            // the store's directory, or a token with the `admin` right.
-            let apply = parser.flag("--apply")
-            guard let reason = parser.option("--reason") else {
-                throw CodeAnalysisError.analysisMismatch("\(command) needs --reason")
-            }
-            let bodyOption = command == "library-take-out" ? parser.option("--body") : nil
-            guard let local = store as? LocalOperations else {
-                throw CodeAnalysisError.analysisMismatch("\(command) runs on a store directory, not on a server")
-            }
-            let held = try ContentStore(root: local.root, create: local.create)
-            switch command {
-            case "library-take-out":
-                let id = try parser.required("an entry id")
-                try parser.end()
-                output.stdout = try encode(try held.changeLibrary(
-                    LibraryChange(action: .takeOut, id: id, body: bodyOption, reason: reason),
-                    by: "administrator", changedFrom: nil, dryRun: !apply))
-            case "library-restore":
-                let body = try parser.required("the body's key")
-                try parser.end()
-                output.stdout = try encode(try held.changeLibrary(
-                    LibraryChange(action: .restore, body: body, reason: reason),
-                    by: "administrator", changedFrom: nil, dryRun: !apply))
-            default:
-                let id = try parser.required("an entry id")
-                let body = try parser.required("the body to split off")
-                let name = try parser.required("its name")
-                try parser.end()
-                output.stdout = try encode(try held.changeLibrary(
-                    LibraryChange(action: .split, id: id, body: body, name: name, reason: reason),
-                    by: "administrator", changedFrom: nil, dryRun: !apply))
-            }
-        case "library-rebody":
-            let apply = parser.flag("--apply")
-            guard let reason = parser.option("--reason") else {
-                throw CodeAnalysisError.analysisMismatch("library-rebody needs --reason")
-            }
-            let id = try parser.required("an entry id")
-            let body = try parser.required("the body to keep")
-            try parser.end()
-            guard let local = store as? LocalOperations else {
-                throw CodeAnalysisError.analysisMismatch("library-rebody runs on a store directory, not on a server")
-            }
-            output.stdout = try encode(try ContentStore(root: local.root, create: local.create).rebodyLibraryEntry(id: id, bodyKey: body, reason: reason,
-                                                                    dryRun: !apply))
         case "verify":
             try parser.end()
             output.stdout = try json(["problems": try store.verify()])

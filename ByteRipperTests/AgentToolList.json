@@ -2933,7 +2933,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "When this module's publish is refused because it would replace shared types or library registry entries (`library.conflicts`, or a link to an entry whose review differs), and the shared definitions are the wrong ones: proposes this module's as the shared ones — every type and every entry the publish would replace, in one proposal. Only the module's holder proposes, with the module in work. The proposal keeps each type as the module defines it now and as the shared types hold it, each entry's changed fields as the entry holds them and as this module offers them, and `reason` — the evidence: the instructions, offsets and callers that prove the module's layout and disprove the shared one. Other agents vote with `ghidra_type_vote`. Once 2 agents other than you agree and none objects, this module's next publish (`ghidra_publish`, `ghidra_done`) replaces them — the types as the shared types' next version, each entry as its next version with the reason and the voters in its history — provided the module still defines them as proposed and nobody changed the shared ones meanwhile; otherwise it is refused as before, and you propose again. The modules that wrote the replaced definitions, and every other module whose review uses them, then get a remark on their tickets. One live proposal per module, and per type: a refusal names the one in the way. The person can agree or reject any proposal in the server's console. Answers with the proposal's `id` and `state`, its types by name and its entries by id, as `ghidra_type_proposals` lists it. The whole rule is the review skill's \"Changing a shared type\".",
+    "description" : "When this module's publish is refused because it would replace shared types or library registry entries (`library.conflicts`, or a link to an entry whose review differs), and the shared definitions are the wrong ones: proposes this module's as the shared ones — every type and every entry the publish would replace, in one proposal. Only the module's holder proposes, with the module in work. The proposal keeps each type as the module defines it now and as the shared types hold it, each entry's changed fields as the entry holds them and as this module offers them, and `reason` — the evidence: the instructions, offsets and callers that prove the module's layout and disprove the shared one. Other agents vote with `ghidra_type_vote`. Once 2 agents other than you agree and none objects, this module's next publish (`ghidra_publish`, `ghidra_done`) replaces them — the types as the shared types' next version, each entry as its next version with the reason and the voters in its history — provided the module still defines them as proposed and nobody changed the shared ones meanwhile; otherwise it is refused as before, and you propose again. The modules that wrote the replaced definitions, and every other module whose review uses them, then get a remark on their tickets. One live proposal per module, and per type: a refusal names the one in the way. The person can agree or reject any proposal in the server's console. With `change`, the proposal is a change of the registry itself instead, the only way one is made: `take_out` takes the entry `id` out of the registry (or only its `body`) — its functions are each module's own again; `restore` puts a taken-out `body` back; `split` makes the `body` an entry of its own under `name`. `module` is where the review found it; no lease is needed. What the registry would refuse is refused before it is proposed. It is voted the same way, and the server applies it the moment it is agreed — no publish waits for it; one the registry no longer takes by then is closed as rejected, saying why. Answers with the proposal's `id` and `state`, its types by name, its entries by id and its `change`, as `ghidra_type_proposals` lists it. The whole rule is the review skill's \"Changing a shared type\".",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2941,8 +2941,29 @@
           "description" : "Your own name as an agent, e.g. \"Review Manager\" or \"Verifier · devex-macbook\": several agents share one token, and the board tells them apart by it. Use the same name every time.",
           "type" : "string"
         },
+        "body" : {
+          "description" : "With `change`: one body key — the one taken out, restored or split off.",
+          "type" : "string"
+        },
+        "change" : {
+          "description" : "A change of the registry itself, instead of this module's definitions.",
+          "enum" : [
+            "take_out",
+            "restore",
+            "split"
+          ],
+          "type" : "string"
+        },
+        "id" : {
+          "description" : "With `change`: the entry, for `take_out` and `split`.",
+          "type" : "string"
+        },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "With `split`: the new entry's name.",
           "type" : "string"
         },
         "reason" : {

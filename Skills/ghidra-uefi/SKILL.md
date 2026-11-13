@@ -482,9 +482,8 @@ the entry says must still be there, word for word.
 propose the replacement: two other agents agreeing apply it at the module's next publish
 (see "Changing a shared definition" below). Renaming an entry is such a replacement:
 name the function in a module that links to it, and propose that module's review.
-Splitting or taking out an entry stays an administrator's (`byteripper-cas
-library-split` and its neighbours below). Write down what was found in the report to the
-person.
+Taking out, restoring and splitting an entry are proposals too (`ghidra_type_propose` with
+`change`, below). Write down what was found in the report to the person.
 
 A replacement refused: take the entry's text with `ghidra_library_apply`, `address`
 and `take_text: true`, make the addition over it, name with `ghidra_label` any label
@@ -611,25 +610,26 @@ A pair enters only whole, in one publish of one module: propose both. With its o
 half in another module, or with one half short of the bar, the publish is refused
 under `callee` or the bar, until the review resolves it or takes them off the list.
 
-**Putting the registry in order is an administrator's.** No tool of a review does this.
-Each needs a `--reason`, answers what it would do until `--apply` is given, and the
-history keeps it. They run on the store's directory.
-- `byteripper-cas library-take-out <id> [--body <key>]` gives an entry, or one body of it,
-  back to its modules. A publish does not offer it again. A function that held it is the
-  module's again, with the text its project holds; one with none takes the entry's at its
-  module's next open. Open and publish every module that holds it.
-  `byteripper-cas library-restore <body>` takes a wrong decision back.
-- `byteripper-cas library-split <id> <body> <name>` makes one body its own entry under a
+**Putting the registry in order is a proposal.** `ghidra_type_propose` with `change`,
+`reason` and the `module` the review found it in; agents vote, or the person decides on
+the server's console, and the server applies it the moment it is agreed. The history keeps
+the reason and who agreed. What the registry would refuse is refused before it is proposed.
+- `change: take_out` with `id` (and `body` for one body of it) gives an entry back to its
+  modules. A publish does not offer it again. A function that held it is the module's
+  again, with the text its project holds; one with none takes the entry's at its module's
+  next open. Open and publish every module that holds it. `change: restore` with `body`
+  takes a wrong decision back.
+- `change: split` with `id`, `body` and `name` makes one body its own entry under a
   narrower name.
 - A text is replaced only by a proposal (below): agents vote, or the person agrees it on
   the server's console, and the module's next publish applies it. There is no other way
-  to replace a shared type or a registry entry, the administrator's included.
+  to replace a shared type or change a registry entry, the administrator's included; a
+  citation (`ghidra_library_cite`) only adds and is made directly.
 
 **A refusal for a replacement.** `library.conflicts` means this module's review would
 replace what the registry says. Read the entry's review (`library_registry` with its
 `id`) beside the module's. What the entry lacks goes in as an addition over its text.
-What the entry has wrong goes to the person, with the evidence, for an administrator's
-decision. Never replace an entry because it is another module's or older.
+What the entry has wrong is proposed, with the evidence (`ghidra_type_propose`). Never replace an entry because it is another module's or older.
 
 `library_registry` reads the registry: its entries by name and kind, the
 taken-out bodies and the citations (`show`), and one entry's review and history,

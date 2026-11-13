@@ -93,13 +93,14 @@ public enum ServedStoreProtocol {
         public var entryReasons: [String: String]?
         /// Answer what the offer would do and write nothing.
         public var dryRun: Bool?
-        /// A write on the registry itself, instead of taking any proposals.
-        public var change: LibraryChange?
+        /// A citation of a body's constant, instead of taking any proposals:
+        /// read as a citation whatever its action says.
+        public var citation: LibraryChange?
 
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                    dryRun: Bool? = nil, change: LibraryChange? = nil, entryReasons: [String: String]? = nil) {
+                    dryRun: Bool? = nil, citation: LibraryChange? = nil, entryReasons: [String: String]? = nil) {
             self.entryReasons = entryReasons
-            self.change = change
+            self.citation = citation
             self.module = module
             self.rev = rev
             self.by = by
@@ -108,7 +109,8 @@ public enum ServedStoreProtocol {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case module, rev, by, proposals, change
+            case module, rev, by, proposals
+            case citation = "cite"
             case entryReasons = "entry_reasons"
             case dryRun = "dry_run"
         }

@@ -398,6 +398,17 @@ extension RemoteStore: AnalysisWriter {
     public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try await libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try await object(digest) }
+
+    /// Only a citation crosses the wire: a change of the registry itself is
+    /// applied by the server that keeps the proposals, once agreed.
+    public func changeLibrary(_ change: LibraryChange, by: String?, module: SHA256Digest,
+                              dryRun: Bool) async throws -> LibraryWriteResult {
+        guard change.action == .cite else {
+            throw GhidraHostError(.refused, "a change of the registry is a proposal's: the server that keeps the "
+                + "proposals applies it once agreed", status: 409)
+        }
+        return try await citeLibrary(change, by: by, module: module, dryRun: dryRun)
+    }
     /// A served store renders on the server: this side cannot, and a marked
     /// function then answers without `text`.
     public func functionAsRead(module: SHA256Digest, entry: CodeAddress) async throws -> CodeArtifact.Function? { nil }

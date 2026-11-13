@@ -445,7 +445,7 @@ final class CASServiceTests: XCTestCase {
         try await Task.sleep(nanoseconds: 200_000_000)
         // A citation through the server changes the registry; the feed says so.
         let id = try XCTUnwrap(try served.libraryIndex().entries.keys.first)
-        _ = try await remote.changeLibrary(LibraryChange(action: .cite, id: id, file: "MdePkg/SetMem.c", line: 12),
+        _ = try await remote.citeLibrary(LibraryChange(action: .cite, id: id, file: "MdePkg/SetMem.c", line: 12),
                                            by: "agent", module: module("czn").sha256)
         _ = try await following.value
         XCTAssertEqual(try store.libraryIndex(), try served.libraryIndex())
@@ -561,10 +561,9 @@ final class CASServiceTests: XCTestCase {
         XCTAssertTrue(String(data: missingToken.stderr, encoding: .utf8)!.contains("no such token file"))
     }
 
-    /// An administrator changes what the registry says from the store's directory:
-    /// nothing moves until `--apply`, a reason is required, and over a server the
-    /// command refuses, since a token's right is what speaks there.
-    func testAnAdministratorChangesTheRegistryFromTheStoresDirectory() async throws {
+    /// No command changes the registry: a rename, a take-out, a restore, a
+    /// split or a new body set is a proposal's, applied by the server once agreed.
+    func testNoCommandChangesTheRegistry() async throws {
         let root = directory.appendingPathComponent("admin-store")
         let local = try ContentStore(root: root)
         let body = LibraryBody(size: 0x15, full: "00112233445566aa", specific: "0123456789abcdef")
@@ -574,23 +573,13 @@ final class CASServiceTests: XCTestCase {
             module: module, rev: 1, by: "agent",
             proposals: [LibraryProposal(body: body, name: "SetMem", kind: "edk2", address: "0x1000", entry: entry)])
             .added.first?.id)
-        func run(_ arguments: [String]) -> CASCommand.Output { CASCommand.run(["--store", root.path] + arguments) }
-
-        // A rename is a proposal's: there is no such command.
-        XCTAssertEqual(run(["library-rename", id, "FillMem", "--reason", "narrower", "--apply"]).status, 2, "an unknown command")
-        XCTAssertEqual(try local.libraryIndex().entries[id]?.name, "SetMem")
-
-        XCTAssertEqual(run(["library-take-out", id]).status, 1, "a reason is required")
-        XCTAssertEqual(run(["library-take-out", id, "--reason", "it reads module data"]).status, 0)
-        XCTAssertNotNil(try local.libraryIndex().entries[id], "nothing moves until --apply")
-        XCTAssertEqual(run(["library-take-out", id, "--reason", "it reads module data", "--apply"]).status, 0)
-        XCTAssertNil(try local.libraryIndex().entries[id])
-        XCTAssertEqual(run(["library-restore", body.key, "--reason", "it does not", "--apply"]).status, 0)
-        XCTAssertNotNil(try local.libraryIndex().entries[id])
-
-        let answer = CASCommand.run(["--server", remote.base.absoluteString, "library-take-out", id, "--reason", "x"])
-        XCTAssertEqual(answer.status, 1)
-        XCTAssertTrue(String(data: answer.stderr, encoding: .utf8)!.contains("store directory"))
+        let before = try local.libraryIndex()
+        for arguments in [["library-rename", id, "FillMem"], ["library-take-out", id], ["library-restore", body.key],
+                          ["library-split", id, body.key, "Other"], ["library-rebody", id, body.key]] {
+            let answer = CASCommand.run(["--store", root.path] + arguments + ["--reason", "x", "--apply"])
+            XCTAssertEqual(answer.status, 2, "\(arguments[0]) is no command")
+        }
+        XCTAssertEqual(try local.libraryIndex(), before)
     }
 
     func testTheTokenGuardsTheStore() async throws {

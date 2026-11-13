@@ -67,9 +67,9 @@ enum GhidraRoutes {
             return try TicketBook.encoder.encode(TicketBook.Listed(ticket))
         }, proposals: host.typeProposals.map { proposals in
             { (try? TicketBook.encoder.encode(await proposals.list().map(TypeProposalBook.Listed.init))) ?? Data("[]".utf8) }
-        }, decide: host.typeProposals.map { proposals in
+        }, decide: host.typeProposals.map { _ in
             { id, agree, note, by in
-                let proposal = try await answer { try await proposals.force(id, agree: agree, note: note, by: by) }
+                let proposal = try await answer { try await host.decideProposal(id, agree: agree, note: note, by: by) }
                 return try TicketBook.encoder.encode(TypeProposalBook.Listed(proposal))
             }
         })
@@ -254,11 +254,8 @@ enum GhidraRoutes {
             } catch {
                 throw HTTPError(.badRequest, "the body is {\"action\": \"status\" | \"apply\" | \"decline\" | \"entry\", …}")
             }
-            // A write on the registry itself is an administrator's decision, but
-            // for a citation, which only adds.
-            if asked.action == .change && asked.change?.action != .cite {
-                try request.principal?.require(.admin)
-            }
+            // A citation only adds; a change of the registry itself is a
+            // proposal's, applied once agreed.
             let data = try await answer { try await host.library(module, asked, holder: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }

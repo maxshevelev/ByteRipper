@@ -67,7 +67,7 @@ public enum LibraryRefusal {
                        why: "this review replaces \(what) of entry \(conflict.id), version \(conflict.version), "
                            + "written by module \(conflict.heldBy.module.hex) at \(conflict.heldBy.address)\(printed): only additions pass. "
                            + "Take the entry's text with `ghidra_library_apply` and `take_text`, make the addition over it, "
-                           + "name any label it prints with `ghidra_label`, and publish again. Replacing it is an administrator's decision")
+                           + "name any label it prints with `ghidra_label`, and publish again. If the entry is the wrong one, propose this module's review with `ghidra_type_propose`")
         }
         return rows
     }

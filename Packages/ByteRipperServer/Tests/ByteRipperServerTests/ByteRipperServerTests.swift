@@ -634,34 +634,22 @@ final class ServerTests: XCTestCase {
         // agent on the server uses the socket, not a route.
         let status2 = try await call("POST", "mcp", reader, body: Data("{}".utf8)).0
         XCTAssertEqual(status2, 404)
-        // Taking a body out of the registry is an administrator's: a token that
-        // may use Ghidra and write the store does not reach it, on any route;
-        // the administrator's goes past the right, and hears why there is
-        // nothing to do. A rename is a proposal's, on no route at all.
+        // A change of the registry itself — a rename, a take-out, a split, a
+        // restore — is a proposal's: no route makes one, the administrator's
+        // token included.
         let someModule = SHA256Digest(data: object).hex
-        let replacing: [(String, Data)] = [
-            ("ghidra/v1/modules/\(someModule)/library",
-             Data(#"{"action":"change","change":{"action":"take_out","id":"a","reason":"why"}}"#.utf8)),
-            ("cas/v1/library", try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
-                module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [],
-                change: LibraryChange(action: .takeOut, id: "a", reason: "why"))))
-        ]
-        let (renamed, _) = try await call("POST", "ghidra/v1/modules/\(someModule)/library", admin,
-                                          body: Data(#"{"action":"rename","id":"a","name":"B","reason":"why"}"#.utf8))
-        XCTAssertEqual(renamed, 400, "no rename action is left")
-        for (path, body) in replacing {
-            let (refused, words) = try await call("POST", path, app, body: body)
-            XCTAssertEqual(refused, 403, "\(path): \(words)")
-            XCTAssertTrue(words.contains("admin"), words)
-            let reached = try await call("POST", path, admin, body: body).0
-            XCTAssertNotEqual(reached, 403, path)
+        for body in [#"{"action":"rename","id":"a","name":"B","reason":"why"}"#,
+                     #"{"action":"change","change":{"action":"take_out","id":"a","reason":"why"}}"#] {
+            let (status, words) = try await call("POST", "ghidra/v1/modules/\(someModule)/library", admin,
+                                                 body: Data(body.utf8))
+            XCTAssertEqual(status, 400, words)
         }
         // Every write past a publish is an administrator's, a citation in the
         // registry and a bundle among them: the app's token, which may write,
         // publishes through Ghidra and sets references, and no more.
         let citation = try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
             module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [],
-            change: LibraryChange(action: .cite, id: "a", file: "MdePkg/x.c", line: 1)))
+            citation: LibraryChange(action: .cite, id: "a", file: "MdePkg/x.c", line: 1)))
         let artifact = SHA256Digest(data: object)
         let past: [(String, String, Data)] = [
             ("PUT", objectPath, object),

@@ -71,21 +71,45 @@ extension GhidraTools {
                 proposed and nobody changed the shared ones meanwhile; otherwise it is refused as before, and \
                 you propose again. The modules that wrote the replaced definitions, and every other module \
                 whose review uses them, then get a remark on their tickets. One live proposal per module, and per type: a refusal names the one in the way. \
-                The person can agree or reject any proposal in the server's console. Answers with the \
-                proposal's `id` and `state`, its types by name and its entries by id, as \
+                The person can agree or reject any proposal in the server's console. \
+                With `change`, the proposal is a change of the registry itself instead, the only way one is \
+                made: `take_out` takes the entry `id` out of the registry (or only its `body`) — its functions \
+                are each module's own again; `restore` puts a taken-out `body` back; `split` makes the `body` \
+                an entry of its own under `name`. `module` is where the review found it; no lease is needed. \
+                What the registry would refuse is refused before it is proposed. It is voted the same way, \
+                and the server applies it the moment it is agreed — no publish waits for it; one the \
+                registry no longer takes by then is closed as rejected, saying why. Answers with the \
+                proposal's `id` and `state`, its types by name, its entries by id and its `change`, as \
                 `ghidra_type_proposals` lists it. The whole rule is the review skill's "Changing a shared type".
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
                 "module": moduleProperty,
-                "reason": AgentSchema.string("Why the shared definitions are wrong and this module's right: the evidence, with addresses.")
+                "reason": AgentSchema.string("Why the shared definitions are wrong and this module's right: the evidence, with addresses."),
+                "change": AgentSchema.choice(["take_out", "restore", "split"],
+                                             "A change of the registry itself, instead of this module's definitions."),
+                "id": AgentSchema.string("With `change`: the entry, for `take_out` and `split`."),
+                "body": AgentSchema.string("With `change`: one body key — the one taken out, restored or split off."),
+                "name": AgentSchema.string("With `split`: the new entry's name.")
             ], required: ["agent", "module", "reason"]),
             annotations: .edit
         ) { call in
             let arguments = call.arguments
+            var change: LibraryChange?
+            if let action = try arguments.optionalString("change") {
+                guard let known = LibraryChange.Action(rawValue: action), known != .cite else {
+                    throw AgentToolError("`change` is take_out, restore or split.")
+                }
+                change = LibraryChange(action: known, id: try arguments.optionalString("id"),
+                                       body: try arguments.optionalString("body"),
+                                       name: try arguments.optionalString("name"))
+            } else if arguments.has("id") || arguments.has("body") || arguments.has("name") {
+                throw AgentToolError("`id`, `body` and `name` go with `change`.")
+            }
             let request = TypeProposalBook.Request(action: .propose, agent: try arguments.string("agent"),
                                                    module: try arguments.string("module"),
-                                                   reason: try arguments.string("reason"), view: .summary)
+                                                   reason: try arguments.string("reason"), view: .summary,
+                                                   change: change)
             return try await answer { try await backend.typeProposals(request) }
         }
     }

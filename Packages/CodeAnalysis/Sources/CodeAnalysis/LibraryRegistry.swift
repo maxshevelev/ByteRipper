@@ -1099,57 +1099,6 @@ extension ContentStore {
         }
     }
 
-    /// Make one of an entry's bodies its only one, for an entry that took a
-    /// body it should not have: the entry's id becomes that body's key, the
-    /// review records the body, every other body leaves the index, and the
-    /// history moves to the new id with a version saying why. Nothing else of
-    /// the review changes. `dryRun` answers the same and writes nothing.
-    @discardableResult
-    public func rebodyLibraryEntry(id: String, bodyKey: String, reason: String,
-                                   dryRun: Bool = false) throws -> LibraryWriteResult.Change {
-        let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !why.isEmpty else { throw CodeAnalysisError.analysisMismatch("changing an entry's body needs a reason") }
-        return try withLock {
-            var index = try libraryIndex()
-            guard var entry = index.entries[id] else {
-                throw CodeAnalysisError.analysisMismatch("the registry holds no entry \(id)")
-            }
-            guard let kept = entry.variants.first(where: { $0.body.key == bodyKey }) else {
-                throw CodeAnalysisError.analysisMismatch("the entry \(id) has no body \(bodyKey)")
-            }
-            guard bodyKey != id || entry.variants.count > 1 else {
-                throw CodeAnalysisError.analysisMismatch("\(bodyKey) is already the entry's only body")
-            }
-            if bodyKey != id, index.entries[bodyKey] != nil {
-                throw CodeAnalysisError.analysisMismatch("the registry already holds an entry \(bodyKey)")
-            }
-            guard var review = try JSONSerialization.jsonObject(with: try object(entry.entry)) as? [String: Any] else {
-                throw CodeAnalysisError.analysisMismatch("the entry \(id)'s review is not an object")
-            }
-            review["body"] = ["size": kept.body.size, "full": kept.body.full, "specific": kept.body.specific]
-            review["constants"] = nil
-            let data = try JSONSerialization.data(withJSONObject: review, options: [.sortedKeys, .withoutEscapingSlashes])
-            var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
-            entry.version += 1
-            entry.entry = SHA256Digest(data: data)
-            entry.variants = [LibraryVariant(body: kept.body, module: kept.module, code: kept.code)]
-            history.id = bodyKey
-            history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
-                                                   reason: why, recordedAt: Timestamps.now()))
-            let change = LibraryWriteResult.Change(id: bodyKey, name: entry.name, version: entry.version)
-            if dryRun { return change }
-            _ = try putObject(data)
-            index.entries[id] = nil
-            index.entries[bodyKey] = entry
-            index.bodies = index.bodies.filter { $0.value != id }
-            index.bodies[bodyKey] = bodyKey
-            // The new history first: a stop between the writes leaves a copy, never a loss.
-            try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(bodyKey))
-            try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
-            if bodyKey != id { try FileManager.default.removeItem(at: libraryHistoryURL(id)) }
-            return change
-        }
-    }
 
     /// A review object under another name: its name, and the name in its
     /// signatures — what a split gives the body it makes an entry of.

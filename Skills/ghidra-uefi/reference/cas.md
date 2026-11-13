@@ -24,7 +24,6 @@ byteripper-cas [--store <root>] [--no-create] <command>
   hello | put-object | has-object | get-object | put-analysis | analysis
   recipes | list | conflicts | record-revision | review-history | set-ref
   refs | remove-ref | verify | gc | export | import
-  library-rebody <id> <body> --reason <why> [--apply]
 ```
 
 Every answer is JSON on standard output (an object's bytes are the
@@ -320,12 +319,10 @@ never came on one the module has. `byteripper-server pack-projects [--apply]` ke
 folder whose last publish is the store's last revision in `private/projects/`; the folders are
 read, never changed. Each answers what it would do until `--apply` is given.
 
-An administrator changes what the registry holds with `library-take-out`, `library-restore`
-and `library-split`: each takes `--reason`, answers what it would do until
-`--apply` is given, and runs on a store's directory, not over a server. Over a server, the
-same changes need a token with the `admin` right. A citation only adds, and stays with
-`cas.write`. A replacement of what an entry says, its name included, is no administrator's command:
-it is a proposal, applied by the module's next publish once it is agreed.
+No command changes what the registry holds. A replacement of what an entry says, its name
+included, is a proposal, applied by the module's next publish once it is agreed; taking an
+entry out, restoring a body and splitting one off are proposals too, applied by the server
+the moment they are agreed. A citation only adds, and is made directly.
 
 ## A served store
 
