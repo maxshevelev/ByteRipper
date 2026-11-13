@@ -742,9 +742,17 @@
           ],
           "url": "https://www.intel.com/content/www/us/en/ark/products/series/228622/4th-gen-intel-xeon-scalable-processors.html",
           "quote": "Each model's ARK ordering tab gives its code at E5, S3 (4th Gen Xeon Scalable, Xeon W-2400/2500/3400/3500) or B3 (Xeon CPU Max) — ark-sspec.json"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://edc.intel.com/output/DownloadPdfDocument?id=10629",
+          "quote": "Component Identification via Capability Registers: XCC E-5/E-4 Server, 1S 806F8/806F7; MCC S-3/S-2 Server, 1S 806F8/806F7; HBM B-3 Server, 1S 806F8"
         }
       ],
-      "note": "The models are those whose ARK ordering tab gives an E5, S3 or B3 code. Left out: Xeon Gold 5403N, Xeon Gold 5423N, Xeon Gold 5433N, Xeon Gold 6403N, Xeon Gold 6423N, Xeon Gold 6433N, Xeon Gold 6433NE, Xeon Gold 6443N — ARK gives them L0 or U1, steppings neither Intel's microcode notes nor its list of processors by CPUID tie to a CPUID; their codes are kept in ark-sspec.json."
+      "note": "The models are those whose ARK ordering tab gives an E5, S3 or B3 code. Left out: Xeon Gold 5403N, Xeon Gold 5423N, Xeon Gold 5433N, Xeon Gold 6403N, Xeon Gold 6423N, Xeon Gold 6433N, Xeon Gold 6433NE, Xeon Gold 6443N — ARK gives them L0 or U1 and the code name \"Sapphire Rapids Edge Enhanced\" (read for the 6403N and 5423N); neither Intel's microcode notes, its list of processors by CPUID nor the 4th Gen Xeon Scalable Specification Update (772415-016, which ties XCC E-5/E-4, MCC S-3/S-2 and HBM B-3 to 806F8/806F7) names those steppings. Their codes are kept in ark-sspec.json."
     },
     {
       "cpuids": [
