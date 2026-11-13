@@ -6254,6 +6254,10 @@ public class Owner {
         String asked = match.getName();
         String askedStorage = match.getStorage().toString();
         java.util.Set<String> localsBefore = type != null ? storedLocals(function) : null;
+        // Counted before the write: it gives the symbol its new key in place.
+        Address askedFirstUse = match.getPCAddress();
+        boolean byPlace = askedFirstUse != null && !match.isNameLocked();
+        int unnamedBefore = byPlace ? unnamedAt(high, askedStorage, askedFirstUse, applied) : 0;
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
@@ -6285,13 +6289,25 @@ public class Owner {
             }
             // The name can land on another symbol: a zero hash gives Ghidra
             // nothing of its own to commit against, and the symbol stored at
-            // that first use takes it. The one asked for still shows as it was.
+            // that first use takes it. The one asked for then still shows.
+            // A name of the decompiler's own with a first use is told by its
+            // storage and that first use, never by its name: the decompiler
+            // numbers its temporaries afresh, so naming uVar1 makes uVar2 the
+            // new uVar1, and extraout_ECX_00 the new extraout_ECX (issue
+            // 90a63322). What counts there is whether one fewer unnamed symbol
+            // sits on that storage at that first use. A name a review gave,
+            // and a stack local named by its offset, keep their names, and
+            // are told by them.
             if (!applied.equals(asked)) {
                 String holder = null;
-                boolean still = false;
+                boolean still = byPlace
+                    ? unnamedAt(after, askedStorage, askedFirstUse, applied) >= unnamedBefore
+                    : false;
                 for (Iterator<HighSymbol> scan = after.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
                     HighSymbol symbol = scan.next();
-                    if (symbol.getName().equals(asked) && symbol.getStorage().toString().equals(askedStorage)) still = true;
+                    if (!byPlace && symbol.getName().equals(asked) && symbol.getStorage().toString().equals(askedStorage)) {
+                        still = true;
+                    }
                     if (symbol.getName().equals(applied)) {
                         Address held = symbol.getPCAddress();
                         holder = symbol.getStorage() + (held == null ? "" : " at " + hex(held));
@@ -6363,6 +6379,23 @@ public class Owner {
         var c = results == null ? null : results.getDecompiledFunction();
         return c != null && java.util.regex.Pattern.compile(
             "Unable to use type for symbol " + java.util.regex.Pattern.quote(name) + "(?![A-Za-z0-9_])").matcher(c.getC()).find();
+    }
+
+    /**
+     * How many symbols other than `name` the decompiled function holds on
+     * `storage` with the first use `firstUse` and a name of the decompiler's
+     * own — the temporaries a rename there is meant to take one from.
+     */
+    private static int unnamedAt(HighFunction high, String storage, Address firstUse, String name) {
+        int count = 0;
+        for (Iterator<HighSymbol> scan = high.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
+            HighSymbol symbol = scan.next();
+            if (symbol.isParameter() || symbol.getName().equals(name)) continue;
+            if (!symbol.getStorage().toString().equals(storage)) continue;
+            if (firstUse == null ? symbol.getPCAddress() != null : !firstUse.equals(symbol.getPCAddress())) continue;
+            if (!symbol.isNameLocked()) count++;
+        }
+        return count;
     }
 
     /** The same type by the name the C prints as well as by its layout. */

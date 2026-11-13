@@ -218,4 +218,42 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
         let deleted = try await post("/v1/type", ["delete": true, "name": "SILENT_OUTER"])
         XCTAssertNotNil(deleted, "a type nothing uses goes")
     }
+
+    /// Naming one of several zero-hash temporaries renumbers the rest — the
+    /// next `uVar2` is printed as `uVar1` — and that is no sign the name
+    /// landed elsewhere: the rename applies and one fewer is left unnamed
+    /// (issue 90a63322). PeiVariable has no two of one kind and skips; run it
+    /// with AmdSocFp6CznPei as `GHIDRA_TYPE_MODULE`.
+    func testNamingATemporaryIsNotUndoneByTheRenumberingOfTheRest() async throws {
+        for entry in try await entries() {
+            let locals = try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+            let unhashed = locals.filter {
+                ($0["storage"] as? String ?? "").hasPrefix("HASH:00000000:") && ($0["named"] as? Bool) == false
+            }
+            // Two of one kind on one storage — uVar1 and uVar2 — so that the
+            // second is printed with the first one's name once it is named.
+            let kinds = Dictionary(grouping: unhashed) { local -> String in
+                let name = local["name"] as? String ?? ""
+                return String(name.prefix { !$0.isNumber }) + " " + (local["storage"] as? String ?? "")
+            }
+            func number(_ local: [String: Any]) -> Int { Int((local["name"] as? String ?? "").filter(\.isNumber)) ?? 0 }
+            guard let kind = kinds.values.first(where: {
+                      $0.count >= 2 && Set($0.compactMap { $0["first_use"] as? String }).count == $0.count
+                  }),
+                  let first = kind.min(by: { number($0) < number($1) }),
+                  let storage = first["storage"] as? String, let use = first["first_use"] as? String else { continue }
+            let answer = try await post("/v1/rename/variable",
+                                        ["function": entry, "storage": storage, "first_use": use, "name": "RemarkTemporary"])
+            XCTAssertEqual(answer["name"] as? String, "RemarkTemporary")
+            XCTAssertEqual(answer["first_use"] as? String, use)
+            let after = try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+            let left = after.filter {
+                ($0["storage"] as? String ?? "").hasPrefix("HASH:00000000:") && ($0["named"] as? Bool) == false
+            }
+            XCTAssertEqual(left.count, unhashed.count - 1)
+            XCTAssertFalse(left.contains { ($0["first_use"] as? String) == use })
+            return
+        }
+        throw XCTSkip("no function with two unnamed zero-hash temporaries of one kind")
+    }
 }
