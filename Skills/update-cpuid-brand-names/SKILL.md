@@ -113,6 +113,13 @@ The processors popover says "Same microcode as …" from it, and the Add
 Microcode form shows and searches its Extended CPUIDs. Run it with the table,
 or whenever the collection has moved on.
 
+An entry's steppings follow Intel's microcode notes where the notes name one
+for each of its CPUIDs (`intel_steppings_over_the_article`): a stepping the
+notes give is added, and an article whose steppings are none of the notes'
+has them replaced (506CA: E0, not F1). A stepping the notes give another group
+on the same CPUID (an extra entry `beside` the article's) stays that group's.
+The log names each change (`steppings:`).
+
 Every added code is listed in `sSpecSource` with where it came from (`ark`,
 `wikipedia`, and from `found-sspec.json`: `intel`, `database`, `marking`); `sSpecSources` at the top says which revisions and pages.
 

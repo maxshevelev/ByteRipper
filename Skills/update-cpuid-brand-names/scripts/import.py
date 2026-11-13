@@ -93,12 +93,11 @@ RENAME = {
     "Intel Core i7-7640X": "Intel Core i5-7640X",
     # ARK SKU 201908: "Xeon W-10855M", SRH8M, R1. No W-10855 exists.
     "Intel Xeon W-10855": "Intel Xeon W-10855M",
-    # ARK SKU 122998: "Xeon D-1533N", SR3KS, A1. No plain D-1533 exists.
-    "Intel Xeon D-1533": "Intel Xeon D-1533N",
-    # ARK SKU 91559: "Pentium Processor D1519", SR2DM, V2, in the D-1500
-    # family. No Xeon D-1519 exists.
-    "Intel Xeon D-1519": "Intel Pentium D1519",
 }
+# Not renamed, though ARK has no page for either: the Xeon D-1519 and D-1533.
+# Intel's microcode notes name both — "06-56-03 | Xeon D-1518/19/21/27/28/
+# 31/33/37/41/48, Pentium D1507/08/09/17/19" — beside the Pentium D1519, so
+# they are Intel's models, under 50663, with no code known.
 
 # Lines the page writes where only a series is named, not its models.
 SERIES = {"Intel Xeon Platinum", "Intel Xeon Platinum 8300", "Intel Xeon Gold 6300",
@@ -269,6 +268,35 @@ def unique(items):
     return out
 
 
+def intel_steppings_over_the_article(entries, cache):
+    """An entry's steppings agree with Intel's microcode notes, where the notes
+    name a stepping for each of its CPUIDs: a stepping the notes give and the
+    article does not is added (A0661's K1), and an article whose steppings
+    are none of the notes' has them replaced (506CA: the notes' E0, not F1).
+    Each change is logged."""
+    notes = enrichment.intel_steppings(cache, current=True)
+    # A stepping the notes give another group on the same CPUID (an extra
+    # entry beside the article's: Arizona Beach's A0 on 906A4) is that
+    # group's, not the article's.
+    beside = {}
+    for e in entries:
+        if e.get("source") == "extra":
+            for c in e["cpuids"]:
+                beside.setdefault(c, set()).update(e["steppings"])
+    for e in entries:
+        if e.get("source") == "extra" or any("X" in c or c not in notes for c in e["cpuids"]):
+            continue
+        intel = sorted(set().union(*(notes[c] - (beside.get(c, set()) - set(e["steppings"]))
+                                     for c in e["cpuids"])))
+        have = e["steppings"]
+        if have and not set(have) & set(intel):
+            print(f"  steppings: {'/'.join(e['cpuids'])} {have} → Intel's {intel}")
+            e["steppings"] = intel
+        elif set(intel) - set(have):
+            print(f"  steppings: {'/'.join(e['cpuids'])} + Intel's {sorted(set(intel) - set(have))}")
+            e["steppings"] = have + [s for s in intel if s not in have]
+
+
 def extra_entries(entries):
     """The entries of `extra-entries.json`: CPUIDs the article has no row for,
     or another group on a CPUID it has (Arizona Beach beside Alder Lake U on
@@ -355,6 +383,7 @@ def main(argv):
                  + "\n  ".join(CORRECTIONS))
 
     entries += extra_entries(entries)
+    intel_steppings_over_the_article(entries, cache)
 
     added = enrichment.enrich(entries, cache=cache)
 

@@ -102,7 +102,9 @@
       "productFamilies": [
         "Intel Xeon E processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "M1"
+      ],
       "segments": [
         "Server"
       ],
@@ -428,7 +430,9 @@
       "productFamilies": [
         "Intel Xeon E processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "E0"
+      ],
       "segments": [
         "Server"
       ],
@@ -558,7 +562,8 @@
       ],
       "steppings": [
         "D1",
-        "K1"
+        "K1",
+        "D0"
       ],
       "segments": [
         "Mobile"
@@ -749,7 +754,11 @@
       "productFamilies": [
         "Intel Xeon E processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0",
+        "M0",
+        "R0"
+      ],
       "segments": [
         "Server",
         "Embedded"
@@ -1155,7 +1164,9 @@
       "productFamilies": [
         "Intel Xeon Scalable processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "B1"
+      ],
       "segments": [
         "Server"
       ],
@@ -1197,7 +1208,11 @@
         "Intel Xeon W processor family",
         "Intel Core X-series Processors"
       ],
-      "steppings": [],
+      "steppings": [
+        "H0",
+        "M0",
+        "U0"
+      ],
       "segments": [
         "Server",
         "Desktop"
@@ -2003,7 +2018,9 @@
       "productFamilies": [
         "2nd Generation Intel Xeon Scalable processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Server"
       ],
@@ -2030,7 +2047,9 @@
         "Intel Xeon W processor family",
         "Intel Core X-series Processor"
       ],
-      "steppings": [],
+      "steppings": [
+        "B1"
+      ],
       "segments": [
         "Server",
         "Workstation",
@@ -3140,7 +3159,10 @@
       "productFamilies": [
         "Intel Xeon D processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "V2",
+        "V3"
+      ],
       "segments": [
         "Server"
       ],
@@ -3155,13 +3177,8 @@
           }
         },
         {
-          "name": "Intel Pentium D1519",
-          "sSpec": [
-            "SR2DM"
-          ],
-          "sSpecSource": {
-            "SR2DM": "wikipedia"
-          }
+          "name": "Intel Xeon D-1519",
+          "sSpec": []
         },
         {
           "name": "Intel Xeon D-1521",
@@ -3207,6 +3224,10 @@
           "sSpecSource": {
             "SR2DG": "ark"
           }
+        },
+        {
+          "name": "Intel Xeon D-1533",
+          "sSpec": []
         },
         {
           "name": "Intel Xeon D-1537",
@@ -3279,6 +3300,15 @@
           "sSpecSource": {
             "SR2GG": "wikipedia"
           }
+        },
+        {
+          "name": "Intel Pentium D1519",
+          "sSpec": [
+            "SR2DM"
+          ],
+          "sSpecSource": {
+            "SR2DM": "wikipedia"
+          }
         }
       ]
     },
@@ -3293,7 +3323,9 @@
       "productFamilies": [
         "Intel Xeon D processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "Y0"
+      ],
       "segments": [
         "Server"
       ],
@@ -3375,7 +3407,9 @@
       "productFamilies": [
         "Intel Xeon D processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "A1"
+      ],
       "segments": [
         "Server"
       ],
@@ -3688,7 +3722,7 @@
         "Intel Atom Processor E3900 Series"
       ],
       "steppings": [
-        "F1"
+        "E0"
       ],
       "segments": [
         "Desktop",
@@ -3778,7 +3812,11 @@
         "Intel Xeon E processor family",
         "6th Generation Intel Core Processor Family"
       ],
-      "steppings": [],
+      "steppings": [
+        "N0",
+        "R0",
+        "S0"
+      ],
       "segments": [
         "Server",
         "Workstation",
@@ -4495,7 +4533,9 @@
       "productFamilies": [
         "Intel Atom C processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Server"
       ],
@@ -4737,7 +4777,9 @@
       "productFamilies": [
         "Intel Xeon D Processor"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Embedded"
       ],
@@ -5197,7 +5239,9 @@
         "Intel Celeron Processor J Series",
         "Intel Celeron Processor N Series"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Mobile",
         "Embedded"
@@ -5386,7 +5430,9 @@
       "productFamilies": [
         "Intel Atom Processors"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Server"
       ],
@@ -5422,7 +5468,9 @@
       "productFamilies": [
         "Intel Atom Processor P5900"
       ],
-      "steppings": [],
+      "steppings": [
+        "B1"
+      ],
       "segments": [
         "Server"
       ],
@@ -5657,7 +5705,8 @@
         "11th Generation Intel Core Processor Family"
       ],
       "steppings": [
-        "B1"
+        "B1",
+        "B0"
       ],
       "segments": [
         "Mobile",
@@ -5886,7 +5935,9 @@
         "11th Generation Intel Core Processor Family",
         "Intel Xeon Processor Family"
       ],
-      "steppings": [],
+      "steppings": [
+        "R0"
+      ],
       "segments": [
         "Mobile",
         "Workstation"
@@ -5972,7 +6023,9 @@
         "11th Generation Intel Core Processor Family",
         "Intel Xeon Processor Family"
       ],
-      "steppings": [],
+      "steppings": [
+        "R0"
+      ],
       "segments": [
         "Embedded"
       ],
@@ -6669,7 +6722,9 @@
       "productFamilies": [
         "Intel Atom Processors"
       ],
-      "steppings": [],
+      "steppings": [
+        "B1"
+      ],
       "segments": [
         "Embedded"
       ],
@@ -7011,7 +7066,9 @@
         "Intel Pentium Gold Processor Family",
         "Intel Celeron Processor Family"
       ],
-      "steppings": [],
+      "steppings": [
+        "H0"
+      ],
       "segments": [
         "Desktop"
       ],
@@ -7399,7 +7456,8 @@
         "Intel Atom Processors"
       ],
       "steppings": [
-        "A1"
+        "A1",
+        "A0"
       ],
       "segments": [
         "Desktop",
@@ -7465,7 +7523,8 @@
         "Intel Xeon E processor family"
       ],
       "steppings": [
-        "B0"
+        "B0",
+        "H0"
       ],
       "segments": [
         "Desktop",
@@ -8373,7 +8432,9 @@
         "Intel Pentium Gold Processor Series",
         "Intel Celeron Processor G Series"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Desktop"
       ],
@@ -8553,7 +8614,9 @@
       "productFamilies": [
         "9th Generation Intel Core Processor Family"
       ],
-      "steppings": [],
+      "steppings": [
+        "P0"
+      ],
       "segments": [
         "Desktop"
       ],
@@ -8829,7 +8892,9 @@
         "10th Generation Intel Core Processor Family",
         "Intel Xeon W processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "R1"
+      ],
       "segments": [
         "Mobile",
         "Workstation"
@@ -8926,7 +8991,9 @@
         "Intel Celeron Processor Family",
         "Intel Xeon W processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "G1"
+      ],
       "segments": [
         "Desktop",
         "Workstation"
@@ -9288,7 +9355,9 @@
         "10th Generation Intel Core Processor Family",
         "Intel Xeon W processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "Q0"
+      ],
       "segments": [
         "Desktop",
         "Workstation"
@@ -9499,7 +9568,8 @@
         "Intel Xeon W processor family"
       ],
       "steppings": [
-        "A0"
+        "A0",
+        "K1"
       ],
       "segments": [
         "Mobile",
@@ -10256,7 +10326,8 @@
         "13th Generation Intel Core Processor Family"
       ],
       "steppings": [
-        "J0"
+        "J0",
+        "Q0"
       ],
       "segments": [
         "Mobile"
