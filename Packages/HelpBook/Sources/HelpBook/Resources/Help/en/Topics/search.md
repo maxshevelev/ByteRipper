@@ -14,7 +14,7 @@ The find bar searches the **active pane**, over its current contents, unsaved ed
 
 ## Which find bar searches what
 
-A find bar belongs to the dump it searches. The tab's bar stands over the comparison panes and the minimap, and searches the active pane of the two. A [[topic:fragments|fragment panel]] has a find bar of its own, over the fragment's dump, which searches the fragment only. ⌘F, ⌘G, Esc and the toolbar's **Find** act on the bar of the panel in front.
+A find bar belongs to the dump it searches. The tab's bar stands over the comparison panes and the minimap, and searches the active pane of the two. A [[topic:fragments|fragment panel]] has a find bar of its own, over the fragment's dump, which searches the fragment only. Over the code of a [[topic:code-panel|code panel]] the bar searches the C or the module description instead of the bytes. ⌘F, ⌘G, Esc and the toolbar's **Find** act on the bar of the panel in front.
 
 Each bar keeps its own pattern, its own matches and its own case rule: a search in a fragment does not disturb the search in the tab, and the other way round. A fragment panel's bar starts with the case rule of the bar the fragment was taken out under. When the panel is folded into the dock, its bar goes with it, and it is there again, as it was, when the panel is raised.
 

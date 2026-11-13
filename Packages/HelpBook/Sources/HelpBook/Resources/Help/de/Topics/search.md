@@ -1,4 +1,4 @@
-@source-sha 2142edf3386d611920f54156b47799542ed823f1e068eeb0056df5f2334c0309
+@source-sha 4f70bbc5b217c3285bda33e7e20d4a3cc0536a96b6cd9b8d176a4125668a1707
 # Bytes und Text finden
 
 > ⌘F. Suche nach einer Byte-Folge oder einer Zeichenfolge über den ganzen Dump, im Hintergrund.
@@ -7,7 +7,7 @@ Die Suchleiste durchsucht den **aktiven Bereich** über seinen aktuellen Inhalt,
 
 ## Suchleiste des Tabs und der Fragment-Bereiche
 
-Jede Suchleiste ist dem Dump zugeordnet, in dem sie sucht. Im Tab befindet sie sich oberhalb der Vergleichsbereiche und der Minimap; durchsucht wird der jeweils aktive Bereich. Jeder [[topic:fragments|Fragment-Bereich]] verfügt über eine eigene Suchleiste oberhalb seines Dumps, deren Suche sich auf die Bytes des Fragments beschränkt. ⌘F, ⌘G, Esc sowie die Taste **Suchen** in der Symbolleiste beziehen sich stets auf die Suchleiste des vordersten Bereichs.
+Jede Suchleiste ist dem Dump zugeordnet, in dem sie sucht. Im Tab befindet sie sich oberhalb der Vergleichsbereiche und der Minimap; durchsucht wird der jeweils aktive Bereich. Jeder [[topic:fragments|Fragment-Bereich]] verfügt über eine eigene Suchleiste oberhalb seines Dumps, deren Suche sich auf die Bytes des Fragments beschränkt. Über dem Code eines [[topic:code-panel|Code-Bereichs]] durchsucht die Suchleiste statt der Bytes das C oder die Modulbeschreibung. ⌘F, ⌘G, Esc sowie die Taste **Suchen** in der Symbolleiste beziehen sich stets auf die Suchleiste des vordersten Bereichs.
 
 Muster, Treffer und die Einstellung zur Groß-/Kleinschreibung werden für jede Suchleiste getrennt geführt; Suchvorgänge im Fragment und im Tab beeinflussen einander daher nicht. Ein neu geöffneter Fragment-Bereich übernimmt die Einstellung zur Groß-/Kleinschreibung aus der Suchleiste des Bereichs, dem das Fragment entnommen wurde. Beim Einklappen des Bereichs in seine Pille im Dock wird auch die Suchleiste eingeklappt; nach dem Aufklappen steht sie unverändert wieder zur Verfügung.
 
@@ -50,7 +50,7 @@ Die Treffer werden auch in der [[topic:minimap|Minimap]] markiert, in der ihre V
 
 **⌘E** übernimmt die aktuelle Auswahl als Suchmuster, ohne eine Suche zu starten; so wird eine in einem Dump ausgewählte Folge im anderen gesucht.
 
-**Nächstes suchen** (⌘G) und **Vorheriges suchen** (⇧⌘G) im Menü **Bearbeiten** springen wie **‹ ›** zum nächsten und zum vorherigen Treffer des Musters in der Suchleiste und öffnen die Leiste, wenn sie geschlossen ist; die Tastatur bleibt, wo sie war. Außerdem legen ⌘E und jede Suche ihr Muster in der Suchzeichenfolge ab, die macOS für alle Programme gemeinsam führt; über sie enthalten alle Suchfelder von ByteRipper dasselbe Muster: die Suchleiste jedes Tabs und jedes Fragment-Panels, das Feld des [[topic:tool-uefi|UEFI-Baums]] und das Feld, mit dem das Code-Panel alle Funktionen eines Moduls durchsucht. Wird in einem Feld gesucht, erscheint das Muster sofort in den übrigen geöffneten Feldern; ein geschlossenes Feld übernimmt es beim Öffnen. Ein in einem anderen Programm gesuchtes Muster gelangt in die geöffneten Felder, sobald ByteRipper wieder das aktive Programm ist. ⌘G sucht nach demselben Muster. Ein eingegebenes Muster, nach dem noch nicht gesucht wurde, bleibt im Feld, bis in einem anderen Feld oder in einem anderen Programm eine Suche läuft.
+**Nächstes suchen** (⌘G) und **Vorheriges suchen** (⇧⌘G) im Menü **Bearbeiten** springen wie **‹ ›** zum nächsten und zum vorherigen Treffer des Musters in der Suchleiste und öffnen die Leiste, wenn sie geschlossen ist; die Tastatur bleibt, wo sie war. Außerdem legen ⌘E und jede Suche ihr Muster in der Suchzeichenfolge ab, die macOS für alle Programme gemeinsam führt; über sie enthalten alle Suchfelder von ByteRipper dasselbe Muster: die Suchleiste jedes Tabs und jedes Fragment-Panels, das Feld des [[topic:tool-uefi|UEFI-Baums]] und das Feld, mit dem der Code-Bereich alle Funktionen eines Moduls durchsucht. Wird in einem Feld gesucht, erscheint das Muster sofort in den übrigen geöffneten Feldern; ein geschlossenes Feld übernimmt es beim Öffnen. Ein in einem anderen Programm gesuchtes Muster gelangt in die geöffneten Felder, sobald ByteRipper wieder das aktive Programm ist. ⌘G sucht nach demselben Muster. Ein eingegebenes Muster, nach dem noch nicht gesucht wurde, bleibt im Feld, bis in einem anderen Feld oder in einem anderen Programm eine Suche läuft.
 
 Muster lassen sich benennen und in einer Musterbibliothek halten (**Einstellungen ▸ Suchmuster**) — etwa regelmäßig gebrauchte Signaturen wie `_FVH`, `$FPT` oder `24 00 00 00`. Die Bibliothek lässt sich über einen Ordner abgleichen, sodass mehrere Installationen dieselbe verwenden.
 
