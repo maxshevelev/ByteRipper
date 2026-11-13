@@ -10865,6 +10865,40 @@
     },
     {
       "cpuids": [
+        "B0674"
+      ],
+      "codeNames": [
+        "Bartlett Lake S"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "B06A8"
+      ],
+      "codeNames": [
+        "Raptor Lake P",
+        "Raptor Lake H",
+        "Raptor Lake U Refresh"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [
+        "Mobile"
+      ],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "B06D0"
       ],
       "codeNames": [
@@ -10988,6 +11022,42 @@
           }
         }
       ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "B06F6"
+      ],
+      "codeNames": [
+        "Raptor Lake S",
+        "Bartlett Lake S"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [
+        "Mobile",
+        "Embedded"
+      ],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "B06F7"
+      ],
+      "codeNames": [
+        "Raptor Lake S",
+        "Bartlett Lake S"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [
+        "Mobile",
+        "Embedded"
+      ],
+      "processors": [],
       "source": "extra"
     }
   ]

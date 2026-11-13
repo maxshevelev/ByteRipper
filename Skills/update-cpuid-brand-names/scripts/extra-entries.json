@@ -165,6 +165,72 @@
     },
     {
       "cpuids": [
+        "B0674"
+      ],
+      "codeNames": [
+        "Bartlett Lake S"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| BTL-S816       | B0       | 06-b7-04/36 |          | 00000137 | Intel Core Series 2 Processors with P-cores"
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuB0674_plat36_ver00000137_2026-02-18_PRD_FF5416E9.bin — extended signatures B0671/36, B0674/36, D0670/36"
+        }
+      ],
+      "note": "Intel's microcode notes name 06-b7-04 BTL-S816, stepping B0, one update with B0671 and D0670. ARK lists Bartlett Lake models on B0 (Core 7 251E SRQDU, 251TE SRQAX, Core 5 221E SRQDV, 211E SRQER), but B0 is B0671's name too and no Intel document says which of the two CPUIDs they report, so none is listed. Intel's list of processors by CPUID has no B0674."
+    },
+    {
+      "cpuids": [
+        "B06A8"
+      ],
+      "codeNames": [
+        "Raptor Lake P",
+        "Raptor Lake H",
+        "Raptor Lake U Refresh"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [
+        "Mobile"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_BAH | 2,3,8 | … | Raptor Lake P / H / U Refresh | … | Mobile | B06A2, B06A3, B06A8"
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuB06A8_platE0_ver00006134_2025-10-08_PRD_49EC5ADD.bin — extended signatures B06A2/E0, B06A3/E0, B06A8/E0"
+        }
+      ],
+      "note": "Intel's list of processors by CPUID gives B06A8 with B06A2 (J0) and B06A3 (Q0) as Raptor Lake P/H/U Refresh; one microcode serves all three. No Intel document names its stepping — the 13th/14th gen datasheet (743844-015) and specification update (740518-032) list only B06A2 and B06A3 — so no model is listed."
+    },
+    {
+      "cpuids": [
         "B06D0"
       ],
       "codeNames": [
@@ -291,6 +357,74 @@
         }
       ],
       "note": "The article has no row for B06F5. Intel's microcode notes call 06-bf-05 RPL-S H0 since 2024 (earlier releases called it ADL C0); coreboot names 0xb06f5 Raptor Lake H0. The models are those whose ARK ordering tab gives an H0 code among the 13th/14th gen 4-core and 2-core desktop and embedded parts; the i5-13400/14400 (B0, C0) and Xeon E-2400 (B0) have none. Alder Lake's H0 is another CPUID, 90675."
+    },
+    {
+      "cpuids": [
+        "B06F6"
+      ],
+      "codeNames": [
+        "Raptor Lake S",
+        "Bartlett Lake S"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [
+        "Mobile",
+        "Embedded"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_BFH | 2, 5 | … | Raptor Lake S, Bartlett Lake S | … | Mobile, Embedded | B06F2, B06F5, B06F6, B06F7"
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuB06F6_plat07_ver0000003E_2025-10-12_PRD_5582AF1C.bin — extended signatures 90672, 90675, B06F2, B06F5, B06F6, B06F7 (07)"
+        }
+      ],
+      "note": "Intel's list of processors by CPUID gives B06F6 with B06F2 (C0) and B06F5 (H0), Raptor Lake S and Bartlett Lake S; one microcode serves them and Alder Lake's 90672/90675. No Intel document names its stepping, so no model is listed."
+    },
+    {
+      "cpuids": [
+        "B06F7"
+      ],
+      "codeNames": [
+        "Raptor Lake S",
+        "Bartlett Lake S"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [
+        "Mobile",
+        "Embedded"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_BFH | 2, 5 | … | Raptor Lake S, Bartlett Lake S | … | Mobile, Embedded | B06F2, B06F5, B06F6, B06F7"
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuB06F7_plat07_ver0000003E_2025-10-12_PRD_5582AF1B.bin — extended signatures 90672, 90675, B06F2, B06F5, B06F6, B06F7 (07)"
+        }
+      ],
+      "note": "As B06F6: Intel's list gives it with B06F2 and B06F5, Raptor Lake S and Bartlett Lake S; one microcode serves them; no Intel document names its stepping, so no model is listed."
     }
   ]
 }
