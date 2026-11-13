@@ -231,7 +231,7 @@ public enum FITAgentMicrocode {
         ]
         // The other CPUIDs the file's update serves (its extended signature
         // table), as the form's Extended CPUIDs column shows them.
-        let extended = MicrocodeSignatures.shipped.extendedCPUIDs(of: entry)
+        let extended = MicrocodeSignatures.current.extendedCPUIDs(of: entry)
         if !extended.isEmpty { members["extended_cpuids"] = .array(extended.map { .string($0) }) }
         let rows = installed.filter { row in
             guard case .microcode(let header) = row.target, let cpuid = entry.cpuid else { return false }

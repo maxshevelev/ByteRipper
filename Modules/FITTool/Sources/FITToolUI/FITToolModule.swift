@@ -130,6 +130,9 @@ struct FITParkedState: PersistableToolSessionState {
     /// Listening for a newer listing. Cancelled in `stop()`.
     private var catalogueWatch: Task<Void, Never>?
 
+    /// Listening for newer processor tables. Removed in `stop()`.
+    private var tablesWatch: NSObjectProtocol?
+
     /// Which reading is the current one. A file edited twice in quick
     /// succession starts two, and the one that finishes second is not
     /// necessarily the one that read the newer bytes.
@@ -143,6 +146,10 @@ struct FITParkedState: PersistableToolSessionState {
     /// Where microcode comes from. Swappable, because a test suite that
     /// reaches GitHub is a suite that fails on a train.
     public static var microcodeSource: any MicrocodeSource = CPUMicrocodesRepository()
+
+    /// Where the processor tables come from — `github.com/maxshevelev/IntelCPUID`.
+    /// Swappable for the same reason.
+    public static var processorTablesSource: any ProcessorTablesSource = IntelCPUIDRepository.shared
 
     public init(host: any ToolHost) {
         self.host = host
@@ -165,6 +172,7 @@ struct FITParkedState: PersistableToolSessionState {
         // session, not fetched again for every sheet.
         loadCatalogue()
         watchTheCatalogue()
+        loadTheTables()
         // The pane kept the table this panel last read, and no edit has
         // dropped it: it is what a reading would find, so it is shown as it
         // stands, with no "Reading…" and no busy bar in between.
@@ -240,6 +248,32 @@ struct FITParkedState: PersistableToolSessionState {
         generation += 1
         catalogueWatch?.cancel()
         catalogueWatch = nil
+        if let tablesWatch { NotificationCenter.default.removeObserver(tablesWatch) }
+        tablesWatch = nil
+    }
+
+    /// The processor tables are the repository's, read when the panel opens
+    /// (at most once a day) and kept from the last good read: a table already
+    /// on screen names its processors again when newer ones land — a row's
+    /// code names, its `ⓘ`, the form's Extended CPUIDs.
+    private func loadTheTables() {
+        if tablesWatch == nil {
+            tablesWatch = NotificationCenter.default.addObserver(
+                forName: ProcessorTables.didChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.tablesChanged() }
+            }
+        }
+        let source = FITToolSession.processorTablesSource
+        Task { await source.refresh() }
+    }
+
+    private func tablesChanged() {
+        if !isParsing, let lastReport {
+            show(FITPresenter.display(lastReport, focus: focus, in: Localization.appLanguage)
+                .ratingLatest(against: catalogue))
+        }
+        form?.tablesChanged()
     }
 
     public var parkedState: (any ToolSessionState)? {

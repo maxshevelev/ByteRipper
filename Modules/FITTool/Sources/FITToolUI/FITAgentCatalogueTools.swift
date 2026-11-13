@@ -115,6 +115,8 @@ enum FITAgentCatalogueTools {
     // MARK: - The source
 
     private static func listing() async throws -> [MicrocodeCatalogueEntry] {
+        // A file's extended CPUIDs are the processor tables'.
+        await FITToolSession.processorTablesSource.refresh()
         do {
             return try await FITToolSession.microcodeSource.catalogue()
         } catch {

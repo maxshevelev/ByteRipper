@@ -31,6 +31,7 @@ final class FITToolFlowTests: XCTestCase {
         // Nothing in this suite touches the network: a test that reaches
         // github.com is a test that fails on a train.
         FITToolSession.microcodeSource = FakeMicrocodeSource()
+        FixtureProcessorTables.use()
         // A test suite that beeps is a test suite people run with the volume
         // down.
         beeps = 0
@@ -44,6 +45,7 @@ final class FITToolFlowTests: XCTestCase {
         ToolController.defaults = .standard
         ToolController.changeDelay = 0.15
         FITToolSession.microcodeSource = CPUMicrocodesRepository()
+        FITToolSession.processorTablesSource = IntelCPUIDRepository.shared
         FITToolSession.alert = { NSSound.beep() }
         controller = nil
         window = nil
@@ -934,9 +936,9 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(popover.group.cpuid, "806EA")
         XCTAssertTrue(popover.shownText.contains("Core i5-8250U"), popover.shownText)
 
-        XCTAssertNil(FITProcessorsPopover.group(for: 0x000B_06A8, vendor: .intel), "not in the table")
+        XCTAssertNil(FITProcessorsPopover.group(for: 0x000B_06A9, vendor: .intel), "not in the table")
         XCTAssertNil(FITProcessorsPopover.group(for: 0x0080_0F11, vendor: .amd), "not about AMD")
-        cell.show("B06A8", group: nil)
+        cell.show("B06A9", group: nil)
         XCTAssertTrue(cell.infoButton.isHidden, "no ⓘ where nothing is known")
     }
 
@@ -1318,7 +1320,7 @@ final class FITToolFlowTests: XCTestCase {
         _ = try open(FITTestImage.make())
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
         let display = try session().display
-        XCTAssertFalse(display.rows[1].processorGroups.first?.lines.isEmpty ?? true, "806EA is in the shipped table")
+        XCTAssertFalse(display.rows[1].processorGroups.first?.lines.isEmpty ?? true, "806EA is in the table")
         XCTAssertFalse(outline.isExpandable(try XCTUnwrap(outline.item(atRow: 0))), "the header opens into nothing")
         XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 1)), "the microcode is open to begin with")
         XCTAssertEqual(outline.numberOfRows, display.rows.count + 2, "the rows, the plate, and Add")
@@ -1384,7 +1386,7 @@ final class FITToolFlowTests: XCTestCase {
     /// without the `ⓘ` — which is why the row's menu has no Copy CPUID.
     func testTheCPUIDsAreTextToSelectAndCopy() throws {
         _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
-            (0x000B_06A2, 1), (0x000B_06A8, 1)
+            (0x000B_06A2, 1), (0x000B_06A9, 1)
         ]))
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
         let plate = try plate(in: outline, row: 2)
@@ -1401,7 +1403,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertTrue(text.writeSelection(to: board, type: .string))
         let copied = try XCTUnwrap(board.string(forType: .string))
         XCTAssertTrue(copied.hasPrefix("CPUID B06A2  Raptor Lake"), copied)
-        XCTAssertTrue(copied.hasSuffix("\nCPUID B06A8"), copied)
+        XCTAssertTrue(copied.hasSuffix("\nCPUID B06A9"), copied)
         XCTAssertFalse(copied.contains("\u{FFFC}"), "no ⓘ in a copy")
 
         board.clearContents()
@@ -1414,15 +1416,15 @@ final class FITToolFlowTests: XCTestCase {
     }
 
     /// An update for several processors puts a line a CPUID under it, in the
-    /// update's order, as tall as its lines — and one the shipped table does
-    /// not know has no `ⓘ`.
+    /// update's order, as tall as its lines — and one the table does not know
+    /// has no `ⓘ`.
     func testEachCPUIDOfAnUpdateIsALineOfThePlate() throws {
         _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
-            (0x000B_06A2, 1), (0x000B_06A3, 1), (0x000B_06A8, 1)
+            (0x000B_06A2, 1), (0x000B_06A3, 1), (0x000B_06A9, 1)
         ]))
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
         let row = try session().display.rows[1]
-        XCTAssertEqual(row.processorGroups.map(\.cpuid), ["B06A2", "B06A3", "B06A8"])
+        XCTAssertEqual(row.processorGroups.map(\.cpuid), ["B06A2", "B06A3", "B06A9"])
         XCTAssertEqual(outline.numberOfRows, try session().display.rows.count + 2, "one plate, not a row a CPUID")
 
         let plate = try plate(in: outline, row: 2)
@@ -1430,14 +1432,14 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(lines.count, 3)
         XCTAssertTrue(lines[0].hasPrefix("CPUID B06A2"), lines[0])
         XCTAssertTrue(lines[1].hasPrefix("CPUID B06A3"), lines[1])
-        XCTAssertTrue(lines[2].hasPrefix("CPUID B06A8"), lines[2])
+        XCTAssertTrue(lines[2].hasPrefix("CPUID B06A9"), lines[2])
         XCTAssertEqual(outline.level(forRow: 2), 1)
         XCTAssertGreaterThan(outline.rect(ofRow: 2).height, 2 * outline.rowHeight, "as tall as its lines")
-        XCTAssertEqual(lines[2], "CPUID B06A8", "the CPUID alone: the table knows no names for it")
+        XCTAssertEqual(lines[2], "CPUID B06A9", "the CPUID alone: the table knows no names for it")
 
         XCTAssertNotNil(plate.textView.rectOfInfo(0))
         XCTAssertNil(plate.textView.rectOfInfo(2), "no ⓘ where the table knows nothing of the CPUID")
-        XCTAssertTrue(plate.textView.string.hasSuffix("\nCPUID B06A8"), plate.textView.string)
+        XCTAssertTrue(plate.textView.string.hasSuffix("\nCPUID B06A9"), plate.textView.string)
     }
 
     private func plate(in outline: NSOutlineView, row: Int) throws -> FITCPUIDPlate {

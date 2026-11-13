@@ -8,9 +8,10 @@ import UEFIImage
 /// header (Intel SDM vol. 3A, §10.11.2) — the same bytes for each. The
 /// collection the catalogue is read from files such an update once under each
 /// of them, `cpuB06F2_…` and `cpuB06F5_…`, and its file names say nothing of
-/// the rest. `Skills/update-cpuid-brand-names/scripts/microcode_signatures.py`
-/// reads the files at one commit and ships what their tables say, so the form
-/// and the processors popover can say it without a download.
+/// the rest. that repository's `microcode_signatures.py`
+/// reads the files at one commit into `github.com/maxshevelev/IntelCPUID`,
+/// which the app reads at run time (`ProcessorTables`), so the form and the
+/// processors popover can say it without downloading a microcode.
 ///
 /// A file newer than that commit is matched by what its name says of the
 /// update — revision, date, platforms and size, which a copy keeps — and one
@@ -44,22 +45,16 @@ public struct MicrocodeSignatures: Sendable {
 
     private var byFile: [String: Int] = [:]
 
-    /// The table shipped in this package, read once.
-    public static let shipped: MicrocodeSignatures = {
-        struct File: Decodable { var updates: [Update] }
-        guard let url = Bundle.module.url(forResource: "IntelMicrocodeSignatures", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let file = try? JSONDecoder().decode(File.self, from: data)
-        else { return MicrocodeSignatures(updates: []) }
-        return MicrocodeSignatures(updates: file.updates)
-    }()
+    /// The table as last read from `github.com/maxshevelev/IntelCPUID`
+    /// (`ProcessorTables`): empty until a copy has been read.
+    public static var current: MicrocodeSignatures { ProcessorTables.current.microcode }
 
     /// The update a catalogue file is a copy of, where it serves several
     /// CPUIDs: by its path, or else by what its name says of the update.
     public func update(for entry: MicrocodeCatalogueEntry) -> Update? {
         guard entry.vendor == .intel else { return nil }
         if let index = byFile[entry.path] { return updates[index] }
-        // A copy the shipped table has not seen: same revision, date and
+        // A copy the table has not seen: same revision, date and
         // platforms as one it has, under a CPUID that update names.
         return updates.first { update in
             update.revision == entry.revisionText && update.date == entry.date

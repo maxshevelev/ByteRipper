@@ -5,6 +5,11 @@ import UEFIImage
 /// The list of microcode that can be browsed and added, read from the file
 /// names in `github.com/platomav/CPUMicrocodes`.
 final class MicrocodeCatalogueTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        TestTables.install()
+    }
+
     /// A slice of GitHub's recursive tree listing, with one of every shape the
     /// four vendors write: they agree about almost nothing.
     private let tree = Data("""
@@ -181,11 +186,11 @@ final class MicrocodeCatalogueTests: XCTestCase {
                                                 processors: processors).isEmpty)
     }
 
-    /// The shipped table answers the bench's own examples.
+    /// The repository's table answers the bench's own examples.
     func testTheShippedTableFindsAlderLakeByModelAndSSpec() {
-        let named = MicrocodeCatalogue.families(named: "12800H", in: ProcessorNames.shipped)
+        let named = MicrocodeCatalogue.families(named: "12800H", in: ProcessorNames.current)
         XCTAssertTrue(named.contains { $0.matches("906A3") }, "i7-12800H is Alder Lake-P/H")
-        let bySSpec = MicrocodeCatalogue.families(named: "SRLFU", in: ProcessorNames.shipped)
+        let bySSpec = MicrocodeCatalogue.families(named: "SRLFU", in: ProcessorNames.current)
         XCTAssertTrue(bySSpec.contains { $0.matches("906A4") }, "SRLFU is the i3-1215U")
     }
 

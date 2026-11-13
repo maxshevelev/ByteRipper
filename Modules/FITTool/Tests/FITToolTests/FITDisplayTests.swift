@@ -6,6 +6,11 @@ import UEFIImage
 /// What the panel draws, decided here so the view controller has no decisions
 /// left in it.
 final class FITDisplayTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        TestTables.install()
+    }
+
     private let microcode: UInt64 = 0x2000
 
     private func display(
@@ -119,7 +124,7 @@ final class FITDisplayTests: XCTestCase {
         // component's, not the row's zero field (§7.1) — hex, the way the
         // column shows every size.
         XCTAssertEqual(row.targetText, "r.F0 · 2019-07-15 · platform 01")
-        // The row opens into the processors the shipped table names for it.
+        // The row opens into the processors the repository's table names for it.
         XCTAssertEqual(row.processorGroups.map(\.cpuid), ["806EA"])
         let lines = row.processorGroups[0].lines
         XCTAssertEqual(lines.first?.kind, .model, "the models, with nothing ahead of them")

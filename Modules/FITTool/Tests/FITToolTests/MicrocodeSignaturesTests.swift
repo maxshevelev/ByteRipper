@@ -6,6 +6,11 @@ import UEFIImage
 /// tables: what the form's Extended CPUIDs column shows and searches, and what
 /// the processors popover says a CPUID shares its microcode with.
 final class MicrocodeSignaturesTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        TestTables.install()
+    }
+
     private let signatures = MicrocodeSignatures(updates: [
         .init(revision: "3E", date: "2025-10-12",
               signatures: [.init(cpuid: "90672", platforms: "07"), .init(cpuid: "B06F2", platforms: "07"),
@@ -28,7 +33,7 @@ final class MicrocodeSignaturesTests: XCTestCase {
         XCTAssertEqual(signatures.extendedCPUIDs(of: file), ["90672", "B06F6"])
     }
 
-    /// A copy the shipped table has not seen is matched by what its name says
+    /// A copy the table has not seen is matched by what its name says
     /// of the update; an update it does not know has none said.
     func testAnUnseenCopyIsMatchedByItsUpdateAndAnUnknownUpdateHasNone() throws {
         let copy = try entry("cpuB06F6_plat07_ver0000003E_2025-10-12_PRD_5582AF1C.bin")
@@ -54,10 +59,10 @@ final class MicrocodeSignaturesTests: XCTestCase {
                                                  processors: [], signatures: signatures), [])
     }
 
-    /// The shipped table is read, and says what Intel's files do: the Alder
-    /// Lake / Raptor Lake S update 0x3E serves six CPUIDs.
-    func testTheShippedTableIsRead() {
-        XCTAssertEqual(Set(MicrocodeSignatures.shipped.sharing(0xB06F5)),
+    /// The repository's table, as the fixtures hold it, says what Intel's
+    /// files do: the Alder Lake / Raptor Lake S update 0x3E serves six CPUIDs.
+    func testTheRepositorysTableIsRead() {
+        XCTAssertEqual(Set(MicrocodeSignatures.current.sharing(0xB06F5)),
                        ["90672", "90675", "B06F2", "B06F6", "B06F7"])
         let group = FITProcessorGroup.groups(for: [0xB06F5], language: .english).first
         XCTAssertEqual(Set(group?.sharesMicrocodeWith ?? []), ["90672", "90675", "B06F2", "B06F6", "B06F7"])

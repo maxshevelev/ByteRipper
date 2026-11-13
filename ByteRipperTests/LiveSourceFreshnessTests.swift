@@ -246,4 +246,89 @@ final class LiveSourceFreshnessTests: XCTestCase {
 
         XCTAssertEqual(entries, expected, "a list from last week beats an error message")
     }
+
+    // MARK: - The processor tables (github.com/maxshevelev/IntelCPUID)
+
+    private func names(_ code: String, version: Int = 1) -> String {
+        """
+        {"formatVersion": \(version), "entries": [{"cpuids": ["806EA"], "codeNames": ["Kaby Lake Refresh U"],
+          "cores": [], "productFamilies": [], "steppings": ["Y0"], "segments": [],
+          "processors": [{"name": "Intel Core i5-8250U", "sSpec": ["\(code)"]}]}]}
+        """
+    }
+    private let shared = #"{"formatVersion": 1, "updates": []}"#
+
+    private func tablesFolder() -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("IntelCPUID-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        return folder
+    }
+
+    private var installedCode: String? { ProcessorTablesForTesting.firstCode }
+
+    /// The first read installs both files and keeps them; a second refresh the
+    /// same day asks nothing; after a day two `304`s keep what is held.
+    func testTheTablesAreReadKeptAndCheckedOnceADay() async throws {
+        addTeardownBlock { ProcessorTablesForTesting.clear() }
+        let ticker = self.ticker!
+        let folder = tablesFolder()
+        script.queue(ok(names("SR3LA"), etag: "n1"))
+        script.queue(ok(shared, etag: "s1"))
+        let repository = IntelCPUIDRepository(session: makeSession(), folder: folder, ttl: day, now: { ticker.now })
+        await repository.refresh()
+        XCTAssertEqual(installedCode, "SR3LA")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("IntelCPUIDBrandNames.json").path))
+
+        await repository.refresh()
+        XCTAssertEqual(script.count, 2, "the same day asks nothing")
+
+        ticker.advance(day + 1)
+        script.queue(notModified)
+        script.queue(notModified)
+        await repository.refresh()
+        XCTAssertEqual(Array(script.asked.suffix(2)), ["n1", "s1"], "each asked with its kept ETag")
+        XCTAssertEqual(installedCode, "SR3LA")
+    }
+
+    /// A run with no network shows what the last good read kept; with nothing
+    /// kept, nothing is known — the app has no table of its own.
+    func testWithNoNetworkTheKeptCopyIsWhatIsShown() async throws {
+        addTeardownBlock { ProcessorTablesForTesting.clear() }
+        let ticker = self.ticker!
+        let folder = tablesFolder()
+        script.queue(ok(names("SR3LA"), etag: "n1"))
+        script.queue(ok(shared, etag: "s1"))
+        await IntelCPUIDRepository(session: makeSession(), folder: folder, ttl: day, now: { ticker.now }).refresh()
+
+        ProcessorTablesForTesting.clear()
+        script.queue(offline)
+        await IntelCPUIDRepository(session: makeSession(), folder: folder, ttl: day, now: { ticker.now }).refresh()
+        XCTAssertEqual(installedCode, "SR3LA", "the kept copy stands in for the network")
+
+        ProcessorTablesForTesting.clear()
+        script.queue(offline)
+        await IntelCPUIDRepository(session: makeSession(), folder: tablesFolder(), ttl: day, now: { ticker.now }).refresh()
+        XCTAssertNil(installedCode, "nothing kept, nothing known")
+    }
+
+    /// A file of a newer format — a push this build cannot read — leaves the
+    /// tables as they were, and is not kept.
+    func testANewerFormatLeavesTheTablesAsTheyWere() async throws {
+        addTeardownBlock { ProcessorTablesForTesting.clear() }
+        let ticker = self.ticker!
+        let folder = tablesFolder()
+        script.queue(ok(names("SR3LA"), etag: "n1"))
+        script.queue(ok(shared, etag: "s1"))
+        let repository = IntelCPUIDRepository(session: makeSession(), folder: folder, ttl: day, now: { ticker.now })
+        await repository.refresh()
+
+        ticker.advance(day + 1)
+        script.queue(ok(names("SRXXX", version: 2), etag: "n2"))
+        script.queue(notModified)
+        await repository.refresh()
+        XCTAssertEqual(installedCode, "SR3LA")
+        let kept = try String(contentsOf: folder.appendingPathComponent("IntelCPUIDBrandNames.json"), encoding: .utf8)
+        XCTAssertTrue(kept.contains("SR3LA"), "the newer file is not kept")
+    }
 }

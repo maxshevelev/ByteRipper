@@ -3,8 +3,9 @@ import Localization
 import UEFIImage
 
 /// One group of processors that share a CPUID, as the table of brand names
-/// lists it (`Resources/IntelCPUIDBrandNames.json`,
-/// `Skills/update-cpuid-brand-names/scripts/import.py`).
+/// lists it — `IntelCPUIDBrandNames.json` of `github.com/maxshevelev/IntelCPUID`,
+/// read at run time (`ProcessorTables`) and generated there by its
+/// `update-cpuid-brand-names` skill.
 public struct ProcessorFamily: Equatable, Sendable, Decodable {
     /// As written: five hex digits, or a pattern with an `X` for any one digit
     /// (`606AX`).
@@ -33,7 +34,7 @@ public struct ProcessorModel: Equatable, Sendable, Decodable {
     public var name: String
     public var sSpec: [String]
     /// Where a code that is not the article's came from: `ark`, `wikipedia`,
-    /// or what `Skills/find-sspec` found — `intel`, `database`, `marking`.
+    /// or what IntelCPUID's `find-sspec` found — `intel`, `database`, `marking`.
     public var sSpecSource: [String: String]?
     /// A line that names a series rather than its models.
     public var series: Bool?
@@ -45,20 +46,14 @@ public struct ProcessorModel: Equatable, Sendable, Decodable {
 /// it is incomplete and its source says so. A CPUID it does not know is
 /// said to be unknown, never guessed from a neighbour.
 public enum ProcessorNames {
-    /// The table shipped in this package, read once.
-    public static let shipped: [ProcessorFamily] = {
-        struct File: Decodable { var entries: [ProcessorFamily] }
-        guard let url = Bundle.module.url(forResource: "IntelCPUIDBrandNames", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let file = try? JSONDecoder().decode(File.self, from: data)
-        else { return [] }
-        return file.entries
-    }()
+    /// The table as last read from `github.com/maxshevelev/IntelCPUID`
+    /// (`ProcessorTables`): empty until a copy has been read.
+    public static var current: [ProcessorFamily] { ProcessorTables.current.families }
 
     /// The groups for these processor signatures, in the order the signatures
     /// come — the header's own first — and each group once.
     public static func families(
-        for signatures: [UInt32], in catalogue: [ProcessorFamily] = shipped
+        for signatures: [UInt32], in catalogue: [ProcessorFamily] = current
     ) -> [ProcessorFamily] {
         var found: [ProcessorFamily] = []
         for signature in signatures {
@@ -101,8 +96,8 @@ public struct FITProcessorGroup: Equatable, Sendable {
     /// header's own first. A CPUID the table does not know is a group of one
     /// line that says so.
     public static func groups(
-        for signatures: [UInt32], in catalogue: [ProcessorFamily] = ProcessorNames.shipped,
-        microcode: MicrocodeSignatures = .shipped,
+        for signatures: [UInt32], in catalogue: [ProcessorFamily] = ProcessorNames.current,
+        microcode: MicrocodeSignatures = .current,
         language: AppLanguage
     ) -> [FITProcessorGroup] {
         signatures.map { signature in

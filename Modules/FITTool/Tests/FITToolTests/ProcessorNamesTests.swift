@@ -2,6 +2,11 @@ import XCTest
 @testable import FITTool
 
 final class ProcessorNamesTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        TestTables.install()
+    }
+
     private let catalogue = [
         ProcessorFamily(
             cpuids: ["906EA"], codeNames: ["Coffee Lake H", "Coffee Lake S"],
@@ -18,8 +23,8 @@ final class ProcessorNamesTests: XCTestCase {
     ]
 
     func testTheShippedTableIsRead() {
-        XCTAssertGreaterThan(ProcessorNames.shipped.count, 50)
-        XCTAssertFalse(ProcessorNames.families(for: [0x906EA]).isEmpty, "906EA is in the shipped table")
+        XCTAssertGreaterThan(ProcessorNames.current.count, 50)
+        XCTAssertFalse(ProcessorNames.families(for: [0x906EA]).isEmpty, "906EA is in the repository's table")
     }
 
     /// A CPUID the article has no row for, from `extra-entries.json`:

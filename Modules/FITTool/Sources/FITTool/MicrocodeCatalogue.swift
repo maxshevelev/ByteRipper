@@ -185,8 +185,8 @@ public enum MicrocodeCatalogue {
         vendor: MicrocodeVendor? = nil,
         search: String = "",
         cpuidsInTheImage: Set<UInt32>? = nil,
-        processors: [ProcessorFamily] = ProcessorNames.shipped,
-        signatures: MicrocodeSignatures = .shipped
+        processors: [ProcessorFamily] = ProcessorNames.current,
+        signatures: MicrocodeSignatures = .current
     ) -> [MicrocodeCatalogueEntry] {
         let needle = search.trimmingCharacters(in: .whitespaces).uppercased()
         let named = families(named: needle, in: processors)

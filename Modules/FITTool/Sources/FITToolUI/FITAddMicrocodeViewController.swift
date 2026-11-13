@@ -200,6 +200,13 @@ import ToolModuleKit
     }
 
     /// The catalogue arrived.
+    /// Newer processor tables: the Extended CPUIDs and the `ⓘ`s are theirs,
+    /// and the search reads them too.
+    func tablesChanged() {
+        guard isViewLoaded else { return }
+        narrow()
+    }
+
     func show(_ entries: [MicrocodeCatalogueEntry]) {
         self.entries = entries
         onlyInImage.isEnabled = !cpuidsInTheImage.isEmpty
@@ -276,7 +283,7 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         cell.textField?.textColor = .labelColor
         switch column.identifier {
         case Column.extended:
-            let extended = MicrocodeSignatures.shipped.extendedCPUIDs(of: entry).joined(separator: ", ")
+            let extended = MicrocodeSignatures.current.extendedCPUIDs(of: entry).joined(separator: ", ")
             cell.textField?.stringValue = extended
             cell.textField?.lineBreakMode = .byTruncatingTail
             cell.toolTip = extended.isEmpty ? nil : extended
