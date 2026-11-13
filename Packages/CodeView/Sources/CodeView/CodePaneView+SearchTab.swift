@@ -28,6 +28,11 @@ extension CodePaneView {
     /// code has not been read yet are read first.
     public func searchAllFunctions(_ query: TextQuery) {
         showSearchTab(true)
+        startSearchAll(query)
+    }
+
+    /// The search itself, the tab left in front or not.
+    private func startSearchAll(_ query: TextQuery) {
         searchAllTask?.cancel()
         searchAllTask = nil
         guard !query.text.isEmpty else {
@@ -50,6 +55,7 @@ extension CodePaneView {
     }
 
     private func runSearchAll(_ query: TextQuery) {
+        searchedDescription = descriptionView.hasDescription ? descriptionView.textView.string : nil
         let corpus = searchCorpus
         searchPanel.show(status: L("Searching…"))
         searchAllTask = Task { @MainActor [weak self] in
@@ -109,6 +115,57 @@ extension CodePaneView {
     func searchModuleMark() -> NSImage? {
         ToolPanelOriginBadge.image(for: manifest.reading?.origin,
                                    pointSize: (CodePaneView.navigatorSize * 0.8).rounded())
+    }
+
+    // MARK: - Kept with the screen
+
+    /// What the Search tab holds: the search it lists and where it looks —
+    /// carried by a screen that moves to another container, and kept in the
+    /// workspace. The search is run again when it is put back.
+    public struct SearchTabState: Equatable, Sendable {
+        public enum Scope: String, Sendable {
+            case everywhere, functions, description
+        }
+        public var query: TextQuery?
+        public var scope: Scope
+
+        public init(query: TextQuery?, scope: Scope) {
+            self.query = query
+            self.scope = scope
+        }
+    }
+
+    /// The Search tab as it stands; nil while the lists are in front.
+    public var searchTabState: SearchTabState? {
+        guard showsSearchTab else { return nil }
+        let scope: SearchTabState.Scope = switch searchPanel.scope {
+        case .everywhere: .everywhere
+        case .functions: .functions
+        case .description: .description
+        }
+        return SearchTabState(query: searchedAll, scope: scope)
+    }
+
+    /// Puts the Search tab back in front, with its scope, and runs its search
+    /// again: the result is the module's as it is now.
+    public func restoreSearchTab(_ state: SearchTabState) {
+        searchPanel.scope = switch state.scope {
+        case .everywhere: .everywhere
+        case .functions: .functions
+        case .description: .description
+        }
+        guard let query = state.query, !query.text.isEmpty else { return showSearchTab(true) }
+        searchAllFunctions(query)
+        onSearchRestored?(query)
+    }
+
+    /// The description arrived, or changed, while a search stands: it is
+    /// searched again so the description's occurrences are in the result.
+    func searchDescriptionAgainIfChanged(_ markdown: String?) {
+        guard let query = searchedAll, searchPanel.scope != .functions else { return }
+        let text = descriptionView.hasDescription ? descriptionView.textView.string : nil
+        guard text != searchedDescription else { return }
+        startSearchAll(query)
     }
 
     // MARK: - For tests

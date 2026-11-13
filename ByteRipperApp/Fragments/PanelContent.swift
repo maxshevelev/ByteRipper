@@ -64,4 +64,7 @@ struct CodeScreen {
     var comparisons: [CodeAddress: CodePaneView.FunctionComparison] = [:]
     /// The places open in the call tree, by the entries that outlive a revision.
     var openCalls: [[CodeAddress]] = []
+    /// The Search tab, while it was in front: its search is run again where
+    /// the screen is drawn next.
+    var search: CodePaneView.SearchTabState?
 }

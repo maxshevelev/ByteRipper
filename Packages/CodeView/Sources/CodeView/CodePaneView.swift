@@ -212,6 +212,11 @@ import ToolModuleKit
     public internal(set) var searchedAll: TextQuery?
     /// A search of every function finished: whether it found anything.
     public var onSearchAllFinished: ((_ query: TextQuery, _ found: Bool) -> Void)?
+    /// A screen put back its Search tab's search: the app's field shows it.
+    public var onSearchRestored: ((TextQuery) -> Void)?
+    /// The description text the Search tab last saw: one that arrives, or
+    /// changes, while a search stands is searched too.
+    var searchedDescription: String?
     private var descriptionLeading: NSLayoutConstraint?
     private let rightSplit = ALSplitView()
     private let hexDumpBar = CodeDumpBar()
@@ -1006,6 +1011,7 @@ import ToolModuleKit
     public func setModuleDescription(_ markdown: String?) {
         descriptionView.show(markdown)
         findTextMayHaveChanged()
+        searchDescriptionAgainIfChanged(markdown)
         hasDescription = !(markdown ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if opensOnDescription, hasDescription { showDescription(true) }
         opensOnDescription = false

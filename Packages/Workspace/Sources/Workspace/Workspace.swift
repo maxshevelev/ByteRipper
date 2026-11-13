@@ -334,16 +334,39 @@ public struct CodeScreenState: Codable, Equatable, Sendable {
     /// come back with another artifact, and a function is the same function
     /// in it. Nil in a screen written before the lines were kept.
     public var topLines: [String: Int]?
+    /// The Search tab, when it was in front: the search is run again as the
+    /// screen comes back. Nil in a screen written before it was kept.
+    public var search: Search?
+
+    /// The Search tab's search and where it looks.
+    public struct Search: Codable, Equatable, Sendable {
+        /// Nil for a tab in front with no search run.
+        public var pattern: String?
+        public var caseSensitive: Bool
+        public var wholeWord: Bool
+        /// `everywhere`, `functions` or `description`; anything else reads
+        /// as `everywhere`.
+        public var scope: String
+
+        public init(pattern: String?, caseSensitive: Bool = false, wholeWord: Bool = false,
+                    scope: String = "everywhere") {
+            self.pattern = pattern
+            self.caseSensitive = caseSensitive
+            self.wholeWord = wholeWord
+            self.scope = scope
+        }
+    }
 
     public init(manifest: String, selectedFunction: Int? = nil,
                 selectedInstruction: Int? = nil, place: Place? = nil, showsC: Bool = false,
-                topLines: [String: Int]? = nil) {
+                topLines: [String: Int]? = nil, search: Search? = nil) {
         self.manifest = manifest
         self.selectedFunction = selectedFunction
         self.selectedInstruction = selectedInstruction
         self.place = place
         self.showsC = showsC
         self.topLines = topLines
+        self.search = search
     }
 }
 

@@ -82,6 +82,7 @@ func presentCodeScreen(_ screen: CodeScreen, on codePane: CodePaneView) {
                      instruction: screen.selectedInstruction,
                      showsC: screen.showsC)
     codePane.openCallPlaces(screen.openCalls)
+    if let search = screen.search { codePane.restoreSearchTab(search) }
 }
 
 /// The dump bar's revision picker: the module's history read from the store,

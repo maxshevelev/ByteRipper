@@ -37,6 +37,7 @@ extension MainViewController {
         code.screen.newMarks = view.newMarks
         code.screen.comparisons = view.keptComparisons
         code.screen.openCalls = view.openCallEntries
+        code.screen.search = view.searchTabState
         codeScreen = code
     }
 
@@ -118,6 +119,7 @@ extension MainViewController {
             next.newMarks = self.codeScreenView?.newMarks ?? screen.newMarks
             next.comparisons = self.codeScreenView?.keptComparisons ?? screen.comparisons
             next.openCalls = self.codeScreenView?.openCallEntries ?? screen.openCalls
+            next.search = self.codeScreenView.map(\.searchTabState) ?? screen.search
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)

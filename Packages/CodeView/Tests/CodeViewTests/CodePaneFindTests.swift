@@ -370,6 +370,58 @@ final class CodePaneFindTests: XCTestCase {
         XCTAssertEqual(pane.searchSummaryForTests, L("1 result in the description"))
     }
 
+    /// The Search tab's state is what a screen carries: the search and the
+    /// scope. Put back on a new pane, the search runs again there and the
+    /// app's field is told what it is; the lists in front carry nothing.
+    func testTheSearchTabComesBackOnAnotherPane() async throws {
+        let (pane, _) = try paneInWindow()
+        XCTAssertNil(pane.searchTabState, "the lists in front")
+        pane.setSearchScopeForTests(everywhere: false, functions: true)
+        let query = TextQuery(text: "Status", caseSensitive: true, wholeWord: true)
+        pane.searchAllFunctions(query)
+        try await waitForSearch(pane)
+        let state = try XCTUnwrap(pane.searchTabState)
+        XCTAssertEqual(state, CodePaneView.SearchTabState(query: query, scope: .functions))
+
+        let (next, _) = try paneInWindow()
+        var told: TextQuery?
+        next.onSearchRestored = { told = $0 }
+        next.restoreSearchTab(state)
+        try await waitForSearch(next)
+        XCTAssertTrue(next.showsSearchTab)
+        XCTAssertEqual(told, query)
+        XCTAssertEqual(next.searchTabState, state)
+        XCTAssertEqual(next.searchResultsForTests.map(\.function), pane.searchResultsForTests.map(\.function))
+
+        let (empty, _) = try paneInWindow()
+        empty.restoreSearchTab(.init(query: nil, scope: .description))
+        XCTAssertTrue(empty.showsSearchTab, "a tab in front with no search")
+        XCTAssertEqual(empty.searchTabState, .init(query: nil, scope: .description))
+        pane.showSearchTab(false)
+        XCTAssertNil(pane.searchTabState)
+    }
+
+    /// A description that arrives after the search — as a restored screen's
+    /// does — is searched too; one the scope leaves out is not.
+    func testADescriptionThatArrivesLaterIsSearched() async throws {
+        let (pane, _) = try paneInWindow()
+        pane.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true, wholeWord: true))
+        try await waitForSearch(pane)
+        XCTAssertFalse(pane.searchResultsForTests.map(\.function).contains("CpuPei"))
+        pane.setModuleDescription("# CpuPei\n\nReads the Status of the CPU.")
+        try await waitForSearch(pane)
+        XCTAssertEqual(pane.searchResultsForTests.first?.function, "CpuPei")
+
+        let (narrow, _) = try paneInWindow()
+        narrow.setSearchScopeForTests(everywhere: false, functions: true)
+        narrow.searchAllFunctions(TextQuery(text: "Status", caseSensitive: true, wholeWord: true))
+        try await waitForSearch(narrow)
+        let before = narrow.searchResultsForTests.map(\.function)
+        narrow.setModuleDescription("# CpuPei\n\nReads the Status of the CPU.")
+        try await waitForSearch(narrow)
+        XCTAssertEqual(narrow.searchResultsForTests.map(\.function), before)
+    }
+
     /// One result, or one function, is said in the singular.
     func testTheSummarySaysOneInTheSingular() {
         func line(_ hits: Int, _ functions: Int, description: Bool = false, truncated: Bool = false) -> String {

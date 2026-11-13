@@ -1,6 +1,8 @@
 import ByteRipperCore
 import Cocoa
 import CodeAnalysis
+import CodeView
+import Find
 import Localization
 import OSLog
 import PartCodec
@@ -133,7 +135,13 @@ extension MainViewController {
                                selectedInstruction: code.selectedInstruction,
                                place: place,
                                showsC: code.showsC,
-                               topLines: code.topLines)
+                               topLines: code.topLines,
+                               search: code.search.map {
+                                   CodeScreenState.Search(pattern: $0.query?.text,
+                                                          caseSensitive: $0.query?.caseSensitive ?? false,
+                                                          wholeWord: $0.query?.wholeWord ?? false,
+                                                          scope: $0.scope.rawValue)
+                               })
     }
 
     /// The analysis a code screen was drawn from, read back from the store
@@ -201,7 +209,15 @@ extension MainViewController {
                        },
                        showsC: state.showsC,
                        topLines: state.topLines ?? [:],
-                       recipes: loaded.recipes)
+                       recipes: loaded.recipes,
+                       search: state.search.map {
+                           CodePaneView.SearchTabState(
+                               query: $0.pattern.map {
+                                   TextQuery(text: $0, caseSensitive: state.search?.caseSensitive ?? false,
+                                             wholeWord: state.search?.wholeWord ?? false)
+                               },
+                               scope: .init(rawValue: $0.scope) ?? .everywhere)
+                       })
         }
     }
 

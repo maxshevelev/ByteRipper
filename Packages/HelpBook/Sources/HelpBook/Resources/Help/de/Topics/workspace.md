@@ -1,4 +1,4 @@
-@source-sha 80582221d72dd465993cb2a829568544fa672d9e277a707e7baa0bfe11959565
+@source-sha bf8c94c200d7bcc866f438e8f4b10efa6c68b0ff20d2f8575687fb59f0ac2792
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -17,6 +17,7 @@ Die Einstellung heißt **Arbeitsbereich beim Start wiederherstellen** und befind
 - **Der Widerrufsverlauf** jedes Dokuments — Dateien auf dem Datenträger, nie gesicherte Dokumente, Teile — mit dem, was sich noch wiederholen lässt. Nach einem Neustart widerruft ⌘Z die Änderungen von davor: Die Schnitte der Segmente kehren mit ihnen zurück, das Widerrufen eines Zusammenfügens verbindet das Dokument wieder mit seiner Datei, und das Widerrufen bis zum auf dem Datenträger gesicherten Stand macht eine Datei wieder ungeändert. Der Verlauf hält sich an die Grenzen, die unter [[topic:editing|Bytes bearbeiten]] festgelegt sind. Der Name eines Schritts im Menü „Bearbeiten“ bleibt in der Sprache, in der das Programm lief, als die Änderung vorgenommen wurde.
 - Das [[topic:notes|Anmerkungen-Fenster]] an seinem Platz zwischen den Tabs oder als eigenes Fenster, mit den Karten, die ausgewählt waren.
 - Die [[topic:minimap|Minimap]], die Suchleisten des Tabs und aller Fragment-Bereiche samt Muster und Einstellung zur Groß-/Kleinschreibung sowie der Werkzeugbereich mit dem darin gewählten Knoten oder der gewählten Zeile und den geöffneten Zweigen des UEFI-Baums.
+- Im [[topic:code-panel|Code-Bereich]] der Such-Tab, sofern er angezeigt war, mit Muster, den Einstellungen **Groß-/Kleinschreibung beachten** und **Ganzes Wort** sowie dem Suchbereich. Beim Öffnen des Bereichs wird die Suche erneut ausgeführt; das Ergebnis entspricht daher dem Code des Moduls zu diesem Zeitpunkt.
 
 ## Was nicht wiederhergestellt wird
 

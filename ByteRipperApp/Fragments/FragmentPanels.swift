@@ -181,7 +181,8 @@ import ToolModuleKit
                                               recipes: code.recipes,
                                               newMarks: code.newMarks,
                                               comparisons: code.comparisons,
-                                              openCalls: code.openCalls)),
+                                              openCalls: code.openCalls,
+                                              search: code.search)),
                      animated: animated)
     }
 
@@ -469,6 +470,7 @@ import ToolModuleKit
         screen.place = view.selectedLocation
         screen.showsC = view.showsDecompiledC
         screen.topLines = view.topLinePositions
+        screen.search = view.searchTabState
         Task { @MainActor [weak self] in
             guard let self else { return }
             let artifact: CodeArtifact
@@ -554,6 +556,7 @@ import ToolModuleKit
         code.newMarks = entry.codePane?.newMarks ?? code.newMarks
         code.comparisons = entry.codePane?.keptComparisons ?? code.comparisons
         code.openCalls = entry.codePane?.openCallEntries ?? code.openCalls
+        code.search = entry.codePane.map(\.searchTabState) ?? code.search
         return .code(code)
     }
 

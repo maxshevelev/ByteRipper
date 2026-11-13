@@ -22,6 +22,7 @@ The switch is **Reopen the workspace at launch** in [[topic:settings|Settings �
 - **The undo history** of every document — files on disk, documents never saved, parts — with what can still be redone. After a restart ⌘Z undoes the edits made before it, the cuts of the segments move back with them, undoing a join attaches the document to its file again, and undoing back to the state saved on disk makes a file unmodified. The history keeps to the limits set under [[topic:editing|Editing Bytes]]. The name of a step in the Edit menu stays in the language the program spoke when the edit was made.
 - The [[topic:notes|Annotations window]], at its place among the tabs or as a window of its own, with the cards that were selected.
 - The [[topic:minimap|minimap]], the find bar — the tab's and each fragment panel's — with its pattern and case rule, and the tool panel with the node or row selected in it and the open branches of the UEFI tree.
+- In a [[topic:code-panel|code panel]], the Search tab, if it was in front, with its pattern, its **Case Sensitive** and **Whole Word** settings and its scope. The search is run again when the panel opens, so the result reflects the module's code as it is at that time.
 
 ## What is not restored
 

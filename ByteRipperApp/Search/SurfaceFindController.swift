@@ -658,7 +658,17 @@ extension BackgroundOperation: FindActivity {}
         code.onSearchAllFinished = { [weak self] _, found in
             if found { self?.navigatorQuery.recordFoundCodeSearch() }
         }
+        // A screen that comes back with its Search tab — moved, or from the
+        // workspace — shows the search the tab lists, before this or after.
+        code.onSearchRestored = { [weak self] query in self?.showInSearchTabField(query) }
+        if code.showsSearchTab, let query = code.searchedAll { showInSearchTabField(query) }
         searchTabPane = code
+    }
+
+    private func showInSearchTabField(_ query: TextQuery) {
+        navigatorQuery.text = query.text
+        navigatorQuery.caseRule = query.caseSensitive
+        navigatorQuery.wholeWordRule = query.wholeWord
     }
 
     /// Return in the Search tab's field, or a recent query picked.

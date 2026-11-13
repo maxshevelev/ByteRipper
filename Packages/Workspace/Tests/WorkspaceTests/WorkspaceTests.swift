@@ -267,4 +267,21 @@ extension WorkspaceTests {
         XCTAssertEqual(fields["topLines"] as? [String: Int], ["0x1F00": 12])
         XCTAssertNil(old.topLines, "a screen written before the lines were kept has none")
     }
+
+    /// The Search tab is an added optional field: a screen written before it
+    /// reads without one, and one written now keeps the search and its scope.
+    func testACodeScreenSearchIsAnAddedOptionalField() throws {
+        let before = #"{"manifest":"{}","selectedFunction":3,"showsC":true}"#
+        XCTAssertNil(try JSONDecoder().decode(CodeScreenState.self, from: Data(before.utf8)).search)
+
+        let now = CodeScreenState(manifest: "{}", showsC: true,
+                                  search: .init(pattern: "Status", caseSensitive: true,
+                                                wholeWord: true, scope: "functions"))
+        let data = try JSONEncoder().encode(now)
+        XCTAssertEqual(try JSONDecoder().decode(CodeScreenState.self, from: data), now)
+        let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let search = try XCTUnwrap(fields["search"] as? [String: Any])
+        XCTAssertEqual(search["pattern"] as? String, "Status")
+        XCTAssertEqual(search["scope"] as? String, "functions")
+    }
 }

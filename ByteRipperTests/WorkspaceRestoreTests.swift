@@ -824,6 +824,80 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertNil(without.workspaceTab().code)
     }
 
+    /// A code tab's searches come back: the bar over the code open with its
+    /// pattern, and the Search tab in front with its search run again, its
+    /// rules and its scope in the field and the popup.
+    func testACodeTabsSearchesComeBack() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let fileURL = try tempFile(codeBytes, "code-search")
+        let artifactData = Data("""
+        {"script_version":2,"ghidra":"12.1.2","functions":[
+          {"entry":"0x0","name":"entry","c":"return Status;","instructions":[
+            {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8)
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: artifactData)
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeSearchStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let manifest = try store.putAnalysis(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                   size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                   language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: artifactData)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        source.openFiles([fileURL])
+        source.installCodeScreen(CodeScreen(manifest: manifest, artifact: artifact,
+                                            bytes: Data(codeBytes),
+                                            selectedFunction: 0, selectedInstruction: 0,
+                                            showsC: true),
+                                 on: source.windowModel.pane1)
+        source.apply(mode: .singleFile)
+        let code = try XCTUnwrap(source.codeScreenView)
+        source.findPattern()
+        source.findBar.setPatternTextForTests("return")
+        source.findInFunctions()
+        let field = source.frontFind.navigatorQuery
+        field.text = "Status"
+        field.caseRule = true
+        field.wholeWordRule = true
+        code.setSearchScopeForTests(everywhere: false, functions: true)
+        field.onSubmit?()
+        let tab = source.workspaceTab()
+        let saved = try XCTUnwrap(tab.code?.search)
+        XCTAssertEqual(saved, .init(pattern: "Status", caseSensitive: true, wholeWord: true, scope: "functions"))
+        XCTAssertEqual(tab.surface.findPattern?.text, "Status",
+                       "the bar over the code, as any bar — holding the pattern searched last, as every field does")
+
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)])
+        XCTAssertEqual(issues, [])
+        let restored = try XCTUnwrap(target.codeScreenView)
+        XCTAssertTrue(restored.showsSearchTab)
+        for _ in 0..<400 where restored.searchResultsForTests.isEmpty {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(restored.searchResultsForTests.map(\.function), ["entry"], "the search ran again")
+        XCTAssertEqual(restored.searchTabState?.scope, .functions)
+        let restoredField = target.frontFind.navigatorQuery
+        XCTAssertEqual(restoredField.text, "Status")
+        XCTAssertTrue(restoredField.caseRule)
+        XCTAssertTrue(restoredField.wholeWordRule)
+        XCTAssertTrue(restored.isFindBarShown, "the bar is back over the code")
+        XCTAssertEqual(target.findBar.query.text, "Status")
+
+        // The lists in front: nothing of the tab is written.
+        restored.showSearchTab(false)
+        XCTAssertNil(target.workspaceTab().code?.search)
+    }
+
     /// Every surface's Find bar comes back as its own (§11): a panel's open
     /// bar with its pattern, the tab's closed one closed, and each with its
     /// own case rule — the tab's kept while its bar was closed. A panel taken
