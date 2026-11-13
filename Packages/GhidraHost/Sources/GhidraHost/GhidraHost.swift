@@ -755,7 +755,9 @@ public actor GhidraHost {
     static func withoutLinked(_ proposals: [LibraryProposal], writer: any AnalysisWriter) async throws -> [LibraryProposal] {
         guard !proposals.isEmpty else { return proposals }
         let index = try await writer.readLibraryIndex()
-        guard !index.entries.isEmpty else { return proposals }
+        // Not left early on an index with no entries: a body taken out of its
+        // only entry is still the module's own again, not an offer.
+        guard !index.entries.isEmpty || index.takenOut?.isEmpty == false else { return proposals }
         var kept: [LibraryProposal] = []
         for var proposal in proposals {
             if let based = proposal.basedOn, index.entries[based] == nil,
