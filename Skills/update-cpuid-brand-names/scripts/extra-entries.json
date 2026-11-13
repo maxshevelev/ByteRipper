@@ -3,6 +3,751 @@
   "entries": [
     {
       "cpuids": [
+        "80650"
+      ],
+      "codeNames": [
+        "Knights Mill"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Xeon Phi 72x5 Processor Family"
+      ],
+      "steppings": [],
+      "segments": [
+        "Server"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon Phi 7235"
+        },
+        {
+          "name": "Intel Xeon Phi 7255"
+        },
+        {
+          "name": "Intel Xeon Phi 7285"
+        },
+        {
+          "name": "Intel Xeon Phi 7295"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_XEON_PHI_KNM\t\tIFM(6, 0x85) /* Knights Mill */"
+        },
+        {
+          "gives": [
+            "cpuids"
+          ],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu80650_plat08_ver00000018_2018-01-08_PRD_19B5F433.bin — the one microcode of model 0x85"
+        },
+        {
+          "gives": [
+            "processors",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/codename/57723/products-formerly-knights-mill.html",
+          "quote": "Products formerly Knights Mill: Xeon Phi 7235, 7285, 7295 (7255: SKU 128693); Vertical Segment: Server"
+        }
+      ],
+      "note": "Model 0x85 is Knights Mill (the kernel); the collection's one microcode for it is 80650. ARK gives the 7235, 7285 and 7295 codes at stepping A0, which no source ties to stepping ID 0, so no stepping is written; the 7255 has no ordering tab. Intel's list of processors by CPUID has no 06_85H row."
+    },
+    {
+      "cpuids": [
+        "806C0"
+      ],
+      "codeNames": [
+        "Tiger Lake"
+      ],
+      "cores": [
+        "Willow Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_TIGERLAKE_A0\t\t0x806c0"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_TIGERLAKE_L\t\tIFM(6, 0x8C) /* Willow Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8CH rows list 806C1, 806C2 — none for 806C0."
+        }
+      ],
+      "note": "coreboot names 806C0 Tiger Lake A0; Intel's list has no row for it, and its one public microcode is dated 2020-04-02, before Tiger Lake's launch. No models."
+    },
+    {
+      "cpuids": [
+        "806D0"
+      ],
+      "codeNames": [
+        "Tiger Lake H"
+      ],
+      "cores": [
+        "Willow Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "P0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_TIGERLAKE_P0\t\t0x806d0"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_TIGERLAKE\t\t\tIFM(6, 0x8D) /* Willow Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8DH rows list 806D1 — none for 806D0."
+        }
+      ],
+      "note": "coreboot names 806D0 Tiger Lake P0; Intel's list has only 806D1 (R0) for 06_8DH, and the microcode notes name no 06-8d-00. No models."
+    },
+    {
+      "cpuids": [
+        "806ED"
+      ],
+      "codeNames": [
+        "Whiskey Lake U"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "V0"
+      ],
+      "segments": [
+        "Mobile"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings",
+            "segments"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| WHL-U          | V0       | 06-8e-0d/94 | Core Gen8 Mobile"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8EH rows list 806E9, 806EA, 806EB, 806EC — none for 806ED."
+        }
+      ],
+      "note": "Intel's microcode notes list 06-8e-0d as Whiskey Lake U V0, as they do 806EC; Intel's list of processors by CPUID has no 806ED and the collection no microcode for it. ARK's V0 models are under 806EC, so none is listed here."
+    },
+    {
+      "cpuids": [
+        "806F3"
+      ],
+      "codeNames": [
+        "Sapphire Rapids"
+      ],
+      "cores": [
+        "Golden Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_SAPPHIRERAPIDS_X\t\tIFM(6, 0x8F) /* Golden Cove */"
+        },
+        {
+          "gives": [
+            "cpuids"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_SAPPHIRERAPIDS_SP_D\t0x806f3"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH rows list 806F5–806F8 — none for 806F3."
+        }
+      ],
+      "note": "Sapphire Rapids' 806F3; Intel's list of processors by CPUID has no row for it, and no model on ARK gives its stepping. No models."
+    },
+    {
+      "cpuids": [
+        "806F4"
+      ],
+      "codeNames": [
+        "Sapphire Rapids"
+      ],
+      "cores": [
+        "Golden Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "E0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_SAPPHIRERAPIDS_X\t\tIFM(6, 0x8F) /* Golden Cove */"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SPR-SP         | E0       | 06-8f-04/87 | Xeon Scalable Gen4"
+        },
+        {
+          "gives": [
+            "cpuids"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_SAPPHIRERAPIDS_SP_E0\t0x806f4"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH rows list 806F5–806F8 — none for 806F4."
+        }
+      ],
+      "note": "Sapphire Rapids' 806F4; Intel's list of processors by CPUID has no row for it, and no model on ARK gives its stepping. No models."
+    },
+    {
+      "cpuids": [
+        "806F5"
+      ],
+      "codeNames": [
+        "Sapphire Rapids"
+      ],
+      "cores": [
+        "Golden Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "E2"
+      ],
+      "segments": [
+        "Server",
+        "Workstation",
+        "Embedded"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_SAPPHIRERAPIDS_X\t\tIFM(6, 0x8F) /* Golden Cove */"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SPR-SP         | E2       | 06-8f-05/87 | Xeon Scalable Gen4"
+        },
+        {
+          "gives": [
+            "cpuids"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_SAPPHIRERAPIDS_SP_E2\t0x806f5"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH | 5, 6, 7, 8 | Sapphire Rapids (Golden Cove) | 4th Generation Xeon Scalable … Xeon W | Server, Workstation, Embedded | 806F5, 806F6, 806F7, 806F8"
+        }
+      ],
+      "note": "Intel's list of processors by CPUID names 806F5 among Sapphire Rapids' production CPUIDs, but no model on ARK gives its stepping (E2) — every Xeon Scalable, Max and W model there is E5, S3 or B3 (806F8), or L0/U1 — so none is listed."
+    },
+    {
+      "cpuids": [
+        "806F6"
+      ],
+      "codeNames": [
+        "Sapphire Rapids"
+      ],
+      "cores": [
+        "Golden Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "E3"
+      ],
+      "segments": [
+        "Server",
+        "Workstation",
+        "Embedded"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_SAPPHIRERAPIDS_X\t\tIFM(6, 0x8F) /* Golden Cove */"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SPR-SP         | E3       | 06-8f-06/87 | Xeon Scalable Gen4"
+        },
+        {
+          "gives": [
+            "cpuids"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_SAPPHIRERAPIDS_SP_E3\t0x806f6"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH | 5, 6, 7, 8 | Sapphire Rapids (Golden Cove) | 4th Generation Xeon Scalable … Xeon W | Server, Workstation, Embedded | 806F5, 806F6, 806F7, 806F8"
+        }
+      ],
+      "note": "Intel's list of processors by CPUID names 806F6 among Sapphire Rapids' production CPUIDs, but no model on ARK gives its stepping (E3) — every Xeon Scalable, Max and W model there is E5, S3 or B3 (806F8), or L0/U1 — so none is listed."
+    },
+    {
+      "cpuids": [
+        "806F7"
+      ],
+      "codeNames": [
+        "Sapphire Rapids"
+      ],
+      "cores": [
+        "Golden Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "E4",
+        "S2"
+      ],
+      "segments": [
+        "Server",
+        "Workstation",
+        "Embedded"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_SAPPHIRERAPIDS_X\t\tIFM(6, 0x8F) /* Golden Cove */"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SPR-SP         | E4/S2    | 06-8f-07/87 | Xeon Scalable Gen4"
+        },
+        {
+          "gives": [
+            "cpuids"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_SAPPHIRERAPIDS_SP_E4\t0x806f7"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH | 5, 6, 7, 8 | Sapphire Rapids (Golden Cove) | 4th Generation Xeon Scalable … Xeon W | Server, Workstation, Embedded | 806F5, 806F6, 806F7, 806F8"
+        }
+      ],
+      "note": "Intel's list of processors by CPUID names 806F7 among Sapphire Rapids' production CPUIDs, but no model on ARK gives its stepping (E4/S2) — every Xeon Scalable, Max and W model there is E5, S3 or B3 (806F8), or L0/U1 — so none is listed."
+    },
+    {
+      "cpuids": [
+        "806F8"
+      ],
+      "codeNames": [
+        "Sapphire Rapids"
+      ],
+      "cores": [
+        "Golden Cove"
+      ],
+      "productFamilies": [
+        "4th Generation Intel Xeon Scalable Processors",
+        "Intel Xeon CPU Max Series",
+        "Intel Xeon W Processor"
+      ],
+      "steppings": [
+        "E5",
+        "S3",
+        "B3"
+      ],
+      "segments": [
+        "Server",
+        "Workstation",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon Gold 5411N"
+        },
+        {
+          "name": "Intel Xeon Gold 5412U"
+        },
+        {
+          "name": "Intel Xeon Gold 5415+"
+        },
+        {
+          "name": "Intel Xeon Gold 5416S"
+        },
+        {
+          "name": "Intel Xeon Gold 5418N"
+        },
+        {
+          "name": "Intel Xeon Gold 5418Y"
+        },
+        {
+          "name": "Intel Xeon Gold 5420+"
+        },
+        {
+          "name": "Intel Xeon Silver 4410T"
+        },
+        {
+          "name": "Intel Xeon Silver 4410Y"
+        },
+        {
+          "name": "Intel Xeon Silver 4416+"
+        },
+        {
+          "name": "Intel Xeon Bronze 3408U"
+        },
+        {
+          "name": "Intel Xeon Gold 6414U"
+        },
+        {
+          "name": "Intel Xeon Gold 6416H"
+        },
+        {
+          "name": "Intel Xeon Gold 6418H"
+        },
+        {
+          "name": "Intel Xeon Gold 6421N"
+        },
+        {
+          "name": "Intel Xeon Gold 6426Y"
+        },
+        {
+          "name": "Intel Xeon Gold 6428N"
+        },
+        {
+          "name": "Intel Xeon Gold 6430"
+        },
+        {
+          "name": "Intel Xeon Gold 6434"
+        },
+        {
+          "name": "Intel Xeon Gold 6434H"
+        },
+        {
+          "name": "Intel Xeon Gold 6438M"
+        },
+        {
+          "name": "Intel Xeon Gold 6438N"
+        },
+        {
+          "name": "Intel Xeon Gold 6438Y+"
+        },
+        {
+          "name": "Intel Xeon Gold 6442Y"
+        },
+        {
+          "name": "Intel Xeon Gold 6444Y"
+        },
+        {
+          "name": "Intel Xeon Gold 6448H"
+        },
+        {
+          "name": "Intel Xeon Gold 6448Y"
+        },
+        {
+          "name": "Intel Xeon Gold 6454S"
+        },
+        {
+          "name": "Intel Xeon Gold 6458Q"
+        },
+        {
+          "name": "Intel Xeon CPU Max 9480"
+        },
+        {
+          "name": "Intel Xeon CPU Max 9470"
+        },
+        {
+          "name": "Intel Xeon CPU Max 9468"
+        },
+        {
+          "name": "Intel Xeon CPU Max 9462"
+        },
+        {
+          "name": "Intel Xeon CPU Max 9460"
+        },
+        {
+          "name": "Intel Xeon w9-3495X"
+        },
+        {
+          "name": "Intel Xeon w9-3475X"
+        },
+        {
+          "name": "Intel Xeon w7-3465X"
+        },
+        {
+          "name": "Intel Xeon w7-3455"
+        },
+        {
+          "name": "Intel Xeon w7-3445"
+        },
+        {
+          "name": "Intel Xeon w5-3435X"
+        },
+        {
+          "name": "Intel Xeon w5-3425"
+        },
+        {
+          "name": "Intel Xeon w7-2495X"
+        },
+        {
+          "name": "Intel Xeon w7-2475X"
+        },
+        {
+          "name": "Intel Xeon w5-2465X"
+        },
+        {
+          "name": "Intel Xeon w5-2455X"
+        },
+        {
+          "name": "Intel Xeon w5-2445"
+        },
+        {
+          "name": "Intel Xeon w3-2435"
+        },
+        {
+          "name": "Intel Xeon w3-2425"
+        },
+        {
+          "name": "Intel Xeon w3-2423"
+        },
+        {
+          "name": "Intel Xeon w9-3595X"
+        },
+        {
+          "name": "Intel Xeon w9-3575X"
+        },
+        {
+          "name": "Intel Xeon w7-3565X"
+        },
+        {
+          "name": "Intel Xeon w7-3555"
+        },
+        {
+          "name": "Intel Xeon w7-3545"
+        },
+        {
+          "name": "Intel Xeon w5-3535X"
+        },
+        {
+          "name": "Intel Xeon w5-3525"
+        },
+        {
+          "name": "Intel Xeon w7-2595X"
+        },
+        {
+          "name": "Intel Xeon w7-2575X"
+        },
+        {
+          "name": "Intel Xeon w5-2565X"
+        },
+        {
+          "name": "Intel Xeon w5-2555X"
+        },
+        {
+          "name": "Intel Xeon w5-2545"
+        },
+        {
+          "name": "Intel Xeon w3-2535"
+        },
+        {
+          "name": "Intel Xeon w3-2525"
+        },
+        {
+          "name": "Intel Xeon Platinum 8444H"
+        },
+        {
+          "name": "Intel Xeon Platinum 8450H"
+        },
+        {
+          "name": "Intel Xeon Platinum 8452Y"
+        },
+        {
+          "name": "Intel Xeon Platinum 8454H"
+        },
+        {
+          "name": "Intel Xeon Platinum 8458P"
+        },
+        {
+          "name": "Intel Xeon Platinum 8460H"
+        },
+        {
+          "name": "Intel Xeon Platinum 8460Y+"
+        },
+        {
+          "name": "Intel Xeon Platinum 8461V"
+        },
+        {
+          "name": "Intel Xeon Platinum 8462Y+"
+        },
+        {
+          "name": "Intel Xeon Platinum 8468"
+        },
+        {
+          "name": "Intel Xeon Platinum 8468H"
+        },
+        {
+          "name": "Intel Xeon Platinum 8468V"
+        },
+        {
+          "name": "Intel Xeon Platinum 8470"
+        },
+        {
+          "name": "Intel Xeon Platinum 8470N"
+        },
+        {
+          "name": "Intel Xeon Platinum 8470Q"
+        },
+        {
+          "name": "Intel Xeon Platinum 8471N"
+        },
+        {
+          "name": "Intel Xeon Platinum 8480+"
+        },
+        {
+          "name": "Intel Xeon Platinum 8490H"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH | 5, 6, 7, 8 | Sapphire Rapids (Golden Cove) | 4th Generation Xeon Scalable … Xeon W | Server, Workstation, Embedded | 806F5, 806F6, 806F7, 806F8"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "productFamilies"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_8FH | 5, 6, 8 | Sapphire Rapids (Golden Cove) | Intel Xeon CPU Max Series processors (High Bandwidth Memory HBM) | Server | 806F8"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SPR-SP         | E5/S3    | 06-8f-08/87 | Xeon Scalable Gen4"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SPR-HBM        | Bx       | 06-8f-08/10 | Xeon Max"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/series/228622/4th-gen-intel-xeon-scalable-processors.html",
+          "quote": "Each model's ARK ordering tab gives its code at E5, S3 (4th Gen Xeon Scalable, Xeon W-2400/2500/3400/3500) or B3 (Xeon CPU Max) — ark-sspec.json"
+        }
+      ],
+      "note": "The models are those whose ARK ordering tab gives an E5, S3 or B3 code. Left out: Xeon Gold 5403N, Xeon Gold 5423N, Xeon Gold 5433N, Xeon Gold 6403N, Xeon Gold 6423N, Xeon Gold 6433N, Xeon Gold 6433NE, Xeon Gold 6443N — ARK gives them L0 or U1, steppings neither Intel's microcode notes nor its list of processors by CPUID tie to a CPUID; their codes are kept in ark-sspec.json."
+    },
+    {
+      "cpuids": [
         "90660"
       ],
       "codeNames": [

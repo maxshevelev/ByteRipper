@@ -2698,6 +2698,66 @@
       ]
     },
     {
+      "model": "Intel Xeon Bronze 3408U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232372/intel-xeon-bronze-3408u-processor-22-5m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGB",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon CPU Max 9460",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232595/intel-xeon-cpu-max-9460-processor-97-5m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMJD",
+          "stepping": "B3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon CPU Max 9462",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232597/intel-xeon-cpu-max-9462-processor-75m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMJF",
+          "stepping": "B3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon CPU Max 9468",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232596/intel-xeon-cpu-max-9468-processor-105m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMJE",
+          "stepping": "B3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon CPU Max 9470",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232594/intel-xeon-cpu-max-9470-processor-105m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMJC",
+          "stepping": "B3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon CPU Max 9480",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232592/intel-xeon-cpu-max-9480-processor-112-5m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMJA",
+          "stepping": "B3"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon D-1513N",
       "url": "https://www.intel.com/content/www/us/en/products/sku/122999/intel-xeon-processor-d1513n-6m-cache-1-60-ghz/ordering.html",
       "specs": [
@@ -3788,6 +3848,106 @@
       ]
     },
     {
+      "model": "Intel Xeon Gold 5403N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/237980/intel-xeon-gold-5403n-processor-22-5m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN64",
+          "stepping": "U1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5411N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232393/intel-xeon-gold-5411n-processor-45m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGY",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5412U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232374/intel-xeon-gold-5412u-processor-45m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGJ",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5415+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232373/intel-xeon-gold-5415-processor-22-5m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGC",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5416S",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232396/intel-xeon-gold-5416s-processor-30m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMH2",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5418N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232392/intel-xeon-gold-5418n-processor-45m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGX",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5418Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232379/intel-xeon-gold-5418y-processor-45m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGH",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5420+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232381/intel-xeon-gold-5420-processor-52-5m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGL",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5423N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/234916/intel-xeon-gold-5423n-processor-37-5m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMQQ",
+          "stepping": "U1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 5433N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/234915/intel-xeon-gold-5433n-processor-37-5m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMQP",
+          "stepping": "U1"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon Gold 6328H",
       "url": "https://www.intel.com/content/www/us/en/products/sku/204088/intel-xeon-gold-6328h-processor-22m-cache-2-80-ghz/ordering.html",
       "specs": [
@@ -3824,6 +3984,271 @@
         {
           "sSpec": "SRJXX",
           "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6403N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236592/intel-xeon-gold-6403n-processor-45m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2E",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6414U",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231731/intel-xeon-gold-6414u-processor-60m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM73",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6416H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232389/intel-xeon-gold-6416h-processor-45m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGU",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6418H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232390/intel-xeon-gold-6418h-processor-60m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGV",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6421N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232395/intel-xeon-gold-6421n-processor-60m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMH0",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6423N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236591/intel-xeon-gold-6423n-processor-52-5m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2D",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6426Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232377/intel-xeon-gold-6426y-processor-37-5m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGF",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6428N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232394/intel-xeon-gold-6428n-processor-60m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGZ",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6430",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231737/intel-xeon-gold-6430-processor-60m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7A",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6433N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236589/intel-xeon-gold-6433n-processor-60m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2B",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6433NE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236590/intel-xeon-gold-6433ne-processor-60m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2C",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6434",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232375/intel-xeon-gold-6434-processor-22-5m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGD",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6434H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232387/intel-xeon-gold-6434h-processor-22-5m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGT",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6438M",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232398/intel-xeon-gold-6438m-processor-60m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMH3",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6438N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232397/intel-xeon-gold-6438n-processor-60m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMH1",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6438Y+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232382/intel-xeon-gold-6438y-processor-60m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGM",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6442Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232380/intel-xeon-gold-6442y-processor-60m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGK",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6443N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236593/intel-xeon-gold-6443n-processor-60m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN2F",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6444Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232385/intel-xeon-gold-6444y-processor-45m-cache-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGQ",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6448H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232391/intel-xeon-gold-6448h-processor-60m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGW",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6448Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232384/intel-xeon-gold-6448y-processor-60m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGN",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6454S",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231733/intel-xeon-gold-6454s-processor-60m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7B",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6458Q",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232386/intel-xeon-gold-6458q-processor-60m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGR",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Phi 7235",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/128694/intel-xeon-phi-processor-7235-16gb-1-3-ghz-64-core/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3VF",
+          "stepping": "A0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Phi 7255",
+      "url": null,
+      "specs": []
+    },
+    {
+      "model": "Intel Xeon Phi 7285",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/128691/intel-xeon-phi-processor-7285-16gb-1-3-ghz-68-core/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3VE",
+          "stepping": "A0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Phi 7295",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/128690/intel-xeon-phi-processor-7295-16gb-1-5-ghz-72-core/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3VD",
+          "stepping": "A0"
         }
       ]
     },
@@ -3939,6 +4364,186 @@
       ]
     },
     {
+      "model": "Intel Xeon Platinum 8444H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231749/intel-xeon-platinum-8444h-processor-45m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7L",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8450H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231756/intel-xeon-platinum-8450h-processor-75m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7U",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8452Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231761/intel-xeon-platinum-8452y-processor-67-5m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7W",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8454H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231738/intel-xeon-platinum-8454h-processor-82-5m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7F",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8458P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231742/intel-xeon-platinum-8458p-processor-82-5m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7E",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8460H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231744/intel-xeon-platinum-8460h-processor-105m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7K",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8460Y+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231736/intel-xeon-platinum-8460y-processor-105m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM77",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8461V",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231741/intel-xeon-platinum-8461v-processor-97-5m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7D",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8462Y+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232383/intel-xeon-platinum-8462y-processor-60m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGP",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8468",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231735/intel-xeon-platinum-8468-processor-105m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM76",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8468H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231750/intel-xeon-platinum-8468h-processor-105m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7S",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8468V",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231739/intel-xeon-platinum-8468v-processor-97-5m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7C",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8470",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231728/intel-xeon-platinum-8470-processor-105m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM75",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8470N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231748/intel-xeon-platinum-8470n-processor-97-5m-cache-1-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7M",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8470Q",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231727/intel-xeon-platinum-8470q-processor-105m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM74",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8471N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231745/intel-xeon-platinum-8471n-processor-97-5m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7G",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8480+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231746/intel-xeon-platinum-8480-processor-105m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7H",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8490H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/231747/intel-xeon-platinum-8490h-processor-112-5m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM7J",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon Platinum 9220",
       "url": null,
       "specs": [],
@@ -3973,6 +4578,36 @@
       "url": null,
       "specs": [],
       "note": "No Intel product page found for a Silver 4214C; searches return only 4214, 4214Y, 4214R."
+    },
+    {
+      "model": "Intel Xeon Silver 4410T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232388/intel-xeon-silver-4410t-processor-26-25m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGS",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Silver 4410Y",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232376/intel-xeon-silver-4410y-processor-30m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGE",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Silver 4416+",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232378/intel-xeon-silver-4416-processor-37-5m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMGG",
+          "stepping": "S3"
+        }
+      ]
     },
     {
       "model": "Intel Xeon W-10855",
@@ -4047,6 +4682,296 @@
         {
           "sSpec": "SRKWX",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w3-2423",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233484/intel-xeon-w32423-processor-15m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9L",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w3-2425",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233485/intel-xeon-w32425-processor-15m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9K",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w3-2435",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233480/intel-xeon-w32435-processor-22-5m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9J",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w3-2525",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236882/intel-xeon-w32525-processor-22-5m-cache-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4J",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w3-2535",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236880/intel-xeon-w32535-processor-26-25m-cache-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4H",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-2445",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233481/intel-xeon-w52445-processor-26-25m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9H",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-2455X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233420/intel-xeon-w52455x-processor-30m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9G",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-2465X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233415/intel-xeon-w52465x-processor-33-75m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9F",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-2545",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236877/intel-xeon-w52545-processor-30m-cache-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4G",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-2555X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236881/intel-xeon-w52555x-processor-33-75m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4F",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-2565X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236883/intel-xeon-w52565x-processor-37-5m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4E",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-3425",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233482/intel-xeon-w53425-processor-30m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM35",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-3435X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233421/intel-xeon-w53435x-processor-45m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM34",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-3525",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240484/intel-xeon-w53525-processor-45m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN77",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w5-3535X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240483/intel-xeon-w53535x-processor-52-5m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN76",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-2475X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233418/intel-xeon-w72475x-processor-37-5m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9E",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-2495X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233416/intel-xeon-w72495x-processor-45m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM9D",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-2575X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236879/intel-xeon-w72575x-processor-45m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4D",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-2595X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236878/intel-xeon-w72595x-processor-48-75m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN4C",
+          "stepping": "S3"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-3445",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233478/intel-xeon-w73445-processor-52-5m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM33",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-3455",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233479/intel-xeon-w73455-processor-67-5m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM32",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-3465X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233417/intel-xeon-w73465x-processor-75m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM31",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-3545",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240487/intel-xeon-w73545-processor-67-5m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN74",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-3555",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240485/intel-xeon-w73555-processor-75m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN75",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w7-3565X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240486/intel-xeon-w73565x-processor-82-5m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN73",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w9-3475X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233419/intel-xeon-w93475x-processor-82-5m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM30",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w9-3495X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/233483/intel-xeon-w93495x-processor-105m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2Z",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w9-3575X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240501/intel-xeon-w93575x-processor-97-5m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN72",
+          "stepping": "E5"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon w9-3595X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240482/intel-xeon-w93595x-processor-112-5m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN71",
+          "stepping": "E5"
         }
       ]
     }
