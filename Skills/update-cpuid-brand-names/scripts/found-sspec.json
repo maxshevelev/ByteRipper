@@ -2012,9 +2012,9 @@
     },
     {
       "model": "Intel Core i7-7640X",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "note": "The name is a slip: Intel has no i7-7640X; ARK SKU 121500 is the Core i5-7640X (SR3FR, B0), already in the table. Not taken for this name."
     },
     {
       "model": "Intel Core i7-7700",
@@ -2637,39 +2637,129 @@
     },
     {
       "model": "Intel Core i9-9800X",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "note": "The name is a slip: Intel has no i9-9800X; ARK SKU 189122 is the Core i7-9800X (SREZ9, M0). Not taken for this name."
     },
     {
       "model": "Intel Core i9-9820X",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SREZ8",
+          "stepping": "M0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/806662/PCN117897-00.pdf",
+              "quote": "Intel® Core™ i9-9820X X-series Processor CD8067304126901 M0 S REZ8 986452 ; Boxed Intel® Core™ i9-9820X X-series BX80673I99820X M0 S REZ8 999AC8",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Stepping M0 is Skylake-X (Skylake-X refresh, ARK Code Name 'Products formerly Skylake'), not Cascade Lake B1: Intel's microcode release notes put M0 at '| SKX-SP | H0/M0/U0 | 06-55-04/b7 | ... | Xeon Scalable', i.e. CPUID 50654, but that row names only Xeon Scalable, so cpuid is left null. PCN 117897-00 (Minor Change, 2020) lists the same code and stepping; no pre/post-conversion code exists."
     },
     {
       "model": "Intel Core i9-9900X",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SREZ7",
+          "stepping": "M0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/806662/PCN117897-00.pdf",
+              "quote": "Intel® Core™ i9-9900X X-series Processor CD8067304126200 M0 S REZ7 986451 ; Boxed Intel® Core™ i9-9900X X-series BX80673I99900X M0 S REZ7 999AC5",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Stepping M0 is Skylake-X (Skylake-X refresh, ARK Code Name 'Products formerly Skylake'), not Cascade Lake B1: Intel's microcode release notes put M0 at '| SKX-SP | H0/M0/U0 | 06-55-04/b7 | ... | Xeon Scalable', i.e. CPUID 50654, but that row names only Xeon Scalable, so cpuid is left null. PCN 117897-00 (Minor Change, 2020) lists the same code and stepping; no pre/post-conversion code exists."
     },
     {
       "model": "Intel Core i9-9920X",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SREZ6",
+          "stepping": "M0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/806662/PCN117897-00.pdf",
+              "quote": "Intel® Core™ i9-9920X X-series Processor CD8067304126300 M0 S REZ6 986450 ; Boxed Intel® Core™ i9-9920X X-series BX80673I99920X M0 S REZ6 999AC6",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Stepping M0 is Skylake-X (Skylake-X refresh, ARK Code Name 'Products formerly Skylake'), not Cascade Lake B1: Intel's microcode release notes put M0 at '| SKX-SP | H0/M0/U0 | 06-55-04/b7 | ... | Xeon Scalable', i.e. CPUID 50654, but that row names only Xeon Scalable, so cpuid is left null. PCN 117897-00 (Minor Change, 2020) lists the same code and stepping; no pre/post-conversion code exists."
     },
     {
       "model": "Intel Core i9-9940X",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SREZ5",
+          "stepping": "M0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/806662/PCN117897-00.pdf",
+              "quote": "Intel® Core™ i9-9940X X-series Processor CD8067304175600 M0 S REZ5 986449 ; Boxed Intel® Core™ i9-9940X X-series BX80673I99940X M0 S REZ5 999AC9 ; Boxed Intel® Core™ i9-9940X X-series BXC80673I99940X M0 S REZ5 999ACG",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Stepping M0 is Skylake-X (Skylake-X refresh, ARK Code Name 'Products formerly Skylake'), not Cascade Lake B1: Intel's microcode release notes put M0 at '| SKX-SP | H0/M0/U0 | 06-55-04/b7 | ... | Xeon Scalable', i.e. CPUID 50654, but that row names only Xeon Scalable, so cpuid is left null. PCN 117897-00 (Minor Change, 2020) lists the same code and stepping; no pre/post-conversion code exists."
     },
     {
       "model": "Intel Core i9-9960X",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SREZ4",
+          "stepping": "M0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/806662/PCN117897-00.pdf",
+              "quote": "Intel® Core™ i9-9960X X-series Processor CD8067304126500 M0 S REZ4 986448 ; Boxed Intel® Core™ i9-9960X X-series BX80673I99960X M0 S REZ4 999AC7",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Stepping M0 is Skylake-X (Skylake-X refresh, ARK Code Name 'Products formerly Skylake'), not Cascade Lake B1: Intel's microcode release notes put M0 at '| SKX-SP | H0/M0/U0 | 06-55-04/b7 | ... | Xeon Scalable', i.e. CPUID 50654, but that row names only Xeon Scalable, so cpuid is left null. PCN 117897-00 (Minor Change, 2020) lists the same code and stepping; no pre/post-conversion code exists."
     },
     {
       "model": "Intel Core m3-6Y30",
@@ -2849,9 +2939,34 @@
     },
     {
       "model": "Intel Xeon D-1520",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SR29B",
+          "stepping": null,
+          "cpuid": "50662",
+          "architecture": "Broadwell",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/801838/PCN113905-00.pdf",
+              "quote": "D-1520 2.20 GHz GG8067401741800 SR29B 942393 QJPX 943945 GG8067402568800 SR2DF 944001",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://raw.githubusercontent.com/intel/Intel-Linux-Processor-Microcode-Data-Files/main/releasenote.md",
+              "quote": "| BDX-DE         | V1       | 06-56-02/10 | 0000001a | 0000001c | Xeon D-1520/40",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Broadwell-DE (ARK Code Name 'Products formerly Broadwell'), stepping V1 = CPUID 50662, not Ice Lake D 606C1. PCN 113905-00 (Aug 2015) transitions D-1520 V1 to V2 with post-conversion code SR2DF (GG8067402568800, MM 944001), but the same PCN says the V2 part is the D-1521 ('Summary of hardware & software changes from D-1520 V1 to D-1521 V2 step'), and PCN 925418-01 lists 'Intel® Xeon® Processor D-1521 GG8067402568800 S R2DF 944001'. So SR2DF is the D-1521 (V2/V3, CPUID 50663), not a D-1520 code, and is left out of specs. PCN 925418-01 also lists 'Intel® Xeon® Processor D-1520 GG8067401741800 S R29B 942393'."
     },
     {
       "model": "Intel Xeon D-1521",
@@ -2867,9 +2982,9 @@
     },
     {
       "model": "Intel Xeon D-1524N",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "PCN search not run (one search per model allowed, spent on ARK). No Intel document checked."
     },
     {
       "model": "Intel Xeon D-1527",
@@ -2921,9 +3036,27 @@
     },
     {
       "model": "Intel Xeon D-1540",
-      "searched": "2026-11-07",
-      "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "searched": "2026-11-13",
+      "specs": [
+        {
+          "sSpec": "SR29A",
+          "stepping": "V1",
+          "cpuid": null,
+          "architecture": "Broadwell",
+          "evidence": [
+            {
+              "kind": "database",
+              "url": "https://en.wikipedia.org/wiki/List_of_Intel_Xeon_processors_(Broadwell-based)",
+              "quote": "Xeon D-1540 | SR29A (V1) | 8 | 2 GHz | 2.6 GHz | 8 × 256 KB | 12 MB | 45 W | FC-BGA 1667 | DMI 2.0 | 2× DDR4-2133 / 2× DDR3L-1600 | March 2015 | GG8067401635553 | $581 (section Broadwell-DE, Xeon D-15xx; row cells as WebFetch returned them)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN search not run. ARK and Wikipedia agree on SR29A V1."
     },
     {
       "model": "Intel Xeon D-1541",
@@ -2963,15 +3096,15 @@
     },
     {
       "model": "Intel Xeon D-1563N",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "PCN search not run. Not in Wikipedia's Broadwell Xeon list."
     },
     {
       "model": "Intel Xeon D-1564N",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "Absent from ARK search results and from Wikipedia's Broadwell Xeon list (WebFetch confirmed absent). BGA part, so photographs could not tie a code to it; photos not tried."
     },
     {
       "model": "Intel Xeon D-1567",
@@ -2987,9 +3120,9 @@
     },
     {
       "model": "Intel Xeon D-1573N",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "PCN search not run. Not in Wikipedia's Broadwell Xeon list."
     },
     {
       "model": "Intel Xeon D-1577",
@@ -3017,9 +3150,9 @@
     },
     {
       "model": "Intel Xeon D-1612",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "PCN search not run. Wikipedia's Hewitt Lake table does not list D-1612."
     },
     {
       "model": "Intel Xeon D-1622",
@@ -3041,9 +3174,9 @@
     },
     {
       "model": "Intel Xeon D-1632",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "PCN search not run. Wikipedia's Hewitt Lake table does not list D-1632."
     },
     {
       "model": "Intel Xeon D-1633N",
@@ -4289,9 +4422,9 @@
     },
     {
       "model": "Intel Xeon D-2191",
-      "searched": "2026-11-07",
+      "searched": "2026-11-13",
       "specs": [],
-      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+      "note": "PCN search not run."
     },
     {
       "model": "Intel Xeon D-2712T",

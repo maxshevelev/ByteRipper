@@ -284,6 +284,39 @@ def enrich(entries, cache=None, log=print):
             found |= table.get(c, set())
         return found
 
+    with open(ARK_FILE, encoding="utf-8") as f:
+        ark = json.load(f)
+    ark_by_model = {item["model"]: item["specs"] for item in ark["models"]}
+
+    # Rule 6, first half: a model the article lists only under CPUIDs it is
+    # not sold on moves to the one entry that fits it — whose stepping ARK
+    # gives the model, and which already lists a model of its series (the
+    # name up to its first two digits: "Xeon D-15", "Core i7-85"). None, or
+    # several: it stays.
+    def series(name):
+        m = re.match(r"(.*?[- ][A-Za-z]*\d\d)", name)
+        return m.group(1) if m else name
+
+    relocated = []
+    for e in entries:
+        for p in list(e["processors"]):
+            name = p["name"]
+            steps = {s["stepping"] for s in ark_by_model.get(name, ()) if s.get("stepping")}
+            if p.get("series") or p["sSpec"] or not steps or steps & entry_steppings(e, every):
+                continue
+            if any(steps & entry_steppings(e2, every) for e2 in entries
+                   if e2 is not e and any(q["name"] == name for q in e2["processors"])):
+                continue                                 # placed elsewhere already: second half
+            fits = [e2 for e2 in entries if e2 is not e and steps & entry_steppings(e2, every)
+                    and any(series(q["name"]) == series(name) for q in e2["processors"])]
+            if len(fits) == 1:
+                e["processors"].remove(p)
+                fits[0]["processors"].append({"name": name, "sSpec": []})
+                relocated.append(f"{name} {'/'.join(e['cpuids'])} → {'/'.join(fits[0]['cpuids'])} "
+                                 f"(ARK {'/'.join(sorted(steps))})")
+    for r in relocated:
+        log(f"  moved: {r}")
+
     places = collections.defaultdict(list)          # model → [(entry, processor)]
     for e in entries:
         for p in e["processors"]:
@@ -328,9 +361,6 @@ def enrich(entries, cache=None, log=print):
     counts = collections.Counter()
 
     # ARK.
-    with open(ARK_FILE, encoding="utf-8") as f:
-        ark = json.load(f)
-    ark_by_model = {item["model"]: item["specs"] for item in ark["models"]}
     for item in ark["models"]:
         if item["model"] not in places:
             log(f"  ark: {item['model']} is not in the table")
@@ -470,7 +500,7 @@ def enrich(entries, cache=None, log=print):
         e["processors"] = keep
     for m in moved:
         log(f"  moved: {m} is under its other CPUID — taken out")
-    counts["moved"] = len(moved)
+    counts["moved"] = len(moved) + len(relocated)
     found_sources = {
         "intel": {"about": "an Intel document other than ARK's ordering tab (a specification "
                            "update, a datasheet, a product change notification) that gives the "

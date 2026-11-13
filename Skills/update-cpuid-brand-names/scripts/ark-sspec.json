@@ -1,6 +1,6 @@
 {
   "about": "S-SPEC and stepping per model as Intel ARK's Ordering & Compliance tab lists them, read through WebFetch (ARK refuses scripts). Only models the article lists under more than one CPUID.",
-  "retrieved": "2026-11-07",
+  "retrieved": "2026-11-13",
   "models": [
     {
       "model": "Intel Atom C3558RC",
@@ -1926,6 +1926,12 @@
       ]
     },
     {
+      "model": "Intel Core i7-7640X",
+      "url": null,
+      "specs": [],
+      "note": "The name is a slip: Intel has no i7-7640X; ARK SKU 121500 is the Core i5-7640X (SR3FR, B0), already in the table. Not taken for this name."
+    },
+    {
       "model": "Intel Core i7-7700",
       "url": "https://www.intel.com/content/www/us/en/products/sku/97128/intel-core-i77700-processor-8m-cache-up-to-4-20-ghz/ordering.html",
       "specs": [
@@ -2502,6 +2508,22 @@
       ]
     },
     {
+      "model": "Intel Core i9-9800X",
+      "url": null,
+      "specs": [],
+      "note": "The name is a slip: Intel has no i9-9800X; ARK SKU 189122 is the Core i7-9800X (SREZ9, M0). Not taken for this name."
+    },
+    {
+      "model": "Intel Core i9-9820X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189121/intel-core-i99820x-xseries-processor-16-5m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ8",
+          "stepping": "M0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i9-9900K",
       "url": "https://www.intel.com/content/www/us/en/products/sku/186605/intel-core-i99900k-processor-16m-cache-up-to-5-00-ghz/ordering.html",
       "specs": [
@@ -2527,6 +2549,47 @@
         {
           "sSpec": "SRG1A",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-9900X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189124/intel-core-i99900x-xseries-processor-19-25m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ7",
+          "stepping": "M0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-9920X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189127/intel-core-i99920x-xseries-processor-19-25m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ6",
+          "stepping": "M0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-9940X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189125/intel-core-i99940x-xseries-processor-19-25m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ5",
+          "stepping": "M0"
+        }
+      ],
+      "note": "ARK lists only tray and BX80673I99940X; BXC80673I99940X appears in PCN 117897-00 with the same SREZ5/M0."
+    },
+    {
+      "model": "Intel Core i9-9960X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189123/intel-core-i99960x-xseries-processor-22m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREZ4",
+          "stepping": "M0"
         }
       ]
     },
@@ -2651,6 +2714,16 @@
       "note": "No ARK page for a Xeon D-1519 exists: searches ('\"Xeon D-1519\" site:intel.com specifications') return only the Intel Pentium Processor D1519 (SKU 91559). Its ordering tab https://www.intel.com/content/www/us/en/products/sku/91559/intel-pentium-processor-d1519-6m-cache-1-50-ghz/ordering.html lists one row: Spec Code SR2DM, Ordering Code GG8067402569601, Stepping V2 (title 'Intel® Pentium® Processor D1519 (6M Cache, 1.50 GHz)'). Not recorded as the Xeon's code because the brand differs; the table's 'Xeon D-1519' is probably this Pentium D1519 (V2 = CPUID 50663 per Xeon D-1500 Specification Update 332054-022US, Table 1: 'V2=0011b'). Intel's Xeon D-1500 product brief also lists 'Intel® Pentium® Processors D1508/D1509/D1519' as members of the family."
     },
     {
+      "model": "Intel Xeon D-1520",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/87038/intel-xeon-processor-d1520-6m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR29B",
+          "stepping": "V1"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon D-1521",
       "url": "https://www.intel.com/content/www/us/en/products/sku/91202/intel-xeon-processor-d1521-6m-cache-2-40-ghz/ordering.html",
       "specs": [
@@ -2669,6 +2742,17 @@
           "stepping": "A1"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-1524N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189453/intel-xeon-processor-d1524n-6m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREVD",
+          "stepping": "A1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Broadwell\" (Broadwell-DE), not Ice Lake D; stepping A1, not the table's B0."
     },
     {
       "model": "Intel Xeon D-1527",
@@ -2747,6 +2831,17 @@
       ]
     },
     {
+      "model": "Intel Xeon D-1540",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/87039/intel-xeon-processor-d1540-12m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR29A",
+          "stepping": "V1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Broadwell\" (Broadwell-DE), not Ice Lake D; stepping V1, not the table's B0."
+    },
+    {
       "model": "Intel Xeon D-1541",
       "url": "https://www.intel.com/content/www/us/en/products/sku/91199/intel-xeon-processor-d1541-12m-cache-2-10-ghz/ordering.html",
       "specs": [
@@ -2807,6 +2902,23 @@
       ]
     },
     {
+      "model": "Intel Xeon D-1563N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189461/intel-xeon-processor-d1563n-12m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREVF",
+          "stepping": "A1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Broadwell\" (Broadwell-DE), not Ice Lake D; stepping A1, not B0."
+    },
+    {
+      "model": "Intel Xeon D-1564N",
+      "url": null,
+      "specs": [],
+      "note": "No Intel page found for this model: site:intel.com search and an unfiltered search returned only siblings (D-1563N SKU 189461, D-1573N 189462); ark.intel.com/products/189460 is a 404. The model may not exist (possibly a typo of D-1563N in the source article)."
+    },
+    {
       "model": "Intel Xeon D-1567",
       "url": "https://www.intel.com/content/www/us/en/products/sku/93356/intel-xeon-processor-d1567-18m-cache-2-10-ghz/ordering.html",
       "specs": [
@@ -2825,6 +2937,17 @@
           "stepping": "Y0"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-1573N",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/189462/intel-xeon-processor-d1573n-12m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SREVE",
+          "stepping": "A1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Broadwell\" (Broadwell-DE), not Ice Lake D; stepping A1, not B0."
     },
     {
       "model": "Intel Xeon D-1577",
@@ -2867,6 +2990,17 @@
       ]
     },
     {
+      "model": "Intel Xeon D-1612",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/193681/intel-xeon-d1612-processor-6m-cache-1-50ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRG06",
+          "stepping": "A1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Hewitt Lake\" (Broadwell-DE refresh), not Ice Lake D; stepping A1, not B0."
+    },
+    {
       "model": "Intel Xeon D-1622",
       "url": "https://www.intel.com/content/www/us/en/products/sku/193687/intel-xeon-d1622-processor-6m-cache-2-60ghz/ordering.html",
       "specs": [
@@ -2895,6 +3029,17 @@
           "stepping": "A1"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-1632",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/193695/intel-xeon-d1632-processor-12m-cache-1-50ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRG0C",
+          "stepping": "A1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Hewitt Lake\", not Ice Lake D; stepping A1, not B0."
     },
     {
       "model": "Intel Xeon D-1633N",
@@ -3285,6 +3430,17 @@
           "stepping": "M1"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-2191",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129488/intel-xeon-d2191-processor-24-75m-cache-1-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRCK4",
+          "stepping": "M1"
+        }
+      ],
+      "note": "Specifications tab: Code Name \"Products formerly Skylake\" (Skylake-D), not Ice Lake D; stepping M1, not B0."
     },
     {
       "model": "Intel Xeon D-2712T",

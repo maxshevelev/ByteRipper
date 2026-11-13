@@ -8,7 +8,7 @@
   "sSpecSources": {
     "ark": {
       "about": "Intel ARK, the Ordering & Compliance tab of each model's page; the URL per model is in Skills/update-cpuid-brand-names/scripts/ark-sspec.json",
-      "retrieved": "2026-11-07"
+      "retrieved": "2026-11-13"
     },
     "wikipedia": {
       "pages": [
@@ -1980,6 +1980,15 @@
           "sSpecSource": {
             "SR3L5": "ark"
           }
+        },
+        {
+          "name": "Intel Xeon D-2191",
+          "sSpec": [
+            "SRCK4"
+          ],
+          "sSpecSource": {
+            "SRCK4": "ark"
+          }
         }
       ]
     },
@@ -3499,6 +3508,51 @@
           "sSpecSource": {
             "SRG04": "ark"
           }
+        },
+        {
+          "name": "Intel Xeon D-1524N",
+          "sSpec": [
+            "SREVD"
+          ],
+          "sSpecSource": {
+            "SREVD": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon D-1563N",
+          "sSpec": [
+            "SREVF"
+          ],
+          "sSpecSource": {
+            "SREVF": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon D-1573N",
+          "sSpec": [
+            "SREVE"
+          ],
+          "sSpecSource": {
+            "SREVE": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon D-1612",
+          "sSpec": [
+            "SRG06"
+          ],
+          "sSpecSource": {
+            "SRG06": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon D-1632",
+          "sSpec": [
+            "SRG0C"
+          ],
+          "sSpecSource": {
+            "SRG0C": "ark"
+          }
         }
       ]
     },
@@ -4705,31 +4759,11 @@
           "sSpec": []
         },
         {
-          "name": "Intel Xeon D-1524N",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1540",
           "sSpec": []
         },
         {
-          "name": "Intel Xeon D-1563N",
-          "sSpec": []
-        },
-        {
           "name": "Intel Xeon D-1564N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1573N",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1612",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Xeon D-1632",
           "sSpec": []
         },
         {
@@ -4951,10 +4985,6 @@
             "SRLBP": "intel",
             "SRM15": "intel"
           }
-        },
-        {
-          "name": "Intel Xeon D-2191",
-          "sSpec": []
         },
         {
           "name": "Intel Xeon D-2712T",
@@ -6078,15 +6108,7 @@
       ],
       "processors": [
         {
-          "name": "Intel Core i7-8557U",
-          "sSpec": []
-        },
-        {
           "name": "Intel Core i7-8750HF",
-          "sSpec": []
-        },
-        {
-          "name": "Intel Core i7-8569U",
           "sSpec": []
         },
         {
@@ -6425,6 +6447,24 @@
           "sSpec": [
             "SR3L8"
           ]
+        },
+        {
+          "name": "Intel Core i7-8557U",
+          "sSpec": [
+            "SREZ1"
+          ],
+          "sSpecSource": {
+            "SREZ1": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i7-8569U",
+          "sSpec": [
+            "SREYZ"
+          ],
+          "sSpecSource": {
+            "SREYZ": "ark"
+          }
         }
       ]
     },
@@ -6555,10 +6595,6 @@
           "sSpec": [
             "SRF9W"
           ]
-        },
-        {
-          "name": "Intel Core i3-10100TE",
-          "sSpec": []
         },
         {
           "name": "Intel Core i3-10110U",
@@ -9246,6 +9282,15 @@
           ],
           "sSpecSource": {
             "SRH48": "wikipedia"
+          }
+        },
+        {
+          "name": "Intel Core i3-10100TE",
+          "sSpec": [
+            "SRH6F"
+          ],
+          "sSpecSource": {
+            "SRH6F": "ark"
           }
         }
       ]
