@@ -320,12 +320,12 @@ never came on one the module has. `byteripper-server pack-projects [--apply]` ke
 folder whose last publish is the store's last revision in `private/projects/`; the folders are
 read, never changed. Each answers what it would do until `--apply` is given.
 
-An administrator changes what the registry says with `library-rename`, `library-take-out`,
-`library-restore` and `library-split`: each takes `--reason`, answers what it would do until
+An administrator changes what the registry holds with `library-take-out`, `library-restore`
+and `library-split`: each takes `--reason`, answers what it would do until
 `--apply` is given, and runs on a store's directory, not over a server. Over a server, the
 same changes need a token with the `admin` right. A citation only adds, and stays with
-`cas.write`. A replacement of what an entry says is no administrator's command: it is a
-proposal, applied by the module's next publish once it is agreed.
+`cas.write`. A replacement of what an entry says, its name included, is no administrator's command:
+it is a proposal, applied by the module's next publish once it is agreed.
 
 ## A served store
 

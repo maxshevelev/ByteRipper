@@ -21,8 +21,6 @@ extension GhidraHost {
             case candidate
             /// One entry: its review and its history.
             case entry
-            /// The entry `id` takes the narrower `name`, for `reason`.
-            case rename
             /// A write on the registry itself: `change`.
             case change
         }
@@ -35,8 +33,6 @@ extension GhidraHost {
         public var candidates: [LibraryCandidate]?
         /// The addresses of functions that are candidates no longer.
         public var remove: [String]?
-        /// The name `rename` gives the entry.
-        public var name: String?
         public var change: LibraryChange?
         /// `apply` at `address` puts the entry's text in the project, in place of
         /// the function's own, for a review that goes on writing over it.
@@ -46,13 +42,12 @@ extension GhidraHost {
         public var dryRun: Bool?
 
         public init(action: Action, address: String? = nil, id: String? = nil, reason: String? = nil,
-                    candidates: [LibraryCandidate]? = nil, remove: [String]? = nil, dryRun: Bool? = nil, name: String? = nil,
+                    candidates: [LibraryCandidate]? = nil, remove: [String]? = nil, dryRun: Bool? = nil,
                     change: LibraryChange? = nil, takeText: Bool? = nil) {
             self.takeText = takeText
             self.candidates = candidates
             self.remove = remove
             self.change = change
-            self.name = name
             self.action = action
             self.address = address
             self.id = id
@@ -351,17 +346,9 @@ extension GhidraHost {
         switch request.action {
         case .apply, .decline, .candidate: try requireLease(module, holder: holder)
         case .status, .entry: try tellClosed(module, holder: holder)
-        case .rename, .change: break
+        case .change: break
         }
         switch request.action {
-        case .rename:
-            guard let id = request.id, let name = request.name, let reason = request.reason else {
-                throw GhidraHostError(.refused, "renaming an entry takes `id`, `name` and `reason`", status: 400)
-            }
-            let result = try await writer.renameLibraryEntry(id: id, name: name, reason: reason, by: "agent",
-                                                             module: module, dryRun: request.dryRun ?? false)
-            return try JSONSerialization.data(withJSONObject: try Self.plain(Self.naming(result, module: module, reason: reason)),
-                                              options: [.sortedKeys])
         case .change:
             guard let change = request.change else {
                 throw GhidraHostError(.refused, "no change named", status: 400)

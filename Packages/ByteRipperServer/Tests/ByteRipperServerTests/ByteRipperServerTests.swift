@@ -634,21 +634,21 @@ final class ServerTests: XCTestCase {
         // agent on the server uses the socket, not a route.
         let status2 = try await call("POST", "mcp", reader, body: Data("{}".utf8)).0
         XCTAssertEqual(status2, 404)
-        // Replacing a shared definition is an administrator's: a token that may
-        // use Ghidra and write the store does not reach it, on any route; the
-        // administrator's goes past the right, and hears why there is nothing to do.
+        // Taking a body out of the registry is an administrator's: a token that
+        // may use Ghidra and write the store does not reach it, on any route;
+        // the administrator's goes past the right, and hears why there is
+        // nothing to do. A rename is a proposal's, on no route at all.
         let someModule = SHA256Digest(data: object).hex
         let replacing: [(String, Data)] = [
-            ("ghidra/v1/modules/\(someModule)/library", Data(#"{"action":"rename","id":"a","name":"B","reason":"why"}"#.utf8)),
             ("ghidra/v1/modules/\(someModule)/library",
              Data(#"{"action":"change","change":{"action":"take_out","id":"a","reason":"why"}}"#.utf8)),
             ("cas/v1/library", try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
                 module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [],
-                change: LibraryChange(action: .takeOut, id: "a", reason: "why")))),
-            ("cas/v1/library", try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
-                module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [], reason: "why",
-                renameID: "a", renameTo: "B")))
+                change: LibraryChange(action: .takeOut, id: "a", reason: "why"))))
         ]
+        let (renamed, _) = try await call("POST", "ghidra/v1/modules/\(someModule)/library", admin,
+                                          body: Data(#"{"action":"rename","id":"a","name":"B","reason":"why"}"#.utf8))
+        XCTAssertEqual(renamed, 400, "no rename action is left")
         for (path, body) in replacing {
             let (refused, words) = try await call("POST", path, app, body: body)
             XCTAssertEqual(refused, 403, "\(path): \(words)")

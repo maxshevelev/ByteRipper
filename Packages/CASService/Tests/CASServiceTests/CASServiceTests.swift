@@ -420,12 +420,14 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(changes.library, true)
         XCTAssertEqual(changes.modules, [], "the registry changed, no module did")
 
-        // A rename crosses the wire and is the entry's next version.
-        _ = try await remote.renameLibraryEntry(id: id, name: "FillBytes", reason: "the Renoir review names it as EDK2 does",
-                                            by: "agent", module: module("rn").sha256)
+        // An agreed proposal is applied inside the server, as the store's own
+        // decision: its next version is served.
+        try served.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
+                                     proposals: [try libraryProposal("FillBytes")],
+                                     take: .these([id: "the Renoir review names it as EDK2 does"]))
         let history = try await remote.libraryHistory(id: id)
         XCTAssertEqual(history?.versions.map(\.version), [1, 2])
-        XCTAssertEqual(history?.versions.last?.reason, "the Renoir review names it as EDK2 does (was SetMem)")
+        XCTAssertEqual(history?.versions.last?.reason, "the Renoir review names it as EDK2 does")
         let missing = try await remote.libraryHistory(id: "0-0000000000000000-0000000000000000")
         XCTAssertNil(missing)
     }
@@ -441,12 +443,12 @@ final class CASServiceTests: XCTestCase {
 
         let following = Task { try await mirror.follow(wait: 20) }
         try await Task.sleep(nanoseconds: 200_000_000)
-        // A rename is the entry's next version.
+        // A citation through the server changes the registry; the feed says so.
         let id = try XCTUnwrap(try served.libraryIndex().entries.keys.first)
-        _ = try await remote.renameLibraryEntry(id: id, name: "SetMemBetter", reason: "a better name", by: "agent",
-                                            module: module("czn").sha256)
+        _ = try await remote.changeLibrary(LibraryChange(action: .cite, id: id, file: "MdePkg/SetMem.c", line: 12),
+                                           by: "agent", module: module("czn").sha256)
         _ = try await following.value
-        XCTAssertEqual(try store.libraryIndex().entries.values.first?.name, "SetMemBetter")
+        XCTAssertEqual(try store.libraryIndex(), try served.libraryIndex())
     }
 
     // MARK: - The mirror
@@ -574,19 +576,19 @@ final class CASServiceTests: XCTestCase {
             .added.first?.id)
         func run(_ arguments: [String]) -> CASCommand.Output { CASCommand.run(["--store", root.path] + arguments) }
 
-        XCTAssertEqual(run(["library-rename", id, "FillMem"]).status, 1, "a reason is required")
-        XCTAssertEqual(run(["library-rename", id, "FillMem", "--reason", "narrower"]).status, 0)
-        XCTAssertEqual(try local.libraryIndex().entries[id]?.name, "SetMem", "nothing moves until --apply")
-        XCTAssertEqual(run(["library-rename", id, "FillMem", "--reason", "narrower", "--apply"]).status, 0)
-        XCTAssertEqual(try local.libraryIndex().entries[id]?.name, "FillMem")
-        XCTAssertEqual(try local.libraryHistory(id: id)?.versions.last?.reason?.hasPrefix("narrower"), true)
+        // A rename is a proposal's: there is no such command.
+        XCTAssertEqual(run(["library-rename", id, "FillMem", "--reason", "narrower", "--apply"]).status, 2, "an unknown command")
+        XCTAssertEqual(try local.libraryIndex().entries[id]?.name, "SetMem")
 
+        XCTAssertEqual(run(["library-take-out", id]).status, 1, "a reason is required")
+        XCTAssertEqual(run(["library-take-out", id, "--reason", "it reads module data"]).status, 0)
+        XCTAssertNotNil(try local.libraryIndex().entries[id], "nothing moves until --apply")
         XCTAssertEqual(run(["library-take-out", id, "--reason", "it reads module data", "--apply"]).status, 0)
         XCTAssertNil(try local.libraryIndex().entries[id])
         XCTAssertEqual(run(["library-restore", body.key, "--reason", "it does not", "--apply"]).status, 0)
         XCTAssertNotNil(try local.libraryIndex().entries[id])
 
-        let answer = CASCommand.run(["--server", remote.base.absoluteString, "library-rename", id, "Other", "--reason", "x"])
+        let answer = CASCommand.run(["--server", remote.base.absoluteString, "library-take-out", id, "--reason", "x"])
         XCTAssertEqual(answer.status, 1)
         XCTAssertTrue(String(data: answer.stderr, encoding: .utf8)!.contains("store directory"))
     }

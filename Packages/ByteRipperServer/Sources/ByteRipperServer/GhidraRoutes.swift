@@ -256,7 +256,7 @@ enum GhidraRoutes {
             }
             // A write on the registry itself is an administrator's decision, but
             // for a citation, which only adds.
-            if asked.action == .rename || (asked.action == .change && asked.change?.action != .cite) {
+            if asked.action == .change && asked.change?.action != .cite {
                 try request.principal?.require(.admin)
             }
             let data = try await answer { try await host.library(module, asked, holder: holder(request)) }

@@ -322,15 +322,15 @@ extension ContentStore {
                 throw CodeAnalysisError.analysisMismatch("the entry \(id) has no body \(key)")
             }
             guard entry.variants.count > 1 else {
-                throw CodeAnalysisError.analysisMismatch("\(key) is the entry's only body: rename the entry instead")
+                throw CodeAnalysisError.analysisMismatch("\(key) is the entry's only body: propose the entry under another name instead")
             }
             guard key != id, index.entries[key] == nil else {
                 throw CodeAnalysisError.analysisMismatch(
-                    "\(key) is the body the entry is keyed by: rename the entry, and split its other bodies off")
+                    "\(key) is the body the entry is keyed by: propose the entry under another name, and split its other bodies off")
             }
             if let other = index.entries.first(where: { $0.value.name == name }) {
                 throw CodeAnalysisError.analysisMismatch(
-                    "the entry \(other.key) holds the name \(name): rename that one first, if the review finds it should")
+                    "the entry \(other.key) holds the name \(name): propose that one under another name first, if the review finds it should")
             }
             guard var review = try JSONSerialization.jsonObject(with: try object(entry.entry)) as? [String: Any] else {
                 throw CodeAnalysisError.analysisMismatch("the entry \(id)'s review is not an object")

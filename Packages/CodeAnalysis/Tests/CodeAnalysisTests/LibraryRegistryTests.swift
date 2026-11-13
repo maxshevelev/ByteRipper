@@ -253,7 +253,7 @@ final class LibraryRegistryTests: XCTestCase {
         }
         // A conflict is not moved by a reason: it stays a conflict, and says so.
         XCTAssertThrowsError(try put("q", base: nil, [id: "not a take"])) {
-            XCTAssertTrue("\($0)".contains("take_library_conflicts"), "\($0)")
+            XCTAssertTrue("\($0)".contains("ghidra_type_propose"), "\($0)")
         }
         XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 1)
     }
@@ -289,12 +289,10 @@ final class LibraryRegistryTests: XCTestCase {
         try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [
             review("ReadSmn", body: other, constants: ["0x10199"], variantOf: body.key)])
         func last() throws -> LibraryVersion { try XCTUnwrap(try store.libraryHistory(id: body.key)?.versions.last) }
-        try store.renameLibraryEntry(id: body.key, name: "ReadSmnNarrow", reason: "narrower", by: "agent", changedFrom: second)
-        XCTAssertEqual(try last().changedFrom, second)
-        XCTAssertEqual(try last().source.module, first, "the review's author stays")
         try store.changeLibrary(.init(action: .takeOut, id: body.key, body: other.key, reason: "not this code"),
                                 by: "agent", changedFrom: second)
         XCTAssertEqual(try last().changedFrom, second)
+        XCTAssertEqual(try last().source.module, first, "the review's author stays")
         try store.changeLibrary(.init(action: .restore, body: other.key, reason: "it was"), by: "agent", changedFrom: second)
         XCTAssertEqual(try last().changedFrom, second)
         let split = try store.changeLibrary(.init(action: .split, id: body.key, body: other.key, name: "ReadSmnOther",

@@ -1151,56 +1151,8 @@ extension ContentStore {
         }
     }
 
-    /// Give an entry a narrower name, for a review that finds it holds one too
-    /// wide. A name goes by what the functions mean, not by who came first: the
-    /// entry that holds a name another function also has a claim to can give it
-    /// up. The reason is the history's, and every module takes the new name at
-    /// its next open. `dryRun` answers the same and writes nothing.
-    @discardableResult
-    public func renameLibraryEntry(id: String, name: String, reason: String, by: String?, changedFrom: SHA256Digest? = nil,
-                                   dryRun: Bool = false) throws -> LibraryWriteResult.Change {
-        let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !why.isEmpty else { throw CodeAnalysisError.analysisMismatch("renaming a library entry needs a reason") }
-        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !LibraryEntryReview.isPlaceholder(name) else {
-            throw CodeAnalysisError.analysisMismatch("\(name) is not a name a review gives")
-        }
-        return try withLock {
-            var index = try libraryIndex()
-            guard var entry = index.entries[id] else {
-                throw CodeAnalysisError.analysisMismatch("the registry holds no entry \(id)")
-            }
-            guard entry.name != name else {
-                throw CodeAnalysisError.analysisMismatch("the entry \(id) is already \(name)")
-            }
-            if let other = index.entries.first(where: { $0.key != id && $0.value.name == name }) {
-                throw CodeAnalysisError.analysisMismatch(
-                    "the entry \(other.key) holds the name \(name): rename that one first, if the review finds it should")
-            }
-            guard var review = try JSONSerialization.jsonObject(with: try object(entry.entry)) as? [String: Any] else {
-                throw CodeAnalysisError.analysisMismatch("the entry \(id)'s review is not an object")
-            }
-            let old = entry.name
-            Self.rename(&review, from: old, to: name)
-            let data = try JSONSerialization.data(withJSONObject: review, options: [.sortedKeys, .withoutEscapingSlashes])
-            var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
-            entry.version += 1
-            entry.entry = SHA256Digest(data: data)
-            entry.name = name
-            history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
-                                                   reason: "\(why) (was \(old))", recordedAt: Timestamps.now(),
-                                                   changedFrom: changedFrom))
-            let change = LibraryWriteResult.Change(id: id, name: name, version: entry.version)
-            if dryRun { return change }
-            _ = try putObject(data)
-            index.entries[id] = entry
-            try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
-            try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
-            return change
-        }
-    }
-
-    /// A review object under another name: its name, and the name in its signatures.
+    /// A review object under another name: its name, and the name in its
+    /// signatures — what a split gives the body it makes an entry of.
     static func rename(_ review: inout [String: Any], from old: String, to name: String) {
         func renamed(_ signature: String) -> String {
             signature.replacingOccurrences(of: "\\b\(NSRegularExpression.escapedPattern(for: old))\\b",

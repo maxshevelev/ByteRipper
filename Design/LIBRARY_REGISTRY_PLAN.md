@@ -10,8 +10,8 @@
 > C, and its own name. A library function's name is unique in the registry: a body
 > offered under a name another entry holds is refused (`name_conflicts`), and the
 > review names the new function otherwise: a name goes by meaning, not by who came
-> first, and an administrator (`byteripper-cas library-rename`) gives an entry that
-> holds one too wide a narrower one. A module's own
+> first, and an agreed proposal gives an entry that holds one too wide a narrower
+> one. A module's own
 > function is in the module's scope and conflicts with nothing in other modules.
 > A text true of one module only means the function is not a library function, and
 > it does not belong here. An open links (`mode: link`), and only that. A module stores its
@@ -137,8 +137,8 @@ review documents.
   on any version, and a replacement of what the entry says refuses the whole
   publish and names who wrote it. A replacement of what an entry or a shared
   type says is a proposal's alone: agents vote, or an administrator decides on
-  the console, and the module's next publish applies it (2026-11-13). Rename,
-  take-out, split and restore are an administrator's.
+  the console, and the module's next publish applies it (2026-11-13); a rename
+  is such a replacement. Take-out, split and restore are an administrator's.
   The next version reaches every reader at once: readers read the entry.
 - **Readers see that a function is the registry's**: the artifact records
   `library_entry` (the entry, its version, and whether the function is the

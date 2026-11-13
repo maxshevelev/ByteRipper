@@ -159,16 +159,6 @@ public struct CASService: Sendable {
                 if !dryRun { await feed.rescan() }
                 return .json(result)
             }
-            if let id = put.renameID, let name = put.renameTo {
-                let change = try Self.answer {
-                    try store.renameLibraryEntry(id: id, name: name, reason: put.reason ?? "", by: put.by, changedFrom: put.module,
-                                                 dryRun: dryRun)
-                }
-                if !dryRun { await feed.rescan() }
-                var result = LibraryWriteResult()
-                result.updated = [change]
-                return .json(result)
-            }
             // An offer adds, or completes, or conflicts: what an entry says is
             // replaced by an agreed proposal, which the module's next publish
             // applies inside the server, never by an offer.

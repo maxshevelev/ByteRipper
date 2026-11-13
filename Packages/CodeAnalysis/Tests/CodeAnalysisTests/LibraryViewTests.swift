@@ -216,9 +216,10 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex().entries[other.key]?.name, "CopyMemForward")
     }
 
-    /// A rename reaches the stored C: its own name there, a recursive call, and
-    /// every place after them. A comment naming it is the review's and stays.
-    func testARenameReachesTheStoredC() throws {
+    /// A new name reaches the stored C — what a split does to the body it
+    /// makes an entry of: its own name there, a recursive call, and every place
+    /// after them. A comment naming it is the review's and stays.
+    func testANewNameReachesTheStoredC() throws {
         let c = "/* CopyMem copies */\nvoid CopyMem(void) {\n  CopyMem(Count);\n  Theirs(Count);\n}\n"
         let text = c as NSString
         let own = text.range(of: "void CopyMem").location + 5
@@ -234,13 +235,13 @@ final class LibraryViewTests: XCTestCase {
             "c_unreachable": [[own, 12, ["0x1008"]]],
             "instructions": [["address": "0x1000", "bytes": "90", "text": "NOP"]]
         ]
-        try register(try JSONSerialization.data(withJSONObject: [
+        var review: [String: Any] = [
             "schema": 1, "name": "CopyMem", "kind": "edk2", "plate": "EDK2 CopyMem",
             "signature": "void CopyMem(void)", "function": function
-        ], options: .sortedKeys))
-        try store.renameLibraryEntry(id: body.key, name: "CopyMemForwardOnly", reason: "copies forward only", by: "agent")
-        let entry = try XCTUnwrap(try store.libraryIndex().entries[body.key])
-        let review = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(entry.entry)) as? [String: Any])
+        ]
+        ContentStore.rename(&review, from: "CopyMem", to: "CopyMemForwardOnly")
+        XCTAssertEqual(review["name"] as? String, "CopyMemForwardOnly")
+        XCTAssertEqual(review["signature"] as? String, "void CopyMemForwardOnly(void)")
         let stored = try XCTUnwrap(review["function"] as? [String: Any])
         let now = try XCTUnwrap(stored["c"] as? String) as NSString
         XCTAssertEqual(now, "/* CopyMem copies */\nvoid CopyMemForwardOnly(void) {\n  CopyMemForwardOnly(Count);\n  Theirs(Count);\n}\n")
@@ -250,36 +251,6 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(stored["c_sites"] as? [[Any]]).map(token), ["CopyMemForwardOnly", "Theirs"])
         XCTAssertEqual(try XCTUnwrap(stored["c_fields"] as? [[Any]]).map(token), ["Count"])
         XCTAssertEqual(try XCTUnwrap(stored["c_unreachable"] as? [[Any]]).map(token), ["CopyMemForwardOnly(void"])
-    }
-
-    /// A name goes by what the functions mean: the entry holding one too wide
-    /// gives it up, and a later function may take it or a narrower one.
-    func testAnEntryWithAWideNameCanGiveItUp() throws {
-        try register(try entryObject())
-        XCTAssertThrowsError(try store.renameLibraryEntry(id: body.key, name: "CopyMemForward", reason: " ", by: "agent"))
-        let preview = try store.renameLibraryEntry(id: body.key, name: "CopyMemForward", reason: "copies forward only",
-                                                   by: "agent", dryRun: true)
-        XCTAssertEqual(preview.version, 2)
-        XCTAssertEqual(try store.libraryIndex().entries[body.key]?.name, "CopyMem")
-        try store.renameLibraryEntry(id: body.key, name: "CopyMemForward", reason: "copies forward only", by: "agent")
-        let index = try store.libraryIndex()
-        XCTAssertEqual(index.entries[body.key]?.name, "CopyMemForward")
-        XCTAssertEqual(index.entries[body.key]?.version, 2)
-        let history = try XCTUnwrap(try store.libraryHistory(id: body.key))
-        XCTAssertEqual(history.versions.last?.reason, "copies forward only (was CopyMem)")
-        let read = store.throughRegistry(try moduleArtifact()).functions[0]
-        XCTAssertEqual(read.name, "CopyMemForward")
-        XCTAssertEqual(read.signature, "void CopyMemForward(void)")
-
-        // The name is free again, for a function the review finds it fits.
-        let other = LibraryBody(size: 0x13, full: "ffeeddccbbaa9988", specific: "7766554433221100")
-        let object = try JSONSerialization.data(withJSONObject: ["schema": 1, "name": "CopyMem", "kind": "edk2"], options: .sortedKeys)
-        let taken = try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
-            LibraryProposal(body: other, name: "CopyMem", kind: "edk2", address: "0x3000", entry: object)
-        ])
-        XCTAssertEqual(taken.added.map(\.name), ["CopyMem"])
-        // And a rename onto a name another entry holds says which.
-        XCTAssertThrowsError(try store.renameLibraryEntry(id: body.key, name: "CopyMem", reason: "x", by: "agent"))
     }
 
     private func offerBody(_ key: LibraryBody, _ name: String, data: [String]? = nil,

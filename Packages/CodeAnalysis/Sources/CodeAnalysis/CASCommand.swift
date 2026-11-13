@@ -42,7 +42,6 @@ public enum CASCommand {
           recount-stats [--apply]
           drop-earlier-projects [--apply]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
-          library-rename <id> <name> --reason <text> [--apply]
           library-take-out <id> [--body <key>] --reason <text> [--apply]
           library-restore <body> --reason <text> [--apply]
           library-split <id> <body> <name> --reason <text> [--apply]
@@ -295,7 +294,7 @@ public enum CASCommand {
             }
             output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
                 .recountStats(dryRun: !apply))
-        case "library-rename", "library-take-out", "library-restore", "library-split":
+        case "library-take-out", "library-restore", "library-split":
             // Changing what the registry says is an administrator's: whoever holds
             // the store's directory, or a token with the `admin` right.
             let apply = parser.flag("--apply")
@@ -308,12 +307,6 @@ public enum CASCommand {
             }
             let held = try ContentStore(root: local.root, create: local.create)
             switch command {
-            case "library-rename":
-                let id = try parser.required("an entry id")
-                let name = try parser.required("the entry's new name")
-                try parser.end()
-                output.stdout = try encode(try held.renameLibraryEntry(id: id, name: name, reason: reason, by: "administrator",
-                                                                       changedFrom: nil, dryRun: !apply))
             case "library-take-out":
                 let id = try parser.required("an entry id")
                 try parser.end()

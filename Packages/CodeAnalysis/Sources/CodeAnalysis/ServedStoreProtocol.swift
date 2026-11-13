@@ -89,40 +89,28 @@ public enum ServedStoreProtocol {
         public var rev: Int?
         public var by: String?
         public var proposals: [LibraryProposal]
-        /// Why a rename is made.
-        public var reason: String?
         /// Why this offer adds to the entries it moves, by id, in the review's words.
         public var entryReasons: [String: String]?
         /// Answer what the offer would do and write nothing.
         public var dryRun: Bool?
-        /// Give the entry `renameID` the name `renameTo`, for `reason`, instead
-        /// of taking any proposals; a server that predates it answers nothing done.
-        public var renameID: String?
-        public var renameTo: String?
         /// A write on the registry itself, instead of taking any proposals.
         public var change: LibraryChange?
 
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                    reason: String? = nil, dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil,
-                    change: LibraryChange? = nil, entryReasons: [String: String]? = nil) {
+                    dryRun: Bool? = nil, change: LibraryChange? = nil, entryReasons: [String: String]? = nil) {
             self.entryReasons = entryReasons
             self.change = change
-            self.renameID = renameID
-            self.renameTo = renameTo
             self.module = module
             self.rev = rev
             self.by = by
             self.proposals = proposals
-            self.reason = reason
             self.dryRun = dryRun
         }
 
         private enum CodingKeys: String, CodingKey {
-            case module, rev, by, proposals, reason, change
+            case module, rev, by, proposals, change
             case entryReasons = "entry_reasons"
             case dryRun = "dry_run"
-            case renameID = "rename_id"
-            case renameTo = "rename_to"
         }
     }
 

@@ -150,9 +150,6 @@ public protocol AnalysisWriter: Sendable {
     /// What `writeLibraryEntries` would do, writing nothing.
     func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                                take: LibraryTake) async throws -> LibraryWriteResult
-    /// An entry given a narrower name, as `ContentStore.renameLibraryEntry` does.
-    func renameLibraryEntry(id: String, name: String, reason: String, by: String?, module: SHA256Digest,
-                            dryRun: Bool) async throws -> LibraryWriteResult
     /// A write on the registry itself, as `ContentStore.changeLibrary` does.
     func changeLibrary(_ change: LibraryChange, by: String?, module: SHA256Digest,
                        dryRun: Bool) async throws -> LibraryWriteResult
@@ -289,13 +286,6 @@ extension ContentStore: AnalysisWriter {
                                       proposals: [LibraryProposal],
                                       take: LibraryTake) async throws -> LibraryWriteResult {
         try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, dryRun: true)
-    }
-
-    public func renameLibraryEntry(id: String, name: String, reason: String, by: String?, module: SHA256Digest,
-                                   dryRun: Bool) async throws -> LibraryWriteResult {
-        var result = LibraryWriteResult()
-        result.updated = [try renameLibraryEntry(id: id, name: name, reason: reason, by: by, changedFrom: module, dryRun: dryRun)]
-        return result
     }
 
     public func changeLibrary(_ change: LibraryChange, by: String?, module: SHA256Digest,

@@ -416,7 +416,7 @@ public enum GhidraTools {
                     A refusal is resolved by bringing the function to the bar, renaming, or `remove`: a \
                     function the registry cannot hold is the module's. A function the registry already holds \
                     is refused here: a change to it offers itself at a publish. A new function under a name \
-                    the registry holds takes another name; renaming an entry is an administrator's. A body under four instructions is told \
+                    the registry holds takes another name; renaming an entry is a proposal's. A body under four instructions is told \
                     by how it is called, not by its bytes: read `short_candidate` in `ghidra_library` first \
                     and bind an entry that fits with `ghidra_library_apply`; propose it only when none does. \
                     Answers `candidates`, the module's list now.

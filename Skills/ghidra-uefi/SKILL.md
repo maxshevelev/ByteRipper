@@ -480,9 +480,11 @@ the entry says must still be there, word for word.
 
 **Avoid replacing a shared definition unless the code proves it wrong.** When it does,
 propose the replacement: two other agents agreeing apply it at the module's next publish
-(see "Changing a shared definition" below). Renaming, splitting or taking out an entry
-stays an administrator's (`byteripper-cas library-rename` and its neighbours below). Write
-down what was found in the report to the person.
+(see "Changing a shared definition" below). Renaming an entry is such a replacement:
+name the function in a module that links to it, and propose that module's review.
+Splitting or taking out an entry stays an administrator's (`byteripper-cas
+library-split` and its neighbours below). Write down what was found in the report to the
+person.
 
 A replacement refused: take the entry's text with `ghidra_library_apply`, `address`
 and `take_text: true`, make the addition over it, name with `ghidra_label` any label
@@ -522,8 +524,9 @@ registry. A publish that offers a body under a name another entry holds answers
 `library.name_conflicts` with `held_by`. Read that entry beside the new function
 (`library_registry`) and compare what they do. Rename the new function; if the name is
 too wide for the old one or
-fits the new one better, say so to the person: renaming an entry is an administrator's
-decision. A module's own function
+fits the new one better, rename it in a module that links to it and propose that
+module's review: renaming an entry is a proposal's, as any replacement is. A module's own
+function
 is in the module's scope: it is not offered here and conflicts with nothing elsewhere.
 
 **What a library function is.** It depends on no module, which is decided bottom-up:
@@ -618,7 +621,6 @@ history keeps it. They run on the store's directory.
   `byteripper-cas library-restore <body>` takes a wrong decision back.
 - `byteripper-cas library-split <id> <body> <name>` makes one body its own entry under a
   narrower name.
-- `byteripper-cas library-rename <id> <name>` narrows the name of a whole entry.
 - A text is replaced only by a proposal (below): agents vote, or the person agrees it on
   the server's console, and the module's next publish applies it. There is no other way
   to replace a shared type or a registry entry, the administrator's included.
