@@ -6927,15 +6927,17 @@ public class Owner {
      * convention, still at `unknown` with their storage locked: each prints
      * "WARNING: Unknown calling convention -- yet parameter storage is locked" in
      * its C. A publish settles them the way a signature written now does, and
-     * leaves one no convention fits as it is. Inside a transaction; answers
-     * whether any changed.
+     * leaves one no convention fits as it is. A function that reads as a
+     * registry entry is left too: its signature is the entry's, which only a
+     * proposal changes. Inside a transaction; answers whether any changed.
      */
     private boolean settleUnknownConventions() {
         int settled = 0;
         for (Function function : program.getFunctionManager().getFunctions(true)) {
             if (function.isThunk() || function.isExternal()
                 || function.getSignatureSource() == SourceType.DEFAULT
-                || !Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(function.getCallingConventionName())) continue;
+                || !Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(function.getCallingConventionName())
+                || libraryMark(function) != null) continue;
             try {
                 if (settleConvention(function) == null) {
                     settlePurge(function);
