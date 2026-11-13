@@ -2698,6 +2698,747 @@
       ]
     },
     {
+      "model": "Intel Xeon 6503P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/246088/intel-xeon-6503p-processor-48m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "QA2P",
+          "stepping": "L0"
+        },
+        {
+          "sSpec": "SAE3R",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6503P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242897/intel-xeon-6503pb-processor-48m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG6",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6505P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242667/intel-xeon-6505p-processor-48m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q7J4",
+          "stepping": "L0"
+        },
+        {
+          "sSpec": "SRVU7",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6507P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242668/intel-xeon-6507p-processor-48m-cache-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVU5",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6511P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242666/intel-xeon-6511p-processor-72m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVU9",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6513P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242909/intel-xeon-6513pb-processor-80m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG7",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6515P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242669/intel-xeon-6515p-processor-72m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVU6",
+          "stepping": "L0"
+        },
+        {
+          "sSpec": "Q7NZ",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6516P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242898/intel-xeon-6516pb-processor-80m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG3",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6517P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242665/intel-xeon-6517p-processor-72m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVU4",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6518P-B",
+      "url": null,
+      "specs": []
+    },
+    {
+      "model": "Intel Xeon 6520P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242640/intel-xeon-6520p-processor-144m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVNQ",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6521P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242634/intel-xeon-6521p-processor-144m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVNS",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6523P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242901/intel-xeon-6523pb-processor-96m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWGC",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6527P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242642/intel-xeon-6527p-processor-144m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q7C5",
+          "stepping": "H0"
+        },
+        {
+          "sSpec": "SRVNY",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6530P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242636/intel-xeon-6530p-processor-144m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q7C4",
+          "stepping": "H0"
+        },
+        {
+          "sSpec": "SRVNP",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6532P-B",
+      "url": null,
+      "specs": []
+    },
+    {
+      "model": "Intel Xeon 6533P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242900/intel-xeon-6533pb-processor-128m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWGA",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6543P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242903/intel-xeon-6543pb-processor-128m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG9",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6544P-B",
+      "url": null,
+      "specs": []
+    },
+    {
+      "model": "Intel Xeon 6546P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242902/intel-xeon-6546pb-processor-128m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWFZ",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6548P-B",
+      "url": null,
+      "specs": []
+    },
+    {
+      "model": "Intel Xeon 6553P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242904/intel-xeon-6553pb-processor-144m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG5",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6556P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242907/intel-xeon-6556pb-processor-144m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG2",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6563P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242906/intel-xeon-6563pb-processor-152m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWG4",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6706P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242905/intel-xeon-6706pb-processor-160m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWGD",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6710E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240363/intel-xeon-6710e-processor-96m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPG2",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "Q4W3",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6714P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242671/intel-xeon-6714p-processor-48m-cache-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVUC",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6716P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242908/intel-xeon-6716pb-processor-160m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWGG",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6718P-B",
+      "url": null,
+      "specs": []
+    },
+    {
+      "model": "Intel Xeon 6724P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242670/intel-xeon-6724p-processor-72m-cache-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVUA",
+          "stepping": "L0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6725P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/245097/intel-xeon-6725p-processor-192m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA3XS",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6726P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242896/intel-xeon-6726pb-processor-168m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWFY",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6728P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242643/intel-xeon-6728p-processor-144m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVP3",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6730P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241830/intel-xeon-6730p-processor-288m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5R",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6731E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240366/intel-xeon-6731e-processor-96m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFY",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "Q4VZ",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6731P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242635/intel-xeon-6731p-processor-144m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVNR",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6732P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242641/intel-xeon-6732p-processor-144m-cache-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVP2",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6736P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242638/intel-xeon-6736p-processor-144m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVNW",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6737P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242628/intel-xeon-6737p-processor-144m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVNZ",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6738P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242632/intel-xeon-6738p-processor-144m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q7AX",
+          "stepping": "H0"
+        },
+        {
+          "sSpec": "SRVNU",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6740E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240359/intel-xeon-6740e-processor-96m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFV",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "Q4VV",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6740P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241838/intel-xeon-6740p-processor-288m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5H",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6741P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241828/intel-xeon-6741p-processor-288m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVEY",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6745P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243112/intel-xeon-6745p-processor-336m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q7L9",
+          "stepping": "B2"
+        },
+        {
+          "sSpec": "SRWPA",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6746E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240369/intel-xeon-6746e-processor-96m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFZ",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6747P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241825/intel-xeon-6747p-processor-288m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVEZ",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6748P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242637/intel-xeon-6748p-processor-192m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVNT",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6756E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240361/intel-xeon-6756e-processor-96m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFX",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6756P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/245156/intel-xeon-6756pb-processor-256m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA4J4",
+          "stepping": "A0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6760P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241836/intel-xeon-6760p-processor-320m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q62W",
+          "stepping": "B2"
+        },
+        {
+          "sSpec": "SRV5G",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6761P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241842/intel-xeon-6761p-processor-336m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5L",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6766E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240365/intel-xeon-6766e-processor-108m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPFW",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6766P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/245155/intel-xeon-6766pb-processor-256m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA4J3",
+          "stepping": "A0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6767P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241845/intel-xeon-6767p-processor-336m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5F",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6768P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241840/intel-xeon-6768p-processor-336m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5P",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6768P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/245739/intel-xeon-6768pb-processor-256m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA4J5",
+          "stepping": "A0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6774P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243692/intel-xeon-6774p-processor-336m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWPC",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6776P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/243691/intel-xeon-6776p-processor-336m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRWPD",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6776P-B",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/245154/intel-xeon-6776pb-processor-288m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA4J2",
+          "stepping": "A0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6780E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240362/intel-xeon-6780e-processor-108m-cache-2-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPG3",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6781P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241834/intel-xeon-6781p-processor-336m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5J",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6787P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241844/intel-xeon-6787p-processor-336m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5E",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6788P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241837/intel-xeon-6788p-processor-336m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRV5N",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6944P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/242856/intel-xeon-6944p-processor-432m-cache-1-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRVUS",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6952P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/241643/intel-xeon-6952p-processor-480m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "Q5TS",
+          "stepping": "B2"
+        },
+        {
+          "sSpec": "SRQ6Q",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6960P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240775/intel-xeon-6960p-processor-432m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPKX",
+          "stepping": "B2"
+        },
+        {
+          "sSpec": "Q5SQ",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6962P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/244339/intel-xeon-6962p-processor-432m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA2YM",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6972P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240785/intel-xeon-6972p-processor-480m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPKY",
+          "stepping": "B2"
+        },
+        {
+          "sSpec": "Q5SP",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6978P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/244340/intel-xeon-6978p-processor-504m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SA2YL",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon 6979P",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html; the page lists no Spec Code rows"
+    },
+    {
+      "model": "Intel Xeon 6980P",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/240777/intel-xeon-6980p-processor-504m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRPL2",
+          "stepping": "B2"
+        },
+        {
+          "sSpec": "Q5SM",
+          "stepping": "B2"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon Bronze 3408U",
       "url": "https://www.intel.com/content/www/us/en/products/sku/232372/intel-xeon-bronze-3408u-processor-22-5m-cache-1-80-ghz/ordering.html",
       "specs": [

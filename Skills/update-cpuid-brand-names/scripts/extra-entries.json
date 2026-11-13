@@ -1143,6 +1143,704 @@
     },
     {
       "cpuids": [
+        "A0650"
+      ],
+      "codeNames": [
+        "Comet Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "G0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_COMETLAKE_H_S_6_2_G0\t\t0xa0650"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_COMETLAKE\t\t\tIFM(6, 0xA5) /* Sky Lake */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A0650."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA0650_plat22_ver000000BE_2019-10-10_PRD_B5D77A0C.bin"
+        }
+      ],
+      "note": "coreboot names A0650 Comet Lake H/S 6+2 G0; Intel's list has A0652, A0653, A0655 for 06_A5H, not A0650. No models."
+    },
+    {
+      "cpuids": [
+        "A0651"
+      ],
+      "codeNames": [
+        "Comet Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "P0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_COMETLAKE_H_S_10_2_P0\t\t0xa0651"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_COMETLAKE\t\t\tIFM(6, 0xA5) /* Sky Lake */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A0651."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA0651_plat22_ver000000C2_2019-11-13_PRD_F3861F27.bin"
+        }
+      ],
+      "note": "coreboot names A0651 Comet Lake H/S 10+2 P0; not in Intel's list. No models."
+    },
+    {
+      "cpuids": [
+        "A0654"
+      ],
+      "codeNames": [
+        "Comet Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "P1"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_COMETLAKE_H_S_10_2_P1\t\t0xa0654"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_COMETLAKE\t\t\tIFM(6, 0xA5) /* Sky Lake */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A0654."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA0654_plat22_ver000000C6_2020-01-23_PRD_C415D594.bin"
+        }
+      ],
+      "note": "coreboot names A0654 Comet Lake H/S 10+2 P1; not in Intel's list. No models."
+    },
+    {
+      "cpuids": [
+        "A06A1"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_METEORLAKE_A0_2\t\t0xa06a1"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_METEORLAKE_L\t\tIFM(6, 0xAA)"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A06A1."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA06A1_platC6_ver00000017_2023-05-18_PRD_D870D7CD.bin"
+        }
+      ],
+      "note": "coreboot names A06A1 Meteor Lake A0; Intel's list has only A06A4 (C0) for 06_AAH. No models."
+    },
+    {
+      "cpuids": [
+        "A06A2"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_METEORLAKE_B0\t\t0xa06a2"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_METEORLAKE_L\t\tIFM(6, 0xAA)"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A06A2."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA06A2_platC6_ver00000011_2023-06-27_PRD_E57D4F01.bin"
+        }
+      ],
+      "note": "coreboot names A06A2 Meteor Lake B0; not in Intel's list. No models."
+    },
+    {
+      "cpuids": [
+        "A06C0"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_METEORLAKE\t\tIFM(6, 0xAC) /* Redwood Cove / Crestmont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A06C0."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA06C0_platC6_ver00000013_2023-09-01_PRD_1D60B491.bin"
+        }
+      ],
+      "note": "Model 0xAC is Meteor Lake (the kernel); Intel's list has no 06_ACH row, and nothing names a model or a stepping for A06C0. No models."
+    },
+    {
+      "cpuids": [
+        "A06C1"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_METEORLAKE\t\tIFM(6, 0xAC) /* Redwood Cove / Crestmont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A06C1."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA06C1_platC6_ver00000005_2023-12-01_PRD_113FCB31.bin"
+        }
+      ],
+      "note": "As A06C0: model 0xAC, no 06_ACH row in Intel's list, nothing names a model or stepping. No models."
+    },
+    {
+      "cpuids": [
+        "A06D0"
+      ],
+      "codeNames": [
+        "Granite Rapids"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_GRANITERAPIDS\t\t0xa06d0"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_GRANITERAPIDS_X\t\tIFM(6, 0xAD) /* Redwood Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for A06D0."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpuA06D0_plat95_ver10000680_2024-08-18_PRD_B3DC49CF.bin"
+        }
+      ],
+      "note": "Granite Rapids' stepping ID 0. Intel's list has only A06D1 for 06_ADH, and its one public microcode predates the line's launch. No models."
+    },
+    {
+      "cpuids": [
+        "A06D1"
+      ],
+      "codeNames": [
+        "Granite Rapids"
+      ],
+      "cores": [
+        "Redwood Cove"
+      ],
+      "productFamilies": [
+        "Intel Xeon 6 processors"
+      ],
+      "steppings": [
+        "B2",
+        "H0",
+        "L0"
+      ],
+      "segments": [
+        "Server"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon 6980P"
+        },
+        {
+          "name": "Intel Xeon 6979P"
+        },
+        {
+          "name": "Intel Xeon 6978P"
+        },
+        {
+          "name": "Intel Xeon 6972P"
+        },
+        {
+          "name": "Intel Xeon 6962P"
+        },
+        {
+          "name": "Intel Xeon 6960P"
+        },
+        {
+          "name": "Intel Xeon 6952P"
+        },
+        {
+          "name": "Intel Xeon 6944P"
+        },
+        {
+          "name": "Intel Xeon 6788P"
+        },
+        {
+          "name": "Intel Xeon 6787P"
+        },
+        {
+          "name": "Intel Xeon 6781P"
+        },
+        {
+          "name": "Intel Xeon 6776P"
+        },
+        {
+          "name": "Intel Xeon 6774P"
+        },
+        {
+          "name": "Intel Xeon 6768P"
+        },
+        {
+          "name": "Intel Xeon 6767P"
+        },
+        {
+          "name": "Intel Xeon 6761P"
+        },
+        {
+          "name": "Intel Xeon 6760P"
+        },
+        {
+          "name": "Intel Xeon 6748P"
+        },
+        {
+          "name": "Intel Xeon 6747P"
+        },
+        {
+          "name": "Intel Xeon 6745P"
+        },
+        {
+          "name": "Intel Xeon 6741P"
+        },
+        {
+          "name": "Intel Xeon 6740P"
+        },
+        {
+          "name": "Intel Xeon 6738P"
+        },
+        {
+          "name": "Intel Xeon 6737P"
+        },
+        {
+          "name": "Intel Xeon 6736P"
+        },
+        {
+          "name": "Intel Xeon 6732P"
+        },
+        {
+          "name": "Intel Xeon 6731P"
+        },
+        {
+          "name": "Intel Xeon 6730P"
+        },
+        {
+          "name": "Intel Xeon 6728P"
+        },
+        {
+          "name": "Intel Xeon 6725P"
+        },
+        {
+          "name": "Intel Xeon 6724P"
+        },
+        {
+          "name": "Intel Xeon 6714P"
+        },
+        {
+          "name": "Intel Xeon 6530P"
+        },
+        {
+          "name": "Intel Xeon 6527P"
+        },
+        {
+          "name": "Intel Xeon 6521P"
+        },
+        {
+          "name": "Intel Xeon 6520P"
+        },
+        {
+          "name": "Intel Xeon 6517P"
+        },
+        {
+          "name": "Intel Xeon 6515P"
+        },
+        {
+          "name": "Intel Xeon 6511P"
+        },
+        {
+          "name": "Intel Xeon 6507P"
+        },
+        {
+          "name": "Intel Xeon 6505P"
+        },
+        {
+          "name": "Intel Xeon 6503P"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_ADH | 1 | … | Granite Rapids (Redwood Cove) | Intel Xeon 6900/6700/6500 Series Processors with P-Cores; Intel Xeon 6 processors | Server | A06D1"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| GNR-AP/SP      | Bx/Hx/Lx | 06-ad-01/95 | Xeon 6900/6700/6500 Series Processors with P-Cores"
+        },
+        {
+          "gives": [
+            "processors",
+            "steppings"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/series/240357/intel-xeon-6-processors.html",
+          "quote": "Each model's ARK ordering tab gives its code at B2, H0 or L0 (ark-sspec.json)"
+        }
+      ],
+      "note": "Intel's notes name the line's steppings B·, H· and L· and one CPUID for them, 06-ad-01; ARK gives B2, H0 and L0 by cache size. The Xeon 6 6300P are Raptor Lake on ARK, not here. The 6979P has no ordering tab. Intel's list also gives Xeon 600 workstation processors (platform 0x02) as A06D1; they are not listed yet."
+    },
+    {
+      "cpuids": [
+        "A06E1"
+      ],
+      "codeNames": [
+        "Granite Rapids-D"
+      ],
+      "cores": [
+        "Redwood Cove"
+      ],
+      "productFamilies": [
+        "Intel Xeon 6 processors"
+      ],
+      "steppings": [
+        "A0",
+        "B1"
+      ],
+      "segments": [
+        "Server",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon 6768P-B"
+        },
+        {
+          "name": "Intel Xeon 6756P-B"
+        },
+        {
+          "name": "Intel Xeon 6766P-B"
+        },
+        {
+          "name": "Intel Xeon 6776P-B"
+        },
+        {
+          "name": "Intel Xeon 6548P-B"
+        },
+        {
+          "name": "Intel Xeon 6544P-B"
+        },
+        {
+          "name": "Intel Xeon 6718P-B"
+        },
+        {
+          "name": "Intel Xeon 6518P-B"
+        },
+        {
+          "name": "Intel Xeon 6532P-B"
+        },
+        {
+          "name": "Intel Xeon 6716P-B"
+        },
+        {
+          "name": "Intel Xeon 6563P-B"
+        },
+        {
+          "name": "Intel Xeon 6513P-B"
+        },
+        {
+          "name": "Intel Xeon 6556P-B"
+        },
+        {
+          "name": "Intel Xeon 6726P-B"
+        },
+        {
+          "name": "Intel Xeon 6706P-B"
+        },
+        {
+          "name": "Intel Xeon 6553P-B"
+        },
+        {
+          "name": "Intel Xeon 6543P-B"
+        },
+        {
+          "name": "Intel Xeon 6546P-B"
+        },
+        {
+          "name": "Intel Xeon 6523P-B"
+        },
+        {
+          "name": "Intel Xeon 6533P-B"
+        },
+        {
+          "name": "Intel Xeon 6516P-B"
+        },
+        {
+          "name": "Intel Xeon 6503P-B"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_AEH | 1 | … | Granite Rapids-D (Redwood Cove) Kaseyville | Intel Xeon 6700P-B/6500P-B Series P-cores | Embedded | A06E1"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| GNR-D          | B0/B1    | 06-ae-01/97 | Xeon 6700P-B/6500P-B Series SoC with P-Cores"
+        },
+        {
+          "gives": [
+            "processors",
+            "steppings"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/codename/228655/products-formerly-granite-rapidsd.html",
+          "quote": "Products formerly Granite Rapids-D: 22 models; each ordering tab gives its code at B1, or A0 for the 256M/288M-cache ones (ark-sspec.json)"
+        }
+      ],
+      "note": "Intel's list gives the whole Xeon 6700P-B/6500P-B line as A06E1, so the large-cache models, which ARK gives as A0, are here too. 6548P-B, 6544P-B, 6718P-B, 6518P-B and 6532P-B have no ordering tab on ARK."
+    },
+    {
+      "cpuids": [
+        "A06F3"
+      ],
+      "codeNames": [
+        "Sierra Forest"
+      ],
+      "cores": [
+        "Crestmont"
+      ],
+      "productFamilies": [
+        "Intel Xeon 6 processors"
+      ],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [
+        "Server"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon 6710E"
+        },
+        {
+          "name": "Intel Xeon 6731E"
+        },
+        {
+          "name": "Intel Xeon 6740E"
+        },
+        {
+          "name": "Intel Xeon 6746E"
+        },
+        {
+          "name": "Intel Xeon 6756E"
+        },
+        {
+          "name": "Intel Xeon 6766E"
+        },
+        {
+          "name": "Intel Xeon 6780E"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_AFH | 3 | … | Sierra Forest (Crestmont) | Intel Xeon 6900/6700-Series Processors with E-Cores | Server | A06F3"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| SRF-SP         | C0       | 06-af-03/01 | Xeon 6700-Series Processors with E-Cores"
+        },
+        {
+          "gives": [
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/ark/products/codename/198508/products-formerly-sierra-forest.html",
+          "quote": "Products formerly Sierra Forest: Xeon 6710E, 6731E, 6740E, 6746E, 6756E, 6766E, 6780E (C0)"
+        }
+      ],
+      "note": "ARK lists no Sierra Forest 6900E model."
+    },
+    {
+      "cpuids": [
         "B0660"
       ],
       "codeNames": [

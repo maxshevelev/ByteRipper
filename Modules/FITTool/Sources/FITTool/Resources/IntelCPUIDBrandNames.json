@@ -11877,6 +11877,840 @@
     },
     {
       "cpuids": [
+        "A0650"
+      ],
+      "codeNames": [
+        "Comet Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "G0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A0651"
+      ],
+      "codeNames": [
+        "Comet Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "P0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A0654"
+      ],
+      "codeNames": [
+        "Comet Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "P1"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06A1"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06A2"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06C0"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06C1"
+      ],
+      "codeNames": [
+        "Meteor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06D0"
+      ],
+      "codeNames": [
+        "Granite Rapids"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06D1"
+      ],
+      "codeNames": [
+        "Granite Rapids"
+      ],
+      "cores": [
+        "Redwood Cove"
+      ],
+      "productFamilies": [
+        "Intel Xeon 6 processors"
+      ],
+      "steppings": [
+        "B2",
+        "H0",
+        "L0"
+      ],
+      "segments": [
+        "Server"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon 6980P",
+          "sSpec": [
+            "SRPL2",
+            "Q5SM"
+          ],
+          "sSpecSource": {
+            "SRPL2": "ark",
+            "Q5SM": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6979P",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Xeon 6978P",
+          "sSpec": [
+            "SA2YL"
+          ],
+          "sSpecSource": {
+            "SA2YL": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6972P",
+          "sSpec": [
+            "SRPKY",
+            "Q5SP"
+          ],
+          "sSpecSource": {
+            "SRPKY": "ark",
+            "Q5SP": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6962P",
+          "sSpec": [
+            "SA2YM"
+          ],
+          "sSpecSource": {
+            "SA2YM": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6960P",
+          "sSpec": [
+            "SRPKX",
+            "Q5SQ"
+          ],
+          "sSpecSource": {
+            "SRPKX": "ark",
+            "Q5SQ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6952P",
+          "sSpec": [
+            "Q5TS",
+            "SRQ6Q"
+          ],
+          "sSpecSource": {
+            "Q5TS": "ark",
+            "SRQ6Q": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6944P",
+          "sSpec": [
+            "SRVUS"
+          ],
+          "sSpecSource": {
+            "SRVUS": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6788P",
+          "sSpec": [
+            "SRV5N"
+          ],
+          "sSpecSource": {
+            "SRV5N": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6787P",
+          "sSpec": [
+            "SRV5E"
+          ],
+          "sSpecSource": {
+            "SRV5E": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6781P",
+          "sSpec": [
+            "SRV5J"
+          ],
+          "sSpecSource": {
+            "SRV5J": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6776P",
+          "sSpec": [
+            "SRWPD"
+          ],
+          "sSpecSource": {
+            "SRWPD": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6774P",
+          "sSpec": [
+            "SRWPC"
+          ],
+          "sSpecSource": {
+            "SRWPC": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6768P",
+          "sSpec": [
+            "SRV5P"
+          ],
+          "sSpecSource": {
+            "SRV5P": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6767P",
+          "sSpec": [
+            "SRV5F"
+          ],
+          "sSpecSource": {
+            "SRV5F": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6761P",
+          "sSpec": [
+            "SRV5L"
+          ],
+          "sSpecSource": {
+            "SRV5L": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6760P",
+          "sSpec": [
+            "Q62W",
+            "SRV5G"
+          ],
+          "sSpecSource": {
+            "Q62W": "ark",
+            "SRV5G": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6748P",
+          "sSpec": [
+            "SRVNT"
+          ],
+          "sSpecSource": {
+            "SRVNT": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6747P",
+          "sSpec": [
+            "SRVEZ"
+          ],
+          "sSpecSource": {
+            "SRVEZ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6745P",
+          "sSpec": [
+            "Q7L9",
+            "SRWPA"
+          ],
+          "sSpecSource": {
+            "Q7L9": "ark",
+            "SRWPA": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6741P",
+          "sSpec": [
+            "SRVEY"
+          ],
+          "sSpecSource": {
+            "SRVEY": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6740P",
+          "sSpec": [
+            "SRV5H"
+          ],
+          "sSpecSource": {
+            "SRV5H": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6738P",
+          "sSpec": [
+            "Q7AX",
+            "SRVNU"
+          ],
+          "sSpecSource": {
+            "Q7AX": "ark",
+            "SRVNU": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6737P",
+          "sSpec": [
+            "SRVNZ"
+          ],
+          "sSpecSource": {
+            "SRVNZ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6736P",
+          "sSpec": [
+            "SRVNW"
+          ],
+          "sSpecSource": {
+            "SRVNW": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6732P",
+          "sSpec": [
+            "SRVP2"
+          ],
+          "sSpecSource": {
+            "SRVP2": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6731P",
+          "sSpec": [
+            "SRVNR"
+          ],
+          "sSpecSource": {
+            "SRVNR": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6730P",
+          "sSpec": [
+            "SRV5R"
+          ],
+          "sSpecSource": {
+            "SRV5R": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6728P",
+          "sSpec": [
+            "SRVP3"
+          ],
+          "sSpecSource": {
+            "SRVP3": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6725P",
+          "sSpec": [
+            "SA3XS"
+          ],
+          "sSpecSource": {
+            "SA3XS": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6724P",
+          "sSpec": [
+            "SRVUA"
+          ],
+          "sSpecSource": {
+            "SRVUA": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6714P",
+          "sSpec": [
+            "SRVUC"
+          ],
+          "sSpecSource": {
+            "SRVUC": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6530P",
+          "sSpec": [
+            "Q7C4",
+            "SRVNP"
+          ],
+          "sSpecSource": {
+            "Q7C4": "ark",
+            "SRVNP": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6527P",
+          "sSpec": [
+            "Q7C5",
+            "SRVNY"
+          ],
+          "sSpecSource": {
+            "Q7C5": "ark",
+            "SRVNY": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6521P",
+          "sSpec": [
+            "SRVNS"
+          ],
+          "sSpecSource": {
+            "SRVNS": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6520P",
+          "sSpec": [
+            "SRVNQ"
+          ],
+          "sSpecSource": {
+            "SRVNQ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6517P",
+          "sSpec": [
+            "SRVU4"
+          ],
+          "sSpecSource": {
+            "SRVU4": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6515P",
+          "sSpec": [
+            "SRVU6",
+            "Q7NZ"
+          ],
+          "sSpecSource": {
+            "SRVU6": "ark",
+            "Q7NZ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6511P",
+          "sSpec": [
+            "SRVU9"
+          ],
+          "sSpecSource": {
+            "SRVU9": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6507P",
+          "sSpec": [
+            "SRVU5"
+          ],
+          "sSpecSource": {
+            "SRVU5": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6505P",
+          "sSpec": [
+            "Q7J4",
+            "SRVU7"
+          ],
+          "sSpecSource": {
+            "Q7J4": "ark",
+            "SRVU7": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6503P",
+          "sSpec": [
+            "QA2P",
+            "SAE3R"
+          ],
+          "sSpecSource": {
+            "QA2P": "ark",
+            "SAE3R": "ark"
+          }
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06E1"
+      ],
+      "codeNames": [
+        "Granite Rapids-D"
+      ],
+      "cores": [
+        "Redwood Cove"
+      ],
+      "productFamilies": [
+        "Intel Xeon 6 processors"
+      ],
+      "steppings": [
+        "A0",
+        "B1"
+      ],
+      "segments": [
+        "Server",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon 6768P-B",
+          "sSpec": [
+            "SA4J5"
+          ],
+          "sSpecSource": {
+            "SA4J5": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6756P-B",
+          "sSpec": [
+            "SA4J4"
+          ],
+          "sSpecSource": {
+            "SA4J4": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6766P-B",
+          "sSpec": [
+            "SA4J3"
+          ],
+          "sSpecSource": {
+            "SA4J3": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6776P-B",
+          "sSpec": [
+            "SA4J2"
+          ],
+          "sSpecSource": {
+            "SA4J2": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6548P-B",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Xeon 6544P-B",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Xeon 6718P-B",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Xeon 6518P-B",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Xeon 6532P-B",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Xeon 6716P-B",
+          "sSpec": [
+            "SRWGG"
+          ],
+          "sSpecSource": {
+            "SRWGG": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6563P-B",
+          "sSpec": [
+            "SRWG4"
+          ],
+          "sSpecSource": {
+            "SRWG4": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6513P-B",
+          "sSpec": [
+            "SRWG7"
+          ],
+          "sSpecSource": {
+            "SRWG7": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6556P-B",
+          "sSpec": [
+            "SRWG2"
+          ],
+          "sSpecSource": {
+            "SRWG2": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6726P-B",
+          "sSpec": [
+            "SRWFY"
+          ],
+          "sSpecSource": {
+            "SRWFY": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6706P-B",
+          "sSpec": [
+            "SRWGD"
+          ],
+          "sSpecSource": {
+            "SRWGD": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6553P-B",
+          "sSpec": [
+            "SRWG5"
+          ],
+          "sSpecSource": {
+            "SRWG5": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6543P-B",
+          "sSpec": [
+            "SRWG9"
+          ],
+          "sSpecSource": {
+            "SRWG9": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6546P-B",
+          "sSpec": [
+            "SRWFZ"
+          ],
+          "sSpecSource": {
+            "SRWFZ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6523P-B",
+          "sSpec": [
+            "SRWGC"
+          ],
+          "sSpecSource": {
+            "SRWGC": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6533P-B",
+          "sSpec": [
+            "SRWGA"
+          ],
+          "sSpecSource": {
+            "SRWGA": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6516P-B",
+          "sSpec": [
+            "SRWG3"
+          ],
+          "sSpecSource": {
+            "SRWG3": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6503P-B",
+          "sSpec": [
+            "SRWG6"
+          ],
+          "sSpecSource": {
+            "SRWG6": "ark"
+          }
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "A06F3"
+      ],
+      "codeNames": [
+        "Sierra Forest"
+      ],
+      "cores": [
+        "Crestmont"
+      ],
+      "productFamilies": [
+        "Intel Xeon 6 processors"
+      ],
+      "steppings": [
+        "C0"
+      ],
+      "segments": [
+        "Server"
+      ],
+      "processors": [
+        {
+          "name": "Intel Xeon 6710E",
+          "sSpec": [
+            "SRPG2",
+            "Q4W3"
+          ],
+          "sSpecSource": {
+            "SRPG2": "ark",
+            "Q4W3": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6731E",
+          "sSpec": [
+            "SRPFY",
+            "Q4VZ"
+          ],
+          "sSpecSource": {
+            "SRPFY": "ark",
+            "Q4VZ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6740E",
+          "sSpec": [
+            "SRPFV",
+            "Q4VV"
+          ],
+          "sSpecSource": {
+            "SRPFV": "ark",
+            "Q4VV": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6746E",
+          "sSpec": [
+            "SRPFZ"
+          ],
+          "sSpecSource": {
+            "SRPFZ": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6756E",
+          "sSpec": [
+            "SRPFX"
+          ],
+          "sSpecSource": {
+            "SRPFX": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6766E",
+          "sSpec": [
+            "SRPFW"
+          ],
+          "sSpecSource": {
+            "SRPFW": "ark"
+          }
+        },
+        {
+          "name": "Intel Xeon 6780E",
+          "sSpec": [
+            "SRPG3"
+          ],
+          "sSpecSource": {
+            "SRPG3": "ark"
+          }
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "B0660"
       ],
       "codeNames": [
