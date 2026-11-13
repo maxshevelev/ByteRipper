@@ -3,6 +3,197 @@
   "entries": [
     {
       "cpuids": [
+        "706A0"
+      ],
+      "codeNames": [
+        "Gemini Lake"
+      ],
+      "cores": [
+        "Goldmont Plus"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_GLK_A0\t\t\t0x706a0"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ATOM_GOLDMONT_PLUS\tIFM(6, 0x7A) /* Gemini Lake */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_7AH: stepping 8, Gemini Lake, CPUID 706A8 — none for 706A0."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu706A0_plat01_ver00000026_2017-07-12_PRD_E129C7BC.bin"
+        }
+      ],
+      "note": "coreboot names 706A0 Gemini Lake A0. Intel's list has no row for it, its microcode notes name 06-7a-01 (B0) and 06-7a-08 (R0) only, and its one public microcode is dated 2017-07-12, months before Gemini Lake's launch. No models."
+    },
+    {
+      "cpuids": [
+        "706E0"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_L\t\t\tIFM(6, 0x7E) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_7EH: stepping 5, Ice Lake U/Y, CPUID 706E5 — none for 706E0."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu706E0_platC0_ver0000002C_2018-06-14_PRD_1470F9AE.bin"
+        }
+      ],
+      "note": "Model 0x7E is Ice Lake (the kernel). Intel's list of processors by CPUID has only 706E5 for it, its microcode notes only 06-7e-05 (D1), and coreboot names no 0x706E stepping, so 706E0 has no stepping written and no models."
+    },
+    {
+      "cpuids": [
+        "706E1"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_L\t\t\tIFM(6, 0x7E) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_7EH: stepping 5, Ice Lake U/Y, CPUID 706E5 — none for 706E1."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu706E1_plat80_ver00000042_2019-04-20_PRD_A8218BC2.bin"
+        }
+      ],
+      "note": "Model 0x7E is Ice Lake (the kernel). Intel's list of processors by CPUID has only 706E5 for it, its microcode notes only 06-7e-05 (D1), and coreboot names no 0x706E stepping, so 706E1 has no stepping written and no models; its one public microcode is one update with 706E2."
+    },
+    {
+      "cpuids": [
+        "706E2"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_L\t\t\tIFM(6, 0x7E) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_7EH: stepping 5, Ice Lake U/Y, CPUID 706E5 — none for 706E2."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu706E2_plat80_ver00000042_2019-04-20_PRD_A8218BC1.bin"
+        }
+      ],
+      "note": "Model 0x7E is Ice Lake (the kernel). Intel's list of processors by CPUID has only 706E5 for it, its microcode notes only 06-7e-05 (D1), and coreboot names no 0x706E stepping, so 706E2 has no stepping written and no models; its one public microcode is one update with 706E1."
+    },
+    {
+      "cpuids": [
+        "706E4"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ICELAKE_L\t\t\tIFM(6, 0x7E) /* Sunny Cove */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_7EH: stepping 5, Ice Lake U/Y, CPUID 706E5 — none for 706E4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu706E4_plat80_ver00000046_2019-09-05_PRD_E1B5BB04.bin"
+        }
+      ],
+      "note": "Model 0x7E is Ice Lake (the kernel). Intel's list of processors by CPUID has only 706E5 for it, its microcode notes only 06-7e-05 (D1), and coreboot names no 0x706E stepping, so 706E4 has no stepping written and no models."
+    },
+    {
+      "cpuids": [
         "80650"
       ],
       "codeNames": [

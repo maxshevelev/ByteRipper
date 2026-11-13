@@ -10741,6 +10741,88 @@
     },
     {
       "cpuids": [
+        "706A0"
+      ],
+      "codeNames": [
+        "Gemini Lake"
+      ],
+      "cores": [
+        "Goldmont Plus"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "706E0"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "706E1"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "706E2"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "706E4"
+      ],
+      "codeNames": [
+        "Ice Lake"
+      ],
+      "cores": [
+        "Sunny Cove"
+      ],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "80650"
       ],
       "codeNames": [
