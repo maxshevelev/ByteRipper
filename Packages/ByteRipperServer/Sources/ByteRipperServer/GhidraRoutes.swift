@@ -26,16 +26,8 @@ enum GhidraRoutes {
     /// too, and need `cas.write` beside it (`Design/SERVER_HEADLESS_PLAN.md`
     /// decision 4).
     /// The console's Leases page: the same rows and the same close as the routes.
-    static func consoleLeases(_ host: GhidraHost, published: @escaping @Sendable () async -> Void) -> ConsoleLeases {
-        // The holder of a module in work: the console acts as it, since only
-        // the holder publishes.
-        @Sendable func holder(of digest: SHA256Digest) async throws -> String {
-            guard let held = await host.leaseRows().first(where: { $0.module == digest.hex })?.holder else {
-                throw HTTPError(.conflict, "the module is not in work: only a module someone holds is published")
-            }
-            return held
-        }
-        return ConsoleLeases(list: {
+    static func consoleLeases(_ host: GhidraHost) -> ConsoleLeases {
+        ConsoleLeases(list: {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             return (try? encoder.encode(await host.leaseRows())) ?? Data("[]".utf8)
@@ -43,77 +35,7 @@ enum GhidraRoutes {
             let digest = try digest(module)
             let closed = try await answer { try await host.closeLease(digest, by: by) }
             return try JSONEncoder().encode(closed)
-        }, localHolder: localHolder, conflicts: { module in
-            let digest = try digest(module)
-            let holder = try await holder(of: digest)
-            let raw = try await answer { try await host.preview(digest, holder: holder, conflictTexts: true) }
-            let preview = (try JSONSerialization.jsonObject(with: raw)) as? [String: Any] ?? [:]
-            @Sendable func moduleName(_ hex: String?) async -> Any {
-                guard let hex, let source = SHA256Digest(hex: hex) else { return NSNull() }
-                return (try? await host.project(source).state().module.name) ?? NSNull()
-            }
-            let origins = preview["type_conflict_origins"] as? [String: String] ?? [:]
-            var rows: [[String: Any]] = []
-            let names = preview["type_conflicts"] as? [String] ?? []
-            for name in names {
-                // A typedef and its tag are one type to decide on: the tag
-                // goes with its typedef's row, under the typedef's origin.
-                if name.hasPrefix("_"), names.contains(String(name.dropFirst())) { continue }
-                let origin = origins[name] ?? ""
-                // A withdrawn name only stays in this module: nothing to replace.
-                if origin.hasPrefix("withdrawn ") { continue }
-                var row: [String: Any] = ["name": name]
-                if names.contains("_" + name) { row["tag"] = "_" + name }
-                if let source = SHA256Digest(hex: origin) {
-                    row["origin"] = source.hex
-                    row["origin_name"] = await moduleName(source.hex)
-                }
-                if let data = try? await host.read(digest, "/v1/type?" + FormQuery.encode(["name": name]), holder: holder),
-                   let definition = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    row["module_c"] = (definition["program"] as? [String: Any])?["c"] ?? NSNull()
-                    row["shared_c"] = (definition["shared"] as? [String: Any])?["c"] ?? NSNull()
-                }
-                rows.append(row)
-            }
-            // The registry's entries the review replaces: who wrote each, and
-            // every field it changes, as the entry says it and as it would.
-            let texts = preview["conflict_fields"] as? [String: Any] ?? [:]
-            var entries: [[String: Any]] = []
-            for conflict in (preview["library"] as? [String: Any])?["conflicts"] as? [[String: Any]] ?? [] {
-                guard let id = conflict["id"] as? String else { continue }
-                var row = conflict
-                if var heldBy = conflict["held_by"] as? [String: Any] {
-                    heldBy["module_name"] = await moduleName(heldBy["module"] as? String)
-                    row["held_by"] = heldBy
-                }
-                row["fields"] = texts[id] ?? []
-                entries.append(row)
-            }
-            var answer: [String: Any] = ["module": digest.hex, "holder": holder, "conflicts": rows, "library": entries]
-            answer["revision"] = preview["revision"]
-            // A refusal a decision here does not lift — a function the
-            // registry does not take — is said as the publish would say it.
-            if entries.isEmpty { answer["library_refused"] = preview["library_refused"] }
-            return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
-        }, publishTaking: { module, by, decision in
-            let digest = try digest(module)
-            var take = LibraryTake.none
-            if !decision.entries.isEmpty {
-                guard let reason = decision.reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
-                    throw HTTPError(.badRequest, "a registry entry is taken with a reason: its history keeps why it changed")
-                }
-                take = .these(Dictionary(decision.entries.map { ($0, reason) }, uniquingKeysWith: { first, _ in first }))
-            }
-            let holder = try await holder(of: digest)
-            let what = decision.entries.isEmpty ? "replaces the shared types" : "replaces the shared types and registry entries"
-            let publication = try await answer {
-                try await host.publish(digest, by: "\(by) (console: \(what))",
-                                       options: GhidraHost.PublishOptions(takeTypeConflicts: true, takeLibrary: take),
-                                       holder: holder)
-            }
-            await published()
-            return try JSONEncoder().encode(PublishAnswer(publication))
-        })
+        }, localHolder: localHolder)
     }
 
     /// The console's Issues page over the host's reports.
@@ -291,33 +213,18 @@ enum GhidraRoutes {
 
         router.add("POST", "\(prefix)/modules/:module/publish", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
+            // A shared type or a registry entry is replaced by a proposal
+            // alone — agents' votes, or an administrator's decision on the
+            // console's Proposals page — never by a publish that asks to.
+            try Self.refuseTakes(request)
+            let options = GhidraHost.PublishOptions(takeLibrary: Self.libraryTake(request))
             // `dry_run`: what the publish would store, exported and answered —
             // nothing is written, so the store's right is not needed for it.
             if let dryRun = request.query["dry_run"], dryRun != "0", !dryRun.isEmpty {
-                // With `take_type_conflicts` the preview also names what the
-                // publish would replace in the shared archive; with the
-                // library decision it says which entries it would take and
-                // which conflicts would remain.
-                let take = request.query["take_type_conflicts"] == "1"
                 let data = try await answer {
-                    try await host.preview(module, takeTypeConflicts: take,
-                                           takeLibrary: Self.libraryTake(request), holder: holder(request))
+                    try await host.preview(module, takeLibrary: options.takeLibrary, holder: holder(request))
                 }
                 return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
-            }
-            // `take_type_conflicts`: this publish's version of a conflicting
-            // type replaces the shared one — a layout that was published wrong.
-            // `take_library_conflicts`: this review of a library body becomes
-            // the registry entry's next version — `=1` with `library_reason`
-            // for every conflict, or a body naming the entries
-            // (`{"take_library_conflicts": ["<id>", …], "library_reasons":
-            // {"<id>": "…"}}`) for those alone, each with its own reason.
-            let options = GhidraHost.PublishOptions(
-                takeTypeConflicts: request.query["take_type_conflicts"] == "1",
-                takeLibrary: Self.libraryTake(request))
-            // Replacing a shared definition is an administrator's decision.
-            if options.takeTypeConflicts || options.takeLibrary.all || !options.takeLibrary.ids.isEmpty {
-                try request.principal?.require(.admin)
             }
             let publication = try await answer {
                 try await host.publish(module, by: by(request), options: options, holder: holder(request))
@@ -414,33 +321,35 @@ enum GhidraRoutes {
         return router
     }
 
-    /// The library decision a publish carries: the query form —
-    /// `take_library_conflicts=1` with `library_reason` — takes every
-    /// conflict, the body names the entries with their reasons.
+    /// What a publish carries for the registry: the reasons this review adds
+    /// to each entry it moves (`{"entry_reasons": {"<id>": "…"}}`), kept in
+    /// the entry's history. An addition, never a replacement.
     static func libraryTake(_ request: HTTPRequest) -> LibraryTake {
         let asked = request.body.isEmpty ? nil : try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body)
-        let entryReasons = asked?.entryReasons ?? [:]
-        if request.query["take_library_conflicts"] == "1" {
-            return LibraryTake.all(request.query["library_reason"] ?? "").with(entryReasons: entryReasons)
-        }
-        guard let ids = asked?.takeLibraryConflicts, !ids.isEmpty else {
-            return LibraryTake.none.with(entryReasons: entryReasons)
-        }
-        return LibraryTake.these(asked?.libraryReasons ?? [:]).with(entryReasons: entryReasons)
+        return LibraryTake.none.with(entryReasons: asked?.entryReasons ?? [:])
     }
 
-    /// A publish's body: the library entries this review takes, each with the
-    /// reason the registry's history keeps. The query form — `take_library_
-    /// conflicts=1` with `library_reason` — stays for a take of every one.
+    /// A publish that asks to replace a shared definition is refused, saying
+    /// where that is decided now.
+    static func refuseTakes(_ request: HTTPRequest) throws {
+        let asked = request.body.isEmpty ? nil : try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body)
+        let taking = request.query["take_type_conflicts"] != nil || request.query["take_library_conflicts"] != nil
+            || !(asked?.takeLibraryConflicts ?? []).isEmpty
+        guard taking else { return }
+        throw HTTPError(.badRequest, "a publish no longer replaces a shared type or a registry entry: propose the "
+            + "module's definitions with ghidra_type_propose; agents vote, or an administrator decides on the "
+            + "console's Proposals page, and the module's next publish applies an agreed proposal")
+    }
+
+    /// A publish's body: the reasons for the entries it adds to, and — only to
+    /// be refused — the replacement a publish used to ask for.
     struct PublishLibraryTake: Decodable {
         var takeLibraryConflicts: [String]?
-        var libraryReasons: [String: String]?
         var entryReasons: [String: String]?
 
         private enum CodingKeys: String, CodingKey {
             case takeLibraryConflicts = "take_library_conflicts"
             case entryReasons = "entry_reasons"
-            case libraryReasons = "library_reasons"
         }
     }
 

@@ -205,10 +205,9 @@ and the structure's size unchanged — makes the next version. Comments and desc
 module whose text for a type, a field or an enum member differs from the
 archive's writes its own, and that too is the next version. A type the
 archive holds differently in any other way refuses the publish, and nothing is
-written; only an administrator replaces one (`take_type_conflicts`, from the
-server console's Activity page for a module in work), and that too is a version.
-Agents can agree a replacement instead: the module's holder proposes it, two
-other agents agree with no objection open, and the module's next publish
+written. A replacement is a proposal and nothing else: the module's holder proposes it, two
+other agents agree with no objection open — or an administrator agrees it on the
+console's Review Tickets page — and the module's next publish
 replaces the types the proposal names — while the module and the shared copy
 still hold the texts the voters read. The proposals are kept in
 `private/type-proposals.json` beside the review board's `private/tickets.json`;

@@ -1161,14 +1161,6 @@ details.revoked[open] summary::before { content: "▾ "; }
 /* An administrator's decision on shared types: the module's and the shared
    definition side by side. */
 dialog.wide { width: min(1100px, calc(100vw - 32px)); }
-.type-conflicts { display: flex; flex-direction: column; gap: 18px; max-height: 60vh; overflow-y: auto; }
-.conflict-section { margin: 4px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.conflict-reason { margin-top: 14px; }
-.conflict-reason .field { width: 100%; }
-.type-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 8px; }
-.type-pair > div { min-width: 0; }
-.type-pair pre.code { border: 1px solid var(--border); border-radius: 10px; max-height: 40vh; overflow: auto; font-size: 12px; }
-@media (max-width: 760px) { .type-pair { grid-template-columns: 1fr; } }
 
 /* A proposal's text against the shared one, as the app's code panel shows a
    diff: the gutter and the mark in grey, the removed lines on red, the added
@@ -1221,7 +1213,7 @@ tr.opens.selected td { background: var(--accent-soft); }
 .sheet-head .grow { flex: 1; }
 .sheet-body { padding: 18px 24px 24px; overflow-y: auto; min-height: 0; }
 .sheet-body .issue-part pre.code { max-height: none; }
-.sheet-body .type-pair pre.code, .sheet-body .line-diff pre.code.diff { max-height: none; }
+.sheet-body .line-diff pre.code.diff { max-height: none; }
 @media (max-width: 760px) { .sheet-backdrop { padding: 12px; } }
 
 /* The sheet's first line: the record's state, its counts, and the decisions

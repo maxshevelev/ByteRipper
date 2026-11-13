@@ -99,22 +99,6 @@ public struct Console: Sendable {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: closed)
         }
 
-        // The shared types and registry entries a module in work would
-        // replace, and an administrator's publish that replaces them: the
-        // decision an agent cannot take (a refused publish names it).
-        add("GET", "/admin/api/leases/:module/conflicts") { request in
-            guard let read = leases?.conflicts else { throw HTTPError(.notFound, "this server has no Ghidra role") }
-            let answer = try await read(request.parameters["module"] ?? "")
-            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: answer)
-        }
-        add("POST", "/admin/api/leases/:module/publish-taking-conflicts", maxBodyBytes: 64 << 10) { request in
-            guard let publish = leases?.publishTaking else { throw HTTPError(.notFound, "this server has no Ghidra role") }
-            let by = request.principal?.name ?? "an administrator"
-            let decision = request.body.isEmpty ? ConsoleTakeDecision() : try request.json(ConsoleTakeDecision.self)
-            let answer = try await publish(request.parameters["module"] ?? "", by, decision)
-            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: answer)
-        }
-
         // What agents reported about the tools, and an administrator's resolve.
         let issues = self.issues
         add("GET", "/admin/api/issues") { request in

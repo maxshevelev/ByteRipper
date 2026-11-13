@@ -21,12 +21,16 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], nil)), .none)
         XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], ["entry_reasons": reasons])),
                        LibraryTake.none.with(entryReasons: reasons))
-        XCTAssertEqual(GhidraRoutes.libraryTake(try request(
-            ["take_library_conflicts": "1", "library_reason": "all"], ["entry_reasons": reasons])),
-                       LibraryTake.all("all").with(entryReasons: reasons))
-        XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], [
-            "take_library_conflicts": ["b"], "library_reasons": ["b": "why b"], "entry_reasons": reasons])),
-                       LibraryTake.these(["b": "why b"]).with(entryReasons: reasons))
+        // A publish no longer replaces: asking to is refused, whichever way
+        // it asks; the reasons for additions still pass.
+        XCTAssertNoThrow(try GhidraRoutes.refuseTakes(try request([:], ["entry_reasons": reasons])))
+        for (query, body) in [(["take_library_conflicts": "1", "library_reason": "all"], nil),
+                              (["take_type_conflicts": "1"], nil),
+                              ([:], ["take_library_conflicts": ["b"], "library_reasons": ["b": "why b"]])] as [([String: String], [String: Any]?)] {
+            XCTAssertThrowsError(try GhidraRoutes.refuseTakes(try request(query, body))) { error in
+                XCTAssertTrue("\(error)".contains("ghidra_type_propose"), "\(error)")
+            }
+        }
     }
 
     /// A home no configuration file is in, so the defaults are the defaults.
@@ -472,20 +476,16 @@ final class ServerTests: XCTestCase {
         let (page, _) = try await call("GET", "admin/issues", admin)
         XCTAssertEqual(page, 200, "the console's page")
 
-        // An administrator's decision on shared types and registry entries:
-        // only for a module in work, whose holder the publish runs as; no
-        // client token reaches it; an entry is taken only with a reason.
+        // A shared definition is replaced by a proposal alone: the console's
+        // routes that published replacing them are gone, and a publish that
+        // asks to replace is refused, the administrator's too.
         for (method, path) in [("GET", "conflicts"), ("POST", "publish-taking-conflicts")] {
-            let (notInWork, why) = try await call(method, "admin/api/leases/\(closed.hex)/\(path)", admin)
-            XCTAssertEqual(notInWork, 409, String(decoding: why, as: UTF8.self))
-            XCTAssertTrue(String(decoding: why, as: UTF8.self).contains("not in work"), String(decoding: why, as: UTF8.self))
-            let (client, _) = try await call(method, "admin/api/leases/\(closed.hex)/\(path)", app)
-            XCTAssertNotEqual(client, 200, "a client token is no administrator")
+            let (gone, _) = try await call(method, "admin/api/leases/\(closed.hex)/\(path)", admin)
+            XCTAssertEqual(gone, 404, path)
         }
-        let (noReason, said) = try await call("POST", "admin/api/leases/\(closed.hex)/publish-taking-conflicts", admin,
-                                              body: Data(#"{"entries":["c-1"]}"#.utf8))
-        XCTAssertEqual(noReason, 400, String(decoding: said, as: UTF8.self))
-        XCTAssertTrue(String(decoding: said, as: UTF8.self).contains("reason"), String(decoding: said, as: UTF8.self))
+        let (taking, said) = try await call("POST", "ghidra/v1/modules/\(closed.hex)/publish?take_type_conflicts=1", admin)
+        XCTAssertEqual(taking, 400, String(decoding: said, as: UTF8.self))
+        XCTAssertTrue(String(decoding: said, as: UTF8.self).contains("ghidra_type_propose"), String(decoding: said, as: UTF8.self))
 
         // The review board over HTTP: a verifier's remark, the reviewer's fix,
         // the reviewer refused the closing, another agent closes; the console
@@ -654,8 +654,6 @@ final class ServerTests: XCTestCase {
         // administrator's goes past the right, and hears why there is nothing to do.
         let someModule = SHA256Digest(data: object).hex
         let replacing: [(String, Data)] = [
-            ("ghidra/v1/modules/\(someModule)/publish",
-             Data(#"{"take_library_conflicts":["a"],"library_reasons":{"a":"why"}}"#.utf8)),
             ("ghidra/v1/modules/\(someModule)/library", Data(#"{"action":"rename","id":"a","name":"B","reason":"why"}"#.utf8)),
             ("ghidra/v1/modules/\(someModule)/library",
              Data(#"{"action":"change","change":{"action":"take_out","id":"a","reason":"why"}}"#.utf8)),
@@ -672,6 +670,14 @@ final class ServerTests: XCTestCase {
             XCTAssertTrue(words.contains("admin"), words)
             let reached = try await call("POST", path, admin, body: body).0
             XCTAssertNotEqual(reached, 403, path)
+        }
+        // A publish that asks to replace a registry entry is refused for
+        // every token alike: that is a proposal's.
+        for token in [app, admin] {
+            let (refused, words) = try await call("POST", "ghidra/v1/modules/\(someModule)/publish", token,
+                                                  body: Data(#"{"take_library_conflicts":["a"],"library_reasons":{"a":"why"}}"#.utf8))
+            XCTAssertEqual(refused, 400, words)
+            XCTAssertTrue(words.contains("ghidra_type_propose"), words)
         }
         // Every write past a publish is an administrator's, a citation in the
         // registry and a bundle among them: the app's token, which may write,

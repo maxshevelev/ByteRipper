@@ -1323,7 +1323,7 @@ public enum GhidraTools {
                   + "uses them, naming those. Who and why are recorded and shown by `ghidra_type_definition` "
                   + "(`withdrawn`). Modules that took the type keep their copy, but no module opened after it "
                   + "gets it, and a publish cannot bring it back — it reads as a `type_conflicts` entry whose "
-                  + "origin says `withdrawn`, and `take_type_conflicts` does not override that. Owners already "
+                  + "origin says `withdrawn`, and no proposal overrides that. Owners already "
                   + "running hold their copy of the archive until they restart. `ghidra_type_uses` lists what "
                   + "still names it, to walk and correct. A program that holds a type keeps its own copy: `name` "
                   + "alone answers that one, never the shared one. After a shared type was replaced — an applied "

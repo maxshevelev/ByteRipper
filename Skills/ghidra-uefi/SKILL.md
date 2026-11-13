@@ -619,14 +619,10 @@ history keeps it. They run on the store's directory.
 - `byteripper-cas library-split <id> <body> <name>` makes one body its own entry under a
   narrower name.
 - `byteripper-cas library-rename <id> <name>` narrows the name of a whole entry.
-- A text is replaced by publishing over the review server's routes with a token that has
-  the `admin` right: `take_library_conflicts` names the entries and `library_reasons`
-  says why; `take_type_conflicts=1` replaces a shared type, as the shared types' next
-  version. The person does that from the server's console: on **Activity**, the module in
-  work's conflicts button shows the module's type definitions beside the shared ones and
-  each registry entry's changed fields as the entry holds them and as the module offers
-  them, asks the reason the entries' history keeps, and publishes as the module's holder,
-  replacing them. An agent never does it.
+- A text is replaced only by a proposal (below): agents vote, or the person agrees it on
+  the server's console, and the module's next publish applies it. A publish that asks to
+  replace — `take_type_conflicts`, `take_library_conflicts` — is refused, the
+  administrator's too.
 
 **A refusal for a replacement.** `library.conflicts` means this module's review would
 replace what the registry says. Read the entry's review (`library_registry` with its
@@ -724,8 +720,9 @@ a replaced entry's new version get a remark on their tickets; their reviews are 
 again like any remark. Nobody waits for them before the replacement.
 
 **The person** can agree or reject any proposal in the server's console (**Review
-Tickets**, "Shared-definition proposals"), whatever the votes, and can still replace a
-shared definition directly (**Activity**, the module in work's conflicts). The author
+Tickets**, "Shared-definition proposals"), whatever the votes; that is the only way a
+shared definition is replaced without the votes. **Activity** shows a module in work's
+live proposal beside its lease and opens it. The author
 `withdraw`s its own proposal.
 
 ### On an analysis server
