@@ -408,6 +408,18 @@ public actor GhidraHost {
                 leases[module] = nil
                 token = try await lease(module, record)
                 answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            } catch let error as GhidraHostError where !byHost && !Self.untakenText(error).isEmpty {
+                // A link reads as its entry's text, which the program does not
+                // hold: the entry's text goes into the program first, so the
+                // write stands on it rather than on Ghidra's defaults (issue
+                // 41e8efe7). Once: a second refusal is answered as it is.
+                for address in Self.untakenText(error) {
+                    _ = try await library(module, .init(action: .apply, address: address,
+                                                        reason: "the entry's text, taken before a write on its link",
+                                                        takeText: true), holder: holder)
+                }
+                token = leases[module] ?? token
+                answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
             }
         } catch {
             // A refused write wrote nothing, so the lease it took goes back: a
@@ -427,6 +439,17 @@ public actor GhidraHost {
         }
         if !byHost { noteActivity(module, holder: holder, call: Self.callName(path), kind: .write) }
         return answer
+    }
+
+    /// The links an owner's refusal names as reading their entry's text
+    /// without the program holding it (`Owner.UNTAKEN_TEXT`); empty for any
+    /// other refusal.
+    static func untakenText(_ error: GhidraHostError) -> [String] {
+        guard error.status == 409, let start = error.message.range(of: "untaken entry text at ") else { return [] }
+        let rest = error.message[start.upperBound...]
+        let list = rest.prefix { $0 != ":" }
+        return list.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasPrefix("0x") }
     }
 
     /// Whether the owner's count of changes stands where the last publish left

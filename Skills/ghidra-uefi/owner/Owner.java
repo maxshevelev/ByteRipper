@@ -3592,6 +3592,9 @@ public class Owner {
         mark.addProperty("version", version);
         mark.addProperty("kind", kind);
         if (item.has("codes")) mark.add("codes", item.get("codes"));
+        // The program holds the entry's text, not only the link to it: a write
+        // made on it from here on stands on that text.
+        if (!link) mark.addProperty("text", true);
         propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
         if (hash != null) {
             mark.addProperty("digest", reviewDigest(function, hash));
@@ -3901,6 +3904,9 @@ public class Owner {
             propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
             mark.addProperty("digest", reviewDigest(function, hash));
             if (held != null && id.equals(string(held, "id", "")) && held.has("codes")) mark.add("codes", held.get("codes"));
+            // What a publish marks is what this module offered: the program
+            // holds that review's text, not only a link to it.
+            mark.addProperty("text", true);
             propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
             marked++;
             if (!java.util.Objects.equals(before, libraryState(function))) changed++;
@@ -4553,6 +4559,7 @@ public class Owner {
     private JsonObject write(HttpExchange exchange, Change change) throws Exception {
         requireLease(exchange);
         JsonObject body = body(exchange);
+        requireEntryText(exchange, body);
         long before = program.getModificationNumber();
         int transaction = program.startTransaction(exchange.getRequestURI().getPath());
         boolean done = false;
@@ -4581,6 +4588,7 @@ public class Owner {
         if (items == null || !items.isJsonArray()) throw new Failure(400, "items is a list of changes");
         JsonArray requests = items.getAsJsonArray();
         if (requests.size() > 200) throw new Failure(400, "items holds at most 200 changes");
+        requireEntryText(exchange, body);
         JsonArray answers = new JsonArray();
         for (JsonElement element : requests) {
             if (!element.isJsonObject()) {
@@ -4651,6 +4659,41 @@ public class Owner {
     }
 
     /** The addresses a write's body names. */
+    /** What a refusal for a link whose text the program does not hold begins with: the host reads it. */
+    static final String UNTAKEN_TEXT = "untaken entry text at ";
+
+    /**
+     * A function linked to a registry entry reads as the entry's text while it
+     * is unchanged, though the program holds only the link: names, plate and
+     * comments are Ghidra's defaults underneath. The first write would make it
+     * a draft read as the program holds it, and the entry's text would vanish
+     * from it (issue 41e8efe7). A write on such a function is refused, naming
+     * it, before anything is changed: the host takes the entry's text into the
+     * program (`take_text`) and sends the write again.
+     */
+    private void requireEntryText(HttpExchange exchange, JsonObject body) throws Exception {
+        if (exchange.getRequestURI().getPath().startsWith("/v1/library/")) return;
+        java.util.LinkedHashSet<String> untaken = new java.util.LinkedHashSet<>();
+        for (String place : writePlaces(body)) {
+            Address at;
+            try {
+                at = address(place);
+            } catch (Exception error) {
+                continue;
+            }
+            Function function = program.getFunctionManager().getFunctionContaining(at);
+            JsonObject mark = function == null ? null : libraryMark(function);
+            if (mark == null || mark.has("text") || isDirty(mark)) continue;
+            ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
+            if (!atItsMark(function, hash, mark)) continue;
+            untaken.add(hex(function.getEntryPoint()));
+        }
+        if (untaken.isEmpty()) return;
+        throw new Failure(409, UNTAKEN_TEXT + String.join(",", untaken) + ": the function reads as its registry "
+            + "entry's text, which the program does not hold; a write on it would leave Ghidra's defaults. "
+            + "Take the entry's text with `ghidra_library_apply` and `take_text`, then repeat the write. Nothing was changed");
+    }
+
     private static java.util.List<String> writePlaces(JsonObject body) {
         java.util.List<String> places = new java.util.ArrayList<>();
         for (String key : new String[] {"function", "address"}) {

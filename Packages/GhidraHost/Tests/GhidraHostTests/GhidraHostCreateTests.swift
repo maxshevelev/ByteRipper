@@ -626,6 +626,58 @@ final class GhidraHostLibraryTests: XCTestCase {
         let said = (text?["comments"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }
         XCTAssertTrue(said.contains("A step the holder adds.") && said.contains("Written on the current version."), "\(said)")
     }
+
+    /// A link reads as its entry's text while the program holds only the link.
+    /// A signature written on it — the convention a holder would propose — keeps
+    /// the entry's plate and comments: the entry's text goes into the program
+    /// before the write, not Ghidra's defaults after it (issue 41e8efe7).
+    func testASignatureOnALinkKeepsTheEntrysText() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostLibraryTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
+        try await host.take(reviewed)
+        _ = try await host.createCached(module: images[1], name: "Other")
+        try await host.take(other)
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+
+        let copyGuid = try await function(of: 25, in: reviewed, host: host)
+        _ = try await host.write(reviewed, "/v1/set/signature", body: body([
+            "address": copyGuid, "signature": "EFI_GUID * CopyGuid(EFI_GUID * DestinationGuid, EFI_GUID * SourceGuid)",
+            "storage": ["ECX:4", "EDX:4"], "by": "agent", "reason": "EDK2 BaseLib CopyGuid"]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "plate", "text": "EDK2 BaseLib CopyGuid: the plate of the entry."]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
+        _ = try await moved(copyGuid, of: reviewed, host: host)
+
+        let theirs = try await function(of: 25, in: other, host: host)
+        _ = try await host.library(other, .init(action: .apply))
+        _ = try await host.publish(other, by: "agent")
+        let linked = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertEqual(linked["text"] as? String, "registry", "\(linked.keys.sorted())")
+
+        _ = try await host.write(other, "/v1/set/signature", body: body([
+            "address": theirs, "signature": "EFI_GUID * CopyGuid(EFI_GUID * DestinationGuid, EFI_GUID * SourceGuid)",
+            "storage": ["ECX:4", "EDX:4"], "by": "agent", "reason": "the convention, to propose"]))
+        let signed = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertEqual((signed["library_entry"] as? [String: Any])?["state"] as? String, "edited", "\(signed)")
+        XCTAssertEqual(signed["plate"] as? String, "EDK2 BaseLib CopyGuid: the plate of the entry.", "\(signed)")
+        XCTAssertTrue(((signed["comments"] as? [[String: Any]])?.compactMap { $0["text"] as? String } ?? [])
+                        .contains("first dword of the GUID"), "\(signed)")
+        XCTAssertEqual((signed["parameters"] as? [[String: Any]])?.compactMap { $0["name"] as? String },
+                       ["DestinationGuid", "SourceGuid"])
+    }
 }
 
 /// A type the decompiler declines is refused and leaves the C as it was. Run
