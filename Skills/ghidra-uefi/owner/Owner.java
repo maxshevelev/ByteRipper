@@ -122,11 +122,15 @@ public class Owner {
     // The EDK2 archive the program was typed with, read-only: a type a
     // review names that the program does not hold yet comes from here.
     private FileDataTypeManager archive;
-    // The types other reviews defined, as they were when this owner started:
-    // a copy, so no owner ever holds the shared archive open (§6.5).
+    // The types other reviews defined: a copy, so no owner ever holds the
+    // shared archive open (§6.5), made again whenever the shared file changed
+    // since — another module's publish or an applied proposal makes a new
+    // version while this owner runs (`refreshReviewArchive`).
     private File reviewTypes;
     private File reviewTypesCopy;
     private FileDataTypeManager reviewArchive;
+    private long reviewTypesModified = -1;
+    private long reviewTypesLength = -1;
     private final Map<Address, DecompileResults> decompiled = new HashMap<>();
     private long decompiledAt = -1;
     /** How far rollbacks have moved the program's number: see `modification()`. */
@@ -180,13 +184,7 @@ public class Owner {
         if (options.containsKey("review-types")) {
             String bits = program.getDefaultPointerSize() == 8 ? "X64" : "Ia32";
             reviewTypes = new File(options.get("review-types"), "review-types-" + bits + ".gdt");
-            if (reviewTypes.isFile()) {
-                reviewTypesCopy = File.createTempFile("review-types-", ".gdt");
-                try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
-                    Files.copy(reviewTypes.toPath(), reviewTypesCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                }
-                reviewArchive = FileDataTypeManager.openFileArchive(reviewTypesCopy, false);
-            }
+            refreshReviewArchive();
         }
         // What the program held before anyone reviewed it — the loader's
         // comments, ApplyUefi's types — so a harvest holds only the review.
@@ -292,6 +290,12 @@ public class Owner {
 
     private void handle(HttpExchange exchange) {
         lastRequest = System.currentTimeMillis();
+        // Requests run one at a time, so the copy changes between them only.
+        try {
+            refreshReviewArchive();
+        } catch (Exception error) {
+            System.err.println("OWNER REVIEW TYPES not refreshed: " + error);
+        }
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
         Map<String, String> query = query(exchange.getRequestURI().getRawQuery());
@@ -1876,6 +1880,31 @@ public class Owner {
     }
 
     private FileChannel lockChannel() throws Exception { return lockChannel(reviewTypes); }
+
+    /**
+     * The copy of the shared review types made again when the shared file is
+     * not the one it was copied from: a type taken with `take_shared`, looked
+     * up by name or shown as the shared side of a definition is then the
+     * current version's, not the one the archive held when this owner started.
+     * Nothing when the file has not changed, or there is none.
+     */
+    private void refreshReviewArchive() throws Exception {
+        if (reviewTypes == null || !reviewTypes.isFile()) return;
+        if (reviewArchive != null && reviewTypes.lastModified() == reviewTypesModified
+                && reviewTypes.length() == reviewTypesLength) return;
+        if (reviewTypesCopy == null) reviewTypesCopy = File.createTempFile("review-types-", ".gdt");
+        long modified, length;
+        try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+            modified = reviewTypes.lastModified();
+            length = reviewTypes.length();
+            if (reviewArchive != null) reviewArchive.close();
+            reviewArchive = null;
+            Files.copy(reviewTypes.toPath(), reviewTypesCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+        reviewArchive = FileDataTypeManager.openFileArchive(reviewTypesCopy, false);
+        reviewTypesModified = modified;
+        reviewTypesLength = length;
+    }
 
     private static FileChannel lockChannel(File archive) throws Exception {
         File lock = new File(archive.getPath() + ".lock");
