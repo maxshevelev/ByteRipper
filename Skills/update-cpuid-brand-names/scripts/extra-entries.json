@@ -903,7 +903,7 @@
             "segments"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| WHL-U          | V0       | 06-8e-0d/94 | Core Gen8 Mobile"
+          "quote": "| WHL-U          | V0       | 06-8e-0d/94 | 000000b2 | 000000b8 | Core Gen8 Mobile"
         },
         {
           "gives": [],
@@ -982,7 +982,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SPR-SP         | E0       | 06-8f-04/87 | Xeon Scalable Gen4"
+          "quote": "| SPR-SP         | E0       | 06-8f-04/87 | 2b0004b1 | 2b0004d0 | Xeon Scalable Gen4"
         },
         {
           "gives": [
@@ -1034,7 +1034,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SPR-SP         | E2       | 06-8f-05/87 | Xeon Scalable Gen4"
+          "quote": "| SPR-SP         | E2       | 06-8f-05/87 | 2b000590 | 2b0005c0 | Xeon Scalable Gen4"
         },
         {
           "gives": [
@@ -1090,7 +1090,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SPR-SP         | E3       | 06-8f-06/87 | Xeon Scalable Gen4"
+          "quote": "| SPR-SP         | E3       | 06-8f-06/87 | 2b0005c0 | 2b000603 | Xeon Scalable Gen4"
         },
         {
           "gives": [
@@ -1147,7 +1147,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SPR-SP         | E4/S2    | 06-8f-07/87 | Xeon Scalable Gen4"
+          "quote": "| SPR-SP         | E4/S2    | 06-8f-07/87 | 2b000670 | 2b000685 | Xeon Scalable Gen4"
         },
         {
           "gives": [
@@ -1463,7 +1463,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SPR-SP         | E5/S3    | 06-8f-08/87 | Xeon Scalable Gen4"
+          "quote": "| SPR-SP         | E5/S3    | 06-8f-08/87 | 2b000670 | 2b000685 | Xeon Scalable Gen4"
         },
         {
           "gives": [
@@ -1471,7 +1471,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SPR-HBM        | Bx       | 06-8f-08/10 | Xeon Max"
+          "quote": "| SPR-HBM        | Bx       | 06-8f-08/10 | 2c000421 | 2c000435 | Xeon Max"
         },
         {
           "gives": [
@@ -1872,7 +1872,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| AZB            | A0/R0    | 06-9a-04/40 | Atom C1100"
+          "quote": "| AZB            | A0/R0    | 06-9a-04/40 | 0000000b | 0000000c | Atom C1100"
         },
         {
           "gives": [
@@ -2380,7 +2380,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| GNR-AP/SP      | Bx/Hx/Lx | 06-ad-01/95 | Xeon 6900/6700/6500 Series Processors with P-Cores"
+          "quote": "| GNR-AP/SP      | Bx/Hx/Lx | 06-ad-01/95 | 01000423 | 01000434 | Xeon 6900/6700/6500 Series Processors with P-Cores"
         },
         {
           "gives": [
@@ -2500,7 +2500,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| GNR-D          | B0/B1    | 06-ae-01/97 | Xeon 6700P-B/6500P-B Series SoC with P-Cores"
+          "quote": "| GNR-D          | B0/B1    | 06-ae-01/97 | 01000307 | 01000309 | Xeon 6700P-B/6500P-B Series SoC with P-Cores"
         },
         {
           "gives": [
@@ -2572,7 +2572,7 @@
             "steppings"
           ],
           "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
-          "quote": "| SRF-SP         | C0       | 06-af-03/01 | Xeon 6700-Series Processors with E-Cores"
+          "quote": "| SRF-SP         | C0       | 06-af-03/01 | 03000341 | 03000362 | Xeon 6700-Series Processors with E-Cores"
         },
         {
           "gives": [
