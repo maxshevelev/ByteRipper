@@ -3004,7 +3004,9 @@
       "productFamilies": [
         "3rd Generation Intel Xeon Scalable processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "A1"
+      ],
       "segments": [
         "Server"
       ],
@@ -5663,7 +5665,10 @@
       "productFamilies": [
         "Intel Core Processors with Intel Hybrid Technology"
       ],
-      "steppings": [],
+      "steppings": [
+        "B2",
+        "B3"
+      ],
       "segments": [
         "Mobile"
       ],
@@ -9640,7 +9645,9 @@
         "Intel Xeon E-2300 Processor Family",
         "Intel Xeon W-1300 processor family"
       ],
-      "steppings": [],
+      "steppings": [
+        "B0"
+      ],
       "segments": [
         "Desktop",
         "Server",
@@ -11304,6 +11311,7 @@
         "Intel Xeon W Processor"
       ],
       "steppings": [
+        "D0",
         "D2",
         "M1"
       ],
@@ -13056,6 +13064,7 @@
         "Intel Xeon 6 processors"
       ],
       "steppings": [
+        "B0",
         "B2",
         "H0",
         "L0"
@@ -13479,6 +13488,7 @@
       ],
       "steppings": [
         "A0",
+        "B0",
         "B1"
       ],
       "segments": [

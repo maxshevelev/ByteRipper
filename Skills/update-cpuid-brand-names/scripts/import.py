@@ -273,7 +273,8 @@ def intel_steppings_over_the_article(entries, cache):
     name a stepping for each of its CPUIDs: a stepping the notes give and the
     article does not is added (A0661's K1), and an article whose steppings
     are none of the notes' has them replaced (506CA: the notes' E0, not F1).
-    Each change is logged."""
+    An entry with a CPUID the notes do not list (A0670/A0671) gains the known
+    one's steppings but loses none. Each change is logged."""
     notes = enrichment.intel_steppings(cache, current=True)
     # A stepping the notes give another group on the same CPUID (an extra
     # entry beside the article's: Arizona Beach's A0 on 906A4) is that
@@ -284,12 +285,16 @@ def intel_steppings_over_the_article(entries, cache):
             for c in e["cpuids"]:
                 beside.setdefault(c, set()).update(e["steppings"])
     for e in entries:
-        if e.get("source") == "extra" or any("X" in c or c not in notes for c in e["cpuids"]):
+        known = [c for c in e["cpuids"] if "X" not in c and c in notes]
+        if e.get("source") == "extra" or not known:
             continue
         intel = sorted(set().union(*(notes[c] - (beside.get(c, set()) - set(e["steppings"]))
-                                     for c in e["cpuids"])))
+                                     for c in known)))
         have = e["steppings"]
-        if have and not set(have) & set(intel):
+        # Replaced only where the notes know every CPUID of the entry; with
+        # one they do not (A0670 of A0670/A0671), its own stepping may be the
+        # article's.
+        if have and not set(have) & set(intel) and len(known) == len(e["cpuids"]):
             print(f"  steppings: {'/'.join(e['cpuids'])} {have} → Intel's {intel}")
             e["steppings"] = intel
         elif set(intel) - set(have):

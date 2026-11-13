@@ -912,6 +912,7 @@
         "Intel Xeon W Processor"
       ],
       "steppings": [
+        "D0",
         "D2",
         "M1"
       ],
@@ -2759,6 +2760,7 @@
         "Intel Xeon 6 processors"
       ],
       "steppings": [
+        "B0",
         "B2",
         "H0",
         "L0"
@@ -2940,6 +2942,7 @@
       ],
       "steppings": [
         "A0",
+        "B0",
         "B1"
       ],
       "segments": [
@@ -3471,7 +3474,7 @@
           "quote": "Each model's ARK ordering tab lists its codes at stepping H0 (ark-sspec.json); Code Name \"Products formerly Raptor Lake\", Vertical Segment \"Desktop\" (i3-13100, i3-14100, Processor 300), \"Embedded\" (i3-13100E)"
         }
       ],
-      "note": "The article has no row for B06F5. Intel's microcode notes call 06-bf-05 RPL-S H0 since 2024 (earlier releases called it ADL C0); coreboot names 0xb06f5 Raptor Lake H0. The models are those whose ARK ordering tab gives an H0 code among the 13th/14th gen 4-core and 2-core desktop and embedded parts; the i5-13400/14400 (B0, C0) and Xeon E-2400 (B0) have none. Alder Lake's H0 is another CPUID, 90675."
+      "note": "The article has no row for B06F5. Intel's microcode notes call 06-bf-05 RPL-S H0 since 2024 (earlier releases called it ADL C0); coreboot names 0xb06f5 Raptor Lake H0. The models are those whose ARK ordering tab gives an H0 code among the 13th/14th gen 4-core and 2-core desktop and embedded parts; the i5-13400/14400 (B0, C0) and Xeon E-2400 (B0) have none. Alder Lake's H0 is another CPUID, 90675. Intel's notes before 2024 called 06-bf-05 \"ADL | C0\"; since then \"RPL-S | H0\", which is what ARK's models give, so C0 is not written."
     },
     {
       "cpuids": [
