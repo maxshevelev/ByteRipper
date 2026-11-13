@@ -38,7 +38,7 @@ import ToolModuleKit
     private let outline = NSOutlineView()
     /// The column of sections. The pane places it, beside the header as well as
     /// the text.
-    let sectionColumn = NSScrollView()
+    let sectionColumn = SectionColumnView()
     private var outlineRoots: [SectionRow] = []
     fileprivate var sectionRoots: [SectionRow] { outlineRoots }
     fileprivate var isFollowingReading: Bool { followingReading }
@@ -107,7 +107,8 @@ import ToolModuleKit
         outline.floatsGroupRows = false
         outline.indentationPerLevel = 14
         outline.style = .inset
-        outline.backgroundColor = .windowBackgroundColor
+        // The column's fill shows through: see `SectionColumnView`.
+        outline.backgroundColor = .clear
         outline.rowSizeStyle = .custom
         outline.dataSource = self
         outline.delegate = self
@@ -117,7 +118,7 @@ import ToolModuleKit
         ControlHelp.describe(outline, L("Sections of the description"))
         sectionColumn.documentView = outline
         sectionColumn.hasVerticalScroller = true
-        sectionColumn.backgroundColor = .windowBackgroundColor
+        sectionColumn.drawsBackground = false
         sectionColumn.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(scroll)
@@ -852,4 +853,46 @@ final class DescriptionTextView: NSTextView, FindBoxHost {
         menu.addItem(withTitle: L("Select All"), action: #selector(selectAll(_:)), keyEquivalent: "")
         return menu
     }
+}
+
+/// The description's column of sections: chrome beside the document, not part
+/// of it, and filled to say so. It used to be `windowBackgroundColor`, which
+/// on macOS 26 is as white as the text's own background, so the column no
+/// longer stood apart from the text it lists. A system fill is translucent and
+/// made to sit over content — darker over light, lighter over dark — the
+/// fill the panes' headers use, at the same tertiary weight.
+final class SectionColumnView: NSScrollView {
+    static let cornerRadius: CGFloat = 8
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = Self.cornerRadius
+        layer?.masksToBounds = true
+        applyFill()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been used") }
+
+    /// A layer's colour is a CGColor, fixed when it is set: resolved in this
+    /// view's own appearance, and again whenever that changes.
+    private func applyFill() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.tertiarySystemFill.cgColor
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyFill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyFill()
+    }
+
+    /// The fill as last resolved, for a test.
+    var fillColor: CGColor? { layer?.backgroundColor }
 }

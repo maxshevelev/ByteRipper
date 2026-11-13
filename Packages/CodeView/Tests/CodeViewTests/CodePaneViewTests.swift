@@ -3777,6 +3777,26 @@ final class CodePaneViewTests: XCTestCase {
         return text.attribute(.link, at: range.location, effectiveRange: nil)
     }
 
+    /// The column of sections is chrome over the document: a translucent
+    /// system fill, resolved again with the appearance — not the window's
+    /// background, which on macOS 26 is as white as the text's.
+    func testTheSectionColumnIsFilledApartFromTheText() throws {
+        let view = try describedPane()
+        view.setModuleDescription("# Module\n\nIntro.\n\n## How it works\n\nText.")
+        view.showDescription(true)
+        view.layoutSubtreeIfNeeded()
+        let column = try XCTUnwrap(view.descriptionView.sectionColumn as? SectionColumnView)
+        XCTAssertFalse(column.drawsBackground)
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            let appearance = try XCTUnwrap(NSAppearance(named: name))
+            column.appearance = appearance
+            var expected: CGColor?
+            appearance.performAsCurrentDrawingAppearance { expected = NSColor.tertiarySystemFill.cgColor }
+            XCTAssertEqual(column.fillColor, expected, "\(name.rawValue)")
+            XCTAssertGreaterThan(column.fillColor?.alpha ?? 0, 0, "\(name.rawValue): the fill shows")
+        }
+    }
+
     /// Over the description the header names no function. A column lists the
     /// sections and follows the reading; a click on one is a step Back returns
     /// from.
