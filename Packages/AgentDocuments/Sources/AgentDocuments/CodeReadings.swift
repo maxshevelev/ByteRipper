@@ -105,6 +105,12 @@ public final class CodeReadings {
         properties["level"] = AgentSchema.choice(ReviewLevel.allCases.map(\.rawValue),
                                                  "With `what: \"functions\"`: only functions at this review level.")
         properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written; with `what: \"post_codes\"`, the code's value in hex, such as \"0xB2\".")
+        properties["pattern"] = AgentSchema.string(
+            "With `what: \"c\"` and no `function`: a regular expression to find in every function's stored C, any case, "
+            + "in place of `search` — `undefined|LAB_|[ui]Var\\d|param_|local_` finds all that is left to name in one call.")
+        properties["summary"] = AgentSchema.boolean(
+            "With `pattern`: per function, how many lines each alternative of the pattern matches, with the first such "
+            + "line, in place of every line.")
         properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
         properties["after"] = AgentSchema.string("The `next` of the page before; a list too long for one answer says one.")
         return AgentTool(
@@ -497,10 +503,37 @@ public final class CodeReadings {
 
     // MARK: - code_query
 
+    /// A pattern's top-level alternatives: `undefined|LAB_|(a|b)` is
+    /// `undefined`, `LAB_` and `(a|b)`, each counted apart in a summary.
+    static func alternatives(_ pattern: String) -> [String] {
+        var parts: [String] = [], current = "", depth = 0, escaped = false, inClass = false
+        for character in pattern {
+            if escaped { current.append(character); escaped = false; continue }
+            switch character {
+            case "\\": escaped = true; current.append(character)
+            case "[": inClass = true; current.append(character)
+            case "]": inClass = false; current.append(character)
+            case "(" where !inClass: depth += 1; current.append(character)
+            case ")" where !inClass: depth -= 1; current.append(character)
+            case "|" where depth == 0 && !inClass: parts.append(current); current = ""
+            default: current.append(character)
+            }
+        }
+        parts.append(current)
+        let kept = parts.filter { !$0.isEmpty }
+        return kept.isEmpty ? [pattern] : kept
+    }
+
     func answer(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let source = try await source(arguments)
         let what = try arguments.choice("what", from: Self.lists, default: "functions")
         let search = (try arguments.optionalString("search"))?.lowercased()
+        if arguments.has("pattern") && (what != "c" || arguments.has("function")) {
+            throw AgentToolError("`pattern` searches every function's C: with `what: \"c\"` and no `function`.")
+        }
+        if arguments.has("summary") && !arguments.has("pattern") {
+            throw AgentToolError("`summary` counts the matches of a `pattern`.")
+        }
         let limit = try arguments.limit(default: 200, maximum: 500)
         let model = CodeModel(artifact: source.artifact, moduleBytes: source.bytes)
 
@@ -602,7 +635,63 @@ public final class CodeReadings {
             listed = try page("instructions", items, [function.entry.description, search])
 
         case "c":
-            // Across the module: the lines of stored C holding the text.
+            // Across the module: the lines matching a pattern, or per function
+            // how many each alternative matches.
+            if let pattern = try arguments.optionalString("pattern"), try arguments.optionalString("function") == nil {
+                if search != nil { throw AgentToolError("Give `pattern` or `search`, not both.") }
+                let alternatives = Self.alternatives(pattern)
+                let expressions: [(name: String, regex: NSRegularExpression)]
+                do {
+                    expressions = try alternatives.map { ($0, try NSRegularExpression(pattern: $0, options: [.caseInsensitive])) }
+                } catch {
+                    throw AgentToolError("`pattern` is not a regular expression: \(pattern)")
+                }
+                let summary = try arguments.bool("summary", default: false)
+                var matches: [JSONValue] = []
+                var holding = 0
+                for function in model.functions {
+                    guard let c = function.c else { continue }
+                    var counts: [String: (count: Int, line: Int, text: String)] = [:]
+                    var held = false
+                    for (number, line) in c.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                        let text = String(line)
+                        let range = NSRange(text.startIndex..., in: text)
+                        let hits = expressions.filter { $0.regex.firstMatch(in: text, range: range) != nil }
+                        guard !hits.isEmpty else { continue }
+                        held = true
+                        let shown = String(text.trimmingCharacters(in: .whitespaces).prefix(summary ? 160 : 300))
+                        if summary {
+                            for hit in hits {
+                                if let seen = counts[hit.name] { counts[hit.name] = (seen.count + 1, seen.line, seen.text) }
+                                else { counts[hit.name] = (1, number + 1, shown) }
+                            }
+                        } else {
+                            matches.append(.object([
+                                "function": .string(function.name),
+                                "entry": .string(function.entry.description),
+                                "line": .int(Int64(number + 1)),
+                                "text": .string(shown)
+                            ]))
+                        }
+                    }
+                    guard held else { continue }
+                    holding += 1
+                    if summary {
+                        matches.append(.object([
+                            "function": .string(function.name),
+                            "entry": .string(function.entry.description),
+                            "patterns": .object(counts.mapValues { found in
+                                .object(["count": .int(Int64(found.count)), "line": .int(Int64(found.line)),
+                                         "text": .string(found.text)])
+                            })
+                        ]))
+                    }
+                }
+                body["pattern"] = .string(pattern)
+                body["functions_matched"] = .int(Int64(holding))
+                listed = try page(summary ? "functions" : "matches", matches, [pattern, summary ? "summary" : "lines"])
+                break
+            }
             if let search, !search.isEmpty, try arguments.optionalString("function") == nil {
                 var matches: [JSONValue] = []
                 var holding = 0

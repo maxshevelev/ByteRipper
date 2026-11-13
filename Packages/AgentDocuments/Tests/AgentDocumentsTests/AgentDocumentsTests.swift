@@ -152,6 +152,47 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertNil(members["disk"])
     }
 
+    /// The sweep before a review closes is one call: a pattern's alternatives
+    /// counted per function, each with its first line.
+    func testAPatternSummaryCountsEachAlternativePerFunction() async throws {
+        let artifact = """
+            {"script_version": 4, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "name": "entry", "size": 1, "signature": "void entry(void)",
+               "c": "void entry(void)\\n{\\n  undefined4 uVar1;\\n  uVar1 = 0;\\nLAB_00001010:\\n  return;\\n}\\n",
+               "instructions": [{"address": "0x1000", "text": "RET"}]},
+              {"entry": "0x2000", "name": "Done", "size": 1, "signature": "void Done(void)",
+               "c": "void Done(void)\\n{\\n  return;\\n}\\n",
+               "instructions": [{"address": "0x2000", "text": "RET"}]}
+            ], "strings": [], "post_codes": [], "status_code_calls": []}
+            """
+        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
+        let tool = try query(readings())
+        let found = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("c"),
+            "pattern": .string(#"undefined|LAB_|[ui]Var\d"#), "summary": .bool(true)])))
+        guard case .json(.object(let answer)) = found else { return XCTFail("not an object: \(found)") }
+        let rows = try XCTUnwrap(answer["functions"]?.arrayValue, "\(answer)")
+        XCTAssertEqual(rows.map { $0["entry"]?.stringValue }, ["0x1000"])
+        let patterns = try XCTUnwrap(rows.first?["patterns"]?.objectValue)
+        XCTAssertEqual(patterns["undefined"]?["count"], .int(1))
+        XCTAssertEqual(patterns["LAB_"]?["line"], .int(5))
+        XCTAssertEqual(patterns[#"[ui]Var\d"#]?["count"], .int(2))
+        XCTAssertEqual(patterns[#"[ui]Var\d"#]?["text"]?.stringValue, "undefined4 uVar1;")
+
+        // Lines, without `summary`.
+        let lines = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("c"), "pattern": .string("lab_")])))
+        guard case .json(.object(let listed)) = lines else { return XCTFail("not an object: \(lines)") }
+        XCTAssertEqual(listed["matches"]?.arrayValue?.first?["line"], .int(5), "\(listed)")
+
+        // Where a pattern does nothing, it is refused.
+        do {
+            _ = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+                "module": .string(module.sha256.hex), "what": .string("functions"), "pattern": .string("x")])))
+            XCTFail("a pattern outside the C is refused")
+        } catch {}
+    }
+
     /// A function longer than one page is read to its end, page by page.
     func testALongFunctionsInstructionsAreReadToTheEnd() async throws {
         let lines = (0..<1200).map { #"{"address": "0x\#(String(0x1000 + $0, radix: 16))", "text": "NOP"}"# }
