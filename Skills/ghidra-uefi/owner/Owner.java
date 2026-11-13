@@ -1676,6 +1676,7 @@ public class Owner {
         boolean named = false;
         try {
             named = nameFunctionPointerMembers();
+            named |= settleUnknownConventions();
         } finally {
             if (!dryRun) endTransaction(transaction, named, before);
         }
@@ -3616,7 +3617,7 @@ public class Owner {
             for (JsonElement place : equate.getAsJsonArray("uses")) {
                 JsonArray use = place.getAsJsonArray();
                 try {
-                    Address at = function.getEntryPoint().add(Long.decode(use.get(0).getAsString()));
+                    Address at = function.getEntryPoint().add(relative(use.get(0).getAsString()));
                     int operand = use.get(1).getAsInt();
                     boolean named = false;
                     for (ghidra.program.model.symbol.Equate own : table.getEquates(at, operand)) named = true;
@@ -5062,6 +5063,15 @@ public class Owner {
         Function from = functionAt(required(body, "from"));
         if (into.getEntryPoint().equals(from.getEntryPoint())) {
             throw new Failure(400, "a function cannot be merged into itself");
+        }
+        // A thunk stands for its target and goes with it: removing the target
+        // would remove the function asked to take its body.
+        if (into.isThunk() && from.equals(into.getThunkedFunction(false))) {
+            throw new Failure(409, into.getName() + " at " + hex(into.getEntryPoint()) + " is a thunk of "
+                + from.getName() + " at " + hex(from.getEntryPoint()) + ": Ghidra removes a thunk with its target, "
+                + "so the target's body cannot move into it. The thunk's C is the target's already: name and "
+                + "sign the target. A jump the stub ends in that is meant as a call is ghidra_flow_override's. "
+                + "Nothing was changed");
         }
         if (into.getBody().contains(from.getEntryPoint())
             || into.getBody().intersects(from.getBody())) {
@@ -6852,18 +6862,92 @@ public class Owner {
 
     /**
      * A signature someone wrote, on a function analysis left at `unknown`: the
-     * decompiler would put a warning in its C for as long as it stays so. `default`
-     * names no convention and prints nothing, and is taken only if it leaves every
-     * place where it was. Answers why not, or null.
+     * decompiler would put a warning in its C for as long as it stays so. A
+     * convention is taken only if it leaves every place where it was and takes
+     * off the stack what the function's own RET does. On IA32 `__cdecl` comes
+     * first, as EFIAPI is `__cdecl` there (ProcessorBind.h); `default` is the
+     * windows spec's `__stdcall`, which would have a plain RET purge its
+     * arguments, and every direct caller's C read the stack wrong after the call.
+     * Answers why not, or null.
      */
     private String settleConvention(Function function) throws Exception {
         if (!Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(function.getCallingConventionName())) return null;
+        ghidra.program.model.lang.CompilerSpec spec = program.getCompilerSpec();
+        java.util.List<String> candidates = new java.util.ArrayList<>();
+        if (program.getDefaultPointerSize() == 4 && spec.getCallingConvention("__cdecl") != null) candidates.add("__cdecl");
+        candidates.add(Function.DEFAULT_CALLING_CONVENTION_STRING);
+        Integer pops = returnPops(function);
         String before = placesOf(function);
-        function.setCallingConvention(Function.DEFAULT_CALLING_CONVENTION_STRING);
-        String after = placesOf(function);
-        if (before.equals(after)) return null;
-        function.setCallingConvention(Function.UNKNOWN_CALLING_CONVENTION_STRING);
-        return "the default convention would move it: " + before + " to " + after;
+        java.util.List<String> why = new java.util.ArrayList<>();
+        for (String name : candidates) {
+            ghidra.program.model.lang.PrototypeModel model = name.equals(Function.DEFAULT_CALLING_CONVENTION_STRING)
+                ? spec.getDefaultCallingConvention() : spec.getCallingConvention(name);
+            if (model == null) continue;
+            int extrapop = model.getExtrapop();
+            if (pops != null && extrapop != ghidra.program.model.lang.PrototypeModel.UNKNOWN_EXTRAPOP
+                && extrapop - model.getStackshift() != pops) {
+                why.add(model.getName() + " would take " + (extrapop - model.getStackshift())
+                        + " bytes off the stack, and the function's RET takes " + pops);
+                continue;
+            }
+            function.setCallingConvention(name);
+            String after = placesOf(function);
+            if (before.equals(after)) return null;
+            function.setCallingConvention(Function.UNKNOWN_CALLING_CONVENTION_STRING);
+            why.add(model.getName() + " would move it: " + before + " to " + after);
+        }
+        return why.isEmpty() ? "no convention of this language fits it" : String.join("; ", why);
+    }
+
+    /**
+     * What the function's RET instructions take off the stack beyond the return
+     * address: `RET` 0, `RET 0xc` 12. Null when it has none, or when two disagree.
+     */
+    private Integer returnPops(Function function) {
+        Integer pops = null;
+        for (ghidra.program.model.listing.Instruction instruction
+                : program.getListing().getInstructions(function.getBody(), true)) {
+            if (!instruction.getFlowType().isTerminal() || !instruction.getMnemonicString().toUpperCase().startsWith("RET")) {
+                continue;
+            }
+            int taken = 0;
+            if (instruction.getNumOperands() > 0
+                && instruction.getOpObjects(0).length > 0
+                && instruction.getOpObjects(0)[0] instanceof ghidra.program.model.scalar.Scalar scalar) {
+                taken = (int) scalar.getUnsignedValue();
+            }
+            if (pops != null && pops != taken) return null;
+            pops = taken;
+        }
+        return pops;
+    }
+
+    /**
+     * Functions a signature was written on before a signature settled the
+     * convention, still at `unknown` with their storage locked: each prints
+     * "WARNING: Unknown calling convention -- yet parameter storage is locked" in
+     * its C. A publish settles them the way a signature written now does, and
+     * leaves one no convention fits as it is. Inside a transaction; answers
+     * whether any changed.
+     */
+    private boolean settleUnknownConventions() {
+        int settled = 0;
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            if (function.isThunk() || function.isExternal()
+                || function.getSignatureSource() == SourceType.DEFAULT
+                || !Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(function.getCallingConventionName())) continue;
+            try {
+                if (settleConvention(function) == null) {
+                    settlePurge(function);
+                    decompiled.remove(function.getEntryPoint());
+                    settled++;
+                }
+            } catch (Exception error) {
+                System.err.println("OWNER CONVENTION " + hex(function.getEntryPoint()) + ": " + error);
+            }
+        }
+        if (settled > 0) System.out.println("OWNER CONVENTIONS settled " + settled);
+        return settled > 0;
     }
 
     /**

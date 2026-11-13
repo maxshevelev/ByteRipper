@@ -923,7 +923,8 @@ public enum GhidraTools {
                   + "analysis made, where a conditional jump inside a body it took for a function left half "
                   + "of it as a function of its own. Both are named by entry or any address inside them, as "
                   + "`ghidra_function` lists them; the answer gives the survivor's entry, name and size. "
-                  + "Merging a function into itself, or one that is already part of the other, is refused. "
+                  + "Merging a function into itself, or one that is already part of the other, is refused, and "
+                  + "so is a target's body into its own thunk: Ghidra removes a thunk with its target. "
                   + "The thunks that pointed at `from` go with it; `thunks_removed` names them.",
                   ["into": AgentSchema.string("The function that keeps its entry and name."),
                    "from": AgentSchema.string("The function that becomes part of it.")],
@@ -1042,8 +1043,10 @@ public enum GhidraTools {
                   + "and after. Sign the target, not the thunk. A convention "
                   + "that does not give that storage is dropped, so the C prints none against it. "
                   + "A function analysis left at `unknown`, for which the decompiler writes a warning into its C, moves to "
-                  + "`default`, which names no convention and does not say the function follows one; "
-                  + "`convention_stays_unknown` in the answer says why not, when that would move a parameter. "
+                  + "the first convention that keeps every place and takes off the stack what its own RET does: on "
+                  + "IA32 `__cdecl` (EFIAPI) for a plain RET, else `default`; "
+                  + "`convention_stays_unknown` in the answer says why not, when none does. A publish settles the "
+                  + "same way a function signed before this rule and left at `unknown`. "
                   + "`unaffected` names registers the function leaves as they were, beyond what its convention "
                   + "keeps (`[\"EDX\"]` for a helper that never writes EDX): every caller's C then reads the value "
                   + "across the call instead of an uninitialised one. The program gets a convention of its own, the "

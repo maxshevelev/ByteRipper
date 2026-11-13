@@ -1002,6 +1002,8 @@ final class GhidraOwnerReadBackTests: XCTestCase {
 
     /// A signature written on a function analysis left at `unknown` clears the
     /// decompiler's warning, and only that: the places and the rest of the C stay.
+    /// The callback ends in a plain RET, so it is EFIAPI's `__cdecl` and purges
+    /// nothing; the windows spec's `default` would purge its arguments.
     func testASignatureOnAnUnknownFunctionClearsTheWarningOnly() async throws {
         try await openCopy(of: "InitPortConfigPei")
         let entry = "0x9A00548"
@@ -1016,12 +1018,17 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                                                           "by": "agent", "reason": "test"])
         XCTAssertNil(answer["convention_stays_unknown"], "\(answer)")
         let now = try await read("/v1/function/\(entry)")
-        XCTAssertEqual(now["calling_convention"] as? String, "default")
+        XCTAssertEqual(now["calling_convention"] as? String, "__cdecl")
+        XCTAssertNil(now["stack_purge"], "\(now)")
         XCTAssertEqual(places(now), places(held))
         let after = try await c(entry)
         let unwarned = before.split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.contains("WARNING: Unknown calling") }.joined(separator: "\n")
-        XCTAssertEqual(after, unwarned)
+        // The head now names the convention, and the decompiler lays it out anew.
+        func flat(_ text: String) -> String {
+            text.replacingOccurrences(of: "__cdecl", with: "").filter { !$0.isWhitespace }
+        }
+        XCTAssertEqual(flat(after), flat(unwarned))
     }
 
     /// An entry whose function was left at `unknown` says nothing about the
