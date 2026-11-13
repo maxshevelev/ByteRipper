@@ -271,15 +271,21 @@ def unique(items):
 
 def extra_entries(entries):
     """The entries of `extra-entries.json`: CPUIDs the article has no row for,
-    each with the pages its facts came from. One whose CPUID the article has
-    is refused — the article's row stands, and two rows would split it."""
+    or another group on a CPUID it has (Arizona Beach beside Alder Lake U on
+    906A4), each with the pages its facts came from. One that names a code
+    name the article already gives that CPUID is refused — the article's row
+    stands, and two rows would split one group."""
     with open(EXTRA, encoding="utf-8") as f:
         extra = json.load(f)["entries"]
-    have = {c for e in entries for c in e["cpuids"]}
+    names = {}
+    for e in entries:
+        for c in e["cpuids"]:
+            names.setdefault(c, set()).update(e["codeNames"])
     out = []
     for e in extra:
-        if have & set(e["cpuids"]):
-            sys.exit(f"extra-entries.json: {e['cpuids']} is in the article now — take it out")
+        clash = {c for c in e["cpuids"] if c in names and (not e.get("beside") or names[c] & set(e["codeNames"]))}
+        if clash:
+            sys.exit(f"extra-entries.json: {sorted(clash)} is in the article now, as the same group — take it out")
         if not e.get("evidence"):
             sys.exit(f"extra-entries.json: {e['cpuids']} has no evidence")
         out.append({

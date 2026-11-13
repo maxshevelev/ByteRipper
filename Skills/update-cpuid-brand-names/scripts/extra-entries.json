@@ -3,6 +3,401 @@
   "entries": [
     {
       "cpuids": [
+        "90660"
+      ],
+      "codeNames": [
+        "Elkhart Lake"
+      ],
+      "cores": [
+        "Tremont"
+      ],
+      "productFamilies": [
+        "Intel Atom Processors"
+      ],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [
+        "Embedded",
+        "Desktop"
+      ],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_96H | All | NA | Elkhart Lake (Tremont) | Intel Atom Processors | Embedded, Desktop | 90660, 90661 | 0x1A"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ELKHARTLAKE_A0\t\t0x90660"
+        }
+      ],
+      "note": "Intel's list of processors by CPUID gives 90660 and 90661 in one Elkhart Lake row, without saying which models report which; the models the article lists are under 90661 (B1). coreboot names 90660 A0. No model is listed for it."
+    },
+    {
+      "cpuids": [
+        "90670"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ALDERLAKE_A0\t\t0x90670"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ALDERLAKE\t\t\tIFM(6, 0x97) /* Golden Cove / Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 90670: 06_97H/06_9AH rows list 90672, 90675, 906A3, 906A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu90670_plat02_ver00000019_2020-11-11_PRD_80448C99.bin — the one microcode for 90670"
+        }
+      ],
+      "note": "coreboot names 90670 Alder Lake A0. No source names a model sold as 90670: Intel's list of processors by CPUID has none, and its public microcode is dated before Alder Lake's launch (November 2021). So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "90671"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ALDERLAKE_B0\t\t0x90671"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ALDERLAKE\t\t\tIFM(6, 0x97) /* Golden Cove / Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 90671: 06_97H/06_9AH rows list 90672, 90675, 906A3, 906A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu90671_plat82_ver0000001C_2021-06-14_PRD_41B7E16B.bin — one update with 906A0"
+        }
+      ],
+      "note": "coreboot names 90671 Alder Lake B0. No source names a model sold as 90671: Intel's list of processors by CPUID has none, and its public microcode is dated before Alder Lake's launch (November 2021). So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "90674"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "G0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ALDERLAKE_G0\t\t0x90674"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ALDERLAKE\t\t\tIFM(6, 0x97) /* Golden Cove / Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 90674: 06_97H/06_9AH rows list 90672, 90675, 906A3, 906A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu90674_plat01_ver00000219_2021-04-25_PRD_BFD44DE0.bin — the one microcode for 90674"
+        }
+      ],
+      "note": "coreboot names 90674 Alder Lake G0. No source names a model sold as 90674: Intel's list of processors by CPUID has none, and its public microcode is dated before Alder Lake's launch (November 2021). So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "906A0"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "J0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ALDERLAKE_J0\t\t0x906a0"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ALDERLAKE_L\t\tIFM(6, 0x9A) /* Golden Cove / Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 906A0: 06_97H/06_9AH rows list 90672, 90675, 906A3, 906A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu906A0_plat82_ver0000001C_2021-06-14_PRD_41B7E13C.bin — one update with 90671"
+        }
+      ],
+      "note": "coreboot names 906A0 Alder Lake J0. No source names a model sold as 906A0: Intel's list of processors by CPUID has none, and its public microcode is dated before Alder Lake mobile's launch (January 2022). So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "906A1"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "Q0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ALDERLAKE_Q0\t\t0x906a1"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ALDERLAKE_L\t\tIFM(6, 0x9A) /* Golden Cove / Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 906A1: 06_97H/06_9AH rows list 90672, 90675, 906A3, 906A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu906A1_plat82_ver0000011F_2021-11-04_PRD_322B7C90.bin — the one microcode for 906A1"
+        }
+      ],
+      "note": "coreboot names 906A1 Alder Lake Q0. No source names a model sold as 906A1: Intel's list of processors by CPUID has none, and its public microcode is dated before Alder Lake mobile's launch (January 2022). So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "906A2"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "K0"
+      ],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_ALDERLAKE_K0\t\t0x906a2"
+        },
+        {
+          "gives": [
+            "codeNames",
+            "cores"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_ALDERLAKE_L\t\tIFM(6, 0x9A) /* Golden Cove / Gracemont */"
+        },
+        {
+          "gives": [],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "No row for 906A2: 06_97H/06_9AH rows list 90672, 90675, 906A3, 906A4."
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu906A2_plat80_ver00000315_2022-01-02_PRD_A9485C51.bin — the one microcode for 906A2"
+        }
+      ],
+      "note": "coreboot names 906A2 Alder Lake K0. No source names a model sold as 906A2: Intel's list of processors by CPUID has none, and its public microcode is dated before Alder Lake mobile's launch (January 2022). So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "906A4"
+      ],
+      "beside": true,
+      "codeNames": [
+        "Arizona Beach"
+      ],
+      "cores": [
+        "Gracemont"
+      ],
+      "productFamilies": [
+        "Intel Atom Processor C Series"
+      ],
+      "steppings": [
+        "A0",
+        "R0"
+      ],
+      "segments": [
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Atom C1100"
+        },
+        {
+          "name": "Intel Atom C1110"
+        },
+        {
+          "name": "Intel Atom C1130"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "cores",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/developer/topic-technology/software-security-guidance/processors-affected-consolidated-product-cpu-model.html",
+          "quote": "06_9AH | 4 | CPUID.0x7.EDX[15] =0 | Arizona Beach (Gracemont) | Intel Atom Processors | Embedded | 906A4 | 0xc"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/main/releasenote.md",
+          "quote": "| AZB            | A0/R0    | 06-9a-04/40 | Atom C1100"
+        },
+        {
+          "gives": [
+            "processors",
+            "productFamilies",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/products/sku/229206/intel-atom-processor-c1110-6m-cache-2-10-ghz/specifications.html",
+          "quote": "Product Collection: Intel Atom® Processor C Series; Code Name: Products formerly Arizona Beach; Vertical Segment: Embedded (C1100 SKU 229204, C1110 229206, C1130 229205)"
+        }
+      ],
+      "note": "Arizona Beach shares 906A4 with Alder Lake U; only the hybrid bit (CPUID.0x7.EDX[15]: 0 here, 1 for Alder Lake U) and the microcode's platform (0x40) tell them apart. ARK has no ordering tab for the three models, so no S-SPEC is known."
+    },
+    {
+      "cpuids": [
         "B0660"
       ],
       "codeNames": [

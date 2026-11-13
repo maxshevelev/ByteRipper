@@ -10741,6 +10741,179 @@
     },
     {
       "cpuids": [
+        "90660"
+      ],
+      "codeNames": [
+        "Elkhart Lake"
+      ],
+      "cores": [
+        "Tremont"
+      ],
+      "productFamilies": [
+        "Intel Atom Processors"
+      ],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [
+        "Embedded",
+        "Desktop"
+      ],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "90670"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "A0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "90671"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "B0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "90674"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "G0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "906A0"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "J0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "906A1"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "Q0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "906A2"
+      ],
+      "codeNames": [
+        "Alder Lake"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
+      ],
+      "productFamilies": [],
+      "steppings": [
+        "K0"
+      ],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "906A4"
+      ],
+      "codeNames": [
+        "Arizona Beach"
+      ],
+      "cores": [
+        "Gracemont"
+      ],
+      "productFamilies": [
+        "Intel Atom Processor C Series"
+      ],
+      "steppings": [
+        "A0",
+        "R0"
+      ],
+      "segments": [
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Atom C1100",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Atom C1110",
+          "sSpec": []
+        },
+        {
+          "name": "Intel Atom C1130",
+          "sSpec": []
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "B0660"
       ],
       "codeNames": [

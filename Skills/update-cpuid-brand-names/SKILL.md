@@ -91,7 +91,9 @@ segments and models, each with the page that says so (the kernel's
 `intel-family.h` for a model number's code name, ARK for the models), and a
 stepping only where a page ties it to the CPUID. Its models' codes go in
 `ark-sspec.json` like any others. `import.py` refuses an extra entry once the
-article has the CPUID: then take it out.
+article has the CPUID: then take it out — unless the entry says `"beside": true`
+and is another group on that CPUID, none of whose code names the article
+gives it (Arizona Beach beside Alder Lake U on 906A4).
 
 6. A model the article lists under a CPUID it is not sold on is taken out of
    that entry: when it has no code there, ARK gives it steppings none of
