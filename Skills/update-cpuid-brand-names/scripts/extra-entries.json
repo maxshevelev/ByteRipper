@@ -1082,6 +1082,71 @@
     },
     {
       "cpuids": [
+        "606E0"
+      ],
+      "codeNames": [
+        "Cougar Mountain"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "evidence": [
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://www.intel.com/content/dam/www/public/us/en/documents/corporate-information/SA00233-microcode-update-guidance.pdf",
+          "quote": "microcode revision guidance, August 31, 2019: Cougar Mountain | Intel® Puma™ Family | Intel® Puma™ 7 Home Gateway SOC | CPUID 606E1 | Platform ID 01 | Production Status Production"
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu606E0_plat01_ver0000000B_2016-11-04_PRD_8D10D855.bin"
+        }
+      ],
+      "note": "Model 0x6E's stepping ID 0: Intel's microcode revision guidance names 606E1 Cougar Mountain (Puma 7) and not 606E0, whose one public microcode is dated 2016-11-04. No models."
+    },
+    {
+      "cpuids": [
+        "606E1"
+      ],
+      "codeNames": [
+        "Cougar Mountain"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Puma Family"
+      ],
+      "steppings": [],
+      "segments": [],
+      "processors": [
+        {
+          "name": "Intel Puma 7 Home Gateway SoC"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "productFamilies",
+            "processors"
+          ],
+          "url": "https://www.intel.com/content/dam/www/public/us/en/documents/corporate-information/SA00233-microcode-update-guidance.pdf",
+          "quote": "microcode revision guidance, August 31, 2019: Cougar Mountain | Intel® Puma™ Family | Intel® Puma™ 7 Home Gateway SOC | CPUID 606E1 | Platform ID 01 | Production Status Production"
+        },
+        {
+          "gives": [],
+          "url": "https://github.com/platomav/CPUMicrocodes/tree/53e47114a0612cba145f9f4bbe882d1a74ab95b1/Intel",
+          "quote": "cpu606E1_plat01_ver00000108_2019-04-23_PRD_66444E22.bin"
+        }
+      ],
+      "note": "Intel's microcode revision guidance (August 2019) gives CPUID 606E1, platform 01, as Cougar Mountain, the Intel Puma 7 Home Gateway SoC, in production. Intel publishes no S-SPEC or stepping for it, and the Linux kernel names no model 0x6E."
+    },
+    {
+      "cpuids": [
         "706A0"
       ],
       "codeNames": [

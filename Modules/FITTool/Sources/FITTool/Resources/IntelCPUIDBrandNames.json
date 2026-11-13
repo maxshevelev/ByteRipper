@@ -11712,6 +11712,41 @@
     },
     {
       "cpuids": [
+        "606E0"
+      ],
+      "codeNames": [
+        "Cougar Mountain"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [],
+      "segments": [],
+      "processors": [],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
+        "606E1"
+      ],
+      "codeNames": [
+        "Cougar Mountain"
+      ],
+      "cores": [],
+      "productFamilies": [
+        "Intel Puma Family"
+      ],
+      "steppings": [],
+      "segments": [],
+      "processors": [
+        {
+          "name": "Intel Puma 7 Home Gateway SoC",
+          "sSpec": []
+        }
+      ],
+      "source": "extra"
+    },
+    {
+      "cpuids": [
         "706A0"
       ],
       "codeNames": [
