@@ -18,7 +18,11 @@
 // `EFI_INVALID_PARAMETER` where it printed `0x80000002`. EDK2 spells their
 // values as `#define`s, which the parser keeps — each as a one-value enum
 // `define_<NAME>` under `/<header>/defines` — but ties to no type. On Ia32
-// every function type then gets EFIAPI's `__cdecl` (revision 3). A change
+// every function type then gets EFIAPI's `__cdecl` (revision 3). An enum
+// member initialised with an earlier member's name — `EfiGcdMemoryType
+// PersistentMemory = EfiGcdMemoryTypePersistent` — gets that member's value,
+// and the members after it count on from there; the parser numbered it as
+// the previous member plus one (revision 4, issue 33a286ab). A change
 // here is a change of every typed analysis: raise `TYPES_REVISION` in
 // `UEFITypes.swift` with it.
 // @category ByteRipper
@@ -81,6 +85,7 @@ public class BuildUefiTypes extends GhidraScript {
         try {
             statusEnum(types);
             statusCodeTypeEnum(types);
+            aliasedMembers(types, new File(include));
             if (processor.equals("Ia32")) efiApi(types);
         } finally {
             types.endTransaction(transaction, true);
@@ -195,5 +200,64 @@ public class BuildUefiTypes extends GhidraScript {
         }
         types.replaceDataType(type, values, true);
         println("EFI_STATUS_CODE_TYPE: " + names.length + " values");
+    }
+
+    /**
+     * The enums of the headers whose members are initialised with an earlier
+     * member's name, their values as C gives them: the alias takes the named
+     * member's value, a member with no initialiser the one before it plus
+     * one, and a member with any other initialiser keeps the parser's value.
+     * Only an enum with such an alias is looked at; the parser counted the
+     * alias as the member before it plus one.
+     */
+    private void aliasedMembers(FileDataTypeManager types, File include) throws Exception {
+        java.util.Map<String, ghidra.program.model.data.Enum> byName = new java.util.HashMap<>();
+        java.util.Iterator<DataType> all = types.getAllDataTypes();
+        while (all.hasNext()) {
+            DataType type = all.next();
+            DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
+            if (base instanceof ghidra.program.model.data.Enum values) byName.putIfAbsent(type.getName(), values);
+        }
+        java.util.regex.Pattern enumBody = java.util.regex.Pattern.compile("\\benum\\s*(\\w*)\\s*\\{([^{}]*)\\}\\s*(\\w*)");
+        java.util.regex.Pattern member = java.util.regex.Pattern.compile("(?s)(\\w+)\\s*(?:=\\s*(.+))?");
+        List<File> headers = new ArrayList<>();
+        java.nio.file.Files.walk(include.toPath()).filter(path -> path.toString().endsWith(".h")).sorted()
+            .forEach(path -> headers.add(path.toFile()));
+        int fixed = 0;
+        for (File header : headers) {
+            String text = java.nio.file.Files.readString(header.toPath(), java.nio.charset.StandardCharsets.ISO_8859_1)
+                .replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\\n]*", " ");
+            java.util.regex.Matcher found = enumBody.matcher(text);
+            while (found.find()) {
+                String body = found.group(2).replaceAll("(?m)^\\s*#.*$", "");
+                ghidra.program.model.data.Enum values = byName.get(found.group(3));
+                if (values == null) values = byName.get(found.group(1));
+                if (values == null) continue;
+                java.util.LinkedHashMap<String, Long> wanted = new java.util.LinkedHashMap<>();
+                boolean aliased = false;
+                long next = 0;
+                for (String part : body.split(",")) {
+                    java.util.regex.Matcher one = member.matcher(part.trim());
+                    if (part.trim().isEmpty() || !one.matches() || !values.contains(one.group(1))) continue;
+                    String name = one.group(1);
+                    String init = one.group(2) == null ? "" : one.group(2).trim();
+                    long value;
+                    if (init.isEmpty()) value = next;
+                    else if (wanted.containsKey(init)) { value = wanted.get(init); aliased = true; }
+                    else value = values.getValue(name);
+                    wanted.put(name, value);
+                    next = value + 1;
+                }
+                if (!aliased) continue;
+                for (java.util.Map.Entry<String, Long> entry : wanted.entrySet()) {
+                    if (values.getValue(entry.getKey()) == entry.getValue()) continue;
+                    String comment = values.getComment(entry.getKey());
+                    values.remove(entry.getKey());
+                    values.add(entry.getKey(), entry.getValue(), comment == null ? "" : comment);
+                    fixed++;
+                }
+            }
+        }
+        println("aliased enum members: " + fixed + " values put right");
     }
 }

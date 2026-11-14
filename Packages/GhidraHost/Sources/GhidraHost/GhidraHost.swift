@@ -223,6 +223,8 @@ public actor GhidraHost {
     /// Whether this process has given the shared 32-bit review types EFIAPI's
     /// convention, or found they need none (`migrateSharedEFIAPI`).
     var sharedEFIAPIDone = false
+    /// The sizes whose shared types this process gave EDK2's enum values.
+    var sharedEDK2EnumsDone: Set<String> = []
     /// The step a test stops a publish after.
     var publishStop: PublishStop?
     func setPublishStop(_ stop: PublishStop?) { publishStop = stop }
@@ -1235,6 +1237,7 @@ public actor GhidraHost {
         let record = try await task.value
         await finishPublishes(module, record: record)
         await migrateSharedEFIAPI(module)
+        await migrateSharedEDK2Enums(module)
         return record
     }
 
@@ -1286,7 +1289,7 @@ public actor GhidraHost {
     private func startOnce(_ project: GhidraProject) async throws -> OwnerRecord {
         let install = try ghidra()
         let jar = try OwnerBuild.jar(for: install, sources: configuration.sources)
-        let state = try await retypedForEFIAPI(project, try project.state())
+        let state = try await retypedForCurrentArchive(project, try project.state())
         var arguments = ["-Xmx4G", "-Djava.awt.headless=true",
                          "-cp", (install.classpath() + [jar.path]).joined(separator: ":"), "Owner",
                          "--project-dir", project.folder.path, "--project-name", GhidraProject.name,

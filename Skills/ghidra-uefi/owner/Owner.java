@@ -119,6 +119,8 @@ public class Owner {
     private GhidraProject project;
     private Program program;
     private DecompInterface decompiler;
+    /** Where the C comes from: `decompiler`, and a second pass for a displacement Ghidra took for a module address. */
+    private ExportCode.Decompilers decompilers;
     // The EDK2 archive the program was typed with, read-only: a type a
     // review names that the program does not hold yet comes from here.
     private FileDataTypeManager archive;
@@ -207,6 +209,16 @@ public class Owner {
             program.endTransaction(transaction, efiApi > 0);
         }
         if (efiApi > 0) saveProgram("EFIAPI on " + efiApi + " function types");
+        // An EDK2 enum the program took from an earlier archive takes the
+        // values the current one gives its members (issue 33a286ab).
+        transaction = program.startTransaction("EDK2 enum values");
+        int enumValues = 0;
+        try {
+            enumValues = archive == null ? 0 : edk2EnumValues(program.getDataTypeManager(), archive, reviewWritten());
+        } finally {
+            program.endTransaction(transaction, enumValues > 0);
+        }
+        if (enumValues > 0) saveProgram("EDK2 values of " + enumValues + " enum members");
         ExportCode.analysisComments = Harvest.baselineComments(program);
         // From here a change counts; the count goes on from the last session's.
         writesFile = new File(options.get("project-dir"), "writes");
@@ -331,6 +343,7 @@ public class Owner {
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 if (path.equals("/v1/types/merge")) { json(exchange, 200, typesMerge(exchange)); return; }
                 if (path.equals("/v1/types/efiapi")) { json(exchange, 200, typesEfiApi(exchange)); return; }
+                if (path.equals("/v1/types/edk2enums")) { json(exchange, 200, typesEdk2Enums(exchange)); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
@@ -1756,6 +1769,78 @@ public class Owner {
         answer.add("taken", taken);
         answer.add("origins", origins);
         return answer;
+    }
+
+    /**
+     * `POST /v1/types/edk2enums`: the shared archive a call names with
+     * `archive` given the values the EDK2 archive gives the members of its
+     * enums, as the program's are at open (issue 33a286ab). Answers how many
+     * members changed; nothing for an owner with no EDK2 archive or an
+     * archive not there yet.
+     */
+    private JsonObject typesEdk2Enums(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        File target = archiveNamed(body(exchange));
+        int changed = 0;
+        if (archive != null && target.isFile()) {
+            try (FileChannel channel = lockChannel(target); FileLock lock = channel.lock()) {
+                FileDataTypeManager shared = FileDataTypeManager.openFileArchive(target, true);
+                try {
+                    int transaction = shared.startTransaction("EDK2 enum values");
+                    try {
+                        changed = edk2EnumValues(shared, archive, java.util.Set.of());
+                    } finally {
+                        shared.endTransaction(transaction, changed > 0);
+                    }
+                    if (changed > 0) shared.save();
+                } finally {
+                    shared.close();
+                }
+            }
+        }
+        JsonObject answer = new JsonObject();
+        answer.addProperty("changed", changed);
+        return answer;
+    }
+
+    /** The names of the enums a review defined itself, and of the enums its typedefs name. */
+    private java.util.Set<String> reviewWritten() {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (String name : Harvest.reviewTypes(program).keySet()) {
+            names.add(name);
+            DataType named = find(program.getDataTypeManager(), name);
+            if (named instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
+                names.add(def.getBaseDataType().getName());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Every enum of `manager` that the EDK2 archive holds at the same path
+     * takes the archive's value for each member both have and give
+     * different values — an enum copied from an earlier archive, whose
+     * aliased members were numbered wrong. An enum a review wrote itself
+     * (`skip`) is the review's. Answers the number of members changed.
+     */
+    static int edk2EnumValues(ghidra.program.model.data.DataTypeManager manager, FileDataTypeManager edk2,
+                              java.util.Set<String> skip) {
+        int changed = 0;
+        java.util.Iterator<DataType> all = edk2.getAllDataTypes();
+        while (all.hasNext()) {
+            if (!(all.next() instanceof ghidra.program.model.data.Enum source)) continue;
+            if (skip.contains(source.getName())) continue;
+            if (!(manager.getDataType(source.getCategoryPath(), source.getName())
+                  instanceof ghidra.program.model.data.Enum copy)) continue;
+            for (String name : source.getNames()) {
+                if (!copy.contains(name) || copy.getValue(name) == source.getValue(name)) continue;
+                String comment = copy.getComment(name);
+                copy.remove(name);
+                copy.add(name, source.getValue(name), comment == null ? "" : comment);
+                changed++;
+            }
+        }
+        return changed;
     }
 
     /**

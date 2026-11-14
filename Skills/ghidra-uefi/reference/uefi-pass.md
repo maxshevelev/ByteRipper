@@ -42,14 +42,25 @@ PEI service or a PPI member then took its arguments off the stack, and the
 caller's stack locals moved by their size after every such call (issue
 4a9a4484). X64 has one convention, and its types are as they were.
 
-`-r3` is `TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
-(`code-v4-types3-ghidra-…`), so a module typed by the new archive is a recipe
-beside the old one. A project keeps the archive it was made with — except a
-32-bit one made before revision 3, which the server moves to the current
-archive when it next starts its owner. The owner gives the program's function
-types with no convention `__cdecl` at open and after every change, the UEFI
-pass does at the end, and the server gives the shared 32-bit review types the
-same once, in a version of their own.
+Revision 4 gives an enum member initialised with an earlier member's name
+that member's value, as C does: the parser numbered it as the member before
+it plus one, so `EfiGcdMemoryTypePersistentMemory` (an alias of
+`EfiGcdMemoryTypePersistent`, 4) came out 5 and the members after it one too
+high (issue 33a286ab). `BuildUefiTypes.java` reads the headers' enums again
+after the parse and puts right every one with such an alias — in MdePkg,
+`EFI_GCD_MEMORY_TYPE`, `EFI_USB_BUS_SPEED`, `EFI_USBFN_ENDPOINT_DIRECTION`,
+`EVENT_LOG_VARIABLE_DATA`, `MEMORY_ERROR_TYPE`,
+`SUPPORTED_DATA_REMOVAL_MECHANISM` and `UDF_VOLUME_DESCRIPTOR_ID`.
+
+`-r4` is `TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
+(`code-v4-types4-ghidra-…`), so a module typed by the new archive is a recipe
+beside the old one. A project made with an earlier revision moves to the
+current archive when the server next starts its owner. At open the owner
+gives the program's function types with no convention `__cdecl` (32-bit, also
+after every change; the UEFI pass does at the end) and the program's EDK2
+enums the values the archive gives their members — not an enum the review
+defined itself. The server gives the shared review types of the module's size
+the same once each, in a version of their own.
 
 Each step says what it is when it starts and how long it took, with a limit —
 the download and the unpacking, the archives, a Ghidra analysis — so an

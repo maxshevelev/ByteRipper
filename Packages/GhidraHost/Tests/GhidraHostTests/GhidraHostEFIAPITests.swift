@@ -41,7 +41,7 @@ final class GhidraHostEFIAPITests: XCTestCase {
         XCTAssertEqual(GhidraHost.typesRevision("edk2-stable202608"), 1)
         XCTAssertEqual(GhidraHost.typesRevision("edk2-stable202608-r2"), 2)
         XCTAssertNil(GhidraHost.typesRevision("edk2-stable202502-r2"))
-        XCTAssertGreaterThanOrEqual(UEFITypes.typesRevision, 3)
+        XCTAssertGreaterThanOrEqual(UEFITypes.typesRevision, 4)
     }
 
     func testAPEIServiceTypeIsCdeclInTheProgramAndInEDK2() async throws {
@@ -96,11 +96,53 @@ final class GhidraHostEFIAPITests: XCTestCase {
         _ = try await host.createCached(module: image, name: "Module")
         defer { Task { await host.stop(module) } }
         _ = try await host.read(module, "/v1/hello")
+        // Revision 2's enums are revision 3's too: their aliased members get
+        // a version of their own after it (issue 33a286ab).
         let versions = try store.typeArchive(bits: "Ia32")?.versions ?? []
-        XCTAssertEqual(versions.map(\.version), [1, 2], "\(versions)")
-        XCTAssertTrue(versions.last?.reason?.contains("4a9a4484") == true, "\(String(describing: versions.last))")
+        XCTAssertEqual(versions.map(\.version), [1, 2, 3], "\(versions)")
+        XCTAssertTrue(versions[1].reason?.contains("4a9a4484") == true, "\(versions[1])")
 
         // Another owner of this process, or of the next one, finds nothing to do.
+        await host.stop(module)
+        let again = self.host(store)
+        _ = try await again.read(module, "/v1/hello")
+        await again.stop(module)
+        XCTAssertEqual(try store.typeArchive(bits: "Ia32")?.versions.map(\.version), [1, 2, 3])
+    }
+
+    /// Issue 33a286ab: shared types holding an EDK2 enum of an archive before
+    /// revision 4 — `EfiGcdMemoryTypePersistentMemory` numbered 5, not the 4
+    /// of the member it aliases — get one version that gives them EDK2's
+    /// values, and the EDK2 archive has them right.
+    func testSharedEDK2EnumsTakeTheValuesOfRevision4() async throws {
+        let old = UEFITypes.cacheRoot.appendingPathComponent("uefi_Ia32-\(UEFITypes.edk2Tag)-r3.gdt")
+        guard FileManager.default.fileExists(atPath: old.path) else { throw XCTSkip("no revision 3 archive at \(old.path)") }
+        let image = try image()
+        let module = SHA256Digest(data: image)
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        var files: [String: SHA256Digest] = [:]
+        files["archive.gdt"] = try store.putObject(try Data(contentsOf: old))
+        files["origin.json"] = try store.putObject(Data("{}".utf8))
+        files["withdrawn.json"] = try store.putObject(Data("{}".utf8))
+        _ = try await store.writeTypeArchive(bits: "Ia32", version: TypeArchiveVersion(
+            version: 1, files: files, at: "2026-11-14T00:00:00Z", by: "test", module: nil, rev: nil))
+        let host = host(store)
+        _ = try await host.createCached(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        _ = try await host.read(module, "/v1/hello")
+        let versions = try store.typeArchive(bits: "Ia32")?.versions ?? []
+        XCTAssertEqual(versions.map(\.version), [1, 2], "\(versions)")
+        XCTAssertTrue(versions.last?.reason?.contains("33a286ab") == true, "\(String(describing: versions.last))")
+        let type = try json(await host.read(module, "/v1/type?name=EFI_GCD_MEMORY_TYPE"))
+        for side in ["edk2", "shared"] {
+            let values = (type[side] as? [String: Any])?["values"] as? [String: String] ?? [:]
+            XCTAssertEqual(values["EfiGcdMemoryTypePersistentMemory"], "0x4", "\(side): \(values)")
+            XCTAssertEqual(values["EfiGcdMemoryTypeMoreReliable"], "0x5", "\(side): \(values)")
+            XCTAssertEqual(values["EfiGcdMemoryTypeUnaccepted"], "0x6", "\(side): \(values)")
+            XCTAssertEqual(values["EfiGcdMemoryTypeMaximum"], "0x7", "\(side): \(values)")
+        }
+
+        // The next owner of the next process finds nothing to do.
         await host.stop(module)
         let again = self.host(store)
         _ = try await again.read(module, "/v1/hello")

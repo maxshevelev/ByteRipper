@@ -32,18 +32,58 @@ extension GhidraHost {
         return state.module.kind == "TE" || state.module.phase == "pei"
     }
 
-    /// The state a 32-bit project typed before revision 3 opens with: the
+    /// The state a project typed with an earlier revision opens with: the
     /// current archive in place of its own. The owner gives the program's
-    /// function types the convention at open. Unchanged for any other project.
-    func retypedForEFIAPI(_ project: GhidraProject, _ state: ProjectState) async throws -> ProjectState {
-        guard let types = state.madeWith.types, types != UEFITypes.types, Self.typedIa32(state),
-              let revision = Self.typesRevision(types), revision < 3, UEFITypes.typesRevision >= 3 else { return state }
+    /// function types the convention (revision 3, 32-bit) and its EDK2 enums
+    /// their members' values (revision 4, issue 33a286ab) at open. Unchanged
+    /// for a project of the current revision or of another tag.
+    func retypedForCurrentArchive(_ project: GhidraProject, _ state: ProjectState) async throws -> ProjectState {
+        guard let types = state.madeWith.types, types != UEFITypes.types,
+              let revision = Self.typesRevision(types), revision < UEFITypes.typesRevision else { return state }
         let paths = try await UEFITypes.ensure(install: try ghidra(), sources: configuration.sources)
         var retyped = state
         retyped.madeWith.types = UEFITypes.types
-        retyped.archive = paths.gdtIa32.path
+        retyped.archive = paths.archive(bits32: Self.typedIa32(state)).path
         try project.write(retyped)
         return retyped
+    }
+
+    /// The shared review types of the module's size given the values EDK2's
+    /// archive gives its enums' members, once in this process, through the
+    /// module's owner: a version of their own when any member changed
+    /// (issue 33a286ab — an alias numbered as the member before it plus one).
+    /// Under the publishes' hold. A failure is left for the next owner.
+    func migrateSharedEDK2Enums(_ module: SHA256Digest) async {
+        guard writer.keepsTypeArchives, let state = try? project(module).state() else { return }
+        let bits = Self.typedIa32(state) ? "Ia32" : "X64"
+        guard !sharedEDK2EnumsDone.contains(bits) else { return }
+        do {
+            let hold = try await writer.lockPublishes()
+            defer { hold.release() }
+            let (folder, current) = try await archiveWorkingCopy(bits: bits)
+            defer { try? FileManager.default.removeItem(at: folder) }
+            guard current != nil else {
+                sharedEDK2EnumsDone.insert(bits)
+                return
+            }
+            let answer = try JSONSerialization.jsonObject(with: try await typesCall(
+                module, "/v1/types/edk2enums", body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
+                as? [String: Any] ?? [:]
+            let changed = answer["changed"] as? Int ?? 0
+            if changed > 0 {
+                let merged = TypesMerged(Data(#"{"changed": true}"#.utf8))
+                if let version = try await nextTypeVersion(
+                    bits: bits, folder: folder, after: current, answer: merged, by: "server", module: module,
+                    reason: "EDK2 enum members initialised with another member's name take its value: "
+                        + "\(changed) members (issue 33a286ab)") {
+                    _ = try await writer.writeTypeArchive(bits: bits, version: version)
+                    try? await refreshArchiveCopy(bits: bits)
+                }
+            }
+            sharedEDK2EnumsDone.insert(bits)
+        } catch {
+            // The next owner of this size tries again.
+        }
     }
 
     /// The shared 32-bit review types given the convention, once in this
