@@ -2975,6 +2975,26 @@ public class Owner {
     }
 
     /**
+     * The places a jump of `function` reaches where no instruction is decoded:
+     * a block a `redecode` or a clear left as bytes. The function's body then
+     * stops short of its code, and what it would give the registry has a jump
+     * into nothing.
+     */
+    private java.util.List<String> undecodedJumpTargets(Function function) {
+        java.util.Set<String> found = new java.util.TreeSet<>();
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        for (Instruction instruction : listing.getInstructions(function.getBody(), true)) {
+            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
+                if (!reference.getReferenceType().isJump()) continue;
+                Address to = reference.getToAddress();
+                if (!to.isMemoryAddress() || !program.getMemory().contains(to)) continue;
+                if (listing.getInstructionAt(to) == null) found.add(hex(to));
+            }
+        }
+        return new java.util.ArrayList<>(found);
+    }
+
+    /**
      * What this program offers the library registry
      * (`Design/LIBRARY_REGISTRY_PLAN.md`): the functions `asked` names, `{"items":
      * [{address, kind}]}`, and every function linked to an entry, whose change
@@ -2997,6 +3017,9 @@ public class Owner {
                 function, decompile(function), ExportCode.stepComments(function));
             java.util.List<String> gaps = new java.util.ArrayList<>(assessment.gaps);
             if (ExportCode.bodyKey(function) == null) gaps.add("no_body");
+            // A jump into bytes nobody decoded: the body has a hole, and the
+            // registry can keep no code for it (issue dc635a83).
+            for (String target : undecodedJumpTargets(function)) gaps.add("undecoded " + target);
             // Linked to an entry and not edited since: its description is the
             // entry's, and what the project lacks is no gap of anyone's.
             boolean linked = heldMark != null && atItsMark(function, hash, heldMark);
@@ -5450,6 +5473,19 @@ public class Owner {
         answer.addProperty("in_c", true);
     }
 
+    /**
+     * Whether `scalar` is the scale of an index register in a memory operand
+     * (`RDI*0x1`), which the operand's objects list beside its displacement.
+     */
+    static boolean isScale(Instruction instruction, int operand, ghidra.program.model.scalar.Scalar scalar) {
+        String text = instruction.getDefaultOperandRepresentation(operand);
+        if (!text.contains("[") || !text.contains("*")) return false;
+        long v = scalar.getUnsignedValue();
+        if (v != 1 && v != 2 && v != 4 && v != 8) return false;
+        return java.util.regex.Pattern.compile("(?i)\\*\\s*(0x0*" + Long.toHexString(v) + "|" + v + ")(?![0-9a-f])")
+            .matcher(text).find();
+    }
+
     private JsonObject applyEquate(JsonObject body) throws Exception {
         Address at = address(required(body, "address"));
         Instruction instruction = program.getListing().getInstructionAt(at);
@@ -5492,8 +5528,17 @@ public class Owner {
                 }
                 continue;
             }
+            boolean scaleSkipped = false;
             for (Object object : instruction.getOpObjects(index)) {
                 if (!(object instanceof ghidra.program.model.scalar.Scalar candidate)) continue;
+                // `[RAX + RDI*0x1 + 0x121c]` holds the index's scale and the
+                // displacement: a name asked for with no value is the
+                // displacement's, never the scale's (issue b2de98c2). The
+                // scale comes first; a displacement equal to it stays.
+                if (value == null && !scaleSkipped && isScale(instruction, index, candidate)) {
+                    scaleSkipped = true;
+                    continue;
+                }
                 if (value == null || holds(candidate, value)) {
                     scalar = candidate;
                     operand = index;
@@ -5511,7 +5556,8 @@ public class Owner {
         if (scalar == null && inDisplacement) {
             throw new Failure(409, "`" + instruction + "` at " + hex(at) + " holds "
                               + (value == null ? "a constant" : valueText)
-                              + " only inside a memory operand, not as an immediate: give `operand` if that is meant");
+                              + " only inside a memory operand, not as an immediate: give `operand` (and `value`, "
+                              + "where the operand holds a scale too) if that is meant");
         }
         if (scalar == null) {
             throw new Failure(409, "no operand of `" + instruction + "` at " + hex(at) + " holds "

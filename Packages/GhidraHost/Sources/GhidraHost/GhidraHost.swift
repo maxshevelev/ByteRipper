@@ -143,8 +143,9 @@ public actor GhidraHost {
         public var address: String
         public var name: String
         public var kind: String
-        /// `name`, `plate`, `comments`, `params`, `locals`, or `no_body` —
-        /// a thunk or an external function, which has no body to offer.
+        /// `name`, `plate`, `comments`, `params`, `locals`, `no_body` — a
+        /// thunk or an external function, which has no body to offer — or
+        /// `undecoded <address>`, a jump into bytes that are not decoded.
         public var gaps: [String]
     }
 
@@ -838,12 +839,22 @@ public actor GhidraHost {
 
     /// What the registry would not take, and why.
     static func offerRefusal(_ shortfalls: [LibraryShortfall], would: LibraryWriteResult?) -> String? {
-        let below = shortfalls.map {
-            LibraryRefusal.Row(address: $0.address, name: $0.name,
-                               why: $0.gaps.contains("no_body") ? "it has no body: a thunk or an external function"
-                                   : "short of the bar: " + $0.gaps.joined(separator: ", ")
-                                       + "; if it is a registry function, take the entry's text with `ghidra_library_apply` "
-                                       + "and `take_text`, then repeat the edit")
+        let below = shortfalls.map { shortfall -> LibraryRefusal.Row in
+            let undecoded = shortfall.gaps.filter { $0.hasPrefix("undecoded ") }
+                .map { String($0.dropFirst("undecoded ".count)) }
+            let why: String
+            if !undecoded.isEmpty {
+                why = "a jump in it reaches bytes that are not decoded (" + undecoded.joined(separator: ", ")
+                    + "), so its body has a hole and the registry could keep no code for it: decode them with "
+                    + "`ghidra_redecode`"
+            } else if shortfall.gaps.contains("no_body") {
+                why = "it has no body: a thunk or an external function"
+            } else {
+                why = "short of the bar: " + shortfall.gaps.joined(separator: ", ")
+                    + "; if it is a registry function, take the entry's text with `ghidra_library_apply` "
+                    + "and `take_text`, then repeat the edit"
+            }
+            return LibraryRefusal.Row(address: shortfall.address, name: shortfall.name, why: why)
         }
         return LibraryRefusal.refusal(below + (would.map(LibraryRefusal.rows(of:)) ?? []))
     }

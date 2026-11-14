@@ -205,4 +205,42 @@ final class GhidraOwnerX64EnumTests: XCTestCase {
         let row = try XCTUnwrap(rows.first { ($0["address"] as? String)?.uppercased() == global.uppercased() })
         XCTAssertFalse((row["data_references"] as? [String] ?? []).isEmpty, "\(global): \(row)")
     }
+
+    /// A jump into bytes nobody decoded leaves a hole in the body: the registry
+    /// could keep no code for it, so the function is offered below the bar with
+    /// the place named, not as an entry the store then silently fails to link
+    /// (issue dc635a83: ReadPTLen's zero-fill loop at 0xE447 was bytes, and
+    /// the publish stored 21 links where its dry run said 23).
+    func testAJumpIntoUndecodedBytesKeepsAFunctionFromTheRegistry() async throws {
+        try await post("/v1/library/candidate", ["items": [["address": "0xE2F4", "kind": "edk2"]]])
+        func row() async throws -> [String: Any] {
+            let library = try await read("/v1/library")
+            let rows = (library["entries"] as? [[String: Any]] ?? []) + (library["below_bar"] as? [[String: Any]] ?? [])
+            return try XCTUnwrap(rows.first { ($0["address"] as? String)?.uppercased() == "0XE2F4" })
+        }
+        let whole = try await row()
+        XCTAssertFalse((whole["gaps"] as? [String] ?? []).contains { $0.hasPrefix("undecoded") }, "\(whole)")
+
+        try await post("/v1/set/data", ["address": "0xE447", "type": "byte[21]", "clear_code": true])
+        let holed = try await row()
+        XCTAssertTrue((holed["gaps"] as? [String] ?? []).contains("undecoded 0xE447"), "\(holed)")
+        XCTAssertNil(holed["entry"], "below the bar, not an entry: \(holed)")
+        let refusal = try XCTUnwrap(GhidraHost.offerRefusal(
+            [GhidraHost.LibraryShortfall(address: "0xE2F4", name: "ReadPTLen", kind: "edk2", gaps: holed["gaps"] as? [String] ?? [])], would: nil))
+        XCTAssertTrue(refusal.contains("not decoded (0xE447)") && refusal.contains("ghidra_redecode"), refusal)
+    }
+
+    /// The displacement of `[RAX + RDI*0x1 + 0x121c]` is named by `operand`
+    /// alone: the operand's objects hold the scale 0x1 first, and a name is
+    /// never the scale's (issue b2de98c2: SCRATCH_DATA.mPTLen in ReadPTLen).
+    func testANamedOperandIsItsDisplacementNotItsScale() async throws {
+        let rows = try await read("/v1/disassembly/0xE2F4?limit=300")["instructions"] as? [[String: Any]] ?? []
+        let store = try XCTUnwrap(rows.first { ($0["text"] as? String ?? "").lowercased().contains("*0x1 + 0x121c]") },
+                                  "\(rows.map { $0["text"] ?? "" })")
+        let at = try XCTUnwrap(store["address"] as? String)
+        let named = try await post("/v1/set/equate", ["address": at, "operand": 0, "name": "SCRATCH_DATA_mPTLen_OFFSET",
+                                                       "enum": "SCRATCH_DATA_OFFSET"])
+        XCTAssertEqual(named["value"] as? String, "0x121C", "\(named)")
+        XCTAssertEqual(named["operand"] as? Int, 0)
+    }
 }
