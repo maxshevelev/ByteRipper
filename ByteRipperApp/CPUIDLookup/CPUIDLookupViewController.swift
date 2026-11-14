@@ -405,8 +405,11 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
             searchField.searchMenuTemplate = nil
             return
         }
-        let menu = PatternQueryControls.searchMenu()
-        menu.addItem(PatternQueryControls.menuHeader(L("Recent Queries"), symbol: "clock"))
+        let menu = NSMenu()
+        // This field's font is larger than the Find bar's, and the menu's
+        // rows are measured for it: the titles are lowered to their middle.
+        let header = PatternQueryControls.menuBaselineOffset(for: searchField, size: PatternQueryControls.menuFlagSize)
+        menu.addItem(PatternQueryControls.menuHeader(L("Recent Queries"), symbol: "clock", baselineOffset: header))
         for query in recents {
             let item = command(query, #selector(recentPicked(_:)))
             item.representedObject = query
@@ -421,8 +424,11 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
     private func command(_ title: String, _ action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
-        item.attributedTitle = NSAttributedString(
-            string: title, attributes: [.font: NSFont.systemFont(ofSize: PatternQueryControls.menuRowSize)])
+        let size = PatternQueryControls.menuRowSize
+        item.attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: size),
+            .baselineOffset: PatternQueryControls.menuBaselineOffset(for: searchField, size: size)
+        ])
         return item
     }
 

@@ -341,7 +341,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// Rebuilds the field's menu: the two lists and the commands that belong to
     /// each (§11, `Design/PATTERN_LIBRARY_IDEA.md`).
     @objc func rebuildPatternMenu() {
-        let menu = Self.searchMenu()
+        let menu = NSMenu()
         let recents = FindHistoryStore.recent
         if !recents.isEmpty {
             menu.addItem(Self.menuHeader(L("Recent Queries"), symbol: "clock"))
@@ -381,20 +381,21 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         return item
     }
 
-    /// An empty search menu whose rows are measured for the size they are
-    /// drawn at. Rows titled a point under the menu's own font sat above the
-    /// middle of the highlight, the row being as tall as the menu's font asks;
-    /// the menu given that same size centres them.
-    static func searchMenu() -> NSMenu {
-        let menu = NSMenu()
-        menu.font = .systemFont(ofSize: menuRowSize)
-        return menu
+    /// How far to lower a menu row's text drawn at `size` so it sits in the
+    /// middle of its highlight. A search field draws its menu in its own font
+    /// and measures each row for that, whatever the row's title says; a title
+    /// a few points smaller is drawn from the row's top and reads high. Zero
+    /// for the Find bar's field, whose font is the menu's own.
+    static func menuBaselineOffset(for field: NSSearchField, size: CGFloat) -> CGFloat {
+        func line(_ font: NSFont) -> CGFloat { font.ascender - font.descender + font.leading }
+        let fieldFont = field.font ?? .menuFont(ofSize: 0)
+        return -max(0, (line(fieldFont) - line(.systemFont(ofSize: size))) / 2).rounded(.toNearestOrAwayFromZero)
     }
 
     /// A section header carrying an icon: a disabled item with the symbol as
     /// its image. Also the Intel CPUID Lookup's, so the two search menus read
     /// alike.
-    static func menuHeader(_ title: String, symbol: String) -> NSMenuItem {
+    static func menuHeader(_ title: String, symbol: String, baselineOffset: CGFloat = 0) -> NSMenuItem {
         let item = NSMenuItem()
         item.isEnabled = false
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
@@ -402,7 +403,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         item.attributedTitle = NSAttributedString(
             string: title,
             attributes: [.font: NSFont.systemFont(ofSize: menuFlagSize, weight: .semibold),
-                         .foregroundColor: NSColor.secondaryLabelColor])
+                         .foregroundColor: NSColor.secondaryLabelColor,
+                         .baselineOffset: baselineOffset])
         return item
     }
 
