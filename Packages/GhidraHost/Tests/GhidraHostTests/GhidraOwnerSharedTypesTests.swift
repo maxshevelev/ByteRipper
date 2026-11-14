@@ -105,4 +105,40 @@ final class GhidraOwnerSharedTypesTests: XCTestCase {
             XCTAssertTrue(error.message.contains("Reader"), error.message)
         }
     }
+
+    /// Issue a77a320e: the author's correction of its own enum — a member at
+    /// another value — is taken by the publish as the preview said, not
+    /// refused because a take never replaced an enum.
+    func testTheAuthorCorrectsItsOwnEnumAsThePreviewSaid() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerAuthorEnum-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraOwnerAuthorEnum"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: String(paths[1])))
+        let writer = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Writer")
+        defer { Task { await host.stop(writer) } }
+        try await host.take(writer)
+        func define(_ c: String) async throws {
+            _ = try await host.write(writer, "/v1/type", body: body(["c": c, "description": "Only this test's."]))
+        }
+        try await define("typedef enum _PROBE_OFFSET { ProbeLength = 0x1, ProbeTable = 0x20 } PROBE_OFFSET;")
+        _ = try await host.publish(writer, by: "agent")
+
+        try await define("typedef enum _PROBE_OFFSET { ProbeLength = 0x121C, ProbeTable = 0x20 } PROBE_OFFSET;")
+        let preview = try json(await host.preview(writer))
+        XCTAssertTrue((preview["types_taken_as_origin"] as? [String] ?? []).contains("PROBE_OFFSET"), "\(preview)")
+        XCTAssertNil(preview["types_refused"], "\(preview)")
+        let corrected = try await host.publish(writer, by: "agent")
+        XCTAssertTrue(corrected.typesTakenAsOrigin.contains("PROBE_OFFSET"), "\(corrected.typesTakenAsOrigin)")
+        let now = try json(await host.read(writer, "/v1/type?name=PROBE_OFFSET"))
+        XCTAssertEqual(now["same"] as? Bool, true, "\(now)")
+    }
 }

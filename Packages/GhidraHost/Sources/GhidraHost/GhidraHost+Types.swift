@@ -243,14 +243,18 @@ extension GhidraHost {
     }
 
     /// The version `decideTypes` would make, worked out on a copy and with
-    /// nothing written: nil when the merge leaves the archive as it is.
-    func wouldBeTypeVersion(_ module: SHA256Digest, language: String, take: Bool) async throws -> Int? {
+    /// nothing written: nil when the merge leaves the archive as it is. With
+    /// it, the types the merge still could not take — what `decideTypes`
+    /// would refuse — so a preview decides as the publish does.
+    func wouldBeTypeVersion(_ module: SHA256Digest, language: String, take: Bool) async throws
+        -> (version: Int?, refused: [String]) {
         let bits = Self.archiveBits(language: language)
         let (folder, current) = try await archiveWorkingCopy(bits: bits)
         defer { try? FileManager.default.removeItem(at: folder) }
         let merged = TypesMerged(try await typesCall(module, take ? "/v1/types/merge?take_type_conflicts=1" : "/v1/types/merge",
                                                      body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
-        guard merged.changed else { return nil }
+        let refused = merged.replacements
+        guard merged.changed else { return (nil, refused) }
         if let current {
             var same = true
             for (stored, local) in Self.archiveFileNames(bits: bits) {
@@ -258,9 +262,9 @@ extension GhidraHost {
                 let data = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : Data("{}".utf8)
                 if current.files[stored] != SHA256Digest(data: data) { same = false; break }
             }
-            if same { return nil }
+            if same { return (nil, refused) }
         }
-        return (current?.version ?? 0) + 1
+        return ((current?.version ?? 0) + 1, refused)
     }
 
     static func typeRefusal(_ names: [String], origins: [String: String], names modules: [String: String],

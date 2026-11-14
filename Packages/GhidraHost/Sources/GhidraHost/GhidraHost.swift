@@ -1001,9 +1001,20 @@ public actor GhidraHost {
         // nothing stored. Absent when the types add nothing, as in a publish.
         if writer.keepsTypeArchives, reviewed, replacing.isEmpty || agreedProposals != nil || takenAsOrigin {
             let language = (artifact["program"] as? [String: Any])?["language"] as? String ?? ""
-            if let next = try? await wouldBeTypeVersion(module, language: language,
-                                                        take: agreedProposals != nil || takenAsOrigin) {
-                preview["types_version"] = next
+            if let would = try? await wouldBeTypeVersion(module, language: language,
+                                                         take: agreedProposals != nil || takenAsOrigin) {
+                if !would.refused.isEmpty {
+                    // The merge itself could not take them: the publish
+                    // refuses, so the preview does too.
+                    preview["types_taken_as_origin"] = nil
+                    preview["types_agreed"] = nil
+                    let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
+                                           uniquingKeysWith: { first, _ in first })
+                    preview["types_refused"] = Self.typeRefusal(would.refused, origins: typeOrigins, names: names,
+                                                                version: nil, bits: previewBits)
+                } else if let next = would.version {
+                    preview["types_version"] = next
+                }
             }
         }
         preview["stale_links"] = try Self.plain(await staleLinks(port: record.port))

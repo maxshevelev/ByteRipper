@@ -1723,10 +1723,11 @@ public class Owner {
      * the current version the server hands over while it decides a publish,
      * and keeps as the next version when the merge changed it; without it,
      * the archive beside the projects, as before versions. `take_type_conflicts=1`
-     * is sent by the host alone, to apply a proposal agreed on the server: this
-     * review's version of each conflicting type replaces the shared one. An
-     * enum is never taken: a member's value clashing means one of the two is
-     * wrong. Merging again what is merged changes nothing.
+     * is sent by the host alone, to apply a proposal agreed on the server or the
+     * correction of the module that wrote the types: this
+     * review's version of each conflicting type replaces the shared one; an
+     * enum takes this review's members in place of the clashing ones
+     * (`takeEnum`). Merging again what is merged changes nothing.
      */
     private JsonObject typesMerge(HttpExchange exchange) throws Exception {
         requireLease(exchange);
@@ -2079,6 +2080,17 @@ public class Owner {
         if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
             && here instanceof ghidra.program.model.data.Enum ownEnum) {
             int merged = mergeEnum(ownEnum, sharedEnum);
+            if (merged < 0 && take) {
+                // The author's correction, or an agreed proposal: this
+                // review's members take the shared enum's clashing ones'
+                // place; members no one disputes stay.
+                takeEnum(ownEnum, sharedEnum);
+                if (!merge.taken.contains(name)) merge.taken.add(name);
+                merge.origins.put(name, originOf(origins, name));
+                merge.written = true;
+                recordOrigin(origins, name, module);
+                return true;
+            }
             if (merged < 0) { recordConflict(merge, origins, name); return false; }
             if (merged > 0 && !merge.amended.contains(name)) merge.amended.add(name);
             return merged > 0;
@@ -2581,7 +2593,7 @@ public class Owner {
         return null;
     }
 
-    /** A take replaces a structure, a union or a typedef — never an enum. */
+    /** A take replaces a structure, a union or a typedef; an enum is taken by `takeEnum`. */
     private static boolean replaceable(DataType own, DataType shared) {
         return !(own instanceof ghidra.program.model.data.Enum)
             && !(shared instanceof ghidra.program.model.data.Enum);
@@ -2869,6 +2881,28 @@ public class Owner {
      * holds, is a conflict, and nothing of that enum is merged. Answers the
      * number of changes, or -1 for a conflict.
      */
+    /**
+     * A taken enum: every shared member that clashes with this review's —
+     * the same name at another value, or this review's value under a name
+     * this review has not — goes, and this review's members, comments and
+     * description take their place. A member only the shared enum has, at a
+     * value this review does not use, stays: another module wrote it.
+     */
+    static void takeEnum(ghidra.program.model.data.Enum own, ghidra.program.model.data.Enum shared) {
+        for (String name : shared.getNames()) {
+            long value = shared.getValue(name);
+            boolean clashes = own.contains(name) ? own.getValue(name) != value : own.contains(value);
+            if (clashes) shared.remove(name);
+        }
+        for (String name : own.getNames()) {
+            String comment = own.getComment(name);
+            if (shared.contains(name)) shared.remove(name);
+            shared.add(name, own.getValue(name), comment == null ? "" : comment);
+        }
+        String description = own.getDescription();
+        if (description != null && !description.isEmpty()) shared.setDescription(description);
+    }
+
     private static int mergeEnum(ghidra.program.model.data.Enum own, ghidra.program.model.data.Enum shared) {
         for (String name : own.getNames()) {
             long value = own.getValue(name);
