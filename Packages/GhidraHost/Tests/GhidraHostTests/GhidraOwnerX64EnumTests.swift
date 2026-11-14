@@ -166,4 +166,43 @@ final class GhidraOwnerX64EnumTests: XCTestCase {
         let values = try XCTUnwrap(edk2["values"] as? [String: String], "\(edk2)")
         XCTAssertEqual(values["EFI_NOT_FOUND"], "0x800000000000000E", "\(values)")
     }
+
+    /// A field of what a register points at is not module data, though at
+    /// image base 0 its displacement is an address of the module: ReadPTLen
+    /// reads `[Sd + Index + 0x121C]` (SCRATCH_DATA.mPTLen), and 0x121C is
+    /// CoreCleanupGcdMapEntry (issue 42abc327). A body that reads only its
+    /// argument's fields depends on nothing of the module.
+    func testAFieldOfARegistersPointeeIsNoModuleData() async throws {
+        let instructions = try await read("/v1/disassembly/0xE2F4?limit=400")["instructions"] as? [[String: Any]] ?? []
+        let field = try XCTUnwrap(instructions.first { ($0["text"] as? String ?? "").lowercased().contains("0x121c]") },
+                                  "\(instructions.prefix(40))")
+        try await post("/v1/library/candidate", ["items": [["address": "0xE2F4", "kind": "edk2"]]])
+        let library = try await read("/v1/library")
+        // Unreviewed, it is below the bar: its dependencies are listed there alike.
+        let entries = (library["entries"] as? [[String: Any]] ?? []) + (library["below_bar"] as? [[String: Any]] ?? [])
+        let entry = try XCTUnwrap(entries.first { ($0["address"] as? String)?.uppercased() == "0XE2F4" },
+                                  "\(library.keys) \(entries.compactMap { $0["address"] })")
+        XCTAssertEqual(entry["data_references"] as? [String], [], "\(field) \(entry["data_references"] ?? "none")")
+
+        // A global the module holds, read RIP-relative, is still its data.
+        let functions = try await read("/v1/functions?limit=200")["functions"] as? [[String: Any]] ?? []
+        var reader: String?
+        for function in functions where reader == nil {
+            guard let at = function["entry"] as? String, at.uppercased() != "0XE2F4" else { continue }
+            let rows = try await read("/v1/disassembly/\(at)?limit=60")["instructions"] as? [[String: Any]] ?? []
+            if rows.contains(where: { row in
+                let text = (row["text"] as? String ?? "").uppercased()
+                let references = row["references"] as? [[String: Any]] ?? []
+                // RIP-relative prints as the address it reaches: `qword ptr [0x1a3c8]`.
+                return (text.contains("[RIP") || text.contains("[0X"))
+                    && references.contains { $0["type"] as? String == "READ" }
+            }) { reader = at }
+        }
+        let global = try XCTUnwrap(reader, "no function reads a global RIP-relative")
+        try await post("/v1/library/candidate", ["items": [["address": global, "kind": "edk2"]]])
+        let after = try await read("/v1/library")
+        let rows = (after["entries"] as? [[String: Any]] ?? []) + (after["below_bar"] as? [[String: Any]] ?? [])
+        let row = try XCTUnwrap(rows.first { ($0["address"] as? String)?.uppercased() == global.uppercased() })
+        XCTAssertFalse((row["data_references"] as? [String] ?? []).isEmpty, "\(global): \(row)")
+    }
 }

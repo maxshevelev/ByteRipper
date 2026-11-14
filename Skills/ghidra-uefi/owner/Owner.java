@@ -3069,6 +3069,7 @@ public class Owner {
             java.util.List<Address> named = new java.util.ArrayList<>();
             for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
                 if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
+                if (throughBaseRegister(instruction, reference.getOperandIndex())) continue;
                 named.add(reference.getToAddress());
             }
             if (baseIsReal) {
@@ -3089,6 +3090,32 @@ public class Owner {
                 else data.add(String.format("0x%X", instruction.getAddress().subtract(entry)));
             }
         }
+    }
+
+    /**
+     * Whether an operand reaches memory through a base register: `[RDI +
+     * 0x121C]` is a field of what RDI points at, never module address 0x121C,
+     * though in an image based at zero Ghidra may make it a reference to one
+     * (issue 42abc327). A register that is only a scaled index (`[RAX*0x4 +
+     * 0x1230]`) indexes a table the displacement names, and RIP-relative is
+     * an address: both stay references.
+     */
+    static boolean throughBaseRegister(ghidra.program.model.listing.Instruction instruction, int operand) {
+        if (operand < 0 || operand >= instruction.getNumOperands()) return false;
+        String text = instruction.getDefaultOperandRepresentation(operand);
+        if (!text.contains("[")) return false;
+        for (Object part : instruction.getOpObjects(operand)) {
+            if (!(part instanceof ghidra.program.model.lang.Register register)) continue;
+            String name = register.getName();
+            if (name.equalsIgnoreCase("RIP") || name.equalsIgnoreCase("EIP")) continue;
+            java.util.regex.Matcher at = java.util.regex.Pattern
+                .compile("(?i)(?<![A-Z0-9_])" + java.util.regex.Pattern.quote(name) + "(?![A-Z0-9_])\\s*(\\*)?")
+                .matcher(text);
+            while (at.find()) {
+                if (at.group(1) == null) return true;
+            }
+        }
+        return false;
     }
 
     /** What decides whether a function depends on a module: `data_references` and `callees`, beside the review. */
