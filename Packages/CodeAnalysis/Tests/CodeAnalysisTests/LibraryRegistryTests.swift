@@ -547,6 +547,34 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertNil(try store.libraryIndex().entry(for: cut))
     }
 
+    /// The module that wrote an entry, the only one holding its body, cuts the
+    /// function again — a block that was bytes decoded — and its author's
+    /// correction takes the new body: the entry keeps its id, the old body
+    /// goes, the next version names why (issue 3b9b96b0, ReadPTLen in DxeCore).
+    /// Taken by another module, it is still refused.
+    func testTheEntrysOnlyModuleGivesItItsBodyCutAgain() throws {
+        let cut = LibraryBody(size: 0x6D, full: "d9f57332aa0e9128", specific: "47c4a7dafc0cbccb")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+        XCTAssertThrowsError(try store.putLibraryEntries(module: second, rev: 1, by: "agent", proposals: [
+            review("ReadSmn", body: cut, constants: ["0x10196"], variantOf: body.key)],
+            take: .these([body.key: "not this module's entry"]))) {
+            XCTAssertTrue("\($0)".contains("ghidra_library_apply") && !"\($0)".contains("replace"), "\($0)")
+        }
+        let taken = try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [
+            review("ReadSmn", body: cut, constants: ["0x10196"], variantOf: body.key)],
+            take: .these([body.key: "taken from the module that wrote it"]))
+        XCTAssertEqual(taken.updated.map(\.version), [2])
+        XCTAssertTrue(taken.conflicts.isEmpty)
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entry(for: cut)?.id, body.key, "the entry keeps its id")
+        XCTAssertNil(index.bodies[body.key], "the old body is gone")
+        XCTAssertEqual(index.entries[body.key]?.variants.map(\.body), [cut])
+        XCTAssertEqual(index.entries[body.key]?.source.module, first)
+        XCTAssertTrue(try store.libraryHistory(id: body.key)?.versions.last?.reason?
+            .contains("its body cut again") == true)
+    }
+
     /// An entry written before entries held their constants takes them from
     /// whichever module offers the same review of its body — the holder's
     /// change in all but name, with a reason the history keeps.

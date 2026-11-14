@@ -977,6 +977,39 @@ extension ContentStore {
                         histories[id] = history
                         settled[id] = "this publish joins it as a variant of version \(held.version)"
                         changedIndex = true
+                    } else if let taken = take.all ? allReason : reasons[id],
+                              !held.variants.isEmpty, held.variants.allSatisfy({ $0.module == module }) {
+                        // The entry's every body is this module's, and the
+                        // function was cut again — a block decoded that was
+                        // bytes: the body it has now is the entry's, by the
+                        // decision that took it (issue 3b9b96b0). The old
+                        // body goes; no module holds it.
+                        conflicting.insert(id)
+                        moving.insert(id)
+                        let heldObject = try object(held.entry)
+                        for old in held.variants { index.bodies[old.body.key] = nil }
+                        held.variants = [LibraryVariant(body: proposal.body, module: module,
+                                                        referenceBytes: proposal.referenceBytes)]
+                        index.bodies[proposal.body.key] = id
+                        held.version += 1
+                        held.entry = digest
+                        held.name = proposal.name
+                        held.kind = proposal.kind
+                        held.role = proposal.role
+                        held.source = source
+                        index.entries[id] = held
+                        let why = entryReasons[id] ?? taken
+                        var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                        history.versions.append(LibraryVersion(version: held.version, entry: digest, source: source,
+                                                               reason: "its body cut again, \(proposal.body.key): " + why,
+                                                               recordedAt: now))
+                        histories[id] = history
+                        result.updated.append(.init(id: id, name: proposal.name, version: held.version,
+                                                    changed: ["body"] + LibraryProposal.changedFields(
+                                                        from: heldObject, to: proposal.entry).filter { $0 != "body" },
+                                                    module: module, reason: why))
+                        settled[id] = "its body is this module's, cut again, at version \(held.version)"
+                        changedIndex = true
                     } else {
                         conflicting.insert(id)
                         variantConflicts.insert(id)
@@ -1188,8 +1221,9 @@ extension ContentStore {
                 let function = proposal.map { "\($0.name) at \($0.address)" } ?? "this module's function"
                 throw CodeAnalysisError.analysisMismatch(
                     "the entry \(id) is the entry of another body, and \(function) is not a variant of it: "
-                        + "a variant's review cannot become the entry's — adopt the entry with replace, "
-                        + "or review the function on its own")
+                        + "a variant's review cannot become the entry's. If the entry's bodies are all this "
+                        + "module's, its author's correction takes the new body; otherwise refuse the entry for "
+                        + "this function with `ghidra_library_apply` and `decline`, and review it on its own")
             }
             // A reason for an entry this publish does not move would read as
             // kept, and be nothing: said as a take of a settled entry is.
