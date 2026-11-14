@@ -1726,9 +1726,6 @@
 "Updated %1$@. Data and sources:" = "Обновлено %1$@. Данные и источники:";
 "Data and sources:" = "Данные и источники:";
 "Open the repository the table is read from" = "Открыть репозиторий, из которого загружается таблица";
-"Recent Searches" = "Недавние запросы";
-"No Recent Searches" = "Нет недавних запросов";
-"Clear Search History" = "Очистить историю поиска";
 "Code name" = "Кодовое имя";
 "Stepping" = "Степпинг";
 "series" = "серия";

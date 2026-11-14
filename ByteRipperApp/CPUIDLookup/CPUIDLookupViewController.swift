@@ -2,6 +2,7 @@ import Cocoa
 import HelpUI
 import IntelCPUID
 import Localization
+import ToolModuleKit
 
 /// The Intel CPUID Lookup window's content: a search field, a line saying
 /// what was found, the entry of a CPUID typed whole, and the models found.
@@ -39,6 +40,10 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
     private var headingHeight: NSLayoutConstraint!
     private var headingFills: NSLayoutConstraint!
     private var tablesWatch: NSObjectProtocol?
+    private var zoomWatch: NSObjectProtocol?
+    /// The type size the table was last drawn at, to scale its columns by
+    /// when the zoom moves.
+    private var drawnSize = ToolPanelFont.size
     private var rememberTimer: Timer?
 
     private enum Column: String, CaseIterable {
@@ -77,9 +82,7 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         searchField.sendsSearchStringImmediately = true
         searchField.target = self
         searchField.action = #selector(searchChanged)
-        searchField.maximumRecents = SearchHistory.limit
-        searchField.searchMenuTemplate = historyMenu()
-        searchField.recentSearches = history
+        rebuildHistoryMenu()
 
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -104,7 +107,7 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         for column in Column.allCases {
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
-            tableColumn.width = column.width
+            tableColumn.width = (column.width * ToolPanelFont.size / ToolPanelFont.defaultSize).rounded()
             tableColumn.minWidth = 60
             tableColumn.sortDescriptorPrototype = NSSortDescriptor(key: column.rawValue, ascending: true)
             tableView.addTableColumn(tableColumn)
@@ -115,7 +118,6 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = true
         tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-        tableView.rowHeight = 22
         tableView.target = self
         tableView.doubleAction = #selector(lookUpClickedRow)
         tableView.autosaveName = "CPUIDLookupTable"
@@ -179,6 +181,10 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         view = content
 
         suggestions.onPick = { [weak self] text in self?.pick(text) }
+        // The table and the heading follow View ▸ Zoom, as the tool panels'
+        // tables do.
+        ToolPanelTable.apply(to: tableView)
+        zoomWatch = ToolPanelFont.observeZoom { [weak self] in self?.zoomChanged() }
         tablesWatch = NotificationCenter.default.addObserver(
             forName: ProcessorTables.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -188,6 +194,14 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
     }
 
     private var footerLabel: NSTextField?
+
+    private func zoomChanged() {
+        ToolPanelTable.scaleColumnWidths(of: tableView, by: ToolPanelFont.size / drawnSize)
+        drawnSize = ToolPanelFont.size
+        ToolPanelTable.apply(to: tableView)
+        suggestions.zoomChanged()
+        render()
+    }
 
     override func viewDidLayout() {
         super.viewDidLayout()
@@ -222,8 +236,6 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
     var query: String { searchField.stringValue }
 
     @objc private func searchChanged() {
-        // The menu's recent searches are kept here, not by the field.
-        searchField.recentSearches = history
         render()
         showSuggestions()
         rememberSoon()
@@ -380,34 +392,48 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         rememberTimer = nil
         guard !shown.isEmpty || !headings.isEmpty else { return }
         history = SearchHistory.remembering(query, in: history)
-        searchField.recentSearches = history
+        rebuildHistoryMenu()
     }
 
-    private func historyMenu() -> NSMenu {
-        let menu = NSMenu(title: L("Recent Searches"))
-        let title = NSMenuItem(title: L("Recent Searches"), action: nil, keyEquivalent: "")
-        title.tag = NSSearchField.recentsTitleMenuItemTag
-        menu.addItem(title)
-        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        item.tag = NSSearchField.recentsMenuItemTag
-        menu.addItem(item)
-        let none = NSMenuItem(title: L("No Recent Searches"), action: nil, keyEquivalent: "")
-        none.tag = NSSearchField.noRecentsMenuItemTag
-        menu.addItem(none)
-        let separator = NSMenuItem.separator()
-        separator.tag = NSSearchField.recentsTitleMenuItemTag
-        menu.addItem(separator)
-        // Not the field's own clear item: the searches are kept here, and
-        // the field's would clear only its copy of them.
-        let clear = NSMenuItem(title: L("Clear Search History"), action: #selector(clearHistory), keyEquivalent: "")
-        clear.target = self
-        menu.addItem(clear)
-        return menu
+    /// The magnifier's menu, drawn as the Find bar's is: the last searches
+    /// under a header, then the command that clears them. The menu is a
+    /// template the field copies on every click, so it is built again
+    /// whenever the list changes; with nothing to list there is none.
+    func rebuildHistoryMenu() {
+        let recents = history
+        guard !recents.isEmpty else {
+            searchField.searchMenuTemplate = nil
+            return
+        }
+        let menu = NSMenu()
+        menu.addItem(PatternQueryControls.menuHeader(L("Recent Queries"), symbol: "clock"))
+        for query in recents {
+            let item = command(query, #selector(recentPicked(_:)))
+            item.representedObject = query
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        menu.addItem(command(L("Clear Recents"), #selector(clearHistory)))
+        searchField.searchMenuTemplate = menu
+    }
+
+    /// A menu row with a target and an action, at the Find bar's size.
+    private func command(_ title: String, _ action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.attributedTitle = NSAttributedString(
+            string: title, attributes: [.font: NSFont.systemFont(ofSize: PatternQueryControls.menuRowSize)])
+        return item
+    }
+
+    @objc private func recentPicked(_ sender: NSMenuItem) {
+        guard let query = sender.representedObject as? String else { return }
+        pick(query)
     }
 
     @objc func clearHistory() {
         history = []
-        searchField.recentSearches = []
+        rebuildHistoryMenu()
     }
 
     // MARK: - The table

@@ -382,8 +382,9 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     }
 
     /// A section header carrying an icon: a disabled item with the symbol as
-    /// its image.
-    private static func menuHeader(_ title: String, symbol: String) -> NSMenuItem {
+    /// its image. Also the Intel CPUID Lookup's, so the two search menus read
+    /// alike.
+    static func menuHeader(_ title: String, symbol: String) -> NSMenuItem {
         let item = NSMenuItem()
         item.isEnabled = false
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?

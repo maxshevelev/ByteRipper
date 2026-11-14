@@ -1,5 +1,6 @@
 import Cocoa
 import IntelCPUID
+import ToolModuleKit
 
 /// A cell of the lookup table: its text, with what the query found in it
 /// marked.
@@ -66,7 +67,9 @@ final class CPUIDLookupCell: NSTableCellView {
 
     private func draw() {
         let emphasized = backgroundStyle == .emphasized
-        let size: CGFloat = monospaced ? 12 : 13
+        // The tool panels' size, which View ▸ Zoom moves; the monospaced
+        // face a point under it, where its wider letters match the body.
+        let size = monospaced ? ToolPanelFont.size - 1 : ToolPanelFont.size
         let font: NSFont = monospaced
             ? .monospacedSystemFont(ofSize: size, weight: bold ? .semibold : .regular)
             : .systemFont(ofSize: size, weight: bold ? .semibold : .regular)

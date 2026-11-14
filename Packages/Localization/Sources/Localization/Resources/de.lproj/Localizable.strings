@@ -1726,9 +1726,6 @@
 "Updated %1$@. Data and sources:" = "Aktualisiert am %1$@. Daten und Quellen:";
 "Data and sources:" = "Daten und Quellen:";
 "Open the repository the table is read from" = "Das Repository öffnen, aus dem die Tabelle gelesen wird";
-"Recent Searches" = "Letzte Suchen";
-"No Recent Searches" = "Keine letzten Suchen";
-"Clear Search History" = "Suchverlauf löschen";
 "Code name" = "Codename";
 "Stepping" = "Stepping";
 "series" = "Serie";

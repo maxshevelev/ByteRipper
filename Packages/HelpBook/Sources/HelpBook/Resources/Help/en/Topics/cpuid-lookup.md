@@ -11,9 +11,9 @@
 
 Type into the search field. The table below lists every model the query matches, with its CPUID, its S-SPEC codes, the stepping and the code name. Case, spaces and punctuation are ignored, so `i72600k`, `i7 2600K` and `Core i7-2600K` find the same model. Several words narrow the search: every word must be found in the row, as in `xeon 906EA`. A CPUID the table writes with an `X`, such as `606AX`, stands for every CPUID with any hexadecimal digit in that place and is found by each of them. What matched is marked in each row.
 
-While typing, a list under the field offers completions — CPUIDs, S-SPEC codes, models and code names, each with what it belongs to. **↑** and **↓** move through it, **Return** takes the completion chosen, **Escape** closes the list, and a click takes a completion directly. The magnifier in the field opens the last ten searches; a search is remembered when **Return** is pressed, when a completion is taken, or when it has stood unchanged for two seconds and found something. **Clear Search History** in the same menu removes them.
+While typing, a list under the field offers completions — CPUIDs, S-SPEC codes, models and code names, each with what it belongs to. **↑** and **↓** move through it, **Return** takes the completion chosen, **Escape** closes the list, and a click takes a completion directly. The magnifier in the field opens the last ten searches; a search is remembered when **Return** is pressed, when a completion is taken, or when it has stood unchanged for two seconds and found something. **Clear Recents** in the same menu removes them.
 
-Clicking a column title sorts the table by that column; a second click reverses the order. A double click on a row looks up its CPUID.
+Clicking a column title sorts the table by that column; a second click reverses the order. A double click on a row looks up its CPUID. The table and the entry above it follow **View ▸ Zoom In** and **View ▸ Zoom Out**, as the tool panels do.
 
 ## A CPUID typed whole
 

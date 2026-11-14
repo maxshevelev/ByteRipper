@@ -1,6 +1,7 @@
 import Cocoa
 import IntelCPUID
 import Localization
+import ToolModuleKit
 
 /// What the lookup window says over its table for a query that is one CPUID:
 /// the entry's code names, steppings, product families, segments, cores and
@@ -25,18 +26,21 @@ enum CPUIDHeadingText {
     @MainActor
     static func make(_ headings: [CPUIDLookup.Heading], opened: Set<String>, expanded: Bool) -> NSAttributedString {
         let out = NSMutableAttributedString()
-        let body = NSFont.systemFont(ofSize: 13)
+        // At the tool panels' size, which View ▸ Zoom moves.
+        let size = ToolPanelFont.size
+        let body = NSFont.systemFont(ofSize: size)
         let paragraph = NSMutableParagraphStyle()
         paragraph.paragraphSpacing = 2
         let facts = NSMutableParagraphStyle()
-        facts.tabStops = [NSTextTab(textAlignment: .left, location: 150)]
-        facts.headIndent = 150
+        let labels = (150 * size / ToolPanelFont.defaultSize).rounded()
+        facts.tabStops = [NSTextTab(textAlignment: .left, location: labels)]
+        facts.headIndent = labels
         facts.paragraphSpacing = 1
         let plain: [NSAttributedString.Key: Any] = [.font: body, .foregroundColor: NSColor.labelColor,
                                                     .paragraphStyle: paragraph]
         let muted: [NSAttributedString.Key: Any] = [.font: body, .foregroundColor: NSColor.secondaryLabelColor,
                                                     .paragraphStyle: paragraph]
-        let mono = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let mono = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
 
         func add(_ text: String, _ attributes: [NSAttributedString.Key: Any]) {
             out.append(NSAttributedString(string: text, attributes: attributes))
@@ -68,16 +72,16 @@ enum CPUIDHeadingText {
         for (index, heading) in headings.enumerated() {
             if index > 0 { add("\n", plain) }
             add(heading.cpuids.joined(separator: ", "),
-                [.font: NSFont.monospacedSystemFont(ofSize: 16, weight: .bold), .foregroundColor: NSColor.labelColor])
+                [.font: NSFont.monospacedSystemFont(ofSize: size + 3, weight: .bold), .foregroundColor: NSColor.labelColor])
             add("  ·  ", muted)
             if let family = heading.family {
                 add(family.codeNames.joined(separator: ", "),
-                    [.font: NSFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: NSColor.labelColor])
+                    [.font: NSFont.systemFont(ofSize: size + 2, weight: .semibold), .foregroundColor: NSColor.labelColor])
                 if heading.cpuids.contains(where: { $0.contains("X") }) {
                     add("  (" + L("X stands for any digit") + ")", muted)
                 }
             } else {
-                add(L("not in the table"), [.font: NSFont.systemFont(ofSize: 15), .foregroundColor: NSColor.secondaryLabelColor])
+                add(L("not in the table"), [.font: NSFont.systemFont(ofSize: size + 2), .foregroundColor: NSColor.secondaryLabelColor])
             }
             add("\n", plain)
 
@@ -137,7 +141,7 @@ enum CPUIDHeadingText {
                             add(source.url, plain)
                         }
                         add("  " + source.quote + "\n",
-                            [.font: NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular),
+                            [.font: NSFont.monospacedSystemFont(ofSize: size - 1.5, weight: .regular),
                              .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: paragraph])
                     }
                 }

@@ -1,5 +1,6 @@
 import Cocoa
 import IntelCPUID
+import ToolModuleKit
 import XCTest
 @testable import ByteRipper
 
@@ -73,16 +74,19 @@ final class CPUIDLookupWindowTests: XCTestCase {
 
     /// A search that found something is remembered, and replaces what was
     /// typed on the way to it; one that found nothing is not.
-    func testSearchesAreRememberedWhenTheyFindSomething() {
+    func testSearchesAreRememberedWhenTheyFindSomething() throws {
         lookup.searchField.stringValue = "SR3Z"
         lookup.render()
         lookup.rememberQuery()
         lookup.setQuery("SR3Z0")
         lookup.setQuery("nosuchprocessor")
         XCTAssertEqual(lookup.history, ["SR3Z0"])
-        XCTAssertEqual(lookup.searchField.recentSearches, ["SR3Z0"])
+        let menu = try XCTUnwrap(lookup.searchField.searchMenuTemplate, "the magnifier offers them")
+        XCTAssertEqual(menu.items.map(\.title), ["Recent Queries", "SR3Z0", "", "Clear Recents"],
+                       "drawn as the Find bar's menu is")
         lookup.clearHistory()
         XCTAssertTrue(lookup.history.isEmpty)
+        XCTAssertNil(lookup.searchField.searchMenuTemplate, "nothing to list, no menu")
     }
 
     /// Copy puts the selected rows on the pasteboard, a line each.
@@ -106,6 +110,23 @@ final class CPUIDLookupWindowTests: XCTestCase {
         wait(for: [emptied], timeout: 2)
         XCTAssertTrue(lookup.shown.isEmpty)
         XCTAssertTrue(lookup.statusLabel.stringValue.hasPrefix("The table has not been read yet"))
+    }
+
+    /// View ▸ Zoom reaches the table: its rows and columns grow with the size.
+    func testTheTableFollowsTheZoom() {
+        let key = ToolPanelFont.zoomSizeKey
+        let saved = ToolPanelFont.defaults.object(forKey: key)
+        defer {
+            ToolPanelFont.defaults.set(saved, forKey: key)
+            NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        }
+        let rowHeight = lookup.tableView.rowHeight
+        let width = lookup.tableView.tableColumns[1].width
+        ToolPanelFont.defaults.set(ToolPanelFont.size + 4, forKey: key)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertGreaterThan(lookup.tableView.rowHeight, rowHeight)
+        XCTAssertGreaterThan(lookup.tableView.tableColumns[1].width, width)
     }
 
     /// Its `?` opens its page.

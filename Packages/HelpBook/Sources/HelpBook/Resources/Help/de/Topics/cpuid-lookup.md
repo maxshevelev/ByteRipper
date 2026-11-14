@@ -1,4 +1,4 @@
-@source-sha 6478dac1b8866fb62514abd277350ceb9f99751ef93d718e991734914dfdb320
+@source-sha 337937ba4e5ae17b7ffc8db462b049f66fd2133a368594493d1046f6815668be
 # Intel-CPUID-Suche
 
 > Ein Fenster, das die Tabelle der Intel-Prozessoren nach CPUID, Modell, S-SPEC, Codename oder Stepping durchsucht – dieselbe Tabelle, nach der das FIT-Werkzeug Prozessoren benennt.
@@ -9,9 +9,9 @@
 
 Geben Sie den Suchbegriff in das Suchfeld ein. Die Tabelle darunter führt jedes passende Modell mit CPUID, S-SPEC-Codes, Stepping und Codename auf. Groß- und Kleinschreibung, Leerzeichen und Satzzeichen werden nicht berücksichtigt: `i72600k`, `i7 2600K` und `Core i7-2600K` finden dasselbe Modell. Mehrere Wörter grenzen die Suche ein; jedes Wort muss in der Zeile vorkommen, etwa `xeon 906EA`. Eine CPUID, die die Tabelle mit `X` schreibt, etwa `606AX`, steht für jede CPUID mit einer beliebigen Hexadezimalziffer an dieser Stelle und wird über jede von ihnen gefunden. Die Treffer sind in jeder Zeile markiert.
 
-Während der Eingabe bietet eine Liste unter dem Feld Vervollständigungen an – CPUIDs, S-SPEC-Codes, Modelle und Codenamen, jeweils mit ihrer Zuordnung. **↑** und **↓** bewegen sich durch die Liste, **Return** übernimmt den gewählten Eintrag, **Escape** schließt die Liste; ein Klick übernimmt einen Eintrag direkt. Die Lupe im Feld öffnet die letzten zehn Suchen. Eine Suche wird gespeichert, wenn **Return** gedrückt oder eine Vervollständigung übernommen wird, oder wenn sie etwas gefunden hat und zwei Sekunden unverändert geblieben ist. **Suchverlauf löschen** im selben Menü entfernt sie.
+Während der Eingabe bietet eine Liste unter dem Feld Vervollständigungen an – CPUIDs, S-SPEC-Codes, Modelle und Codenamen, jeweils mit ihrer Zuordnung. **↑** und **↓** bewegen sich durch die Liste, **Return** übernimmt den gewählten Eintrag, **Escape** schließt die Liste; ein Klick übernimmt einen Eintrag direkt. Die Lupe im Feld öffnet die letzten zehn Suchen. Eine Suche wird gespeichert, wenn **Return** gedrückt oder eine Vervollständigung übernommen wird, oder wenn sie etwas gefunden hat und zwei Sekunden unverändert geblieben ist. **Zuletzt gesucht löschen** im selben Menü entfernt sie.
 
-Ein Klick auf eine Spaltenüberschrift sortiert die Tabelle nach dieser Spalte, ein zweiter Klick kehrt die Reihenfolge um. Ein Doppelklick auf eine Zeile sucht nach ihrer CPUID.
+Ein Klick auf eine Spaltenüberschrift sortiert die Tabelle nach dieser Spalte, ein zweiter Klick kehrt die Reihenfolge um. Ein Doppelklick auf eine Zeile sucht nach ihrer CPUID. Die Tabelle und die Angaben darüber folgen **Darstellung ▸ Vergrößern** und **Darstellung ▸ Verkleinern**, wie die Werkzeugbereiche.
 
 ## Eine vollständig eingegebene CPUID
 

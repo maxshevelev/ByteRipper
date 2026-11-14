@@ -1,6 +1,7 @@
 import Cocoa
 import IntelCPUID
 import Localization
+import ToolModuleKit
 
 /// The completions under the lookup's search field: a borderless list
 /// attached to the window, eight at most, each with what kind of thing it is
@@ -66,6 +67,15 @@ final class CPUIDSuggestions: NSObject, NSTableViewDataSource, NSTableViewDelega
         }
     }
 
+    /// A completion's row: the tool panels' row, with room around it.
+    static var rowHeight: CGFloat { ToolPanelFont.rowHeight + 4 }
+
+    /// View ▸ Zoom moved: the rows are drawn again at the new size.
+    func zoomChanged() {
+        table.rowHeight = Self.rowHeight
+        close()
+    }
+
     private func make() -> NSWindow {
         let window = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                              backing: .buffered, defer: true)
@@ -86,7 +96,7 @@ final class CPUIDSuggestions: NSObject, NSTableViewDataSource, NSTableViewDelega
         table.headerView = nil
         table.backgroundColor = .clear
         table.style = .plain
-        table.rowHeight = 24
+        table.rowHeight = Self.rowHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
         table.selectionHighlightStyle = .regular
         table.refusesFirstResponder = true
@@ -142,7 +152,6 @@ final class CPUIDSuggestionCell: NSTableCellView {
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         self.identifier = identifier
-        detail.font = .systemFont(ofSize: 12)
         detail.textColor = .secondaryLabelColor
         detail.lineBreakMode = .byTruncatingTail
         detail.alignment = .right
@@ -168,6 +177,7 @@ final class CPUIDSuggestionCell: NSTableCellView {
 
     func show(_ hint: CPUIDLookup.Hint, query: String) {
         main.show(hint.text, query: query, monospaced: hint.kind == .cpuid || hint.kind == .sSpec)
+        detail.font = .systemFont(ofSize: ToolPanelFont.size - 1)
         detail.stringValue = CPUIDSuggestions.kind(hint.kind) + (hint.detail.isEmpty ? "" : " · " + hint.detail)
     }
 
