@@ -76,8 +76,8 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         searchField.placeholderString = L("CPUID, model or S-SPEC — 306A9, i7-2600K, SR00C")
         ControlHelp.describe(searchField, name: L("Search"),
                              tooltip: L("Search by CPUID, model, S-SPEC, code name or stepping"))
-        searchField.font = .systemFont(ofSize: 15)
-        searchField.controlSize = .large
+        // The Find bar's field as it is: a search field draws its menu in the
+        // field's font, so a larger field would give the same menu other rows.
         searchField.delegate = self
         searchField.sendsSearchStringImmediately = true
         searchField.target = self
@@ -406,10 +406,7 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
             return
         }
         let menu = NSMenu()
-        // This field's font is larger than the Find bar's, and the menu's
-        // rows are measured for it: the titles are lowered to their middle.
-        let header = PatternQueryControls.menuBaselineOffset(for: searchField, size: PatternQueryControls.menuFlagSize)
-        menu.addItem(PatternQueryControls.menuHeader(L("Recent Queries"), symbol: "clock", baselineOffset: header))
+        menu.addItem(PatternQueryControls.menuHeader(L("Recent Queries"), symbol: "clock"))
         for query in recents {
             let item = command(query, #selector(recentPicked(_:)))
             item.representedObject = query
@@ -424,11 +421,8 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
     private func command(_ title: String, _ action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
-        let size = PatternQueryControls.menuRowSize
-        item.attributedTitle = NSAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: size),
-            .baselineOffset: PatternQueryControls.menuBaselineOffset(for: searchField, size: size)
-        ])
+        item.attributedTitle = NSAttributedString(
+            string: title, attributes: [.font: NSFont.systemFont(ofSize: PatternQueryControls.menuRowSize)])
         return item
     }
 
