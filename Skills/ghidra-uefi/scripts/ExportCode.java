@@ -207,11 +207,12 @@ public class ExportCode extends GhidraScript {
         json.append("  \"symbols\": [").append(String.join(", ", symbols)).append("],\n");
 
         // Functions, in address order, with their instructions and decompiled C.
-        DecompInterface decompiler = new DecompInterface();
-        decompiler.setOptions(decompileOptions(currentProgram));
-        decompiler.toggleCCode(true);
-        decompiler.toggleSyntaxTree(true);
-        decompiler.openProgram(currentProgram);
+        DecompInterface opened = new DecompInterface();
+        opened.setOptions(decompileOptions(currentProgram));
+        opened.toggleCCode(true);
+        opened.toggleSyntaxTree(true);
+        opened.openProgram(currentProgram);
+        Decompilers decompiler = new Decompilers(currentProgram, opened);
 
         List<Function> functions = new ArrayList<>();
         FunctionIterator iterator = currentProgram.getFunctionManager().getFunctions(true);
@@ -267,7 +268,7 @@ public class ExportCode extends GhidraScript {
 
             DecompileResults decompiled = null;
             if (!function.isExternal() && !function.isThunk()) {
-                decompiled = decompiler.decompileFunction(function, 120, monitor);
+                decompiled = decompiler.decompile(function, 120, monitor);
                 if (decompiled != null && decompiled.decompileCompleted()
                         && decompiled.getHighFunction() != null) {
                     ports.collect(function, decompiled.getHighFunction());
@@ -389,6 +390,152 @@ public class ExportCode extends GhidraScript {
      * propagated as a constant is one, and it would print a global's value in
      * place of its name, so it stays off as it was.
      */
+    /**
+     * Where a function's C comes from, for the owner's reads and the
+     * artifact alike. In an image based at zero, a displacement off a base
+     * register — `[RAX + RDI*0x1 + 0x121c]`, a field of what RDI points at —
+     * can equal the address of something in the module, and Ghidra's
+     * decompiler then makes the constant a pointer to it: the C prints
+     * `FUN_0000121c[...]` where the source says `Sd->mPTLen[Index]` (the
+     * ReadPTLen case of 2026-11-14). For such a function only, the C is
+     * decompiled again without constant pointers inferred, and that C is
+     * taken when the only names it loses are those symbols; a function whose
+     * C names nothing that way is decompiled once, as before.
+     */
+    static final class Decompilers {
+        private final ghidra.program.model.listing.Program program;
+        final DecompInterface main;
+        private DecompInterface plain;
+
+        Decompilers(ghidra.program.model.listing.Program program, DecompInterface main) {
+            this.program = program;
+            this.main = main;
+        }
+
+        DecompileResults decompile(Function function, int timeout, ghidra.util.task.TaskMonitor monitor) {
+            DecompileResults first = main.decompileFunction(function, timeout, monitor);
+            if (!completed(first)) return first;
+            java.util.Set<String> displaced = displacedSymbols(program, function);
+            if (displaced.isEmpty()) return first;
+            java.util.Set<String> named = globalNames(program, first.getDecompiledFunction().getC());
+            if (java.util.Collections.disjoint(named, displaced)) return first;
+            if (plain == null) {
+                plain = new DecompInterface();
+                ghidra.app.decompiler.DecompileOptions options = decompileOptions(program);
+                options.setInferConstantPointers(false);
+                plain.setOptions(options);
+                plain.toggleCCode(true);
+                plain.toggleSyntaxTree(true);
+                plain.openProgram(program);
+            }
+            DecompileResults second = plain.decompileFunction(function, timeout, monitor);
+            if (!completed(second)) return first;
+            java.util.Set<String> lost = new java.util.HashSet<>(named);
+            lost.removeAll(globalNames(program, second.getDecompiledFunction().getC()));
+            return displaced.containsAll(lost) ? second : first;
+        }
+
+        /** The program opened again — a compiler spec changed: the second decompiler is made anew when needed. */
+        void reopen() {
+            if (plain != null) plain.dispose();
+            plain = null;
+        }
+
+        void dispose() {
+            main.dispose();
+            reopen();
+        }
+
+        private static boolean completed(DecompileResults results) {
+            return results != null && results.decompileCompleted() && results.getDecompiledFunction() != null;
+        }
+    }
+
+    /**
+     * The names of what the module holds at an address a displacement off a
+     * base register in `function` equals: the symbol there, and the data
+     * that contains it.
+     */
+    static java.util.Set<String> displacedSymbols(ghidra.program.model.listing.Program program, Function function) {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        ghidra.program.model.address.AddressSpace space = program.getAddressFactory().getDefaultAddressSpace();
+        InstructionIterator instructions = program.getListing().getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                if (!throughBaseRegister(instruction, operand)) continue;
+                for (Object part : instruction.getOpObjects(operand)) {
+                    if (!(part instanceof ghidra.program.model.scalar.Scalar scalar) || isScale(instruction, operand, scalar)) {
+                        continue;
+                    }
+                    Address at;
+                    try {
+                        at = space.getAddress(scalar.getUnsignedValue());
+                    } catch (Exception outside) {
+                        continue;
+                    }
+                    if (!program.getMemory().contains(at)) continue;
+                    Symbol symbol = program.getSymbolTable().getPrimarySymbol(at);
+                    if (symbol != null) names.add(symbol.getName());
+                    Data data = program.getListing().getDataContaining(at);
+                    if (data != null && data.getPrimarySymbol() != null) names.add(data.getPrimarySymbol().getName());
+                }
+            }
+        }
+        return names;
+    }
+
+    /** The identifiers of `c` that name a global symbol of the program. */
+    static java.util.Set<String> globalNames(ghidra.program.model.listing.Program program, String c) {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        java.util.regex.Matcher word = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(c);
+        while (word.find()) {
+            String name = word.group();
+            if (seen.add(name) && !program.getSymbolTable().getGlobalSymbols(name).isEmpty()) names.add(name);
+        }
+        return names;
+    }
+
+    /**
+     * Whether an operand reaches memory through a base register: `[RDI +
+     * 0x121C]` is a field of what RDI points at, never module address 0x121C,
+     * though in an image based at zero Ghidra may make it a reference to one
+     * (issue 42abc327). A register that is only a scaled index (`[RAX*0x4 +
+     * 0x1230]`) indexes a table the displacement names, and RIP-relative is
+     * an address: both stay references.
+     */
+    static boolean throughBaseRegister(Instruction instruction, int operand) {
+        if (operand < 0 || operand >= instruction.getNumOperands()) return false;
+        String text = instruction.getDefaultOperandRepresentation(operand);
+        if (!text.contains("[")) return false;
+        for (Object part : instruction.getOpObjects(operand)) {
+            if (!(part instanceof ghidra.program.model.lang.Register register)) continue;
+            String name = register.getName();
+            if (name.equalsIgnoreCase("RIP") || name.equalsIgnoreCase("EIP")) continue;
+            java.util.regex.Matcher at = java.util.regex.Pattern
+                .compile("(?i)(?<![A-Z0-9_])" + java.util.regex.Pattern.quote(name) + "(?![A-Z0-9_])\\s*(\\*)?")
+                .matcher(text);
+            while (at.find()) {
+                if (at.group(1) == null) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether `scalar` is the scale of an index register in a memory operand
+     * (`RDI*0x1`), which the operand's objects list beside its displacement.
+     */
+    static boolean isScale(Instruction instruction, int operand, ghidra.program.model.scalar.Scalar scalar) {
+        String text = instruction.getDefaultOperandRepresentation(operand);
+        if (!text.contains("[") || !text.contains("*")) return false;
+        long v = scalar.getUnsignedValue();
+        if (v != 1 && v != 2 && v != 4 && v != 8) return false;
+        return java.util.regex.Pattern.compile("(?i)\\*\\s*(0x0*" + Long.toHexString(v) + "|" + v + ")(?![0-9a-f])")
+            .matcher(text).find();
+    }
+
     static ghidra.app.decompiler.DecompileOptions decompileOptions(ghidra.program.model.listing.Program program) {
         ghidra.app.decompiler.DecompileOptions options = new ghidra.app.decompiler.DecompileOptions();
         options.grabFromProgram(program);

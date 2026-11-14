@@ -243,4 +243,20 @@ final class GhidraOwnerX64EnumTests: XCTestCase {
         XCTAssertEqual(named["value"] as? String, "0x121C", "\(named)")
         XCTAssertEqual(named["operand"] as? Int, 0)
     }
+
+    /// `[RAX + RDI*0x1 + 0x121c]` with RDI a `SCRATCH_DATA *` is a field of
+    /// it, though DxeCore's own function sits at 0x121C: the C prints
+    /// `Sd->mPTLen[...]`, not that function indexed (ReadPTLen, 2026-11-14).
+    func testADisplacementEqualToAModuleAddressPrintsAsTheField() async throws {
+        _ = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_SCRATCH { UINT8 Head[50]; UINT16 mLeft; UINT8 Gap[4584]; \
+            UINT8 mPTLen[19]; UINT8 Tail[205]; } PROBE_SCRATCH;
+            """])
+        _ = try await post("/v1/set/signature", [
+            "address": "0xE2F4", "by": "agent", "reason": "the test's",
+            "signature": "UINT16 ReadPTLen(PROBE_SCRATCH * Sd, UINT16 nn, UINT16 nbit, UINT16 Special)"])
+        let c = try await read("/v1/function/0xE2F4")["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("Sd->mPTLen["), c)
+        XCTAssertFalse(c.contains("FUN_0000121c["), c)
+    }
 }

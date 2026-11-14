@@ -178,6 +178,7 @@ public class Owner {
         decompiler = new DecompInterface();
         decompiler.setOptions(ExportCode.decompileOptions(program));
         decompiler.openProgram(program);
+        decompilers = new ExportCode.Decompilers(program, decompiler);
         if (options.containsKey("types")) {
             archive = FileDataTypeManager.openFileArchive(new File(options.get("types")), false);
         }
@@ -269,7 +270,8 @@ public class Owner {
             if (program.isChanged()) saveProgram("owner");
             keepWrites();
             keepSaved();
-            if (decompiler != null) decompiler.dispose();
+            if (decompilers != null) decompilers.dispose();
+            else if (decompiler != null) decompiler.dispose();
             if (archive != null) archive.close();
             if (reviewArchive != null) reviewArchive.close();
             if (reviewTypesCopy != null) reviewTypesCopy.delete();
@@ -3158,21 +3160,7 @@ public class Owner {
      * an address: both stay references.
      */
     static boolean throughBaseRegister(ghidra.program.model.listing.Instruction instruction, int operand) {
-        if (operand < 0 || operand >= instruction.getNumOperands()) return false;
-        String text = instruction.getDefaultOperandRepresentation(operand);
-        if (!text.contains("[")) return false;
-        for (Object part : instruction.getOpObjects(operand)) {
-            if (!(part instanceof ghidra.program.model.lang.Register register)) continue;
-            String name = register.getName();
-            if (name.equalsIgnoreCase("RIP") || name.equalsIgnoreCase("EIP")) continue;
-            java.util.regex.Matcher at = java.util.regex.Pattern
-                .compile("(?i)(?<![A-Z0-9_])" + java.util.regex.Pattern.quote(name) + "(?![A-Z0-9_])\\s*(\\*)?")
-                .matcher(text);
-            while (at.find()) {
-                if (at.group(1) == null) return true;
-            }
-        }
-        return false;
+        return ExportCode.throughBaseRegister(instruction, operand);
     }
 
     /** What decides whether a function depends on a module: `data_references` and `callees`, beside the review. */
@@ -5512,12 +5500,7 @@ public class Owner {
      * (`RDI*0x1`), which the operand's objects list beside its displacement.
      */
     static boolean isScale(Instruction instruction, int operand, ghidra.program.model.scalar.Scalar scalar) {
-        String text = instruction.getDefaultOperandRepresentation(operand);
-        if (!text.contains("[") || !text.contains("*")) return false;
-        long v = scalar.getUnsignedValue();
-        if (v != 1 && v != 2 && v != 4 && v != 8) return false;
-        return java.util.regex.Pattern.compile("(?i)\\*\\s*(0x0*" + Long.toHexString(v) + "|" + v + ")(?![0-9a-f])")
-            .matcher(text).find();
+        return ExportCode.isScale(instruction, operand, scalar);
     }
 
     private JsonObject applyEquate(JsonObject body) throws Exception {
@@ -6967,6 +6950,7 @@ public class Owner {
             decompiler.closeProgram();
             decompiler.setOptions(ExportCode.decompileOptions(program));
             decompiler.openProgram(program);
+            decompilers.reopen();
         }
         function.setCallingConvention(name);
     }
@@ -8416,7 +8400,7 @@ public class Owner {
             decompiledAt = now;
         }
         return decompiled.computeIfAbsent(function.getEntryPoint(),
-            entry -> decompiler.decompileFunction(function, 120, TaskMonitor.DUMMY));
+            entry -> decompilers.decompile(function, 120, TaskMonitor.DUMMY));
     }
 
     private JsonObject reference(Reference reference) {
