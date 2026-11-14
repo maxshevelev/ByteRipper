@@ -151,12 +151,14 @@ public final class CodeReadings {
                 narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead \
                 `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by \
                 body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer \
-                says `total`, `taken_out_total` and `sources_total`. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and \
-                locals by storage, plate, step comments by offset from the entry) and its `history` of \
+                says `total`, `taken_out_total` and `sources_total`. With `id`: that entry, or a taken-out one, with its \
+                `review`'s header (signature, calling convention, parameters, plate) and its `history` of \
                 versions, each with the module that published it and, for a version taken over another \
-                module's, the reason. A recorded function comes with its C but without `instructions`, \
-                `c_spans` and `c_fields`; `function_parts` says how large each is, and `part` reads one, \
-                paged. `review.body.size`, in hex at the head of the `id`, is Function ID's count of code \
+                module's, the reason. The rest of the review is read apart: `function_parts` says how large \
+                each part is, and `part` reads one — `c`, the recorded function's C, whole; `comments` (step \
+                comments by offset from the entry), `locals` (by storage), `constants`, `c_sites`, \
+                `instructions`, `c_spans` and `c_fields` paged. `verbose: true` answers \
+                the review with everything but `instructions`, `c_spans` and `c_fields`. `review.body.size`, in hex at the head of the `id`, is Function ID's count of code \
                 units, not bytes: in practice the instructions without the calls. A name on a decompiler \
                 temporary (`HASH:`, `unique:` storage) stays the module's and does not reach `review.locals`. \
                 `show: "modules"` counts, across the whole store, how each stored analysis holds library \
@@ -175,7 +177,8 @@ public final class CodeReadings {
                 "search": AgentSchema.string("Only entries whose name holds this text, any case."),
                 "kind": AgentSchema.choice(["edk2", "amd", "intel"], "Only entries of this kind."),
                 "show": AgentSchema.choice(["entries", "taken_out", "sources", "modules"], "Which list. Default: entries."),
-                "part": AgentSchema.choice(LibraryEntryParts.names, "With `id`: one part of the recorded function. `instructions` is the registry's code: each at its offset in the function, what it calls by the name that function has now."),
+                "part": AgentSchema.choice(LibraryEntryParts.allNames, "With `id`: one part of the entry's review. `instructions` is the registry's code: each at its offset in the function, what it calls by the name that function has now."),
+                "verbose": AgentSchema.boolean("With `id`: the review with its C, constants, locals and comments, as before parts."),
                 "body": AgentSchema.string("With `part: instructions`: which of the entry's bodies. The first when not given."),
                 "limit": AgentSchema.limit(default: 200, maximum: 1000),
                 "after": AgentSchema.string("The `next` of the page before.")
@@ -193,9 +196,10 @@ public final class CodeReadings {
         let limit = try arguments.limit(default: 200, maximum: 1000)
         let show = try arguments.choice("show", from: ["entries", "taken_out", "sources", "modules"], default: "entries")
         let part = try arguments.optionalString("part")
-        if let part, !LibraryEntryParts.names.contains(part) {
-            throw AgentToolError("`part` is one of \(LibraryEntryParts.names.joined(separator: ", ")).")
+        if let part, !LibraryEntryParts.allNames.contains(part) {
+            throw AgentToolError("`part` is one of \(LibraryEntryParts.allNames.joined(separator: ", ")).")
         }
+        let verbose = try arguments.bool("verbose", default: false)
         if part != nil, id == nil { throw AgentToolError("`part` reads one entry: give its `id`.") }
         return try await Task.detached(priority: .userInitiated) { () throws -> JSONValue in
             guard let store = try? ContentStore(root: root, create: false) else {
@@ -288,9 +292,14 @@ public final class CodeReadings {
                     items = rows
                 } else {
                     let data = try store.object(review)
-                    guard let text = LibraryEntryParts.part(part, of: data),
-                          case .array(let rows) = try JSONDecoder().decode(JSONValue.self, from: text) else {
-                        throw AgentToolError("The entry \(id) has no `\(part)`: no function is recorded in it.")
+                    guard let text = LibraryEntryParts.part(part, of: data) else {
+                        throw AgentToolError("The entry \(id) has no `\(part)`.")
+                    }
+                    let value = try JSONDecoder().decode(JSONValue.self, from: text)
+                    guard case .array(let rows) = value else {
+                        // C, comments: one piece, answered whole.
+                        return .object(["id": .string(id), "version": .int(Int64(version)),
+                                        "part": .string(part), "value": value])
                     }
                     items = rows
                 }
@@ -304,7 +313,7 @@ public final class CodeReadings {
             /// The review for an entry's answer, and what was left out of it.
             func put(review digest: SHA256Digest, in answer: inout [String: JSONValue]) {
                 guard let data = try? store.object(digest) else { return }
-                let (lighter, parts) = LibraryEntryParts.lighter(data)
+                let (lighter, parts) = verbose ? LibraryEntryParts.lighter(data) : LibraryEntryParts.header(data)
                 if let review = try? JSONDecoder().decode(JSONValue.self, from: lighter) {
                     answer["review"] = review
                 }

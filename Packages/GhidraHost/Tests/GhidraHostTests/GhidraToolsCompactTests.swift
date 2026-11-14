@@ -76,4 +76,16 @@ final class GhidraToolsCompactTests: XCTestCase {
         let short = try await compacted.run(AgentCall(tool: tool.name, arguments: AgentArguments([:])))
         XCTAssertEqual(short, .json(try value(#"{"instructions":[{"address":"0x1"}],"entry":"0x1"}"#)))
     }
+
+    /// `ghidra_modules` with `busy`: only the modules leased or running, and
+    /// one line when none is.
+    func testBusyModulesAnswerOnlyThoseInWork() throws {
+        let rows = Data(#"[{"module":"a","leased":true,"running":true},{"module":"b","leased":false,"running":false},{"module":"c","running":true}]"#.utf8)
+        let busy = try JSONValue.parse(GhidraTools.busyModules(rows))
+        XCTAssertEqual(busy["all_free"], .bool(false))
+        XCTAssertEqual(busy["modules"], .int(3))
+        XCTAssertEqual(busy["busy"]?.arrayValue?.compactMap { $0["module"]?.stringValue }, ["a", "c"])
+        let free = try JSONValue.parse(GhidraTools.busyModules(Data(#"[{"module":"b","leased":false,"running":false}]"#.utf8)))
+        XCTAssertEqual(free, try value(#"{"all_free":true,"modules":1}"#))
+    }
 }

@@ -486,7 +486,9 @@ final class CodeReadingsTests: XCTestCase {
         let store = try ContentStore(root: directory)
         let instructions = (0..<500).map { ["address": "0x\(String($0, radix: 16))", "text": String(repeating: "x", count: 200)] }
         let entry = try JSONSerialization.data(withJSONObject: [
-            "name": "LargeOne", "plate": "evidence",
+            "name": "LargeOne", "plate": "evidence", "signature": "VOID LargeOne(VOID)",
+            "locals": [["name": "Index", "storage": "EAX:4"]], "constants": [["name": "SIZE", "value": 4]],
+            "comments": [["offset": "0x4", "kind": "pre", "text": "step"]],
             "function": ["name": "LargeOne", "c": "void LargeOne(void) {}", "instructions": instructions,
                          "c_spans": [[1, 2, "comment"]]]
         ], options: .sortedKeys)
@@ -503,9 +505,27 @@ final class CodeReadingsTests: XCTestCase {
         let id = "20-00112233445566aa-0000000000000001"
         let whole = try await run(["id": .string(id)])
         XCTAssertLessThan(whole.encoded().count, 24 << 10)
-        XCTAssertEqual(whole["review"]?["function"]?["c"]?.stringValue, "void LargeOne(void) {}")
+        // The header: signature and plate; C, locals, constants and comments are parts.
+        XCTAssertEqual(whole["review"]?["plate"]?.stringValue, "evidence")
+        XCTAssertEqual(whole["review"]?["signature"]?.stringValue, "VOID LargeOne(VOID)")
+        XCTAssertNil(whole["review"]?["function"]?["c"])
+        XCTAssertNil(whole["review"]?["locals"])
+        XCTAssertNil(whole["review"]?["constants"])
+        XCTAssertNil(whole["review"]?["comments"])
         XCTAssertNil(whole["review"]?["function"]?["instructions"])
         XCTAssertEqual(whole["function_parts"]?["instructions"]?["items"], .int(500))
+        XCTAssertEqual(whole["function_parts"]?["c"]?["items"], .int(1))
+        XCTAssertEqual(whole["function_parts"]?["locals"]?["items"], .int(1))
+        let c = try await run(["id": .string(id), "part": "c"])
+        XCTAssertEqual(c["value"]?.stringValue, "void LargeOne(void) {}")
+        let locals = try await run(["id": .string(id), "part": "locals"])
+        XCTAssertEqual(locals["items"]?.arrayValue?.count, 1)
+        let comments = try await run(["id": .string(id), "part": "comments"])
+        XCTAssertEqual(comments["items"]?.arrayValue?.first?["text"]?.stringValue, "step")
+        let verbose = try await run(["id": .string(id), "verbose": true])
+        XCTAssertEqual(verbose["review"]?["function"]?["c"]?.stringValue, "void LargeOne(void) {}")
+        XCTAssertEqual(verbose["review"]?["constants"]?.arrayValue?.count, 1)
+        XCTAssertNil(verbose["review"]?["function"]?["instructions"])
 
         var read = 0
         var after: String?

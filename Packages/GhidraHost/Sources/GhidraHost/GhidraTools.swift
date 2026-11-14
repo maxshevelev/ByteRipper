@@ -184,11 +184,31 @@ public enum GhidraTools {
                 publish, for telling what is still unpublished: they move at a publish that stores \
                 nothing new, and are no figure of the publish itself. `leased` says whether the module \
                 is in work, `holder` by whom and `since` since when; `closed` is a lease an \
-                administrator closed, until its holder takes the module again.
-                """
-        ) { _ in
-            try await answer { try await backend.listModules() }
+                administrator closed, until its holder takes the module again. `busy: true` answers only \
+                the modules that are leased or have an owner running, under `busy`, with `modules`, how \
+                many there are in all, and `all_free: true` when none is.
+                """,
+            inputSchema: AgentSchema.object([
+                "busy": AgentSchema.boolean("Only the modules in work or with an owner running.")
+            ])
+        ) { call in
+            let busy = try call.arguments.bool("busy", default: false)
+            return try await answer {
+                let data = try await backend.listModules()
+                return busy ? busyModules(data) : data
+            }
         }
+    }
+
+    /// The modules a deploy has to wait for — leased, or with an owner
+    /// running — and how many there are in all: before a restart only that
+    /// fact is wanted, not every module's row.
+    static func busyModules(_ data: Data) -> Data {
+        guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return data }
+        let busy = rows.filter { ($0["leased"] as? Bool) == true || ($0["running"] as? Bool) == true }
+        var answer: [String: Any] = ["all_free": busy.isEmpty, "modules": rows.count]
+        if !busy.isEmpty { answer["busy"] = busy }
+        return (try? JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])) ?? data
     }
 
     static func openTool(_ backend: GhidraBackend, byImage: Bool) -> AgentTool {

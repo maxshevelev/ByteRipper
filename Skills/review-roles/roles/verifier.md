@@ -102,7 +102,8 @@ board holds no remark still `open`, `answered` or `fixed`. Then close it with
 and on the server's console.
 
 - `ghidra_modules` gives, per module, `leased`, `holder`, `running` and the
-  published revision. `holder` is the name of the token the app uses, the same
+  published revision; `busy: true` gives only the modules leased or running,
+  or `all_free: true` when none is. `holder` is the name of the token the app uses, the same
   for every session that works through this app — so it does not tell your
   Reviewer from another session of this Mac. A revision you did not expect has
   an author: ask the person; the server's console names the connection that
@@ -169,8 +170,9 @@ on another Mac read. One ticket per module; give `agent` as
 - `ghidra_ticket_remark` — one remark per finding: what the review says, what
   the code does, `function` and `address`, and `severity`: `wrong`,
   `misleading` or `cosmetic`. A remark on a closed module opens it again.
-- Read the board with `ghidra_tickets`: `module` for one ticket and its
-  threads, `state: "open"` for what waits. Read it at every tick, as you read
+- Read the board with `ghidra_tickets`: `module` for one ticket — each
+  remark in a line, its text cut at 200 characters; `verbose: true` adds the
+  full texts and the threads — `state: "open"` for what waits. Read it at every tick, as you read
   `ghidra_issues`.
 - Watch the board for the whole session, whether or not a review is
   assigned. At start, read `ghidra_tickets` with `state: "open"` and with

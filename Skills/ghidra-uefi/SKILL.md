@@ -628,7 +628,8 @@ the reason and who agreed. What the registry would refuse is refused before it i
 
 **A refusal for a replacement.** `library.conflicts` means this module's review would
 replace what the registry says. Read the entry's review (`library_registry` with its
-`id`) beside the module's. What the entry lacks goes in as an addition over its text.
+`id` gives the header — signature, parameters, plate; `part` reads `c`, `locals`,
+`constants`, `comments`) beside the module's. What the entry lacks goes in as an addition over its text.
 What the entry has wrong is proposed, with the evidence (`ghidra_type_propose`). Never replace an entry because it is another module's or older.
 
 `library_registry` reads the registry: its entries by name and kind, the

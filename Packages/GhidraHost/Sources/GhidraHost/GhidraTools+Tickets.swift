@@ -22,7 +22,8 @@ extension GhidraTools {
                 The review board: one ticket per module, holding the remarks verifying agents made on its \
                 review, each with its author, severity (`wrong`, `misleading`, `cosmetic`), status (`open`, \
                 `answered`, `fixed`, `wont_fix`, `verified`) and thread of replies. With `module`, that \
-                module's ticket in full (`state: "none"` when it has none). Without, the tickets, newest \
+                module's ticket (`state: "none"` when it has none): each remark's id, severity, status, \
+                author, place, its text cut at 200 characters and how many replies it has. Without, the tickets, newest \
                 activity first, narrowed by `state` — `open` (a remark is still to be dealt with), \
                 `settled` (none is, not yet closed), `closed` — and by `author`, an agent's name: a \
                 reviewer reads `author` = its own name to find the remarks on its work, and \
@@ -41,6 +42,7 @@ extension GhidraTools {
             let request = TicketBook.Request(action: module == nil ? .list : .read, module: module,
                                              state: try arguments.optionalString("state"),
                                              author: try arguments.optionalString("author"))
+            // With `module`, `compact` cuts the remarks to lines; `verbose` is the ticket whole.
             return try await answer { try await backend.tickets(request) }
         }
     }
@@ -57,7 +59,7 @@ extension GhidraTools {
                 reader gets a wrong idea), `cosmetic` (wording, a name's style). The remark is raised \
                 against the module's published revision unless `revision` names another. It stays open \
                 across revisions until a verifier marks it `verified`. Answers with the new remark and the \
-                ticket's state and counts; `ghidra_tickets` with `module` reads the whole ticket.
+                ticket's state and counts; `ghidra_tickets` with `module` and `verbose: true` reads the whole ticket.
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
@@ -153,6 +155,28 @@ extension GhidraTools {
 
     enum WrittenRemark { case last, id(String) }
 
+    /// What `ghidra_tickets` with `module` answers by default: the ticket's
+    /// state and counts and every remark in a line — its text cut at 200
+    /// characters and its thread counted, not sent (`compact`). `verbose` is
+    /// the ticket whole.
+    static func ticketSummary(_ data: Data) -> Data {
+        guard var ticket = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let remarks = ticket["remarks"] as? [[String: Any]] else { return data }
+        ticket["remarks"] = remarks.map { remark -> [String: Any] in
+            var line: [String: Any] = [:]
+            for key in ["id", "severity", "status", "author", "function", "address", "revision"]
+            where remark[key] != nil {
+                line[key] = remark[key]
+            }
+            let text = remark["text"] as? String ?? ""
+            line["text"] = text.count > 200 ? String(text.prefix(199)) + "…" : text
+            line["replies"] = (remark["thread"] as? [Any])?.count ?? 0
+            return line
+        }
+        ticket["read"] = "ghidra_tickets with this module and verbose: true gives the full texts and the threads"
+        return (try? JSONSerialization.data(withJSONObject: ticket, options: [.sortedKeys])) ?? data
+    }
+
     /// What a write on the board answers: the ticket's state and counts and
     /// the remark the call wrote or moved — not every remark's text, which a
     /// run of remarks would send again and again. The ticket itself is
@@ -177,7 +201,7 @@ extension GhidraTools {
             if let last = thread.last { remark["last_reply"] = last }
             answer["remark"] = remark
         }
-        answer["read"] = "ghidra_tickets with this module reads the whole ticket"
+        answer["read"] = "ghidra_tickets with this module and verbose: true reads the whole ticket"
         return (try? JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])) ?? data
     }
 
@@ -201,7 +225,7 @@ extension GhidraTools {
                 line["text"] = text.count > 240 ? String(text.prefix(239)) + "…" : text
                 return line
             }
-            summary["read"] = "ghidra_tickets with this module reads the threads"
+            summary["read"] = "ghidra_tickets with this module and verbose: true reads the threads"
         }
         return summary
     }

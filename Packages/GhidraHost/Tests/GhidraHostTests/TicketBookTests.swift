@@ -1,3 +1,4 @@
+import AgentKit
 import Foundation
 import XCTest
 @testable import GhidraHost
@@ -161,6 +162,38 @@ final class TicketBookTests: XCTestCase {
         XCTAssertEqual((remark["text"] as? String)?.count, 240)
         XCTAssertNil(remark["thread"])
         XCTAssertEqual((remark["last_reply"] as? [String: Any])?["text"] as? String, "retyped")
+    }
+
+    /// `ghidra_tickets` with a module answers every remark in a line — its
+    /// text cut at 200 characters, its thread counted — and `verbose` the
+    /// ticket whole.
+    func testAModuleTicketReadsAsRemarkLinesUnlessVerbose() async throws {
+        let book = TicketBook(file: file)
+        let ticket = try await book.add(.init(severity: .wrong, text: String(repeating: "first ", count: 100)),
+                                        module: module, name: "TcgPei", reviewer: reviewer.author, by: verifier)
+        let first = ticket.remarks[0].id
+        let replied = try await book.reply(module: module, remark: first, text: "retyped", status: .fixed, revision: 4,
+                                           by: reviewer)
+        let data = try TicketBook.encoder.encode(TicketBook.Listed(replied))
+        let summary = try XCTUnwrap(try JSONSerialization.jsonObject(with: GhidraTools.ticketSummary(data)) as? [String: Any])
+        XCTAssertEqual(summary["state"] as? String, "open")
+        XCTAssertEqual(summary["name"] as? String, "TcgPei")
+        let remark = try XCTUnwrap((summary["remarks"] as? [[String: Any]])?.first)
+        XCTAssertEqual(remark["id"] as? String, first)
+        XCTAssertEqual(remark["severity"] as? String, "wrong")
+        XCTAssertEqual(remark["status"] as? String, "fixed")
+        XCTAssertEqual((remark["text"] as? String)?.count, 200)
+        XCTAssertEqual(remark["replies"] as? Int, 1)
+        XCTAssertNil(remark["thread"])
+        XCTAssertFalse(String(decoding: GhidraTools.ticketSummary(data), as: UTF8.self).contains("retyped"))
+        XCTAssertNotNil(summary["read"])
+
+        // The tool's default answer is this summary; `verbose` and a list are left as they are.
+        let full = try JSONValue.parse(data)
+        let compact = GhidraTools.compact(full, tool: "ghidra_tickets", arguments: ["module": .string(module)])
+        XCTAssertEqual(compact["remarks"]?.arrayValue?.first?["replies"], .int(1))
+        XCTAssertNil(compact["remarks"]?.arrayValue?.first?["thread"])
+        XCTAssertEqual(GhidraTools.compact(full, tool: "ghidra_tickets", arguments: [:]), full)
     }
 
     private func assertRefused(_ status: Int, _ message: String = "", file: StaticString = #filePath, line: UInt = #line,
