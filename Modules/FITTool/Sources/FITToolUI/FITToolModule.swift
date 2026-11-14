@@ -1,6 +1,7 @@
 import AppKit
 import FITTool
 import HelpBook
+import IntelCPUID
 import Localization
 import ToolModuleKit
 import UEFIContentSource
@@ -147,10 +148,6 @@ struct FITParkedState: PersistableToolSessionState {
     /// reaches GitHub is a suite that fails on a train.
     public static var microcodeSource: any MicrocodeSource = CPUMicrocodesRepository()
 
-    /// Where the processor tables come from — `github.com/maxshevelev/IntelCPUID`.
-    /// Swappable for the same reason.
-    public static var processorTablesSource: any ProcessorTablesSource = IntelCPUIDRepository.shared
-
     public init(host: any ToolHost) {
         self.host = host
         controller.onSelect = { [weak self] index in self?.select(index) }
@@ -264,8 +261,7 @@ struct FITParkedState: PersistableToolSessionState {
                 MainActor.assumeIsolated { self?.tablesChanged() }
             }
         }
-        let source = FITToolSession.processorTablesSource
-        Task { await source.refresh() }
+        Task { await ProcessorTables.refresh() }
     }
 
     private func tablesChanged() {

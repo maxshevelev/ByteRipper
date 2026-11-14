@@ -57,6 +57,7 @@ public enum HelpContents {
             .toolFIT,
             .lenovoDMI,
             .databases,
+            .cpuidLookup,
             .provenance
         ]),
         ("agent", [

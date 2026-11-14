@@ -37,7 +37,7 @@ final class AgentMicrocodeToolsTests: XCTestCase {
 
     override func tearDown() {
         FITToolSession.microcodeSource = savedSource
-        FITToolSession.processorTablesSource = IntelCPUIDRepository.shared
+        FixtureProcessorTables.restore()
         service.stop()
         controller?.windowModel.pane1.close()
         window?.orderOut(nil)

@@ -1,13 +1,14 @@
-@source-sha 618ca639885b309c81e6409a7565dc1b94283399b92b6a76ee986ecdc72b1e03
+@source-sha a422849b1676eaf25b124788a60980093ddbd180e97b5b584e0d394a6a259117
 # Die Online-Kataloge
 
-> Drei öffentliche Kataloge, die Kennungen aus einem Dump mit Namen versehen. Ohne Zugriff auf sie ist das Programm voll funktionsfähig, zeigt die zusätzlichen Angaben aber nicht an.
+> Vier öffentliche Kataloge, die Kennungen aus einem Dump mit Namen versehen. Ohne Zugriff auf sie ist das Programm voll funktionsfähig, zeigt die zusätzlichen Angaben aber nicht an.
 
-Ein Teil dessen, was die Werkzeugbereiche zeigen, steht gar nicht in der Datei — es ist ein Name, den die Gemeinschaft einer Kennung gegeben hat, die die Datei trägt. Dafür lädt ByteRipper über HTTPS drei öffentliche Kataloge und behält jeden einen Tag:
+Ein Teil dessen, was die Werkzeugbereiche zeigen, steht gar nicht in der Datei — es ist ein Name, den die Gemeinschaft einer Kennung gegeben hat, die die Datei trägt. Dafür lädt ByteRipper über HTTPS vier öffentliche Kataloge und prüft jeden höchstens einmal täglich auf eine neuere Fassung:
 
 - **UEFI-GUID-Namen** — aus dem UEFITool-Projekt. Sie sind es, die das [[topic:tool-uefi|UEFI-Werkzeug]] statt einer nackten [[term:guid|GUID]] „AmiBoardInfo“ oder „DxeCore“ anzeigen lassen.
 - **CPU-Microcode** — aus der Sammlung CPUMicrocodes. Danach werden die Microcode-Updates benannt, die das [[topic:tool-fit|FIT-Werkzeug]] auflistet: nach CPU-Signatur, Revision und Datum. Aus ihr stammt auch die Liste, die **Microcode hinzufügen…** anbietet.
 - **ME-Firmware-Datenbank** — aus dem Projekt ME Analyzer. Mit ihr kann das [[topic:tool-me|ME-Werkzeug]] angeben, welchem bekannten Firmware-Release ein Image entspricht.
+- **Intel-Prozessoren nach CPUID** — aus dem Repository IntelCPUID. Danach benennt das [[topic:tool-fit|FIT-Werkzeug]] die Prozessoren hinter jeder CPUID eines Microcodes, und diese Tabelle durchsucht die [[topic:cpuid-lookup|Intel-CPUID-Suche]]. Die letzte vollständig gelesene Kopie wird aufbewahrt und ohne Netzwerk verwendet.
 
 ## Was Tatsache ist und was ein Name
 
@@ -26,4 +27,4 @@ Die Abrufe gehen an feste Adressen dieser Kataloge, und eine Anfrage enthält ni
 
 Daher werden weder die Bytes des Images noch die darin gefundenen Kennungen übertragen. Der Dump verlässt die Maschine nicht.
 
-Einmal am Tag prüft das Programm außerdem, ob eine neuere Fassung von ihm selbst erschienen ist. Das ist das vierte und letzte, wofür es ans Netz geht.
+Einmal am Tag prüft das Programm außerdem, ob eine neuere Fassung von ihm selbst erschienen ist. Das ist das fünfte und letzte, wofür es ans Netz geht.

@@ -2,6 +2,7 @@ import AppKit
 import AppPalette
 import FITTool
 import HelpUI
+import IntelCPUID
 import Localization
 import ToolModuleKit
 

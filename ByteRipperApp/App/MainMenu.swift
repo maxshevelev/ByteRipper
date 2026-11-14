@@ -86,6 +86,11 @@ enum MainMenu {
                                    keyEquivalent: "")
         notesItem.target = appTarget
         windowMenu.addItem(notesItem)
+        // help: menu.window.cpuid-lookup
+        let lookupItem = NSMenuItem(title: L("Intel CPUID Lookup"),
+                                    action: #selector(AppDelegate.showCPUIDLookupWindow(_:)), keyEquivalent: "")
+        lookupItem.target = appTarget
+        windowMenu.addItem(lookupItem)
         windowItem.submenu = windowMenu
 
         // Help menu

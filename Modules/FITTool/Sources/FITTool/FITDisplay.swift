@@ -1,4 +1,5 @@
 import Foundation
+import IntelCPUID
 import Localization
 import ToolModuleKit
 import UEFIImage

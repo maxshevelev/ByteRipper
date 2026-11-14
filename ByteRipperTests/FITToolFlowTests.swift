@@ -45,7 +45,7 @@ final class FITToolFlowTests: XCTestCase {
         ToolController.defaults = .standard
         ToolController.changeDelay = 0.15
         FITToolSession.microcodeSource = CPUMicrocodesRepository()
-        FITToolSession.processorTablesSource = IntelCPUIDRepository.shared
+        FixtureProcessorTables.restore()
         FITToolSession.alert = { NSSound.beep() }
         controller = nil
         window = nil

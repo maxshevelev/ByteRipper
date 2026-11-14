@@ -1,3 +1,4 @@
+import IntelCPUID
 import XCTest
 @testable import FITTool
 

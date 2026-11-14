@@ -1,4 +1,5 @@
 import Foundation
+import IntelCPUID
 import UEFIImage
 
 /// The four kinds of microcode the collection holds, one directory each.

@@ -566,6 +566,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NotesWindowController.instance.show(tabbedWith: anchor)
     }
 
+    /// The one Intel CPUID Lookup window, made the first time it is asked for.
+    private(set) lazy var cpuidLookupWindowController = CPUIDLookupWindowController()
+
+    /// Window ▸ Intel CPUID Lookup: the processor tables, searched by CPUID,
+    /// model or S-SPEC — in a window of its own, belonging to no dump.
+    @objc func showCPUIDLookupWindow(_ sender: Any?) {
+        cpuidLookupWindowController.present(sender)
+    }
+
     @objc func showAgentSettings(_ sender: Any?) {
         settingsWindowController.showAgent(sender)
     }

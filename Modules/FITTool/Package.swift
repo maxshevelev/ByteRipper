@@ -46,14 +46,19 @@ let package = Package(
         .package(path: "../../Packages/FreshData"),
         // What the module answers an agent with (`FITAgentQueries`,
         // Design/AGENT_PLAN.md).
-        .package(path: "../../Packages/AgentKit")
+        .package(path: "../../Packages/AgentKit"),
+        // The processor tables — which models stand behind a CPUID — and the
+        // one repository and store they are read through, shared with the
+        // app's Intel CPUID Lookup window.
+        .package(path: "../../Packages/IntelCPUID")
     ],
     targets: [
         .target(name: "FITTool", dependencies: [
             .product(name: "Localization", package: "Localization"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "IntelCPUID", package: "IntelCPUID")
         ]),
         .target(name: "FITToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),
@@ -66,8 +71,12 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "IntelCPUID", package: "IntelCPUID")
         ]),
-        .testTarget(name: "FITToolTests", dependencies: ["FITTool"])
+        .testTarget(name: "FITToolTests", dependencies: [
+            "FITTool",
+            .product(name: "IntelCPUID", package: "IntelCPUID")
+        ])
     ]
 )

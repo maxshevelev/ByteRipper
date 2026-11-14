@@ -1,44 +1,7 @@
 import Foundation
+import IntelCPUID
 import Localization
 import UEFIImage
-
-/// One group of processors that share a CPUID, as the table of brand names
-/// lists it — `IntelCPUIDBrandNames.json` of `github.com/maxshevelev/IntelCPUID`,
-/// read at run time (`ProcessorTables`) and generated there by its
-/// `update-cpuid-brand-names` skill.
-public struct ProcessorFamily: Equatable, Sendable, Decodable {
-    /// As written: five hex digits, or a pattern with an `X` for any one digit
-    /// (`606AX`).
-    public var cpuids: [String]
-    public var codeNames: [String]
-    public var productFamilies: [String]
-    public var steppings: [String]
-    public var segments: [String]
-    public var processors: [ProcessorModel]
-    /// The architectures of its cores — `Golden Cove`, `Gracemont` — which the
-    /// article writes in brackets after a code name and the generator moves
-    /// here. Empty where the article names none.
-    public var cores: [String] = []
-
-    /// Whether `cpuid` — as `MicrocodeHeader.cpuid` writes it — is one of this
-    /// group's.
-    public func matches(_ cpuid: String) -> Bool {
-        cpuids.contains { pattern in
-            pattern.count == cpuid.count && zip(pattern, cpuid).allSatisfy { $0 == "X" || $0 == $1 }
-        }
-    }
-}
-
-/// One model: its name, and the S-SPECs it is sold under with this CPUID.
-public struct ProcessorModel: Equatable, Sendable, Decodable {
-    public var name: String
-    public var sSpec: [String]
-    /// Where a code that is not the article's came from: `ark`, `wikipedia`,
-    /// or what IntelCPUID's `find-sspec` found — `intel`, `database`, `marking`.
-    public var sSpecSource: [String: String]?
-    /// A line that names a series rather than its models.
-    public var series: Bool?
-}
 
 /// Which processors a microcode is for, by its CPUIDs.
 ///
@@ -182,6 +145,6 @@ public struct FITProcessorLine: Equatable, Sendable {
 
     /// Every name is Intel's, so the word says nothing in a list of them.
     static func shortName(_ name: String) -> String {
-        name.hasPrefix("Intel ") ? String(name.dropFirst(6)) : name
+        ProcessorModel(name: name).shortName
     }
 }

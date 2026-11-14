@@ -1,6 +1,7 @@
 import AgentKit
 import FITTool
 import Foundation
+import IntelCPUID
 import Localization
 import ToolModuleKit
 
@@ -116,7 +117,7 @@ enum FITAgentCatalogueTools {
 
     private static func listing() async throws -> [MicrocodeCatalogueEntry] {
         // A file's extended CPUIDs are the processor tables'.
-        await FITToolSession.processorTablesSource.refresh()
+        await ProcessorTables.refresh()
         do {
             return try await FITToolSession.microcodeSource.catalogue()
         } catch {

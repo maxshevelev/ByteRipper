@@ -78,6 +78,12 @@ packages:
   # release; only the app links it directly.
   FreshData:
     path: Packages/FreshData
+  # Which Intel processors stand behind a CPUID, read from
+  # github.com/maxshevelev/IntelCPUID: the one store and repository the FIT
+  # panel and the Intel CPUID Lookup window both read. The app links it
+  # directly, so the test bundle shares the app's copy of the store.
+  IntelCPUID:
+    path: Packages/IntelCPUID
   # The session written down and brought back at launch: the value, the rule
   # for a file that changed on disk, and the folder (`Design/WORKSPACE_PLAN.md`).
   # Only the app links it.
@@ -164,6 +170,9 @@ targets:
       # the tool-modules' live sources hold theirs: fetched once, re-checked
       # once a day, and silent when it cannot be made.
       - package: FreshData
+      # The processor tables, for the Intel CPUID Lookup window — the same
+      # store the FIT panel reads.
+      - package: IntelCPUID
       # The workspace the app writes down and restores at launch.
       - package: Workspace
       # The language the app speaks, and every word it says in it.
@@ -393,6 +402,7 @@ targets:
         product: FITTool
       - package: FITTool
         product: FITToolUI
+      - package: IntelCPUID
       - package: UEFITool
         product: UEFIToolUI
       - package: MEFirmware
