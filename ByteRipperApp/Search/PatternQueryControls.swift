@@ -341,7 +341,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// Rebuilds the field's menu: the two lists and the commands that belong to
     /// each (§11, `Design/PATTERN_LIBRARY_IDEA.md`).
     @objc func rebuildPatternMenu() {
-        let menu = NSMenu()
+        let menu = Self.searchMenu()
         let recents = FindHistoryStore.recent
         if !recents.isEmpty {
             menu.addItem(Self.menuHeader(L("Recent Queries"), symbol: "clock"))
@@ -379,6 +379,16 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         item.image = NSImage(systemSymbolName: "exclamationmark.octagon.fill",
                              accessibilityDescription: problem)
         return item
+    }
+
+    /// An empty search menu whose rows are measured for the size they are
+    /// drawn at. Rows titled a point under the menu's own font sat above the
+    /// middle of the highlight, the row being as tall as the menu's font asks;
+    /// the menu given that same size centres them.
+    static func searchMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.font = .systemFont(ofSize: menuRowSize)
+        return menu
     }
 
     /// A section header carrying an icon: a disabled item with the symbol as

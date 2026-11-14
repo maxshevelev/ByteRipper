@@ -405,7 +405,7 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
             searchField.searchMenuTemplate = nil
             return
         }
-        let menu = NSMenu()
+        let menu = PatternQueryControls.searchMenu()
         menu.addItem(PatternQueryControls.menuHeader(L("Recent Queries"), symbol: "clock"))
         for query in recents {
             let item = command(query, #selector(recentPicked(_:)))
