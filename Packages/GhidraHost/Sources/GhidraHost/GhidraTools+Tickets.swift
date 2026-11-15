@@ -23,17 +23,23 @@ extension GhidraTools {
                 review, each with its author, severity (`wrong`, `misleading`, `cosmetic`), status (`open`, \
                 `answered`, `fixed`, `wont_fix`, `verified`) and thread of replies. With `module`, that \
                 module's ticket (`state: "none"` when it has none): each remark's id, severity, status, \
-                author, place, its text cut at 200 characters and how many replies it has. Without, the tickets, newest \
-                activity first, narrowed by `state` — `open` (a remark is still to be dealt with), \
-                `settled` (none is, not yet closed), `closed` — and by `author`, an agent's name: a \
-                reviewer reads `author` = its own name to find the remarks on its work, and \
-                `state: "open"` for what waits. A ticket's `reviewer` is the agent that took the module \
-                into work last.
+                author, place and revision, its text cut at 200 characters, and `replies`, how many its \
+                thread has. Without, the tickets under `tickets`, newest activity first, each as its \
+                module, name, state, reviewer, `remarks` and `open_remarks` counts and, when closed, \
+                `closed` (at, by, note); paged by `limit` and `after`, with `total`. They are narrowed \
+                by `state` — `open` (a remark is still to be dealt with), `settled` (none is, not yet \
+                closed), `closed` — and by `author`, an agent's name: a reviewer reads `author` = its \
+                own name to find the remarks on its work, and `state: "open"` for what waits. A \
+                ticket's `reviewer` is the agent that took the module into work last. `verbose: true` \
+                gives the tickets whole: every remark's full text and thread.
                 """,
             inputSchema: AgentSchema.object([
                 "module": moduleProperty,
                 "state": AgentSchema.choice(["open", "settled", "closed"], "Only tickets in this state."),
-                "author": AgentSchema.string("Only tickets where this agent wrote, replied or is the reviewer.")
+                "author": AgentSchema.string("Only tickets where this agent wrote, replied or is the reviewer."),
+                "limit": AgentSchema.limit(default: 50, maximum: 500),
+                "after": AgentSchema.string("The `next` of the page before."),
+                "verbose": AgentSchema.boolean("The tickets whole: every remark's full text and its thread.")
             ]),
             annotations: .readOnly
         ) { call in
@@ -42,8 +48,10 @@ extension GhidraTools {
             let request = TicketBook.Request(action: module == nil ? .list : .read, module: module,
                                              state: try arguments.optionalString("state"),
                                              author: try arguments.optionalString("author"))
-            // With `module`, `compact` cuts the remarks to lines; `verbose` is the ticket whole.
-            return try await answer { try await backend.tickets(request) }
+            let verbose = try arguments.bool("verbose", default: false)
+            let answered = try await answer { try await backend.tickets(request) }
+            guard case .json(let value) = answered else { return answered }
+            return .json(try ticketsAnswer(value, module: module != nil, verbose: verbose, arguments: arguments))
         }
     }
 
@@ -155,10 +163,48 @@ extension GhidraTools {
 
     enum WrittenRemark { case last, id(String) }
 
+    /// What `ghidra_tickets` answers. With a module, its ticket — each remark
+    /// in a line unless `verbose`. Without, a page of the list: each ticket in
+    /// a row (`ticketRow`) unless `verbose`, so the board stays readable when
+    /// it holds many closed tickets with long threads.
+    static func ticketsAnswer(_ value: JSONValue, module: Bool, verbose: Bool,
+                              arguments: AgentArguments) throws -> JSONValue {
+        if module {
+            guard !verbose, let lines = try? JSONValue.parse(ticketSummary(value.encoded())) else { return value }
+            return lines
+        }
+        guard let tickets = value.arrayValue else { return value }
+        let rows = verbose ? tickets : tickets.map(ticketRow)
+        let limit = try arguments.limit(default: 50, maximum: 500)
+        let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([
+            String(decoding: value.encoded(), as: UTF8.self), try arguments.optionalString("state"), try arguments.optionalString("author"), verbose
+        ]), changed: "The board changed since that page, or the question did; ask again without `after`.")
+        var envelope: [String: JSONValue] = ["total": .int(Int64(rows.count))]
+        if !verbose {
+            envelope["read"] = "ghidra_tickets with a module reads its remarks; verbose: true gives the tickets whole"
+        }
+        return try page.answer(envelope, key: "tickets", items: Array(rows.dropFirst(page.first).prefix(limit)),
+                               total: rows.count, bound: arguments.answerBound)
+    }
+
+    /// One ticket of the list: who and where it stands, without its remarks.
+    static func ticketRow(_ ticket: JSONValue) -> JSONValue {
+        guard let object = ticket.objectValue else { return ticket }
+        var row: [String: JSONValue] = [:]
+        for key in ["module", "name", "state", "reviewer", "open_remarks"] where object[key] != nil {
+            row[key] = object[key]
+        }
+        row["remarks"] = .int(Int64(object["remarks"]?.arrayValue?.count ?? 0))
+        if let closed = object["closed"]?.objectValue {
+            row["closed"] = .object(closed.filter { ["at", "by", "note", "forced"].contains($0.key) })
+        }
+        return .object(row)
+    }
+
     /// What `ghidra_tickets` with `module` answers by default: the ticket's
     /// state and counts and every remark in a line — its text cut at 200
-    /// characters and its thread counted, not sent (`compact`). `verbose` is
-    /// the ticket whole.
+    /// characters and its thread counted, not sent. `verbose` is the ticket
+    /// whole.
     static func ticketSummary(_ data: Data) -> Data {
         guard var ticket = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let remarks = ticket["remarks"] as? [[String: Any]] else { return data }

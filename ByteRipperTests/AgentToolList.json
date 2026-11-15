@@ -2894,13 +2894,23 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The review board: one ticket per module, holding the remarks verifying agents made on its review, each with its author, severity (`wrong`, `misleading`, `cosmetic`), status (`open`, `answered`, `fixed`, `wont_fix`, `verified`) and thread of replies. With `module`, that module's ticket (`state: \"none\"` when it has none): each remark's id, severity, status, author, place, its text cut at 200 characters and how many replies it has. Without, the tickets, newest activity first, narrowed by `state` — `open` (a remark is still to be dealt with), `settled` (none is, not yet closed), `closed` — and by `author`, an agent's name: a reviewer reads `author` = its own name to find the remarks on its work, and `state: \"open\"` for what waits. A ticket's `reviewer` is the agent that took the module into work last. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base); with `module`, each remark comes as its id, severity, status, author, place and revision, its text cut at 200 characters, and `replies`, how many its thread has — `verbose` gives the full texts and the threads.",
+    "description" : "The review board: one ticket per module, holding the remarks verifying agents made on its review, each with its author, severity (`wrong`, `misleading`, `cosmetic`), status (`open`, `answered`, `fixed`, `wont_fix`, `verified`) and thread of replies. With `module`, that module's ticket (`state: \"none\"` when it has none): each remark's id, severity, status, author, place and revision, its text cut at 200 characters, and `replies`, how many its thread has. Without, the tickets under `tickets`, newest activity first, each as its module, name, state, reviewer, `remarks` and `open_remarks` counts and, when closed, `closed` (at, by, note); paged by `limit` and `after`, with `total`. They are narrowed by `state` — `open` (a remark is still to be dealt with), `settled` (none is, not yet closed), `closed` — and by `author`, an agent's name: a reviewer reads `author` = its own name to find the remarks on its work, and `state: \"open\"` for what waits. A ticket's `reviewer` is the agent that took the module into work last. `verbose: true` gives the tickets whole: every remark's full text and thread.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before.",
+          "type" : "string"
+        },
         "author" : {
           "description" : "Only tickets where this agent wrote, replied or is the reviewer.",
           "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 500.",
+          "maximum" : 500,
+          "minimum" : 1,
+          "type" : "integer"
         },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
@@ -2916,7 +2926,7 @@
           "type" : "string"
         },
         "verbose" : {
-          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "description" : "The tickets whole: every remark's full text and its thread.",
           "type" : "boolean"
         }
       },

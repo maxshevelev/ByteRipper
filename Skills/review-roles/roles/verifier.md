@@ -172,7 +172,8 @@ on another Mac read. One ticket per module; give `agent` as
   `misleading` or `cosmetic`. A remark on a closed module opens it again.
 - Read the board with `ghidra_tickets`: `module` for one ticket — each
   remark in a line, its text cut at 200 characters; `verbose: true` adds the
-  full texts and the threads — `state: "open"` for what waits. Read it at every tick, as you read
+  full texts and the threads — `state: "open"` for what waits. The list
+  comes a row per ticket under `tickets`, paged by `limit` and `after`. Read it at every tick, as you read
   `ghidra_issues`.
 - Watch the board for the whole session, whether or not a review is
   assigned. At start, read `ghidra_tickets` with `state: "open"` and with

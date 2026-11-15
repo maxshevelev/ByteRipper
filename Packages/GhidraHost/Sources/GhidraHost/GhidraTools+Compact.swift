@@ -53,10 +53,6 @@ extension GhidraTools {
         case "ghidra_disassembly":
             note += "; an instruction with no references has no `references`, and a reference gives `to` and "
                 + "`type`, with `function` only when it is another function"
-        case "ghidra_tickets":
-            note += "; with `module`, each remark comes as its id, severity, status, author, place and revision, "
-                + "its text cut at 200 characters, and `replies`, how many its thread has — `verbose` gives the "
-                + "full texts and the threads"
         default:
             break
         }
@@ -73,10 +69,6 @@ extension GhidraTools {
             value = compactFunction(value)
         case "ghidra_disassembly":
             value = compactDisassembly(value)
-        case "ghidra_tickets" where arguments["module"] != nil:
-            if let lines = try? JSONValue.parse(ticketSummary(value.encoded())) {
-                value = lines
-            }
         default:
             break
         }

@@ -188,12 +188,53 @@ final class TicketBookTests: XCTestCase {
         XCTAssertFalse(String(decoding: GhidraTools.ticketSummary(data), as: UTF8.self).contains("retyped"))
         XCTAssertNotNil(summary["read"])
 
-        // The tool's default answer is this summary; `verbose` and a list are left as they are.
+        // The tool's default answer is this summary; `verbose` is the ticket whole.
         let full = try JSONValue.parse(data)
-        let compact = GhidraTools.compact(full, tool: "ghidra_tickets", arguments: ["module": .string(module)])
-        XCTAssertEqual(compact["remarks"]?.arrayValue?.first?["replies"], .int(1))
-        XCTAssertNil(compact["remarks"]?.arrayValue?.first?["thread"])
-        XCTAssertEqual(GhidraTools.compact(full, tool: "ghidra_tickets", arguments: [:]), full)
+        let lines = try GhidraTools.ticketsAnswer(full, module: true, verbose: false, arguments: AgentArguments([:]))
+        XCTAssertEqual(lines["remarks"]?.arrayValue?.first?["replies"], .int(1))
+        XCTAssertNil(lines["remarks"]?.arrayValue?.first?["thread"])
+        XCTAssertEqual(try GhidraTools.ticketsAnswer(full, module: true, verbose: true, arguments: AgentArguments([:])), full)
+    }
+
+    /// The board's list is a row per ticket — no remarks — paged by `limit`
+    /// and `after`; `verbose` pages the tickets whole.
+    func testTheBoardListsATicketPerRowInPages() async throws {
+        let book = TicketBook(file: file)
+        var modules: [String] = []
+        for index in 0..<5 {
+            let module = String(repeating: String(index), count: 64)
+            modules.append(module)
+            _ = try await book.add(.init(severity: .wrong, text: String(repeating: "long ", count: 400)), module: module,
+                                   name: "M\(index)", reviewer: reviewer.author, by: verifier)
+        }
+        let listed = try JSONValue.parse(TicketBook.encoder.encode(await book.list().map(TicketBook.Listed.init)))
+        var seen: [String] = []
+        var after: String?
+        repeat {
+            var values: [String: JSONValue] = ["limit": 2]
+            if let after { values["after"] = .string(after) }
+            let page = try GhidraTools.ticketsAnswer(listed, module: false, verbose: false, arguments: AgentArguments(values))
+            XCTAssertEqual(page["total"], .int(5))
+            let rows = try XCTUnwrap(page["tickets"]?.arrayValue)
+            XCTAssertLessThanOrEqual(rows.count, 2)
+            for row in rows {
+                XCTAssertEqual(row["remarks"], .int(1))
+                XCTAssertEqual(row["open_remarks"], .int(1))
+                XCTAssertEqual(row["state"]?.stringValue, "open")
+                XCTAssertFalse(String(decoding: row.encoded(), as: UTF8.self).contains("long long"))
+                seen.append(try XCTUnwrap(row["module"]?.stringValue))
+            }
+            after = page["next"]?.stringValue
+        } while after != nil
+        XCTAssertEqual(Set(seen), Set(modules))
+        XCTAssertEqual(seen.count, 5)
+
+        let whole = try GhidraTools.ticketsAnswer(listed, module: false, verbose: true, arguments: AgentArguments([:]))
+        XCTAssertEqual(whole["tickets"]?.arrayValue?.first?["remarks"]?.arrayValue?.count, 1)
+        // A cursor from another question is refused.
+        let first = try GhidraTools.ticketsAnswer(listed, module: false, verbose: false, arguments: AgentArguments(["limit": 2]))
+        XCTAssertThrowsError(try GhidraTools.ticketsAnswer(listed, module: false, verbose: false, arguments: AgentArguments(
+            ["after": try XCTUnwrap(first["next"]), "state": "closed"])))
     }
 
     private func assertRefused(_ status: Int, _ message: String = "", file: StaticString = #filePath, line: UInt = #line,
