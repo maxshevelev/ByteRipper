@@ -22,9 +22,12 @@
 // member initialised with an earlier member's name — `EfiGcdMemoryType
 // PersistentMemory = EfiGcdMemoryTypePersistent` — gets that member's value,
 // and the members after it count on from there; the parser numbered it as
-// the previous member plus one (revision 4, issue 33a286ab). A change
-// here is a change of every typed analysis: raise `TYPES_REVISION` in
-// `UEFITypes.swift` with it.
+// the previous member plus one (revision 4, issue 33a286ab). `BOOLEAN` is
+// an enum of `FALSE` and `TRUE` and `INT8` a signed byte: the headers make
+// them `unsigned char` and `signed char`, so the decompiler printed `Notify
+// != '\0'` (revision 5). `UINT8` stays `unsigned char`; the program shows it
+// in hex, which an archive cannot hold. `CHAR8` stays `char`: it is text.
+// A change here is a change of every typed analysis: raise `TYPES_REVISION` in `UEFITypes.swift` with it.
 // @category ByteRipper
 
 import java.io.File;
@@ -86,6 +89,7 @@ public class BuildUefiTypes extends GhidraScript {
             statusEnum(types);
             statusCodeTypeEnum(types);
             aliasedMembers(types, new File(include));
+            byteScalars(types);
             if (processor.equals("Ia32")) efiApi(types);
         } finally {
             types.endTransaction(transaction, true);
@@ -113,6 +117,54 @@ public class BuildUefiTypes extends GhidraScript {
         }
         for (FunctionDefinition function : unknown) function.setCallingConvention("__cdecl");
         println("EFIAPI (__cdecl) on " + unknown.size() + " function types");
+    }
+
+    /**
+     * `BOOLEAN` as a one-byte enum of `FALSE` and `TRUE` — EDK2 `#define`s
+     * them, so the parser ties them to no type — and `INT8` as Ghidra's
+     * signed byte instead of `signed char`. Every type that names them keeps
+     * them, at the same size. `UINT8` stays `unsigned char`: the owner and
+     * the UEFI pass show it in hex in the program, which is the only place
+     * Ghidra keeps a typedef's display format.
+     */
+    static int byteScalars(ghidra.program.model.data.DataTypeManager types) throws Exception {
+        int changed = 0;
+        for (DataType wanted : byteScalarTypes(types)) {
+            java.util.Iterator<DataType> all = types.getAllDataTypes();
+            List<DataType> held = new ArrayList<>();
+            while (all.hasNext()) {
+                DataType type = all.next();
+                if (type.getName().equals(wanted.getName()) && !isByteScalar(type)) held.add(type);
+            }
+            for (DataType type : held) {
+                DataType replacement = wanted.copy(types);
+                replacement.setCategoryPath(type.getCategoryPath());
+                types.replaceDataType(type, replacement, true);
+                changed++;
+            }
+        }
+        return changed;
+    }
+
+    /** The two types as revision 5 has them, in no manager yet. */
+    static List<DataType> byteScalarTypes(ghidra.program.model.data.DataTypeManager types) throws Exception {
+        EnumDataType bool = new EnumDataType(CategoryPath.ROOT, "BOOLEAN", 1, types);
+        bool.add("FALSE", 0);
+        bool.add("TRUE", 1);
+        bool.setDescription("BOOLEAN: FALSE or TRUE (ProcessorBind.h, Base.h)");
+        return List.of(bool,
+            new ghidra.program.model.data.TypedefDataType("INT8", ghidra.program.model.data.SignedByteDataType.dataType));
+    }
+
+    /** Whether a type is already as `byteScalarTypes` makes it. */
+    static boolean isByteScalar(DataType type) {
+        if (type.getName().equals("BOOLEAN")) {
+            return type instanceof ghidra.program.model.data.Enum values && values.getLength() == 1
+                && values.contains("FALSE") && values.getValue("FALSE") == 0
+                && values.contains("TRUE") && values.getValue("TRUE") == 1;
+        }
+        return type instanceof ghidra.program.model.data.TypeDef def
+            && def.getBaseDataType() instanceof ghidra.program.model.data.SignedByteDataType;
     }
 
     /** The value of `#define name`, as the parser kept it, or null. */

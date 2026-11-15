@@ -149,4 +149,100 @@ final class GhidraHostEFIAPITests: XCTestCase {
         await again.stop(module)
         XCTAssertEqual(try store.typeArchive(bits: "Ia32")?.versions.map(\.version), [1, 2])
     }
+
+    /// Revision 5: `BOOLEAN` is the enum FALSE/TRUE and `UINT8`/`INT8` are
+    /// byte numbers. A project typed with revision 4 and shared types of a
+    /// revision 4 archive take them — the program at open, the shared types in
+    /// one version of their own — and EDK2's archive has them.
+    func testBooleanAndBytesTakeTheTypesOfRevision5() async throws {
+        let old = UEFITypes.cacheRoot.appendingPathComponent("uefi_Ia32-\(UEFITypes.edk2Tag)-r4.gdt")
+        guard FileManager.default.fileExists(atPath: old.path) else { throw XCTSkip("no revision 4 archive at \(old.path)") }
+        let image = try image()
+        let module = SHA256Digest(data: image)
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        var files: [String: SHA256Digest] = [:]
+        files["archive.gdt"] = try store.putObject(try Data(contentsOf: old))
+        files["origin.json"] = try store.putObject(Data("{}".utf8))
+        files["withdrawn.json"] = try store.putObject(Data("{}".utf8))
+        _ = try await store.writeTypeArchive(bits: "Ia32", version: TypeArchiveVersion(
+            version: 1, files: files, at: "2026-11-15T00:00:00Z", by: "test", module: nil, rev: nil))
+        let host = host(store)
+        _ = try await host.createCached(module: image, name: "Module")
+        await host.stop(module)
+        // The program as revision 4 made it: re-open with that archive's types.
+        let project = await host.project(module)
+        var state = try project.state()
+        state.madeWith.types = "\(UEFITypes.edk2Tag)-r4"
+        state.archive = old.path
+        try project.write(state)
+        defer { Task { await host.stop(module) } }
+        _ = try await host.read(module, "/v1/hello")
+
+        let versions = try store.typeArchive(bits: "Ia32")?.versions ?? []
+        XCTAssertEqual(versions.map(\.version), [1, 2], "\(versions)")
+        XCTAssertTrue(versions.last?.reason?.contains("revision 5") == true, "\(String(describing: versions.last))")
+        let boolean = try json(await host.read(module, "/v1/type?name=BOOLEAN"))
+        for side in ["program", "edk2", "shared"] {
+            let values = (boolean[side] as? [String: Any])?["values"] as? [String: String] ?? [:]
+            XCTAssertEqual(values, ["FALSE": "0x0", "TRUE": "0x1"], "\(side): \(boolean[side] ?? "none")")
+        }
+        // INT8 is a signed byte. UINT8 stays the unsigned char every review
+        // typed its locals with, shown in hex: a byte the decompiler took for
+        // its own `byte` let it merge a review's locals with its temporaries.
+        let int8 = try json(await host.read(module, "/v1/type?name=INT8"))
+        for side in ["program", "edk2", "shared"] {
+            // A program holds only the types it uses: this one has no INT8.
+            if side == "program", (int8[side] as? [String: Any])?.isEmpty != false { continue }
+            let facts = int8[side] as? [String: Any] ?? [:]
+            XCTAssertEqual(facts["base"] as? String, "/sbyte", "INT8 \(side): \(facts)")
+        }
+        // Ghidra keeps a typedef's display format only in a program.
+        let uint8 = try json(await host.read(module, "/v1/type?name=UINT8"))
+        for side in ["program", "edk2", "shared"] {
+            let facts = uint8[side] as? [String: Any] ?? [:]
+            XCTAssertEqual(facts["base"] as? String, "/uchar", "UINT8 \(side): \(facts)")
+            XCTAssertEqual(facts["format"] as? String, side == "program" ? "hex" : nil, "UINT8 \(side): \(facts)")
+        }
+        // A local Ghidra typed `char` itself prints its constants as
+        // characters; retyped UINT8 by a review, they read as numbers, and the
+        // write keeps UINT8's format: the owner sets it again after each change.
+        try await host.take(module)
+        let functions = try json(await host.read(module, "/v1/functions?limit=500"))["functions"] as? [[String: Any]] ?? []
+        var retyped: (entry: String, name: String)?
+        search: for function in functions {
+            guard let entry = function["entry"] as? String else { continue }
+            let read = try json(await host.read(module, "/v1/function/" + entry))
+            let c = read["c"] as? String ?? ""
+            for local in read["locals"] as? [[String: Any]] ?? [] where (local["type"] as? String) == "char" {
+                guard let name = local["name"] as? String,
+                      c.split(separator: "\n").contains(where: { $0.contains(name) && $0.contains("'\\x") }) else { continue }
+                _ = try await host.write(module, "/v1/rename/variable", body: JSONSerialization.data(withJSONObject: [
+                    "function": entry, "storage": local["storage"] ?? "", "first_use": local["first_use"] ?? "",
+                    "name": name, "type": "UINT8", "by": "agent"]))
+                retyped = (entry, name)
+                break search
+            }
+        }
+        let (entry, name) = try XCTUnwrap(retyped, "no char local printed with a character constant")
+        let c = try json(await host.read(module, "/v1/function/" + entry))["c"] as? String ?? ""
+        let lines = c.split(separator: "\n").filter { $0.contains(name) && !$0.contains(" \(name);") }
+        XCTAssertFalse(lines.isEmpty, c)
+        XCTAssertFalse(lines.contains { $0.contains("'\\x") }, "UINT8 constants still printed as characters:\n\(c)")
+        XCTAssertTrue(lines.contains { $0.contains("0x") }, c)
+        let after = try json(await host.read(module, "/v1/type?name=UINT8"))
+        XCTAssertEqual((after["program"] as? [String: Any])?["format"] as? String, "hex", "\(after)")
+        await host.stop(module)
+
+        // CHAR8 stays text.
+        let char8 = try json(await host.read(module, "/v1/type?name=CHAR8"))
+        let edk2Char8 = String(decoding: try JSONSerialization.data(withJSONObject: char8["edk2"] ?? [:]), as: UTF8.self)
+        XCTAssertTrue(edk2Char8.contains("char"), edk2Char8)
+
+        // The next owner of the next process finds nothing to do.
+        await host.stop(module)
+        let again = self.host(store)
+        _ = try await again.read(module, "/v1/hello")
+        await again.stop(module)
+        XCTAssertEqual(try store.typeArchive(bits: "Ia32")?.versions.map(\.version), [1, 2])
+    }
 }

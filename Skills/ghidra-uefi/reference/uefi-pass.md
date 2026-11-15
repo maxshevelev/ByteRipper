@@ -52,14 +52,32 @@ after the parse and puts right every one with such an alias — in MdePkg,
 `EVENT_LOG_VARIABLE_DATA`, `MEMORY_ERROR_TYPE`,
 `SUPPORTED_DATA_REMOVAL_MECHANISM` and `UDF_VOLUME_DESCRIPTOR_ID`.
 
-`-r4` is `TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
-(`code-v4-types4-ghidra-…`), so a module typed by the new archive is a recipe
+Revision 5 makes `BOOLEAN` a one-byte enum of `FALSE` (0) and `TRUE` (1)
+and `INT8` Ghidra's `sbyte`. `ProcessorBind.h` declares them `unsigned char`
+and `signed char`, and `FALSE`/`TRUE` are `#define`s the parser ties to no
+type, so the decompiler printed a char type's constants as characters: `if
+(Notify != '\0')`, `CoreFindProtocolEntry(Protocol,'\0')`, a mask `'\xff'`.
+`UINT8` stays `unsigned char` — the type every review typed its locals with —
+and is shown in hex. Made Ghidra's `byte`, it was the type of the
+decompiler's own temporaries, which then merged with a review's named byte
+locals and took their names. Ghidra keeps a typedef's display format only in
+a program, never in an archive, so the UEFI pass sets it and the owner sets
+it again at open and after each change. The C now prints `FALSE`, `TRUE` and
+numbers (`0x7f`, `0x12`; small ones too: `0x3`). `CHAR8` stays `char`: it is
+text. A program and the shared review types made with an earlier archive take
+`BOOLEAN` and `INT8` at the owner's open, as they take revision 4's values. A
+mask a `BOOLEAN` receives prints as `TRUE` (`Flags & TRUE`), and an equate on
+that constant does not win over the enum: the decompiler's enum printer never
+looks at equates. A review retypes such an expression.
+
+`-r5` is `TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
+(`code-v10-types5-ghidra-…`), so a module typed by the new archive is a recipe
 beside the old one. A project made with an earlier revision moves to the
 current archive when the server next starts its owner. At open the owner
 gives the program's function types with no convention `__cdecl` (32-bit, also
 after every change; the UEFI pass does at the end) and the program's EDK2
-enums the values the archive gives their members — not an enum the review
-defined itself. The server gives the shared review types of the module's size
+enums the values the archive gives their members, and the archive's
+`BOOLEAN` and `INT8` — not a type the review defined itself. The server gives the shared review types of the module's size
 the same once each, in a version of their own.
 
 Each step says what it is when it starts and how long it took, with a limit —

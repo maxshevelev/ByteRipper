@@ -41,7 +41,15 @@ final class TypeText {
         }
         if (description != null && !description.isEmpty()) answer.addProperty("description", description);
         DataType base = type instanceof TypeDef def ? def.getBaseDataType() : type;
-        if (type instanceof TypeDef def) answer.addProperty("base", def.getDataType().getPathName());
+        if (type instanceof TypeDef def) {
+            answer.addProperty("base", def.getDataType().getPathName());
+            // The decompiler prints a typedef's constants in its display
+            // format: `UINT8` is `unsigned char` shown in hex (types revision 5).
+            ghidra.docking.settings.FormatSettingsDefinition format = ghidra.docking.settings.FormatSettingsDefinition.DEF;
+            if (format.hasValue(def.getDefaultSettings())) {
+                answer.addProperty("format", format.getValueString(def.getDefaultSettings()).toLowerCase(java.util.Locale.ROOT));
+            }
+        }
         if (base instanceof Composite composite) {
             // Not `isPackingEnabled`: Ghidra enables its alignment machinery
             // for a default structure too, and that reads as "packed". The

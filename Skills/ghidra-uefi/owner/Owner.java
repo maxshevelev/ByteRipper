@@ -219,6 +219,18 @@ public class Owner {
             program.endTransaction(transaction, enumValues > 0);
         }
         if (enumValues > 0) saveProgram("EDK2 values of " + enumValues + " enum members");
+        // BOOLEAN as FALSE/TRUE and INT8 a signed byte, from an archive of
+        // revision 5 on, in a program typed with an earlier one; UINT8 shown
+        // in hex, which only a program can hold.
+        transaction = program.startTransaction("EDK2 byte scalars");
+        int scalars = 0;
+        try {
+            scalars = archive == null ? 0 : edk2ByteScalars(program.getDataTypeManager(), archive, reviewWritten());
+            scalars += hexUint8(program);
+        } finally {
+            program.endTransaction(transaction, scalars > 0);
+        }
+        if (scalars > 0) saveProgram("EDK2 BOOLEAN, UINT8, INT8 (" + scalars + " types)");
         ExportCode.analysisComments = Harvest.baselineComments(program);
         // From here a change counts; the count goes on from the last session's.
         writesFile = new File(options.get("project-dir"), "writes");
@@ -1782,6 +1794,7 @@ public class Owner {
         requireLease(exchange);
         File target = archiveNamed(body(exchange));
         int changed = 0;
+        int scalars = 0;
         if (archive != null && target.isFile()) {
             try (FileChannel channel = lockChannel(target); FileLock lock = channel.lock()) {
                 FileDataTypeManager shared = FileDataTypeManager.openFileArchive(target, true);
@@ -1789,6 +1802,8 @@ public class Owner {
                     int transaction = shared.startTransaction("EDK2 enum values");
                     try {
                         changed = edk2EnumValues(shared, archive, java.util.Set.of());
+                        scalars = edk2ByteScalars(shared, archive, java.util.Set.of());
+                        changed += scalars;
                     } finally {
                         shared.endTransaction(transaction, changed > 0);
                     }
@@ -1800,7 +1815,67 @@ public class Owner {
         }
         JsonObject answer = new JsonObject();
         answer.addProperty("changed", changed);
+        answer.addProperty("scalars", scalars);
         return answer;
+    }
+
+    /** The EDK2 types revision 5 replaced: `BOOLEAN` an enum, `INT8` a signed byte. */
+    static final String[] BYTE_SCALARS = { "BOOLEAN", "INT8" };
+
+    /**
+     * `BOOLEAN` and `INT8` of `manager`, where the EDK2 archive holds them at
+     * the same path and they differ, replaced by the archive's: from revision
+     * 5 an enum of FALSE and TRUE and a signed byte, where an earlier archive
+     * gave `unsigned char` and `signed char`. Everything that names them
+     * keeps them; the size is one byte either way. A type a review wrote
+     * itself (`skip`) is the review's. Answers how many changed.
+     */
+    static int edk2ByteScalars(ghidra.program.model.data.DataTypeManager manager, FileDataTypeManager edk2,
+                               java.util.Set<String> skip) {
+        int changed = 0;
+        for (String name : BYTE_SCALARS) {
+            if (skip.contains(name)) continue;
+            java.util.List<DataType> sources = new java.util.ArrayList<>();
+            edk2.findDataTypes(name, sources);
+            for (DataType source : sources) {
+                if (source.getLength() != 1) continue;
+                DataType held = manager.getDataType(source.getCategoryPath(), name);
+                if (held == null || held.getLength() != 1 || held.isEquivalent(source)) continue;
+                try {
+                    manager.replaceDataType(held, source, true);
+                    changed++;
+                } catch (ghidra.program.model.data.DataTypeDependencyException e) {
+                    // A type that depends on itself cannot be one of these.
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * EDK2's `UINT8` — `unsigned char` — shown in hex (types revision 5): the
+     * decompiler prints a typedef's constants in its display format, so a
+     * byte compared or passed reads `0x7f`, not `'\x7f'`. The type stays the
+     * one every review typed its locals with: made Ghidra's `byte`, it was
+     * the type of the decompiler's own temporaries, which then merged with a
+     * review's named locals and took their names. Ghidra keeps a typedef's
+     * format only in a program, never in an archive, so every program gets
+     * it here: at open and after each change. Answers how many it set.
+     */
+    static int hexUint8(Program program) {
+        int changed = 0;
+        java.util.List<DataType> found = new java.util.ArrayList<>();
+        program.getDataTypeManager().findDataTypes("UINT8", found);
+        ghidra.docking.settings.FormatSettingsDefinition format = ghidra.docking.settings.FormatSettingsDefinition.DEF;
+        for (DataType type : found) {
+            if (!(type instanceof ghidra.program.model.data.TypeDef def) || def.getLength() != 1
+                || !(def.getBaseDataType() instanceof ghidra.program.model.data.UnsignedCharDataType)) continue;
+            ghidra.docking.settings.Settings settings = def.getDefaultSettings();
+            if (format.hasValue(settings) && format.getFormat(settings) == ghidra.docking.settings.FormatSettingsDefinition.HEX) continue;
+            format.setChoice(settings, ghidra.docking.settings.FormatSettingsDefinition.HEX);
+            changed++;
+        }
+        return changed;
     }
 
     /** The names of the enums a review defined itself, and of the enums its typedefs name. */
@@ -4593,8 +4668,12 @@ public class Owner {
      * what it moved is counted aside: a refused call is not a write.
      */
     private void endTransaction(int transaction, boolean commit, long before) {
-        // A function type the change brought in from an archive is EFIAPI too.
-        if (commit) efiApiFunctionTypes(program);
+        // A function type the change brought in from an archive is EFIAPI
+        // too, and a UINT8 it brought in is shown in hex.
+        if (commit) {
+            efiApiFunctionTypes(program);
+            hexUint8(program);
+        }
         program.endTransaction(transaction, commit);
         if (commit) keepWrites();
         else rolledBack += program.getModificationNumber() - before;

@@ -716,4 +716,17 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(LibraryEntryReview.temporaries(in: artifact.functions[1]), [], "no spans, nothing claimed")
         XCTAssertEqual(artifact.functions[0].reviewGaps, [])
     }
+
+    /// EDK2 types revision 5: a byte constant printed as a character before
+    /// prints as `FALSE`/`TRUE` or a number, and the entry's module reprints
+    /// its C over it; any other change is still a review's.
+    func testAByteConstantPrintedAsANumberIsTheSamePrinting() {
+        let before = "if (Notify != '\\0') { Found = '\\x01'; Mask = '\\xff'; Space = ' '; }"
+        let after = "if (Notify != FALSE) { Found = TRUE; Mask = 0xff; Space = 0x20; }"
+        XCTAssertTrue(LibraryProposal.samePrinting(before, after))
+        XCTAssertTrue(LibraryProposal.samePrinting("CoreFindProtocolEntry(Protocol,'\\0');", "CoreFindProtocolEntry(Protocol,0);"))
+        XCTAssertFalse(LibraryProposal.samePrinting("if (Notify != '\\0')", "if (Notify == FALSE)"))
+        XCTAssertFalse(LibraryProposal.samePrinting("Found = '\\x01';", "Found = FALSE;"))
+        XCTAssertFalse(LibraryProposal.samePrinting("Mask = '\\xff';", "Mask = 0xfe;"))
+    }
 }

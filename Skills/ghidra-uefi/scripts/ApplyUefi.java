@@ -152,6 +152,7 @@ public class ApplyUefi extends GhidraScript {
             followServiceCalls();
             nameFromDebugStrings();
             efiApiFunctionTypes();
+            hexUint8();
         } finally {
             if (decompiler != null) decompiler.dispose();
             archive.close();
@@ -445,6 +446,25 @@ public class ApplyUefi extends GhidraScript {
             }
         }
         println("ApplyUefi: " + unknown.size() + " function types given EFIAPI (cdecl)");
+    }
+
+    /// EDK2's UINT8 — `unsigned char` — shown in hex (types revision 5), so
+    /// the decompiler prints a byte's constants as numbers (`0x7f`), not
+    /// characters (`'\x7f'`). Ghidra keeps a typedef's display format only in
+    /// a program, never in an archive; the owner does the same at open and
+    /// after each change.
+    private void hexUint8() {
+        List<DataType> found = new ArrayList<>();
+        currentProgram.getDataTypeManager().findDataTypes("UINT8", found);
+        ghidra.docking.settings.FormatSettingsDefinition format = ghidra.docking.settings.FormatSettingsDefinition.DEF;
+        int set = 0;
+        for (DataType type : found) {
+            if (!(type instanceof ghidra.program.model.data.TypeDef def) || def.getLength() != 1
+                || !(def.getBaseDataType() instanceof ghidra.program.model.data.UnsignedCharDataType)) continue;
+            format.setChoice(def.getDefaultSettings(), ghidra.docking.settings.FormatSettingsDefinition.HEX);
+            set++;
+        }
+        println("ApplyUefi: UINT8 shown in hex (" + set + ")");
     }
 
     /// Firmware is C: no function has a `this`. Ghidra guesses __thiscall

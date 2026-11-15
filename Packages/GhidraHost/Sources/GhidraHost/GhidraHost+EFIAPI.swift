@@ -49,9 +49,10 @@ extension GhidraHost {
     }
 
     /// The shared review types of the module's size given the values EDK2's
-    /// archive gives its enums' members, once in this process, through the
-    /// module's owner: a version of their own when any member changed
-    /// (issue 33a286ab — an alias numbered as the member before it plus one).
+    /// archive gives its enums' members (issue 33a286ab — an alias numbered
+    /// as the member before it plus one) and its `BOOLEAN` and `INT8`
+    /// (revision 5), once in this process, through the module's
+    /// owner: a version of their own when anything changed.
     /// Under the publishes' hold. A failure is left for the next owner.
     func migrateSharedEDK2Enums(_ module: SHA256Digest) async {
         guard writer.keepsTypeArchives, let state = try? project(module).state() else { return }
@@ -70,12 +71,21 @@ extension GhidraHost {
                 module, "/v1/types/edk2enums", body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
                 as? [String: Any] ?? [:]
             let changed = answer["changed"] as? Int ?? 0
+            let scalars = answer["scalars"] as? Int ?? 0
             if changed > 0 {
+                var reasons: [String] = []
+                if changed > scalars {
+                    reasons.append("EDK2 enum members initialised with another member's name take its value: "
+                        + "\(changed - scalars) members (issue 33a286ab)")
+                }
+                if scalars > 0 {
+                    reasons.append("BOOLEAN is the enum FALSE/TRUE and INT8 a signed byte, "
+                        + "as EDK2 types revision 5 has them: \(scalars) types")
+                }
                 let merged = TypesMerged(Data(#"{"changed": true}"#.utf8))
                 if let version = try await nextTypeVersion(
                     bits: bits, folder: folder, after: current, answer: merged, by: "server", module: module,
-                    reason: "EDK2 enum members initialised with another member's name take its value: "
-                        + "\(changed) members (issue 33a286ab)") {
+                    reason: reasons.joined(separator: "; ")) {
                     _ = try await writer.writeTypeArchive(bits: bits, version: version)
                     try? await refreshArchiveCopy(bits: bits)
                 }

@@ -13,8 +13,10 @@ public enum UEFITypes {
     /// `TYPES_REVISION`. 2: `EFI_STATUS` and `EFI_STATUS_CODE_TYPE` are enums.
     /// 3: every Ia32 function type is EFIAPI, `__cdecl` (issue 4a9a4484).
     /// 4: an enum member initialised with an earlier member's name has its
-    /// value, as C gives it (issue 33a286ab).
-    public static let typesRevision = 4
+    /// value, as C gives it (issue 33a286ab). 5: `BOOLEAN` is an enum of
+    /// `FALSE` and `TRUE` and `INT8` a signed byte; the owner shows the
+    /// program's `UINT8`, still `unsigned char`, in hex: numbers, not characters.
+    public static let typesRevision = 5
     /// The archives' name and the recipe's `types`: the tag and the revision.
     public static let types = "\(edk2Tag)-r\(typesRevision)"
     static let edk2Tarball = URL(string: "https://codeload.github.com/tianocore/edk2/tar.gz/refs/tags/\(edk2Tag)")!

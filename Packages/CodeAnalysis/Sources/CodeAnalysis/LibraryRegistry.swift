@@ -666,14 +666,49 @@ extension LibraryProposal {
     }
 
     /// Whether two prints of one function differ only as `reprinting` allows.
+    /// A byte constant reads as a character, `FALSE`/`TRUE` or a number, and
+    /// these are one printing: EDK2 types revision 5 turned `BOOLEAN` into an
+    /// enum and `UINT8`/`INT8` into byte numbers, so `'\0'` came to print as
+    /// `FALSE` or `0` and `'\xff'` as `0xff`.
     static func samePrinting(_ old: String, _ new: String) -> Bool {
         func read(_ text: String) -> String {
-            text.replacingOccurrences(of: #"/\*\s*WARNING: Unknown calling convention.*?\*/"#, with: "",
+            numbersOfLiterals(text.replacingOccurrences(of: #"/\*\s*WARNING: Unknown calling convention.*?\*/"#, with: "",
                                       options: .regularExpression)
-                .replacingOccurrences(of: #"\([^()]*\)0x0\b"#, with: "NULL", options: .regularExpression)
+                .replacingOccurrences(of: #"\([^()]*\)0x0\b"#, with: "NULL", options: .regularExpression))
                 .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
         }
         return read(old) == read(new)
+    }
+
+    /// The text with every character literal, hex number, `FALSE` and `TRUE`
+    /// written as its decimal value.
+    static func numbersOfLiterals(_ text: String) -> String {
+        func replacing(_ pattern: String, in text: String, _ value: (String) -> String?) -> String {
+            guard let expression = try? NSRegularExpression(pattern: pattern) else { return text }
+            let source = text as NSString
+            var out = ""
+            var last = 0
+            for match in expression.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+                out += source.substring(with: NSRange(location: last, length: match.range.location - last))
+                let found = source.substring(with: match.range)
+                let inner = match.numberOfRanges > 1 && match.range(at: 1).location != NSNotFound
+                    ? source.substring(with: match.range(at: 1)) : found
+                out += value(inner) ?? found
+                last = match.range.location + match.range.length
+            }
+            return out + source.substring(from: last)
+        }
+        let escapes: [String: UInt32] = ["n": 10, "t": 9, "r": 13, "a": 7, "b": 8, "f": 12, "v": 11,
+                                         "\\": 92, "'": 39, "\"": 34, "?": 63]
+        var text = replacing(#"'(\\x[0-9A-Fa-f]{1,2}|\\[0-7]{1,3}|\\.|[^'\\])'"#, in: text) { inner in
+            if inner.hasPrefix("\\x") { return UInt32(inner.dropFirst(2), radix: 16).map(String.init) }
+            if inner.hasPrefix("\\"), let octal = UInt32(inner.dropFirst(), radix: 8) { return String(octal) }
+            if inner.hasPrefix("\\") { return escapes[String(inner.dropFirst())].map(String.init) }
+            return inner.unicodeScalars.first.map { String($0.value) }
+        }
+        text = replacing(#"\b0x([0-9A-Fa-f]+)\b"#, in: text) { UInt64($0, radix: 16).map(String.init) }
+        text = replacing(#"\bFALSE\b"#, in: text) { _ in "0" }
+        return replacing(#"\bTRUE\b"#, in: text) { _ in "1" }
     }
 
     /// The held entry object with the proposal's function added, saying which
