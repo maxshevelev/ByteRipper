@@ -145,6 +145,41 @@ final class LibraryCodeTests: XCTestCase {
         XCTAssertEqual(stored.functions, ["0x90000"], "the callee still is")
     }
 
+    /// An entry that has learned what its data references point at takes its
+    /// code from a module that says the same bytes, and every module links to
+    /// it at once (issue 85d04590: four DevicePathDxe entries learned their
+    /// bytes before their code, and every later publish's teaching was
+    /// refused as other bytes, which kept them and their five callers the
+    /// module's).
+    func testAnEntryThatKnowsItsBytesLearnsItsCodeFromTheirOwner() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("lib-code-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root)
+        let module = SHA256Digest(data: Data("m".utf8))
+        var held = index()
+        held.entries[callee]?.variants[0].referenceBytes = "0123456789abcdef0123456789abcdef"
+        try FileManager.default.createDirectory(at: store.libraryURL, withIntermediateDirectories: true)
+        try store.atomicWrite(try JSONEncoder().encode(held), to: store.libraryIndexURL)
+        var row = calleeRow(at: 0x5000)
+        row["reference_bytes"] = "0123456789abcdef0123456789abcdef"
+        let raw = try artifact([row])
+
+        let teachings = ModuleFormat.teachings(raw, index: held)
+        XCTAssertEqual(teachings.map(\.id), [callee])
+        XCTAssertEqual(teachings.first?.proposal.referenceBytes, "0123456789abcdef0123456789abcdef")
+        let result = try store.putLibraryEntries(module: module, rev: 2, by: "agent",
+                                                 proposals: teachings.map(\.proposal))
+        XCTAssertNil(result.notLibrary, "the same bytes: the entry's own body")
+        XCTAssertNotNil(try store.libraryIndex().entries[callee]?.variants[0].code)
+
+        var other = row
+        other["reference_bytes"] = "fedcba9876543210fedcba9876543210"
+        let refused = try store.putLibraryEntries(
+            module: module, rev: 3, by: "agent",
+            proposals: ModuleFormat.teachings(try artifact([other]), index: held).map(\.proposal))
+        XCTAssertEqual(refused.notLibrary, nil, "other bytes are another function: nothing to teach")
+    }
+
     /// The module's lists say nothing at a link's instructions, and a reader gets it back.
     func testTheModulesListsKeepNoTextOfALink() throws {
         let raw = try artifact([function(at: 0x2000, target: 0x5000, table: 0x7000), calleeRow(at: 0x5000),

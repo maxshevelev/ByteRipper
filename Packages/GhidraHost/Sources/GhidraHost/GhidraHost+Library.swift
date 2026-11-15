@@ -580,13 +580,7 @@ extension GhidraHost {
     /// The bodies the registry holds with no code take it from this module.
     func teachEntryCode(_ module: SHA256Digest, artifact: Data, rev: Int?, by: String?) async throws -> LibraryWriteResult? {
         let index = try await writer.readLibraryIndex()
-        let proposals = ModuleFormat.teachings(artifact, index: index).map { teaching in
-            var proposal = LibraryProposal(body: teaching.variant.body, name: teaching.name, kind: teaching.kind,
-                                           address: teaching.address, entry: Data("{}".utf8), basedOn: teaching.id,
-                                           teachesBytesOnly: true)
-            proposal.code = teaching.code
-            return proposal
-        }
+        let proposals = ModuleFormat.teachings(artifact, index: index).map(\.proposal)
         guard !proposals.isEmpty else { return nil }
         return try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
     }

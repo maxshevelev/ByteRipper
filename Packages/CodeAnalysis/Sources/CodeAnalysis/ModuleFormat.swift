@@ -129,6 +129,20 @@ public enum ModuleFormat {
         public var kind: String
         public var address: String
         public var code: Data
+        /// The bytes the function's data references point at: an entry that
+        /// knows its own takes code only from a function that says the same
+        /// (issue 85d04590).
+        public var referenceBytes: String?
+
+        /// What the registry is offered: the code alone, for the entry's own
+        /// body, with no review and no version moving.
+        public var proposal: LibraryProposal {
+            var proposal = LibraryProposal(body: variant.body, name: name, kind: kind, address: address,
+                                           entry: Data("{}".utf8), basedOn: id, referenceBytes: referenceBytes,
+                                           teachesBytesOnly: true)
+            proposal.code = code
+            return proposal
+        }
     }
 
     /// The bodies the registry holds with no code, which this artifact has. A
@@ -164,7 +178,8 @@ public enum ModuleFormat {
                   },
                                                inImage: { place in blocks.contains { $0.contains(place) } },
                                                label: { names[$0] }) else { continue }
-            found.append(Teaching(id: number, variant: variant, name: row.name, kind: row.kind, address: text, code: code))
+            found.append(Teaching(id: number, variant: variant, name: row.name, kind: row.kind, address: text, code: code,
+                                  referenceBytes: function["reference_bytes"] as? String))
         }
         return found
     }

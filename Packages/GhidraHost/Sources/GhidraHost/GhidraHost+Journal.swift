@@ -173,6 +173,13 @@ extension GhidraHost {
                     journal.library = answer
                 }
                 if let error = taught.relinkError { journal.libraryError = error }
+                // A body whose code the registry refused stays the module's:
+                // the answer says so rather than leave the link count to tell.
+                if let refused = taught.notLibrary, !refused.isEmpty {
+                    var answer = journal.library ?? LibraryWriteResult()
+                    answer.notLibrary = (answer.notLibrary ?? []) + refused
+                    journal.library = answer
+                }
             }
             try await mark(.code, in: &journal)
         }
