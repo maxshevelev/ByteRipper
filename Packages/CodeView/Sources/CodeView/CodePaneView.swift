@@ -382,6 +382,11 @@ import ToolModuleKit
     /// An instruction's bytes from a listing click. The app selects them in
     /// the hex view.
     public var onSelectRange: ((Range<UInt64>) -> Void)?
+    /// The bytes a name in the C stands for — a global, a string, a GUID —
+    /// reached by ⌘-click, a double click or Show in Dump. The app selects
+    /// them and marks them as it marks a search's current match. Without it,
+    /// `onSelectRange` selects them.
+    public var onPointBytes: ((Range<UInt64>) -> Void)?
     /// A function's whole stored range, shown as the dump's main zone rather
     /// than as a selection: the reader keeps the selection for reading bytes.
     public var onFocusRange: ((Range<UInt64>) -> Void)?
@@ -2742,7 +2747,7 @@ import ToolModuleKit
             }
             if let range = dataRange(at: address) {
                 selectingBytes = true
-                onSelectRange?(range)
+                if let onPointBytes { onPointBytes(range) } else { onSelectRange?(range) }
                 selectingBytes = false
             }
         case .label(let name):
@@ -4739,8 +4744,7 @@ import ToolModuleKit
                let index = functionHere(linked, currentSide: token.currentSide) {
                 let range = token.range
                 offerFunctionPopover(index) { [weak self] in
-                    guard let self, let rect = self.diffView.rect(of: range) else { return nil }
-                    return (rect, self.diffView)
+                    self?.diffView.anchor(of: range)
                 } go: { [weak self] in
                     self?.follow(.function(index))
                 }
@@ -4771,13 +4775,13 @@ import ToolModuleKit
     /// explains itself from that revision's model: its uses name its functions
     /// and its lines.
     private func explainInDiff(_ explained: CodeExplanation, range: NSRange, currentSide: Bool) {
-        guard let rect = diffView.rect(of: range) else { return }
+        guard let (rect, text) = diffView.anchor(of: range) else { return }
         afterClick(inC: true) { [weak self] in
             guard let self else { return }
             if currentSide {
-                self.showExplanation(explained, relativeTo: rect, of: self.diffView)
+                self.showExplanation(explained, relativeTo: rect, of: text)
             } else {
-                self.showExplanation(explained, relativeTo: rect, of: self.diffView,
+                self.showExplanation(explained, relativeTo: rect, of: text,
                                      in: self.diffBaselineModel,
                                      onUse: { [weak self] line in self?.goToDiffUse(line) })
             }
@@ -5397,6 +5401,14 @@ import ToolModuleKit
 
     /// The diff's visible area, for a test of where a popover is put.
     var diffBounds: NSRect { diffView.bounds }
+
+    /// The popover's rect in the diff's coordinates, and whether it is
+    /// anchored to the diff's scrolling text — for a test.
+    var shownExplanationInDiff: (rect: NSRect, followsText: Bool)? {
+        guard let popover = explanationPopover, let rect = popover.shownRect, let shown = popover.shownView
+        else { return nil }
+        return (diffView.convert(rect, from: shown), shown.enclosingScrollView?.documentView === shown)
+    }
 
 
     /// Where a range of the diff is drawn, in this pane's coordinates — for a
@@ -6495,8 +6507,12 @@ extension CodePaneView: NSMenuDelegate {
         return menu
     }
 
-    /// The C's right-click menu: a function's on a function's name, Copy on
-    /// a selection, nothing elsewhere.
+    /// The C's right-click menu, the pane's own and never the text view's:
+    /// a function's on a function's name; on a global, a string or a GUID
+    /// Show in Dump; on any other name or a constant Copy Name or Copy Value;
+    /// Copy on a selection. Nil where there is nothing to offer, and then no
+    /// menu opens.
+    // help: panel.code.c-menu
     func cMenu(at character: Int?) -> NSMenu? {
         let token = character.flatMap { index in
             shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
@@ -6506,11 +6522,38 @@ extension CodePaneView: NSMenuDelegate {
             let range = NSRange(location: token.start, length: token.length)
             return functionMenu(for: index, call: range == signatureName()?.range ? nil : range, name: range)
         }
-        guard cTextView.selectedRange().length > 0 else { return nil }
         let menu = NSMenu()
-        menu.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "")
-            .target = cTextView
-        return menu
+        menu.autoenablesItems = false
+        if let token {
+            if case .bytes? = token.link, let link = token.link {
+                let show = menu.addItem(withTitle: L("Show in Dump"), action: #selector(showInDumpChosen(_:)),
+                                        keyEquivalent: "")
+                show.target = self
+                show.representedObject = CodeLinkBox(link)
+            }
+            let text = (cTextView.string as NSString).substring(with: NSRange(location: token.start, length: token.length))
+            let named: Set<CodeToken.Kind> = [.global, .label, .parameter, .local, .pcode, .bytes]
+            if named.contains(token.kind) || token.link != nil {
+                let copy = menu.addItem(withTitle: L("Copy Name"), action: #selector(copyNameChosen(_:)), keyEquivalent: "")
+                copy.target = self
+                copy.representedObject = text
+            } else if token.kind == .constant {
+                let copy = menu.addItem(withTitle: L("Copy Value"), action: #selector(copyNameChosen(_:)), keyEquivalent: "")
+                copy.target = self
+                copy.representedObject = text
+            }
+        }
+        if cTextView.selectedRange().length > 0 {
+            if !menu.items.isEmpty { menu.addItem(.separator()) }
+            menu.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "")
+                .target = cTextView
+        }
+        return menu.items.isEmpty ? nil : menu
+    }
+
+    @objc private func showInDumpChosen(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? CodeLinkBox else { return }
+        follow(box.link)
     }
 
     @objc private func callWaysChosen(_ sender: NSMenuItem) {
@@ -6547,6 +6590,15 @@ extension CodePaneView: NSMenuDelegate {
     @objc private func annotateChosen(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? CodePlaceBox else { return }
         onAnnotate?(box.location, box.name)
+    }
+}
+
+/// Show in Dump's link: the bytes of the name the menu was opened on.
+private final class CodeLinkBox: NSObject {
+    let link: CodeLink
+
+    init(_ link: CodeLink) {
+        self.link = link
     }
 }
 

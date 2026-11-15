@@ -1300,7 +1300,25 @@ final class PaneViewModel: HexViewDataSource {
     }
 
     func hexCurrentMatch() -> Range<UInt64>? {
-        currentMatchRange
+        if let pointed = pointedRange {
+            let selection = hexSelection()
+            if selection.start == pointed.lowerBound, selection.end == pointed.upperBound { return pointed }
+        }
+        return currentMatchRange
+    }
+
+    /// Bytes the code screen pointed at — a global's, a string's, a GUID's,
+    /// reached from a name in the C — drawn with the find indicator's yellow
+    /// plate while they stay selected: the reader sees where the name's
+    /// bytes are at once, as a search's current match is seen. The plate
+    /// goes when the selection moves; nothing has to take it away.
+    private(set) var pointedRange: Range<UInt64>?
+
+    /// Selects `range` and puts the yellow plate on it. The owner pops it.
+    func point(at range: Range<UInt64>) {
+        select(range: range)
+        pointedRange = range.isEmpty ? nil : range
+        onMatchesChanged?()
     }
 
     /// The zone map a tool-module published for this pane

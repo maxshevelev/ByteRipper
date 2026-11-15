@@ -159,9 +159,9 @@ final class CodeTextView: NSTextView, FindBoxHost {
         if onClick?(character, event) == true { return }
         // A link is followed by the pane, on ⌘-click or a double click; the
         // text view's own handling of a plain click would follow it too.
-        // A control-click is the right-click menu, which the text view shows.
-        if event.modifierFlags.contains(.control) {
-            super.mouseDown(with: event)
+        // A control-click is the right-click menu: the pane's, as below.
+        if event.modifierFlags.contains(.control), onMenu != nil {
+            showOwnMenu(for: event)
             return
         }
         // A click in text puts the caret where it was clicked, and the C is no
@@ -194,6 +194,20 @@ final class CodeTextView: NSTextView, FindBoxHost {
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let onMenu else { return super.menu(for: event) }
         return onMenu(characterIndex(atViewPoint: convert(event.locationInWindow, from: nil)))
+    }
+
+    /// The right click opens the pane's menu or none. The text view's own
+    /// handling is never reached: on a link it put up the system's link menu
+    /// — Open Link, Copy Link, Search With Google, Services — where the pane
+    /// had nothing of its own to offer.
+    override func rightMouseDown(with event: NSEvent) {
+        guard onMenu != nil else { return super.rightMouseDown(with: event) }
+        showOwnMenu(for: event)
+    }
+
+    private func showOwnMenu(for event: NSEvent) {
+        guard let menu = menu(for: event) else { return }
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 
     override func complete(_ sender: Any?) {

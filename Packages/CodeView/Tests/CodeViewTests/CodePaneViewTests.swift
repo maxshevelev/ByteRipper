@@ -3137,9 +3137,10 @@ final class CodePaneViewTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         XCTAssertEqual(view.shownExplanation?.subject, .global(CodeAddress(0x230)),
                        "the name on a line both revisions share")
-        let rect = try XCTUnwrap(view.shownExplanationRect)
-        XCTAssertTrue(view.diffBounds.contains(rect),
-                      "the popover sits beside the word: \(rect) in the diff's \(view.diffBounds)")
+        let shownIn = try XCTUnwrap(view.shownExplanationInDiff)
+        XCTAssertTrue(view.diffBounds.contains(shownIn.rect),
+                      "the popover sits beside the word: \(shownIn.rect) in the diff's \(view.diffBounds)")
+        XCTAssertTrue(shownIn.followsText, "anchored to the scrolling text, the popover moves with the code")
         view.shownExplanationClose()
     }
 
@@ -4786,6 +4787,57 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedFunction?.name, "F")
         XCTAssertFalse(view.canGoBack, "a link to data is not a place")
         XCTAssertNil(view.carriedHistory.views.last?.cMark)
+    }
+
+    /// The C's right-click menu is the pane's on every name, never the text
+    /// view's link menu (Open Link, Copy Link, Search With Google, Services):
+    /// a global offers Show in Dump and Copy Name, a number Copy Value. Show in
+    /// Dump and ⌘-click hand the global's bytes to the app as bytes to point
+    /// at — the dump marks them as a search's current match.
+    func testANameOfDataHasThePanesMenuAndPointsAtItsBytes() throws {
+        let c = "void F(void)\n{\n  Port = mPort + 7;\n}\n"
+        let at = (c as NSString).range(of: "mPort")
+        let seven = (c as NSString).range(of: "7")
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x220", "name": "F", "c": c,
+                "c_spans": [[at.location, at.length, "global", "0x230"], [seven.location, seven.length, "constant"]],
+                "instructions": [["address": "0x220", "bytes": "66 A1", "mnemonic": "MOV", "text": "MOV AX,[0x220]",
+                                  "references": [["to": "0x230", "type": "READ"]]]]
+            ]],
+            "symbols": [["address": "0x230", "name": "mPort", "type": "UINT16", "source": "USER_DEFINED"]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let shown = textView.string as NSString
+        var pointed: [Range<UInt64>] = []
+        var selected: [Range<UInt64>] = []
+        view.onPointBytes = { pointed.append($0) }
+        view.onSelectRange = { selected.append($0) }
+
+        let menu = try XCTUnwrap(view.cMenu(at: shown.range(of: "mPort").location + 1))
+        XCTAssertEqual(menu.items.map(\.title), ["Show in Dump", "Copy Name"])
+        menu.performActionForItem(at: 0)
+        XCTAssertEqual(pointed, [0x78..<0x7A], "both bytes of the UINT16")
+        XCTAssertEqual(selected, [], "pointed at, not only selected")
+        XCTAssertEqual(view.cMenu(at: shown.range(of: "7").location)?.items.map(\.title), ["Copy Value"])
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
+                                                     timestamp: 0, windowNumber: 0, context: nil,
+                                                     eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertNil(textView.menu(for: event), "off the glyphs: no menu, not the text view's")
+
+        XCTAssertTrue(view.clickC(at: shown.range(of: "mPort").location + 1,
+                                  event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(pointed, [0x78..<0x7A, 0x78..<0x7A])
     }
 
     /// A ⌘-click on a global selects its bytes in the dump, and the hex

@@ -340,18 +340,29 @@ struct CodeDiffCode {
         }.map(\.range)
     }
 
-    /// The rect a range of the diff occupies, for a popover — in this view's
-    /// coordinates, not the text's: the text is the scroll view's document, and
-    /// a rect in those coordinates puts the popover at the document's top, not
-    /// beside the word clicked.
+    /// Where a popover over a range of the diff is anchored: the range's rect
+    /// in the text's own coordinates, and the text. The text is the scroll
+    /// view's document, so the popover moves with the code when the diff
+    /// scrolls, as one over the C does. A rect in the text's coordinates shown
+    /// against this view instead put it at the document's top.
+    func anchor(of range: NSRange) -> (rect: NSRect, view: NSView)? {
+        guard let box = textRect(of: range) else { return nil }
+        return (box, text)
+    }
+
+    /// The rect a range of the diff occupies, in this view's coordinates.
     func rect(of range: NSRange) -> NSRect? {
+        textRect(of: range).map { convert($0, from: text) }
+    }
+
+    private func textRect(of range: NSRange) -> NSRect? {
         guard let layout = text.layoutManager, let container = text.textContainer,
               range.location + range.length <= (text.string as NSString).length else { return nil }
         let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
         var box = layout.boundingRect(forGlyphRange: glyphs, in: container)
         box.origin.x += text.textContainerOrigin.x
         box.origin.y += text.textContainerOrigin.y
-        return convert(box, from: text)
+        return box
     }
 
     func highlight(_ ranges: [NSRange]) { text.highlight(ranges) }

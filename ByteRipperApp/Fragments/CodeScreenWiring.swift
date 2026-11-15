@@ -42,6 +42,15 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
         pane.select(range: range)
         reveal(range)
     }
+    // The bytes a name in the C stands for — reached by ⌘-click, a double
+    // click or Show in Dump — get the find indicator's yellow plate and its
+    // hop, so the eye finds them in the dump.
+    codePane.onPointBytes = { [weak owner, weak pane] range in
+        guard let pane else { return }
+        pane.point(at: range)
+        reveal(range)
+        owner?.filePaneView(for: pane)?.bounceFindIndicator()
+    }
     // A function is a stretch of the dump to look at, not a selection to
     // replace: it becomes the focused zone, the dump's main highlight.
     codePane.onFocusRange = { [weak codePane, weak pane] range in

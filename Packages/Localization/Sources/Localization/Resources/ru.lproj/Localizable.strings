@@ -1788,6 +1788,8 @@
 "The note was made on other bytes of this module." = "Заметка сделана для других байтов этого модуля.";
 "Show Callers…" = "Показать вызовы…";
 "Jump to Definition" = "Перейти к определению";
+"Show in Dump" = "Показать в дампе";
+"Copy Value" = "Скопировать значение";
 "Callers of %1$@" = "Вызовы функции %1$@";
 "Calls: %1$@" = "Вызовов: %1$@";
 "Call" = "Вызов";

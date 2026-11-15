@@ -38,9 +38,12 @@ import ToolModuleKit
     /// The rect the popover was asked to sit beside, in the view's
     /// coordinates — for a test that a caller converted them.
     private(set) var shownRect: NSRect?
+    /// The view `shownRect` is in — the one the popover follows.
+    private(set) weak var shownView: NSView?
 
     func show(relativeTo rect: NSRect, of view: NSView) {
         shownRect = rect
+        shownView = view
         ToolPanelPopover.show(popover, with: self, relativeTo: rect, of: view, edge: .maxY)
     }
 

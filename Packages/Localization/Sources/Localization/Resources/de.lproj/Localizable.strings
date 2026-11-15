@@ -1788,6 +1788,8 @@
 "The note was made on other bytes of this module." = "Die Anmerkung wurde zu anderen Bytes dieses Moduls angelegt.";
 "Show Callers…" = "Aufrufe anzeigen…";
 "Jump to Definition" = "Gehe zu Definition";
+"Show in Dump" = "Im Dump zeigen";
+"Copy Value" = "Wert kopieren";
 "Callers of %1$@" = "Aufrufe von %1$@";
 "Calls: %1$@" = "Aufrufe: %1$@";
 "Call" = "Aufruf";
