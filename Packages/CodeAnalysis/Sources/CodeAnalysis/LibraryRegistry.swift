@@ -261,9 +261,12 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public func callees(ofEntry id: String, body key: String, object: (SHA256Digest) throws -> Data) -> [String]? {
         guard let variant = entries[id]?.variants.first(where: { $0.body.key == key }) ?? entries[id]?.variants.first
         else { return nil }
-        if let callees = variant.callees { return callees }
+        // Never itself: a recursive call stays inside its body's code, and an
+        // entry recorded before that was said may list it.
+        let own: Set<String> = [id, key]
+        if let callees = variant.callees { return callees.filter { !own.contains($0) } }
         guard let code = variant.code, let data = try? object(code) else { return nil }
-        return LibraryCode.callees(code: data).sorted()
+        return LibraryCode.callees(code: data).subtracting(own).sorted()
     }
 
     /// The entry a body belongs to.

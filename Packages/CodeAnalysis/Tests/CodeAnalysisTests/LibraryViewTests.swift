@@ -330,6 +330,32 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertNil(try store.libraryIndex().takenOut)
     }
 
+    /// A recursive function's call to itself stays inside its code, so the
+    /// code names no such callee: the owner listing it is the same function,
+    /// not another body under its name (issue e4c7b60d, CpuPei
+    /// MtrrLibCalculateSubtractivePath).
+    func testARecursiveFunctionIsItsOwnEntry() throws {
+        let body = LibraryBody(size: 0x176, full: "892810ec4ff74c1d", specific: "6cf8f7c25381367e")
+        let other = LibraryBody(size: 0x18, full: "2483dca98e472ed6", specific: "c8cb3471d27c9293")
+        XCTAssertEqual(try offerBody(other, "MtrrLibAppendVariableMtrr").added.count, 1)
+        XCTAssertEqual(try offerBody(body, "MtrrLibCalculateSubtractivePath").added.count, 1)
+        // The code the registry keeps, which calls only the other function.
+        let code = Data(#"{"base":"0x9A60273","instructions":[{"address":"0x9A60280","references":[{"entry":"\#(other.key)","to":"0x9A61000","type":"UNCONDITIONAL_CALL"}]}]}"#.utf8)
+        var lesson = LibraryProposal(body: body, name: "", kind: "edk2", address: "0x9A60273",
+                                     entry: Data("{}".utf8), basedOn: body.key, teachesBytesOnly: true)
+        lesson.code = code
+        try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [lesson])
+        // The owner lists the call to itself beside the other.
+        let again = try offerBody(body, "MtrrLibCalculateSubtractivePath", callees: [
+            LibraryCallee(name: "MtrrLibCalculateSubtractivePath", body: body.key, entry: body.key),
+            LibraryCallee(name: "MtrrLibAppendVariableMtrr", body: other.key, entry: other.key)
+        ])
+        XCTAssertEqual(again.nameConflicts?.map(\.heldBy) ?? [], [], "no other body under its own name")
+        XCTAssertEqual(again.added.map(\.id), [])
+        XCTAssertEqual(again.unchanged.map(\.id), [body.key])
+        XCTAssertEqual(try store.libraryIndex().holders(of: body.key), [body.key])
+    }
+
     /// The approved rule at the door: a new body with a data reference needs a
     /// citation, and a new body's callees must all be in the registry already.
     func testABodyThatDependsOnAModuleIsNotTaken() throws {

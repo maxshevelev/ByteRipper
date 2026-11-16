@@ -127,7 +127,12 @@ extension LibraryProposal {
     /// an owner that does not list callees.
     public func calls(in index: LibraryIndex) -> [String]? {
         guard let callees else { return nil }
-        let numbers = callees.map { callee -> String in
+        // A call to itself is no callee: the code keeps it inside the body
+        // (`LibraryCode.build`), so it never names it (issue e4c7b60d).
+        let own = Set([body.key, basedOn].compactMap { $0 })
+        let numbers = callees.filter { callee in
+            !own.contains(callee.entry ?? "") && !own.contains(callee.body ?? "")
+        }.map { callee -> String in
             if let id = callee.entry, index.entries[id] != nil { return id }
             guard let key = callee.body else { return "name:" + callee.name }
             if index.entries[key] != nil { return key }

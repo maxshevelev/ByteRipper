@@ -123,8 +123,10 @@ public enum ModuleFormat {
             if let mark, holders.contains(mark) { continue }
             guard let code = LibraryCode.build(function: function, number: { numbers[$0] },
                                                inImage: { _ in false }, label: { _ in nil }) else { continue }
-            let calls = LibraryCode.callees(code: code).sorted()
-            let said = { (id: String) in index.variant(ofEntry: id, body: key)?.callees }
+            let calls = LibraryCode.callees(code: code).subtracting(holders).sorted()
+            let said = { (id: String) in
+                index.variant(ofEntry: id, body: key)?.callees.map { $0.filter { $0 != id && $0 != key } }
+            }
             numbers[at] = holders.first { said($0) == calls } ?? holders.first { said($0) == nil }
         }
     }
