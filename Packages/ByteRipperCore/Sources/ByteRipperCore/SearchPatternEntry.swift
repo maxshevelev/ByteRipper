@@ -92,7 +92,7 @@ public struct SearchPatternEntry: Equatable, Sendable {
     /// code rather than data. A hand-edited store is the only way to a `false`
     /// here, and then the bar reports it like any other bad pattern (§11).
     public var isUsable: Bool {
-        (try? SearchEngine.parsePattern(pattern, encoding: encoding)) != nil
+        (try? SearchEngine.parsePattern(pattern, encoding: encoding, allowingHoles: true)) != nil
     }
 
     /// How letters compare for this entry, which is the pair the search itself

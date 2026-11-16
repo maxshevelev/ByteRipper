@@ -588,7 +588,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         pickedEncoding = encoding
         updateCaseButtonVisibility()
         if encoding == .hex,
-           let pattern = try? SearchEngine.parsePattern(patternField.stringValue, encoding: encoding) {
+           let pattern = try? SearchEngine.parsePattern(patternField.stringValue, encoding: encoding,
+                                                        allowingHoles: true) {
             normalizeHexText(of: pattern)
             searchToRecord?.text = pattern.hexText
         }
@@ -596,8 +597,11 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
 
     private func parsedPattern() -> SearchPattern? {
         do {
+            // `??` is a byte that matches anything, in a search and nowhere
+            // else (#33).
             let pattern = try SearchEngine.parsePattern(patternField.stringValue,
-                                                        encoding: currentEncoding())
+                                                        encoding: currentEncoding(),
+                                                        allowingHoles: true)
             onPatternError?(nil, nil)
             return pattern
         } catch {
@@ -655,6 +659,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
             switch searchError {
             case .emptyPattern: return L("Enter a non-empty pattern.")
             case .invalidHexPattern: return L("Invalid hex — use pairs like DE AD BE EF.")
+            case .partialByteMask: return L("?? stands for a whole byte — half a byte cannot be masked.")
+            case .holesOnly: return L("A pattern of ?? alone matches everywhere — give at least one byte.")
             case .undecodableText: return L("Text cannot be encoded in the selected encoding.")
             }
         }

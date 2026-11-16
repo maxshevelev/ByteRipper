@@ -624,6 +624,82 @@ final class FindFlowTests: XCTestCase {
         XCTAssertEqual(bar.countColorForTests, .secondaryLabelColor)
     }
 
+    // MARK: - Holes and overlapping matches (#33)
+
+    /// `??` is any byte: `24 ?? 4D 49` finds `$DMI` and `$BMI` alike, through
+    /// Smart Search as typed, and is written back as the dump writes bytes.
+    func testAHoleInAHexPatternMatchesAnyByte() throws {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        bytes.replaceSubrange(5..<9, with: Array("$DMI".utf8))
+        bytes.replaceSubrange(20..<24, with: Array("$BMI".utf8))
+        bytes.replaceSubrange(26..<30, with: Array("$DMX".utf8))
+        let (controller, window, url) = try makeController(bytes)
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        let bar = try findBar(window)
+        let (combo, _, _, _) = try barControls(window)
+
+        combo.stringValue = "24??4d49"
+        try clickFindNext(window)
+
+        XCTAssertTrue(pumpUntil(3) { controller.windowModel.pane1.hexSelection().start == 5 })
+        XCTAssertEqual(controller.windowModel.pane1.hexSelection().end, 9)
+        XCTAssertTrue(pumpUntil(3) { bar.countTextForTests == "1 of 2" }, "$DMI and $BMI, not $DMX")
+        XCTAssertEqual(combo.stringValue, "24 ?? 4D 49", "written back as the dump writes bytes")
+        try clickFindNext(window)
+        XCTAssertEqual(controller.windowModel.pane1.hexSelection().start, 20)
+    }
+
+    /// Matches overlap: `FF FF` over a run of five 0xFF is four matches, and
+    /// the steps walk the run a byte at a time both ways.
+    func testOverlappingMatchesAreCountedAndSteppedAByteAtATime() throws {
+        let bytes: [UInt8] = [0x00] + [UInt8](repeating: 0xFF, count: 5) + [0x00]
+        let (controller, window, url) = try makeController(bytes)
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        let bar = try findBar(window)
+        let (combo, _, _, _) = try barControls(window)
+        let pane = controller.windowModel.pane1
+
+        combo.stringValue = "FF FF"
+        try clickFindNext(window)
+        XCTAssertTrue(pumpUntil(3) { bar.countTextForTests == "1 of 4" }, "one less than the run")
+        XCTAssertEqual(pane.hexSelection().start, 1)
+
+        try clickFindNext(window)
+        XCTAssertEqual(pane.hexSelection().start, 2, "the next match begins inside the one stood on")
+        XCTAssertEqual(bar.countTextForTests, "2 of 4")
+        try clickFindNext(window)
+        XCTAssertEqual(pane.hexSelection().start, 3)
+        try clickFindPrevious(window)
+        XCTAssertEqual(pane.hexSelection().start, 2, "and back one byte")
+        XCTAssertEqual(bar.countTextForTests, "2 of 4")
+    }
+
+    /// Half a byte cannot be masked, and the field says so rather than reading
+    /// `2?` as something else.
+    func testHalfAByteIsRefusedWithItsOwnReason() throws {
+        let (controller, window, url) = try makeController([0x24, 0x44, 0x4D, 0x49])
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        try withoutSmartSearch(window)
+        let bar = try findBar(window)
+        let (combo, encoding, _, _) = try barControls(window)
+        encoding.selectItem(at: SearchEncoding.allCases.firstIndex(of: .hex)!)
+        encoding.sendAction(encoding.action, to: encoding.target)
+
+        combo.stringValue = "24 4? 4D"
+        try clickFindNext(window)
+        XCTAssertEqual(bar.countTextForTests, "Invalid pattern")
+        XCTAssertEqual(bar.countTooltipForTests,
+                       "?? stands for a whole byte — half a byte cannot be masked.")
+
+        combo.stringValue = "?? ??"
+        try clickFindNext(window)
+        XCTAssertEqual(bar.countTooltipForTests,
+                       "A pattern of ?? alone matches everywhere — give at least one byte.")
+    }
+
     /// Editing the pattern takes the complaint with it, exactly as it takes the
     /// count: both were about the text that was there.
     func testEditingThePatternClearsTheComplaint() throws {

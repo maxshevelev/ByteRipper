@@ -16,34 +16,65 @@ public struct MaskedPattern: Equatable, Sendable {
 
     public var count: Int { bytes.count }
 
-    /// Hex text with `??` for any byte: pairs of digits, spaces and `0x`
-    /// prefixes as the find bar takes them, and `??` — on its own or between
-    /// pairs, `24??4D` as well — for a byte that matches anything. A pattern
-    /// of holes alone matches everywhere and is refused.
+    /// Hex text with `??` for any byte — the one reading of a hex search, the
+    /// find bar's and the agent's.
+    ///
+    /// Digits are read in pairs across the whole text: spaces between them,
+    /// and a `0x` in front of a group, are for the eye and change nothing, so
+    /// `DEADBEEF`, `DE AD BE EF`, `0xDE 0xAD` and `D EADBEEF` are the same four
+    /// bytes, as the find bar has always taken them. `??` in place of a pair is
+    /// a byte that matches anything — `24 ?? 4D 49`, `24??4D` as well.
+    ///
+    /// A hole is a whole byte. A `?` paired with a digit (`2?`) would mask
+    /// half a byte, which the scan does not do, and is refused as
+    /// `partialByteMask` rather than read as something else; so is a lone `?`.
+    /// A pattern of holes alone matches everywhere and is refused as
+    /// `holesOnly`.
     public static func hex(_ text: String) throws -> MaskedPattern {
-        var bytes: [UInt8] = []
-        var wild: [Bool] = []
+        var symbols: [Character] = []
         for token in text.split(whereSeparator: { $0.isWhitespace }) {
             var rest = Substring(token)
             if rest.lowercased().hasPrefix("0x") { rest = rest.dropFirst(2) }
-            guard !rest.isEmpty, rest.count % 2 == 0 else { throw SearchError.invalidHexPattern }
-            while !rest.isEmpty {
-                let pair = rest.prefix(2)
-                rest = rest.dropFirst(2)
-                if pair == "??" {
-                    bytes.append(0)
-                    wild.append(true)
-                } else if let byte = UInt8(pair, radix: 16) {
-                    bytes.append(byte)
-                    wild.append(false)
-                } else {
-                    throw SearchError.invalidHexPattern
-                }
+            guard !rest.isEmpty,
+                  rest.allSatisfy({ $0.isHexDigit || $0 == "?" }) else { throw SearchError.invalidHexPattern }
+            symbols.append(contentsOf: rest)
+        }
+        // No digits at all is not a hex pattern, as the find bar has always said.
+        guard !symbols.isEmpty else { throw SearchError.invalidHexPattern }
+        guard symbols.count % 2 == 0 else {
+            throw symbols.contains("?") ? SearchError.partialByteMask : SearchError.invalidHexPattern
+        }
+        var bytes: [UInt8] = []
+        var wild: [Bool] = []
+        bytes.reserveCapacity(symbols.count / 2)
+        wild.reserveCapacity(symbols.count / 2)
+        var index = 0
+        while index < symbols.count {
+            let high = symbols[index], low = symbols[index + 1]
+            index += 2
+            switch (high == "?", low == "?") {
+            case (true, true):
+                bytes.append(0)
+                wild.append(true)
+            case (false, false):
+                guard let byte = UInt8(String([high, low]), radix: 16) else { throw SearchError.invalidHexPattern }
+                bytes.append(byte)
+                wild.append(false)
+            default:
+                throw SearchError.partialByteMask
             }
         }
-        guard !bytes.isEmpty else { throw SearchError.emptyPattern }
-        guard wild.contains(false) else { throw SearchError.invalidHexPattern }
+        guard wild.contains(false) else { throw SearchError.holesOnly }
         return MaskedPattern(bytes: bytes, isWild: wild, folding: .exact)
+    }
+
+    /// Whether any byte of the pattern is a hole.
+    public var hasHoles: Bool { isWild.contains(true) }
+
+    /// The pattern as a hex dump writes it: uppercase pairs, one space
+    /// between them, `??` for a hole — the one form a search shows back.
+    public var hexText: String {
+        zip(bytes, isWild).map { $1 ? "??" : String(format: "%02X", $0) }.joined(separator: " ")
     }
 
     /// `text` as ASCII bytes, any case of a letter with `ignoringCase`;

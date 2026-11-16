@@ -19,6 +19,11 @@ public enum PatternScan {
     /// Two patterns matching at one place — the text in ASCII and in UTF-16 —
     /// are both reported, ASCII's first: they are different matches. Throws
     /// `CancellationError` when `shouldCancel` says so between windows.
+    ///
+    /// After each window, `windowFinished` is told how far the scan has got —
+    /// every match starting below that offset has been visited — and
+    /// `progress` the same as a fraction of `range`: what an index built while
+    /// the scan runs needs to show what it already knows.
     public static func matches(
         of patterns: [MaskedPattern],
         size: UInt64,
@@ -27,13 +32,25 @@ public enum PatternScan {
         chunkSize: Int = defaultChunkSize,
         read: (_ offset: UInt64, _ length: Int) throws -> [UInt8],
         shouldCancel: () -> Bool = { false },
+        progress: (Double) -> Void = { _ in },
+        windowFinished: (_ scannedUpTo: UInt64) -> Void = { _ in },
         visit: (_ match: Range<UInt64>, _ pattern: Int) -> Bool
     ) throws {
         guard !patterns.isEmpty, patterns.allSatisfy({ !$0.bytes.isEmpty }) else { throw SearchError.emptyPattern }
         let bounds = range.map { $0.clamped(to: 0..<size) } ?? 0..<size
         let longest = patterns.map(\.count).max()!
         let shortest = patterns.map(\.count).min()!
-        guard UInt64(shortest) <= UInt64(bounds.count) else { return }
+        guard UInt64(shortest) <= UInt64(bounds.count) else {
+            windowFinished(bounds.upperBound)
+            progress(1)
+            return
+        }
+        // One window is done: every start below its end has been looked for.
+        func finished(_ upTo: UInt64) {
+            windowFinished(upTo)
+            let span = bounds.count
+            progress(span == 0 ? 1 : Double(upTo - bounds.lowerBound) / Double(span))
+        }
 
         // Where each pattern may next start, so the non-overlapping rule holds
         // across windows; the rule is per pattern, as each is its own search.
@@ -60,6 +77,7 @@ public enum PatternScan {
                     from = at + step
                 }
                 cursor += fresh
+                finished(cursor)
                 continue
             }
 
@@ -80,7 +98,63 @@ public enum PatternScan {
                 guard visit(start..<(start + UInt64(patterns[match.pattern].count)), match.pattern) else { return }
             }
             cursor += fresh
+            finished(cursor)
         }
+        if cursor < bounds.upperBound { finished(bounds.upperBound) }
+    }
+
+    /// The last match of `pattern` that starts below `anchor` and at or above
+    /// `lowerBound`, in `size` bytes `read` gives: Find Previous.
+    ///
+    /// A match that starts below the anchor and runs past it counts. That is
+    /// what makes Find Previous step through matches that overlap — a run of
+    /// `FF FF` is found one byte back at a time, as Find Next finds it one
+    /// byte on — where "the last match that *ends* before the anchor" would
+    /// skip the ones overlapping the match the reader stands on.
+    ///
+    /// Windows are read from the anchor back towards `lowerBound`, a chunk at
+    /// a time with the pattern's length less one more, so a match across the
+    /// edge of two windows is found. `progress` is the fraction of
+    /// `[lowerBound, anchor)` looked at.
+    public static func lastMatch(
+        of pattern: MaskedPattern,
+        size: UInt64,
+        before anchor: UInt64,
+        lowerBound: UInt64 = 0,
+        chunkSize: Int = defaultChunkSize,
+        read: (_ offset: UInt64, _ length: Int) throws -> [UInt8],
+        shouldCancel: () -> Bool = { false },
+        progress: (Double) -> Void = { _ in }
+    ) throws -> Range<UInt64>? {
+        guard !pattern.bytes.isEmpty else { throw SearchError.emptyPattern }
+        let count = UInt64(pattern.count)
+        guard count <= size else { return nil }
+        // No match can start after `size - count`.
+        let limit = min(anchor, size - count + 1)
+        guard limit > lowerBound else { progress(1); return nil }
+        let span = Double(limit - lowerBound)
+        var startsEnd = limit
+        while startsEnd > lowerBound {
+            if shouldCancel() { throw CancellationError() }
+            let windowStart = max(lowerBound, startsEnd > UInt64(chunkSize) ? startsEnd - UInt64(chunkSize) : 0)
+            let fresh = Int(startsEnd - windowStart)
+            let length = Int(min(UInt64(fresh) + count - 1, size - windowStart))
+            let window = try read(windowStart, length)
+            var last: Int?
+            var from = 0
+            while from < fresh, let at = firstMatch(of: pattern, in: window, from: from, below: fresh) {
+                last = at
+                from = at + 1
+            }
+            if let last {
+                progress(1)
+                let start = windowStart + UInt64(last)
+                return start..<(start + count)
+            }
+            startsEnd = windowStart
+            progress(Double(limit - startsEnd) / span)
+        }
+        return nil
     }
 
     /// The first place at or after `from`, starting below `below`, where

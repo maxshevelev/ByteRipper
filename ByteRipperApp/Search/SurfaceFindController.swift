@@ -287,12 +287,19 @@ extension BackgroundOperation: FindActivity {}
         }
     }
 
-    /// Where a search starts from: the caret, or the edge of the selection it
-    /// would otherwise find again (§11).
+    /// Where a search starts from: the caret, or the start of the selection —
+    /// one byte past it going forward, so the match the reader stands on is
+    /// not found again (§11).
+    ///
+    /// By the selection's *start* both ways, not its end going forward:
+    /// matches overlap (#33), and the next one can begin inside the match the
+    /// reader stands on — `FF FF` over a run of 0xFF is found a byte at a
+    /// time. Find Previous is the last match starting before the anchor
+    /// (`ByteFindContent`, `MatchSet.index(before:)`).
     private func searchAnchor(in pane: PaneViewModel, direction: SearchDirection) -> UInt64 {
         let selection = pane.hexSelection()
-        return selection.isEmpty ? pane.caretOffset
-            : direction == .forward ? selection.end : selection.start
+        guard !selection.isEmpty else { return pane.caretOffset }
+        return direction == .forward ? selection.start + 1 : selection.start
     }
 
     /// The attempt that found something is *the* search: the bar's popup says

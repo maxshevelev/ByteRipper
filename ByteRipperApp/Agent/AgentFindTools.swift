@@ -108,7 +108,8 @@ final class AgentFindTools {
                 return [Wanted(pattern: try MaskedPattern.hex(hex), encoding: "hex")]
             } catch {
                 throw AgentToolError("`hex` is not a byte pattern. Give pairs of hex digits and `??` for any byte, "
-                    + "e.g. \"24 ?? 4D 49\"; a pattern of `??` alone matches everywhere.")
+                    + "e.g. \"24 ?? 4D 49\". A hole is a whole byte — half a byte (`2?`) cannot be masked — "
+                    + "and a pattern of `??` alone matches everywhere.")
             }
         case (.some(let text), _):
             guard !text.isEmpty else { throw AgentToolError("`text` is empty.") }

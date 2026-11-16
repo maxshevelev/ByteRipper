@@ -69,7 +69,9 @@ public enum SmartSearch {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return false }
         let groups = trimmed.split(separator: " ", omittingEmptySubsequences: true)
-        guard groups.allSatisfy({ $0.allSatisfy(\.isHexDigit) }) else { return false }
+        // `??` is a byte of a hex search — `24 ?? 4D 49` is bytes with a hole
+        // in them, written the way it is written to be bytes.
+        guard groups.allSatisfy({ $0.allSatisfy { $0.isHexDigit || $0 == "?" } }) else { return false }
         if groups.count == 1 { return groups[0].count % 2 == 0 }
         return groups.allSatisfy { $0.count == 2 }
     }
@@ -108,11 +110,12 @@ public enum SmartSearch {
         // its usual place. The merge below keeps the first, which is the point
         // of putting it first.
         for encoding in order {
-            guard let pattern = try? SearchEngine.parsePattern(text, encoding: encoding),
+            guard let pattern = try? SearchEngine.parsePattern(text, encoding: encoding, allowingHoles: true),
                   !pattern.bytes.isEmpty else { continue }
             let folding = CaseFolding(encoding: encoding, caseSensitive: caseSensitive)
             if let existing = attempts.firstIndex(where: {
-                $0.pattern.bytes == pattern.bytes && $0.folding == folding
+                $0.pattern.bytes == pattern.bytes && $0.pattern.isWild == pattern.isWild
+                    && $0.folding == folding
             }) {
                 // An encoding already answered for is not answered for twice —
                 // `order` names the preferred one again in its usual place.

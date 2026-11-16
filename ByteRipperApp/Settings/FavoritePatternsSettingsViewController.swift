@@ -844,7 +844,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         case ColumnID.pattern:
             let entry = rows[sender.tag]
             guard text.isEmpty
-                    || (try? SearchEngine.parsePattern(text, encoding: entry.encoding)) != nil else {
+                    || (try? SearchEngine.parsePattern(text, encoding: entry.encoding, allowingHoles: true)) != nil else {
                 // Back to what it held: the same parse the bar makes said no, so
                 // this text is not a search and the list does not gain one.
                 sender.stringValue = entry.pattern
@@ -869,7 +869,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         // and is not hex, so the encoding is refused rather than the entry
         // quietly becoming unsearchable.
         guard entry.pattern.isEmpty
-                || (try? SearchEngine.parsePattern(entry.pattern, encoding: encoding)) != nil else {
+                || (try? SearchEngine.parsePattern(entry.pattern, encoding: encoding, allowingHoles: true)) != nil else {
             sender.selectItem(at: SearchEncoding.allCases.firstIndex(of: entry.encoding) ?? 0)
             show(message: Self.complaint(about: entry.pattern, as: encoding))
             return
