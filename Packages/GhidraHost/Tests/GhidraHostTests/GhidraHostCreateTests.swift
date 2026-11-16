@@ -154,6 +154,54 @@ final class GhidraHostLibraryTests: XCTestCase {
     /// A linked function that declines its entry is the module's from then
     /// on: what the review writes on it offers nothing to the entry, and the
     /// publish takes it as the module's own function (issue 22b4a577).
+    /// An owner left running by a server restarted on new sources is stopped
+    /// at the next call and a new one started from the jar of now: an old
+    /// owner would read, write and publish with the old code. Sources of its
+    /// own, so the jar is this test's and no live server's.
+    func testAnOwnerOfAnotherBuildIsReplaced() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostStaleOwnerTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let skill = directory.appendingPathComponent("skill", isDirectory: true)
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        let checkout = OwnerSources.checkout.scripts.deletingLastPathComponent()
+        for folder in ["owner", "scripts"] {
+            try FileManager.default.copyItem(at: checkout.appendingPathComponent(folder, isDirectory: true),
+                                             to: skill.appendingPathComponent(folder, isDirectory: true))
+        }
+        let sources = OwnerSources.directory(at: skill)
+        let java = try XCTUnwrap(sources.files.first)
+        try (try String(contentsOf: java, encoding: .utf8) + "\n// \(UUID().uuidString)\n")
+            .write(to: java, atomically: true, encoding: .utf8)
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   sources: sources, idle: 300, holder: "GhidraHostStaleOwnerTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func build(_ record: OwnerRecord) async throws -> Int? {
+            let hello = try await GhidraHost.call(record.port, "GET", "/v1/hello", timeout: 30)
+            return (try JSONSerialization.jsonObject(with: hello.data) as? [String: Any])?["build"] as? Int
+        }
+        let first = try await host.owner(of: module)
+        let jar = try OwnerBuild.jar(for: try await host.ghidra(), sources: sources)
+        let built = try XCTUnwrap(OwnerBuild.modified(jar))
+        let firstBuild = try await build(first)
+        XCTAssertEqual(firstBuild, Int(built.timeIntervalSince1970))
+        // The jar of now is another build than the one the owner runs.
+        try FileManager.default.setAttributes([.modificationDate: built.addingTimeInterval(120)], ofItemAtPath: jar.path)
+        let second = try await host.owner(of: module)
+        XCTAssertNotEqual(second.pid, first.pid, "the owner of the old build still serves")
+        XCTAssertFalse(Subprocess.isAlive(first.pid), "the old owner still runs")
+        let secondBuild = try await build(second)
+        XCTAssertEqual(secondBuild, Int(built.timeIntervalSince1970) + 120)
+    }
+
     func testADeclinedEntryLeavesItsFunctionToTheModule() async throws {
         guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
               paths.count == 2 else {
