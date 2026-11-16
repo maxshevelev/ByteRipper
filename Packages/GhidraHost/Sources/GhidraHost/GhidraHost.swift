@@ -775,8 +775,13 @@ public actor GhidraHost {
                 guard let id, accepted.contains(id), let held = index.entries[id] else { return nil }
                 return ["address": proposal.address, "id": id, "version": held.version, "kind": proposal.kind]
             }
-            guard let id = index.bodies[proposal.body.key] ?? proposal.variantOf,
-                  accepted.contains(id), index.bodies[proposal.body.key] == id, let held = index.entries[id] else { return nil }
+            // Of the entries holding the body — several when they call other
+            // functions — the one this publish added, or the one it was made on.
+            let holders = index.holders(of: proposal.body.key)
+            let added = result.added.first { $0.name == proposal.name }?.id
+            let id = [added, proposal.variantOf, proposal.basedOn].compactMap { $0 }.first(where: holders.contains)
+                ?? (holders.count == 1 ? holders.first : nil)
+            guard let id, accepted.contains(id), let held = index.entries[id] else { return nil }
             return ["address": proposal.address, "id": id, "version": held.version, "kind": proposal.kind]
         }
     }

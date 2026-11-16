@@ -66,7 +66,11 @@ public enum LibraryView {
                         referenceBytes: String?, in index: LibraryIndex) -> String? {
         guard !external, !thunk else { return nil }
         if let body, index.takenOut?[body] != nil { return nil }
-        let id = body.flatMap { index.bodies[$0] } ?? mark.flatMap { index.entries[$0] == nil ? nil : $0 }
+        // Of the entries holding the body, the one its mark names: the same
+        // bytes can be several entries, told apart by what they call.
+        let holders = body.map { index.holders(of: $0) } ?? []
+        let id = mark.flatMap { holders.contains($0) ? $0 : nil } ?? body.flatMap { index.bodies[$0] }
+            ?? mark.flatMap { index.entries[$0] == nil ? nil : $0 }
         guard let id else { return nil }
         if let body, index.bytesDiffer(id: id, body: body, referenceBytes: referenceBytes) { return nil }
         return id

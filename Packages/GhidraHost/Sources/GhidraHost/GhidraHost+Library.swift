@@ -268,7 +268,12 @@ extension GhidraHost {
                 }
                 return true
             }
-            if let id = match.exact, let held = index.entries[id] {
+            // Of the entries holding the body, the one the function is marked
+            // with: the same bytes can be several entries, told apart by what
+            // they call (`calleesChecked` picks for an unmarked one).
+            let exact = match.mark.map(\.id).flatMap { index.holders(of: match.key).contains($0) ? $0 : nil }
+                ?? match.exact
+            if let id = exact, let held = index.entries[id] {
                 // One key, other data: another function, whatever it was before.
                 if index.bytesDiffer(id: id, body: match.key, referenceBytes: match.referenceBytes) {
                     plan.candidates.append(step(id, held, mode: nil, state: "reference_bytes",
@@ -757,19 +762,44 @@ extension GhidraHost {
             guard let match = byAddress[at] else { return nil }
             return match.exact ?? match.mark?.id
         }
+        // The function's instructions, as many as the code of `id` holds.
+        func listing(_ address: String, like code: Data) async -> [[String: Any]]? {
+            let count = (try? JSONSerialization.jsonObject(with: code) as? [String: Any])?["instructions"] as? [Any]
+            guard let listed = try? await Self.call(port, "GET", "/v1/disassembly/\(address)?limit=\(count?.count ?? 0)").data,
+                  let read = try? JSONSerialization.jsonObject(with: listed) as? [String: Any] else { return nil }
+            return read["instructions"] as? [[String: Any]]
+        }
+        // Another entry holding the body whose calls the function makes: the
+        // same bytes calling other functions are another entry (issue df8c0e9c).
+        func calledLike(_ step: LibraryStep, _ match: LibraryMatch) async -> LibraryStep? {
+            var codes: [(id: String, code: Data)] = []
+            for other in index.holders(of: match.key)
+            where other != step.id && !(match.declined ?? []).contains(other) {
+                guard let digest = index.code(ofBody: match.key, entry: other),
+                      let code = try? await writer.readObject(digest) else { continue }
+                codes.append((other, code))
+            }
+            guard let first = codes.first, let instructions = await listing(step.address, like: first.code),
+                  let other = Self.calledLike(codes, instructions: instructions, entryAt: entryOf),
+                  let held = index.entries[other] else { return nil }
+            return LibraryStep(address: step.address, name: step.name, entryName: held.name, id: other,
+                               version: held.version, mode: "link", state: match.named ? "named" : "unnamed")
+        }
         var refused: [String: LibraryStep] = [:]
+        var linking: [String: LibraryStep] = [:]
         for step in plan.toApply + plan.applied + plan.edited {
-            guard refused[step.address] == nil, let at = CodeAddress(hex: step.address),
+            guard refused[step.address] == nil, linking[step.address] == nil, let at = CodeAddress(hex: step.address),
                   let match = byAddress[at.value],
                   let digest = index.code(ofBody: match.key, entry: step.id),
                   let code = try? await writer.readObject(digest) else { continue }
             let callees = LibraryCode.callees(code: code)
             guard !callees.isEmpty else { continue }
-            let count = (try? JSONSerialization.jsonObject(with: code) as? [String: Any])?["instructions"] as? [Any]
-            let listed = try? await Self.call(port, "GET", "/v1/disassembly/\(step.address)?limit=\(count?.count ?? 0)").data
-            guard let listed, let read = try? JSONSerialization.jsonObject(with: listed) as? [String: Any],
-                  let instructions = read["instructions"] as? [[String: Any]],
+            guard let instructions = await listing(step.address, like: code),
                   let differs = Self.calleeDiffers(code: code, instructions: instructions, entryAt: entryOf) else { continue }
+            if match.mark?.id != step.id, let other = await calledLike(step, match) {
+                linking[step.address] = other
+                continue
+            }
             let theirs = byAddress[differs.at]?.name ?? differs.place
             let wanted = index.entries[differs.key]?.name ?? differs.key
             var moved = step
@@ -799,13 +829,33 @@ extension GhidraHost {
                 + "and stays the module's"
             calling[step.address] = moved
         }
-        guard !refused.isEmpty || !calling.isEmpty else { return plan }
-        plan.toApply.removeAll { refused[$0.address] != nil }
-        plan.applied.removeAll { refused[$0.address] != nil }
-        plan.edited.removeAll { refused[$0.address] != nil }
+        // A function that declined the first entry of its body may be another's.
+        for step in plan.declined where linking[step.address] == nil {
+            guard let at = CodeAddress(hex: step.address), let match = byAddress[at.value], match.mark == nil,
+                  index.holders(of: match.key).count > 1, let other = await calledLike(step, match) else { continue }
+            linking[step.address] = other
+        }
+        guard !refused.isEmpty || !calling.isEmpty || !linking.isEmpty else { return plan }
+        let moved = Set(refused.keys).union(linking.keys)
+        plan.toApply.removeAll { moved.contains($0.address) }
+        plan.applied.removeAll { moved.contains($0.address) }
+        plan.edited.removeAll { moved.contains($0.address) }
+        plan.declined.removeAll { linking[$0.address] != nil }
+        plan.toApply += linking.values.sorted { $0.address < $1.address }
         plan.candidates = plan.candidates.map { calling[$0.address] ?? $0 }
         plan.candidates += refused.values.sorted { $0.address < $1.address }
         return plan
+    }
+
+    /// The first entry of `codes` — entries holding one body — whose every
+    /// callee is what the function, as its module lists `instructions`, calls
+    /// there; nil when none lines up.
+    static func calledLike(_ codes: [(id: String, code: Data)], instructions: [[String: Any]],
+                           entryAt: (UInt64) -> String?) -> String? {
+        codes.first { candidate in
+            LibraryCode.targets(code: candidate.code, instructions: instructions) != nil
+                && calleeDiffers(code: candidate.code, instructions: instructions, entryAt: entryAt) == nil
+        }?.id
     }
 
     /// The first of `differences` that lies in a call or a jump — a
@@ -896,8 +946,8 @@ extension GhidraHost {
         guard !foreign.isEmpty else { return proposals }
         return proposals.filter { proposal in
             if proposal.linked { return true }
-            let named = [proposal.body.isShort ? nil : index.bodies[proposal.body.key],
-                         proposal.variantOf, proposal.basedOn].compactMap { $0 }
+            let named = (proposal.body.isShort ? [] : index.holders(of: proposal.body.key))
+                + [proposal.variantOf, proposal.basedOn].compactMap { $0 }
             return !named.contains(where: foreign.contains)
         }
     }
@@ -949,7 +999,7 @@ extension GhidraHost {
         let wanted = Set(conflicts.map(\.id))
         var found: [String: [[String: String]]] = [:]
         for proposal in offered {
-            let candidates = [index.bodies[proposal.body.key], proposal.variantOf,
+            let candidates = index.holders(of: proposal.body.key) + [proposal.variantOf,
                               proposal.body.isShort ? proposal.basedOn : nil].compactMap { $0 }
             guard let id = candidates.first(where: wanted.contains), found[id] == nil,
                   let held = index.entries[id] else { continue }

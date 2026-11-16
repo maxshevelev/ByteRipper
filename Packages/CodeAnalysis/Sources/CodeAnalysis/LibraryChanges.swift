@@ -77,10 +77,14 @@ public struct LibraryCallee: Codable, Equatable, Sendable {
     public var name: String
     /// The callee's body key; nil for one Function ID cannot hash, or an external.
     public var body: String?
+    /// The registry entry the callee is linked to, by its mark; nil for one
+    /// that is not, and from an owner that does not say.
+    public var entry: String?
 
-    public init(name: String, body: String?) {
+    public init(name: String, body: String?, entry: String? = nil) {
         self.name = name
         self.body = body
+        self.entry = entry
     }
 }
 
@@ -117,6 +121,22 @@ public struct LibraryChange: Codable, Equatable, Sendable {
 }
 
 extension LibraryProposal {
+    /// What the body calls, as registry numbers where the registry holds the
+    /// callee — the entry its mark names, or the one entry holding its body —
+    /// and as its body key where it does not yet: sorted, each once. Nil from
+    /// an owner that does not list callees.
+    public func calls(in index: LibraryIndex) -> [String]? {
+        guard let callees else { return nil }
+        let numbers = callees.map { callee -> String in
+            if let id = callee.entry, index.entries[id] != nil { return id }
+            guard let key = callee.body else { return "name:" + callee.name }
+            if index.entries[key] != nil { return key }
+            let holders = index.holders(of: key)
+            return holders.count == 1 ? holders[0] : key
+        }
+        return Array(Set(numbers)).sorted()
+    }
+
     /// The new bodies of one publish that can enter together: each one's
     /// callees are held or are among them. So a function and its callee enter in
     /// one publish, and a pair that call each other enter as a pair: neither
@@ -125,7 +145,7 @@ extension LibraryProposal {
     static func admitted(_ proposals: [LibraryProposal], in index: LibraryIndex) -> Set<String> {
         let kinds = Dictionary(proposals.map { ($0.body.key, $0.kind) }, uniquingKeysWith: { first, _ in first })
         var admitted = Set(proposals.filter { proposal in
-            index.bodies[proposal.body.key] == nil
+            index.holders(of: proposal.body.key).isEmpty
                 && !index.entries.values.contains { $0.name == proposal.name }
                 && proposal.refusal(in: index, admitted: Set(proposals.map(\.body.key)), admittedKinds: kinds) == nil
         }.map(\.body.key))
@@ -154,6 +174,7 @@ extension LibraryProposal {
             return .init(address: address, name: name, body: body.key, why: "library")
         }
         func held(_ callee: LibraryCallee) -> String? {
+            if let id = callee.entry, let entry = index.entries[id] { return entry.kind }
             guard let key = callee.body else { return nil }
             if key == body.key { return kind }
             let entering = admitted.contains(key) ? admittedKinds[key] ?? kind : nil
@@ -212,6 +233,15 @@ extension ContentStore {
                 throw CodeAnalysisError.analysisMismatch("the entry \(id) has no body \(body)")
             }
             let leaving = entry.variants.filter { change.body == nil || $0.body.key == change.body }
+            // What was taken out is kept by its body key, and would take every
+            // function of that key out: so not a body other entries hold too,
+            // calling other functions.
+            if let shared = leaving.first(where: { index.holders(of: $0.body.key).count > 1 }) {
+                throw CodeAnalysisError.analysisMismatch(
+                    "the body \(shared.body.key) is held by \(index.holders(of: shared.body.key).joined(separator: ", ")), "
+                    + "entries told apart by what they call; taking one of them out is not supported yet: "
+                    + "report it with ghidra_report_issue")
+            }
             let now = Timestamps.now()
             entry.version += 1
             var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
@@ -224,7 +254,7 @@ extension ContentStore {
                 out[key] = LibraryTakenOut(id: id, name: entry.name, kind: entry.kind, role: entry.role,
                                            version: entry.version, entry: entry.entry, variant: variant,
                                            source: entry.source, reason: why, by: by, at: now)
-                index.bodies[key] = nil
+                index.release(key, from: id)
             }
             index.takenOut = out
             entry.variants.removeAll { variant in leaving.contains { $0.body == variant.body } }
@@ -310,7 +340,7 @@ extension ContentStore {
             }
             entry.version += 1
             index.entries[out.id] = entry
-            index.bodies[body] = out.id
+            index.hold(body, by: out.id)
             index.takenOut?[body] = nil
             var history = try libraryHistory(id: out.id) ?? LibraryHistory(id: out.id, versions: [])
             history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
@@ -385,7 +415,8 @@ extension ContentStore {
             _ = try putObject(data)
             index.entries[id] = entry
             index.entries[key] = new
-            index.bodies[key] = key
+            index.release(key, from: id)
+            index.hold(key, by: key)
             // The new history first: a stop between the writes leaves a history nothing names, never a loss.
             try atomicWrite(try encoder.encode(newHistory), to: libraryHistoryURL(key))
             try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))

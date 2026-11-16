@@ -362,6 +362,24 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
                                 exact: exact, near: near, mark: mark, declined: declined)
     }
 
+    /// The same bytes calling another function are another entry (issue
+    /// df8c0e9c): a function marked with the second entry holding its body is
+    /// that entry's, not a link to the first.
+    func testAFunctionMarkedWithAnotherHolderOfItsBodyIsThatEntrys() {
+        var index = self.index
+        let zeroMem = LibraryIndex.calleeID(body: setMem.key, callees: ["d-zeromem"])
+        index.entries[zeroMem] = LibraryIndexEntry(
+            version: 1, entry: SHA256Digest(data: Data("ZeroMem".utf8)), name: "ZeroMem", kind: "edk2",
+            source: LibrarySource(module: module, address: "0x3400", rev: 1, by: "agent"),
+            variants: [LibraryVariant(body: setMem, module: module, callees: ["d-zeromem"])])
+        index.hold(setMem.key, by: zeroMem)
+        var marked = match("0x3400", exact: setMem.key, mark: .init(id: zeroMem, version: 1, edited: false))
+        marked.key = setMem.key
+        let plan = GhidraHost.libraryPlan([marked], index: index, hashed: 1, comparisons: [:])
+        XCTAssertEqual(plan.applied.map(\.id), [zeroMem])
+        XCTAssertEqual(plan.toApply.map(\.id), [], "no link to the first entry of the body")
+    }
+
     func testTheKeysAreEveryBodyAndEveryShape() {
         let keys = GhidraHost.libraryKeys(index)
         XCTAssertEqual(keys.bodies[setMem.key], setMem.key)
@@ -493,6 +511,16 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
             mode: nil, state: "callee_differs", codes: nil, differences: nil, why: "it calls InternalMemZeroMem_X64")])
         XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x3400", id: nil, reason: "same bytes"),
                              "no reason links another function")
+        // Another entry holding the body, calling what this function calls, is
+        // the one it links to (issue df8c0e9c).
+        let zeroCode = try XCTUnwrap(LibraryCode.build(function: wrapper(at: 0xDA40, jumpingTo: 0x1060),
+                                                       number: { $0 == 0x1060 ? "d-zeromem" : nil },
+                                                       inImage: { _ in false }, label: { _ in nil }))
+        let holders = [(id: "4-setmem", code: code), (id: "4-setmem-zero", code: zeroCode)]
+        XCTAssertEqual(GhidraHost.calledLike(holders, instructions: other, entryAt: { $0 == 0x2E0 ? "d-zeromem" : nil }),
+                       "4-setmem-zero")
+        XCTAssertNil(GhidraHost.calledLike(holders, instructions: other, entryAt: { _ in nil }),
+                     "a callee the registry does not hold is no holder's")
     }
 
     /// A constant that differs in a call — another slot of EFI_PEI_SERVICES —

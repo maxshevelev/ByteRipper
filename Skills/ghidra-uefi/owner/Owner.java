@@ -3278,7 +3278,7 @@ public class Owner {
                 item.addProperty("based_on", mark.get("id").getAsString());
                 item.add("base", mark.get("version"));
             }
-            if (mark != null && hash.getCodeUnitSize() >= 4 && !mark.get("id").getAsString().equals(bodyKey(hash))) {
+            if (mark != null && hash.getCodeUnitSize() >= 4 && !entryBodyKey(mark.get("id").getAsString()).equals(bodyKey(hash))) {
                 item.addProperty("variant_of", mark.get("id").getAsString());
                 if (mark.has("codes")) item.add("codes", mark.get("codes"));
             }
@@ -3372,9 +3372,13 @@ public class Owner {
             callee.addProperty("name", target.getName());
             ghidra.feature.fid.hash.FidHashQuad hash = target.isExternal() ? null : ExportCode.bodyHash(target);
             // A short body's bytes name no entry: the mark does.
-            JsonObject calleeMark = hash != null && hash.getCodeUnitSize() < 4 ? libraryMark(target) : null;
+            JsonObject linked = target.isExternal() ? null : libraryMark(target);
+            JsonObject calleeMark = hash != null && hash.getCodeUnitSize() < 4 ? linked : null;
             if (calleeMark != null) callee.addProperty("body", calleeMark.get("id").getAsString());
             else if (hash != null) callee.addProperty("body", bodyKey(hash));
+            // The entry it is linked to: the same bytes can be several entries,
+            // told apart by what they call.
+            if (linked != null) callee.addProperty("entry", linked.get("id").getAsString());
             callees.add(callee);
         }
         item.add("callees", callees);
@@ -3515,6 +3519,16 @@ public class Owner {
     }
 
     /** `<size>-<full>-<specific>`, as the store keys a body (`LibraryBody.key`). */
+    /**
+     * The body key an entry id is made of: the id, or the key it adds a digest
+     * of its callees to — an entry holding bytes another entry holds, calling
+     * other functions.
+     */
+    static String entryBodyKey(String id) {
+        String[] parts = id.split("-");
+        return parts.length > 3 ? parts[0] + "-" + parts[1] + "-" + parts[2] : id;
+    }
+
     private static String bodyKey(ghidra.feature.fid.hash.FidHashQuad hash) {
         return Integer.toHexString(hash.getCodeUnitSize()) + "-" + String.format("%016x", hash.getFullHash())
             + "-" + String.format("%016x", hash.getSpecificHash());

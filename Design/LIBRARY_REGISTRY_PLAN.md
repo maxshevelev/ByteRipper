@@ -88,6 +88,21 @@ review documents.
   callee is `callee_differs` in `ghidra_library`, never linked by an apply,
   and stays the module's (issue dda320fc). The store's `ModuleFormat.stored`
   makes the same check, so an apply that skipped it linked nothing.
+  Calls written in the code are part of the body (decision 2026-11-16, issue
+  df8c0e9c): the same bytes calling another function are another function,
+  and another entry. Each body's variant records what it calls (`callees`,
+  the registry numbers), and a publish takes a body to the entry holding its
+  key that calls what it calls. One holding the key and calling other
+  functions makes a new entry, whose id is the key plus a digest of its
+  callees (`LibraryIndex.calleeID`). `bodies` keeps the key's first entry;
+  `same_body` lists the others. A function reads through the entry its mark
+  names, and the plan links an unmarked one to the holder whose code its
+  calls line up with. A callee is a registry number: the entry its mark
+  names (the owner lists it as `entry`), or the one entry holding its body.
+  An entry from before `callees` were recorded says them through its code,
+  or decides by its key alone. Taking out a body that several entries hold is
+  refused: what was taken out is kept by body key, and would take the others
+  out with it.
 - **An entry is the review of that body**: name, kind, signature, the
   parameters' and locals' names and types by storage, the plate, and step
   comments by offset from the entry; the evidence line the skill requires; and

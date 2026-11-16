@@ -90,10 +90,16 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     public var referenceBytes: String?
     /// The body's code (`LibraryCode`): the one place its instructions are kept.
     public var code: SHA256Digest?
+    /// What the body calls, written in its code: the registry numbers of its
+    /// callees, sorted (`LibraryProposal.calls`). The same bytes calling
+    /// another function are another function. Nil from before this was
+    /// recorded; the code says it then, where the registry has the code.
+    public var callees: [String]?
 
     public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil, referenceBytes: String? = nil,
-                code: SHA256Digest? = nil) {
+                code: SHA256Digest? = nil, callees: [String]? = nil) {
         self.code = code
+        self.callees = callees
         self.body = body
         self.module = module
         self.codes = codes
@@ -101,7 +107,7 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case body, module, codes, code
+        case body, module, codes, code, callees
         case referenceBytes = "reference_bytes"
     }
 }
@@ -154,6 +160,12 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public var libraries: [String: LibraryDefinition]?
     public var entries: [String: LibraryIndexEntry] = [:]
     public var bodies: [String: String] = [:]
+    /// The other entries holding a body `bodies` names, each calling other
+    /// functions than the first: the body key leaves out where a call goes,
+    /// and the same bytes calling another function are another function
+    /// (issue df8c0e9c). Their ids are the key and a digest of what they
+    /// call (`calleeID`). Nil while there are none.
+    public var sameBody: [String: [String]]?
     /// Bodies given back to their modules, by key. Nil while there are none.
     public var takenOut: [String: LibraryTakenOut]?
     /// Where a body's constant is defined in its library's source, by key.
@@ -200,6 +212,58 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
         case schema, entries, bodies, sources, libraries
         case takenOut = "taken_out"
         case sourceChanges = "source_changes"
+        case sameBody = "same_body"
+    }
+
+    /// Every entry holding a body: the first, then those calling other functions.
+    public func holders(of key: String) -> [String] {
+        (bodies[key].map { [$0] } ?? []) + (sameBody?[key] ?? [])
+    }
+
+    /// Records that entry `id` holds the body `key`.
+    public mutating func hold(_ key: String, by id: String) {
+        guard let first = bodies[key] else { bodies[key] = id; return }
+        guard first != id, !(sameBody?[key] ?? []).contains(id) else { return }
+        var others = sameBody ?? [:]
+        others[key, default: []].append(id)
+        sameBody = others
+    }
+
+    /// Records that entry `id` no longer holds the body `key`: another entry
+    /// holding it becomes the first.
+    public mutating func release(_ key: String, from id: String) {
+        var others = sameBody?[key] ?? []
+        if bodies[key] == id {
+            bodies[key] = others.isEmpty ? nil : others.removeFirst()
+        } else {
+            others.removeAll { $0 == id }
+        }
+        var all = sameBody ?? [:]
+        all[key] = others.isEmpty ? nil : others
+        sameBody = all.isEmpty ? nil : all
+    }
+
+    /// The id of an entry holding a body another entry holds already: the key,
+    /// and a digest of what this one calls.
+    public static func calleeID(body key: String, callees: [String]) -> String {
+        let digest = SHA256Digest(data: Data(callees.sorted().joined(separator: ",").utf8)).hex
+        return "\(key)-\(digest.prefix(8))"
+    }
+
+    /// The body key an entry id is made of: the id itself, or the key it adds
+    /// a callee digest to.
+    public static func bodyKey(ofEntry id: String) -> String {
+        id.split(separator: "-").prefix(3).joined(separator: "-")
+    }
+
+    /// What entry `id`'s body `key` calls, as its variant records it or its
+    /// code says; nil when neither does.
+    public func callees(ofEntry id: String, body key: String, object: (SHA256Digest) throws -> Data) -> [String]? {
+        guard let variant = entries[id]?.variants.first(where: { $0.body.key == key }) ?? entries[id]?.variants.first
+        else { return nil }
+        if let callees = variant.callees { return callees }
+        guard let code = variant.code, let data = try? object(code) else { return nil }
+        return LibraryCode.callees(code: data).sorted()
     }
 
     /// The entry a body belongs to.
@@ -1033,9 +1097,26 @@ extension ContentStore {
                     proposal.variantOf = nil
                 }
                 let source = LibrarySource(module: module, address: proposal.address, rev: rev, by: by)
+                // The entry this body is: of those holding its key, the one
+                // calling what it calls. The same bytes calling another function
+                // are another function (issue df8c0e9c), so a body none of them
+                // calls like is a new entry. An entry that does not say what it
+                // calls, or a proposal that does not, decides as the key alone.
+                let calls = proposal.calls(in: index)
+                func callsAgree(_ id: String) -> Bool {
+                    guard let calls, let theirs = index.callees(ofEntry: id, body: proposal.body.key, object: object)
+                    else { return true }
+                    return theirs == calls
+                }
+                func holder() -> (id: String, entry: LibraryIndexEntry)? {
+                    for id in index.holders(of: proposal.body.key) where callsAgree(id) {
+                        if let entry = index.entries[id] { return (id, entry) }
+                    }
+                    return nil
+                }
                 // Only a new body is judged here: what the registry already
                 // holds is put in order by a review, entry by entry.
-                if index.entry(for: proposal.body) == nil, let refusal = proposal.refusal(in: index, admitted: admitted, admittedKinds: Dictionary(proposals.map { ($0.body.key, $0.kind) }, uniquingKeysWith: { first, _ in first })) {
+                if holder() == nil, let refusal = proposal.refusal(in: index, admitted: admitted, admittedKinds: Dictionary(proposals.map { ($0.body.key, $0.kind) }, uniquingKeysWith: { first, _ in first })) {
                     result.notLibrary = (result.notLibrary ?? []) + [refusal]
                     continue
                 }
@@ -1043,15 +1124,15 @@ extension ContentStore {
                 // is the entry's and the body differs only in its constants:
                 // one review, another body. Another shape is other code — a
                 // function cut again since it took the entry — never a variant.
-                if index.entry(for: proposal.body) == nil, let id = proposal.variantOf,
+                if holder() == nil, let id = proposal.variantOf, callsAgree(id),
                    var held = index.entries[id] {
                     if proposal.body.shape == held.variants.first?.body.shape,
                        LibraryProposal.sameReview(try object(held.entry), proposal.entry) {
                         held.variants.append(LibraryVariant(body: proposal.body, module: module,
                                                             codes: proposal.codes,
-                                                            referenceBytes: proposal.referenceBytes))
+                                                            referenceBytes: proposal.referenceBytes, callees: calls))
                         index.entries[id] = held
-                        index.bodies[proposal.body.key] = id
+                        index.hold(proposal.body.key, by: id)
                         let joined = "the body \(proposal.body.key) joins the entry as a variant"
                         result.variants = (result.variants ?? []) + [.init(
                             id: id, name: held.name, version: held.version, module: module, reason: joined)]
@@ -1071,10 +1152,10 @@ extension ContentStore {
                         conflicting.insert(id)
                         moving.insert(id)
                         let heldObject = try object(held.entry)
-                        for old in held.variants { index.bodies[old.body.key] = nil }
+                        for old in held.variants { index.release(old.body.key, from: id) }
                         held.variants = [LibraryVariant(body: proposal.body, module: module,
-                                                        referenceBytes: proposal.referenceBytes)]
-                        index.bodies[proposal.body.key] = id
+                                                        referenceBytes: proposal.referenceBytes, callees: calls)]
+                        index.hold(proposal.body.key, by: id)
                         held.version += 1
                         held.entry = digest
                         held.name = proposal.name
@@ -1114,17 +1195,20 @@ extension ContentStore {
                     return .init(address: proposal.address, name: proposal.name, body: proposal.body.key,
                                  heldBy: other, heldVersion: entry.version)
                 }
-                guard let (id, found) = index.entry(for: proposal.body) else {
+                guard let (id, found) = holder() else {
                     if let conflict = namedOtherwise(than: nil) {
                         result.nameConflicts = (result.nameConflicts ?? []) + [conflict]
                         continue
                     }
-                    let id = proposal.body.key
+                    // A key another entry holds, calling other functions: an id of its own.
+                    let id = index.holders(of: proposal.body.key).isEmpty && index.entries[proposal.body.key] == nil
+                        ? proposal.body.key : LibraryIndex.calleeID(body: proposal.body.key, callees: calls ?? [])
                     index.entries[id] = LibraryIndexEntry(
                         version: 1, entry: digest, name: proposal.name, kind: proposal.kind, source: source,
                         variants: [LibraryVariant(body: proposal.body, module: module,
-                                                  referenceBytes: proposal.referenceBytes)], role: proposal.role)
-                    index.bodies[proposal.body.key] = id
+                                                  referenceBytes: proposal.referenceBytes, callees: calls)],
+                        role: proposal.role)
+                    index.hold(proposal.body.key, by: id)
                     histories[id] = LibraryHistory(id: id, versions: [
                         LibraryVersion(version: 1, entry: digest, source: source, reason: nil, recordedAt: now)
                     ])
@@ -1399,7 +1483,10 @@ extension ContentStore {
         var ids: Set<String> = []
         for proposal in proposals {
             ids.insert(proposal.body.key)
-            if let held = index.bodies[proposal.body.key] { ids.insert(held) }
+            ids.formUnion(index.holders(of: proposal.body.key))
+            if let calls = proposal.calls(in: index), !index.holders(of: proposal.body.key).isEmpty {
+                ids.insert(LibraryIndex.calleeID(body: proposal.body.key, callees: calls))
+            }
             if let variantOf = proposal.variantOf { ids.insert(variantOf) }
             if proposal.body.isShort, let based = proposal.basedOn { ids.insert(based) }
         }

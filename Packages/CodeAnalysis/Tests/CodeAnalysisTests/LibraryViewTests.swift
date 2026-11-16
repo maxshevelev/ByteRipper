@@ -262,6 +262,58 @@ final class LibraryViewTests: XCTestCase {
         ])
     }
 
+    /// The same bytes calling another function are another function (issue
+    /// df8c0e9c): a ZeroMem wrapper has SetMem's body key, since the key leaves
+    /// out where a call goes, and is an entry of its own beside it.
+    func testTheSameBodyCallingAnotherFunctionIsAnotherEntry() throws {
+        let setMemCore = LibraryBody(size: 0x30, full: "1111111111111111", specific: "2222222222222222")
+        let zeroMemCore = LibraryBody(size: 0x31, full: "3333333333333333", specific: "4444444444444444")
+        XCTAssertEqual(try offerBody(setMemCore, "InternalMemSetMem").added.count, 1)
+        XCTAssertEqual(try offerBody(zeroMemCore, "InternalMemZeroMem").added.count, 1)
+        let wrapper = LibraryBody(size: 0x14, full: "5555555555555555", specific: "6666666666666666")
+        let callsSetMem = [LibraryCallee(name: "InternalMemSetMem", body: setMemCore.key)]
+        let callsZeroMem = [LibraryCallee(name: "InternalMemZeroMem", body: zeroMemCore.key)]
+        XCTAssertEqual(try offerBody(wrapper, "SetMem", callees: callsSetMem).added.map(\.id), [wrapper.key])
+
+        let zeroMem = try offerBody(wrapper, "ZeroMem", callees: callsZeroMem)
+        XCTAssertEqual(zeroMem.conflicts.map(\.id), [], "another callee is no edit of SetMem")
+        let id = LibraryIndex.calleeID(body: wrapper.key, callees: [zeroMemCore.key])
+        XCTAssertNotEqual(id, wrapper.key)
+        XCTAssertEqual(zeroMem.added.map(\.id), [id])
+        XCTAssertEqual(zeroMem.added.map(\.name), ["ZeroMem"])
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.holders(of: wrapper.key), [wrapper.key, id])
+        XCTAssertEqual(index.entries[wrapper.key]?.name, "SetMem", "the first entry is untouched")
+        XCTAssertEqual(index.entries[wrapper.key]?.version, 1)
+        XCTAssertEqual(index.entries[id]?.variants.first?.callees, [zeroMemCore.key])
+        XCTAssertEqual(LibraryIndex.bodyKey(ofEntry: id), wrapper.key)
+
+        // Each publishes again as its own entry, unchanged.
+        XCTAssertEqual(try offerBody(wrapper, "ZeroMem", callees: callsZeroMem).unchanged.map(\.id), [id])
+        XCTAssertEqual(try offerBody(wrapper, "SetMem", callees: callsSetMem).unchanged.map(\.id), [wrapper.key])
+        // A third callee is a third entry; the callee digest keeps their ids apart.
+        let other = try offerBody(wrapper, "FillMem", callees: [LibraryCallee(name: "SetMem", body: wrapper.key,
+                                                                               entry: wrapper.key)])
+        XCTAssertEqual(other.added.count, 1)
+        XCTAssertEqual(try store.libraryIndex().holders(of: wrapper.key).count, 3)
+
+        // A function reads through the entry its mark names.
+        func read(_ mark: String?) -> String? {
+            LibraryView.entryID(body: wrapper.key, mark: mark, external: false, thunk: false, referenceBytes: nil,
+                                in: index)
+        }
+        XCTAssertEqual(read(id), id)
+        XCTAssertEqual(read(wrapper.key), wrapper.key)
+        XCTAssertEqual(read(nil), wrapper.key)
+
+        // What was taken out is kept by body key: one of several is refused, not
+        // the others taken out with it.
+        XCTAssertThrowsError(try store.changeLibrary(.init(action: .takeOut, id: id, reason: "test"), by: "agent")) {
+            XCTAssertTrue("\($0)".contains("told apart by what they call"), "\($0)")
+        }
+        XCTAssertNil(try store.libraryIndex().takenOut)
+    }
+
     /// The approved rule at the door: a new body with a data reference needs a
     /// citation, and a new body's callees must all be in the registry already.
     func testABodyThatDependsOnAModuleIsNotTaken() throws {
