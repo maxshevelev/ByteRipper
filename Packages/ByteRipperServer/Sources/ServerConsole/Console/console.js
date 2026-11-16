@@ -917,7 +917,8 @@
     const closedLeases = h("div", {});
     const agents = card("Local agents", "connections to the local MCP socket, one row each");
     const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
-    const root = h("div", { class: "stack" }, modules.root, closedLeases, agents.root, clients.root);
+    const events = eventLog();
+    const root = h("div", { class: "stack" }, modules.root, closedLeases, events.root, agents.root, clients.root);
 
     function update(data) {
       // A module in work that proposes to replace shared definitions shows
@@ -950,8 +951,120 @@
           h("tbody", {}, data.rest.map(clientLine))));
       }
       updateLog([...data.mcp.map(agentEntry), ...data.rest.map(clientEntry)]);
+      events.update();
     }
     return { root, update };
+  }
+
+  // ---------- Activity: the server log ----------
+
+  // Publishes, leases and the server's starts and stops, newest first, read
+  // on from the last number the page has: the server keeps two weeks of them
+  // with its store, so a restart does not empty the list. The list keeps
+  // its scroll while new lines come in above.
+  function eventLog() {
+    const c = card("Server log", "publishes, leases and restarts of the last two weeks, newest first");
+    const scroller = h("div", { class: "event-log" });
+    fill(c.body, scroller);
+    let rows = [];
+    let last = 0;
+    let busy = false;
+    let drawn = false;
+
+    async function update() {
+      if (busy) return;
+      busy = true;
+      try {
+        const page = await call("GET", `/admin/api/events?after=${last}&limit=${last ? 500 : 2000}`);
+        if (page.last < last) { rows = []; last = 0; busy = false; return update(); }
+        if (page.events.length || !drawn) {
+          rows = rows.concat(page.events).slice(-2000);
+          last = page.last;
+          draw();
+        }
+      } catch (error) {
+        if (!drawn) {
+          fill(scroller, empty("scroll", "No server log", error.status === 404
+            ? "This server keeps no store, so nothing is written down."
+            : "The log could not be read; the page asks again."));
+        }
+      } finally {
+        busy = false;
+      }
+    }
+
+    function draw() {
+      drawn = true;
+      if (!rows.length) {
+        fill(scroller, empty("scroll", "Nothing written down yet",
+          "A publish, a lease taken or given back, and the server's next start appear here."));
+        return;
+      }
+      fill(scroller, h("table", { class: "lines" },
+        h("thead", {}, h("tr", {},
+          h("th", { class: "w-when", text: "Time" }), h("th", { class: "w-event", text: "Event" }),
+          h("th", { class: "w-who", text: "Module" }), h("th", { class: "w-who", text: "Holder" }),
+          h("th", { text: "Detail" }))),
+        h("tbody", {}, rows.slice().reverse().map(eventLine))));
+    }
+    return { root: c.root, update };
+  }
+
+  function eventTime(iso) {
+    const date = new Date(iso);
+    const today = new Date();
+    const clock = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    if (date.toDateString() === today.toDateString()) return clock;
+    return `${date.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${clock}`;
+  }
+
+  // One event: what happened as a pill, the module by its name (its SHA-256
+  // in the tooltip), who held it, and what goes with it.
+  function eventLine(e) {
+    const pill = (kind, text, title) => h("span", { class: `pill ${kind}`, text, title: title || text });
+    const build = [e.version || "development build", e.commit ? `commit ${e.commit}` : null, e.pid ? `pid ${e.pid}` : null]
+      .filter(Boolean).join(" · ");
+    let what;
+    let detail = "";
+    switch (e.kind) {
+      case "server_start":
+        what = e.unclean
+          ? pill("warn", "Started", "Started; the run before it ended without a stop — a crash or a kill")
+          : pill("ok", "Started");
+        detail = e.unclean ? `${build} · the run before ended without a stop` : build;
+        break;
+      case "server_stop": what = pill("plain", "Stopped"); detail = build; break;
+      case "publish":
+        what = pill("ok", "Published");
+        detail = [e.revision ? `revision ${e.revision}` : null, e.by && e.by !== e.holder ? `by ${e.by}` : null].filter(Boolean).join(" · ");
+        break;
+      case "publish_unchanged":
+        what = pill("plain", "Unchanged", "Published, and nothing new: the revision stays");
+        detail = e.revision ? `revision ${e.revision} stays` : "nothing new";
+        break;
+      case "publish_refused": what = pill("danger", "Refused", "The publish was refused"); detail = e.reason || ""; break;
+      case "lease_take": what = pill("plain", "Taken", "Taken into work"); break;
+      case "lease_release":
+        what = pill("plain", "Given back");
+        detail = e.reason === "discarded" ? "unpublished changes discarded"
+          : e.reason === "forgotten" ? "project forgotten"
+            : e.revision ? `last publish: revision ${e.revision}` : "";
+        break;
+      case "lease_close":
+        what = pill("warn", "Closed", "Closed by an administrator");
+        detail = `by ${e.by || "an administrator"}; unpublished changes discarded`;
+        break;
+      default: what = pill("plain", e.kind); detail = e.reason || "";
+    }
+    const server = e.kind === "server_start" || e.kind === "server_stop";
+    const module = server ? "Server" : (e.name || (e.module ? e.module.slice(0, 12) : "—"));
+    return h("tr", {},
+      h("td", { class: "muted", title: when(e.at), text: eventTime(e.at) }),
+      h("td", {}, what),
+      h("td", { title: e.module || "", text: module }),
+      h("td", { title: e.holder || "", text: e.holder || (server ? "" : "—") }),
+      h("td", { class: e.kind === "publish_refused" ? "danger-text" : "muted" },
+        h("div", { class: "event-detail", title: detail, text: detail })));
   }
 
   function statusPill(code) {

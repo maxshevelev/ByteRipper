@@ -34,10 +34,21 @@ final class GhidraHostLeaseTests: XCTestCase {
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 300,
                                                    holder: "first",
-                                                   leasesFile: directory.appendingPathComponent("store/private/leases.json")),
+                                                   leasesFile: directory.appendingPathComponent("store/private/leases.json"),
+                                                   events: ActivityLog(file: eventsFile)),
                               writer: store)
         hosts.append(host)
         return host
+    }
+
+    private var eventsFile: URL { directory.appendingPathComponent("store/private/events.jsonl") }
+
+    /// What the Activity page would read, from the file: kind, holder, revision, reason.
+    private func written() -> [String] {
+        ActivityLog(file: eventsFile).events().map { event in
+            [event.kind, event.holder, event.by.map { "by \($0)" }, event.revision.map { "r\($0)" }, event.reason]
+                .compactMap { $0 }.joined(separator: " ")
+        }
     }
 
     private func comment(_ host: GhidraHost, _ text: String, holder: String? = nil) async throws {
@@ -137,6 +148,18 @@ final class GhidraHostLeaseTests: XCTestCase {
         }
         let second = try await host.take(module, holder: "second")
         XCTAssertEqual(second.holder, "second")
+        // Written down for the Activity page, each with its holder: another
+        // holder's publish as refused, and the give-back with the revision
+        // the lease's last publish made, since it found nothing more to publish.
+        let events = written()
+        XCTAssertEqual(events.count, 6, "\(events)")
+        XCTAssertEqual(events.first, "lease_take first")
+        XCTAssertTrue(events.count > 1 && events[1].hasPrefix("publish_refused second by agent the module is in work by first"),
+                      "\(events)")
+        XCTAssertEqual(Array(events.dropFirst(2)), ["publish first by agent r1", "publish first by agent r2",
+                                                    "lease_release first r2", "lease_take second"])
+        let named = ActivityLog(file: eventsFile).events()
+        XCTAssertTrue(named.allSatisfy { $0.module == module.hex && $0.name == "Module" }, "\(named)")
     }
 
     func testALeaseOutlivesTheHost() async throws {
@@ -199,6 +222,10 @@ final class GhidraHostLeaseTests: XCTestCase {
         XCTAssertEqual(read, "after the close")
         let cleared = await host.leaseRows()
         XCTAssertTrue(cleared.allSatisfy { $0.closed == nil }, "a take again clears the close")
+        XCTAssertEqual(written(), ["lease_take first", "publish first by agent r1", "lease_close first by admin",
+                                   "lease_take first"])
+        let close = ActivityLog(file: eventsFile).events()[2]
+        XCTAssertEqual(close.name, "Module", "named although its project went to the Trash")
     }
 
     func testADiscardGivesTheModuleBackWithoutItsUnpublishedChanges() async throws {
@@ -219,5 +246,22 @@ final class GhidraHostLeaseTests: XCTestCase {
         XCTAssertEqual(after, revision)
         let read = try await plate(host)
         XCTAssertEqual(read, "published")
+        XCTAssertEqual(written(), ["lease_take first", "publish first by agent r1", "lease_release first discarded"])
+        XCTAssertEqual(ActivityLog(file: eventsFile).events().last?.name, "Module",
+                       "named although its project went to the Trash")
+    }
+
+    /// A publish that finds nothing new stores the revision there was, and is
+    /// written down as such: the page tells it from a new revision.
+    func testAPublishWithNothingNewIsWrittenDownAsUnchanged() async throws {
+        let image = try image()
+        let host = try host()
+        module = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Module")
+        try await host.take(module)
+        try await comment(host, "published")
+        _ = try await host.publish(module, by: "agent")
+        _ = try await host.publish(module, by: "agent")
+        XCTAssertEqual(written(), ["lease_take first", "publish first by agent r1", "publish_unchanged first by agent r1"])
     }
 }

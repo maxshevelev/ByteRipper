@@ -31,12 +31,15 @@ public struct Console: Sendable {
     public let issues: ConsoleIssues?
     /// The review board: nil without a Ghidra role.
     public let tickets: ConsoleTickets?
+    /// Publishes, leases, starts and stops: nil without the store.
+    public let events: ConsoleEvents?
     let assets: ConsoleAssets
 
     public init(registry: DocumentRegistry, tokens: TokenStore, authorizer: ServerAuthorizer,
                 gate: SignInGate = SignInGate(), rest: RESTActivity, mcp: ServerActivity?,
                 agent: ConsoleAgent? = nil, leases: ConsoleLeases? = nil, issues: ConsoleIssues? = nil,
-                tickets: ConsoleTickets? = nil, status: @escaping @Sendable () async -> ConsoleStatus) throws {
+                tickets: ConsoleTickets? = nil, events: ConsoleEvents? = nil,
+                status: @escaping @Sendable () async -> ConsoleStatus) throws {
         self.registry = registry
         self.tokens = tokens
         self.authorizer = authorizer
@@ -48,6 +51,7 @@ public struct Console: Sendable {
         self.leases = leases
         self.issues = issues
         self.tickets = tickets
+        self.events = events
         assets = try ConsoleAssets.load()
     }
 
@@ -226,6 +230,16 @@ public struct Console: Sendable {
                 "rest": .array(rest.listed.map(Self.client)),
                 "leases": modules
             ])
+        }
+
+        // The event log under the Activity page's cards, read on from the
+        // last number the page has.
+        let events = self.events
+        add("GET", "/admin/api/events") { request in
+            guard let events else { throw HTTPError(.notFound, "this server keeps no store, so no event log") }
+            let after = Int(request.query["after"] ?? "") ?? 0
+            let limit = min(2000, max(1, Int(request.query["limit"] ?? "") ?? 500))
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: events.after(after, limit))
         }
 
         // Configuration: how an agent's client connects, for each client.

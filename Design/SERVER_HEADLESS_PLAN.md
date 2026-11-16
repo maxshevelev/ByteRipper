@@ -454,6 +454,17 @@ imports AppKit in several files: the server stays macOS-only in v1.
   so a running call is on the page rather than only its count. A connection
   with a call in flight blinks, as the app's toolbar badge does. The log
   leaves out the console's answered reads.
+- Activity's Server log: what happened to the modules and to the server,
+  newest first — a revision published, a publish that stored nothing new or
+  was refused (and why), a lease taken, given back (with the last revision, or
+  `discarded` / `forgotten`) or closed by an administrator, each with its
+  holder; and the server's starts and stops with the version and commit of the
+  install's `VERSION` file. A start whose run before it has no stop is marked:
+  the server died. `ActivityLog` keeps it in `<store>/private/events.jsonl`,
+  one JSON line per event, numbered so the page reads on with
+  `GET /admin/api/events?after=<n>`. It keeps two weeks; what is older goes at
+  most once a day (`events.pruned` holds that time and the last number, so a
+  log pruned empty does not number from 1 again). No CAS object, no mirror.
 - Status: version, addresses, server names, roles, store, Ghidra, documents and
   bytes, limits, socket path, uptime, sessions, and the resident memory.
 - Tokens: presets `reader` (`cas.read`), `app` (`cas.read` + `cas.write` +

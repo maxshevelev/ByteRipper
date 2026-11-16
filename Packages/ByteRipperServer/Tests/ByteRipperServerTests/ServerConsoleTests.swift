@@ -1,4 +1,5 @@
 import AgentKit
+import CodeAnalysis
 import DumpHost
 import Foundation
 import HTTPService
@@ -405,6 +406,53 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(status.body?["sessions"], .count(1))
         XCTAssertEqual(status.body?["addresses"]?.arrayValue?.count, 1)
         XCTAssertNotNil(status.body?["memory"])
+    }
+
+    /// The server log on the Activity page: this run's start, read on from a
+    /// number; a start whose run before it never stopped says so, and a stop
+    /// is written down.
+    func testTheServerLogSaysStartsStopsAndACrash() async throws {
+        let signed = try await signIn()
+        let refused = try await call("GET", "/admin/api/events")
+        XCTAssertEqual(refused.status, 401, "the log is behind the session")
+        let first = try await call("GET", "/admin/api/events", signed: signed)
+        XCTAssertEqual(first.status, 200)
+        XCTAssertEqual(first.body?["last"], .count(1))
+        let started = first.body?["events"]?.arrayValue ?? []
+        XCTAssertEqual(started.compactMap { $0["kind"]?.stringValue }, ["server_start"])
+        XCTAssertEqual(started.first?["pid"], .count(Int(getpid())))
+        XCTAssertNil(started.first?["unclean"], "the first run has nothing before it")
+
+        // A second server on the same store while this one never stopped: as
+        // after a crash, its start says the run before ended without a stop.
+        var configuration = server.configuration
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
+        let second = Server(configuration: configuration, log: { _ in })
+        try await second.start()
+        second.stop()
+        // One server keeps a store; the second's lines are read from the file
+        // the store keeps, as the next start reads them.
+        let kept = ActivityLog(file: directory.appendingPathComponent("store/private/events.jsonl")).events()
+        XCTAssertEqual(kept.map(\.kind), ["server_start", "server_start", "server_stop"])
+        XCTAssertEqual(kept.map(\.seq), [1, 2, 3])
+        XCTAssertEqual(kept[1].unclean, true)
+        XCTAssertNil(kept[2].unclean)
+        let after = try await call("GET", "/admin/api/events?after=1", signed: signed)
+        XCTAssertEqual(after.body?["events"], .array([]), "read on from a number: nothing after it here")
+    }
+
+    /// The version a start writes down is the install's, from `VERSION`
+    /// beside the binary's folder; a checkout's build has none.
+    func testTheVersionComesFromTheInstallsVersionFile() throws {
+        let install = directory.appendingPathComponent("install")
+        try FileManager.default.createDirectory(at: install.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        try "version: v0.10-686-g746207a7\ncommit: 746207a7\nbranch: main\n"
+            .write(to: install.appendingPathComponent("VERSION"), atomically: true, encoding: .utf8)
+        let build = Server.build(executable: install.appendingPathComponent("bin/byteripper-server").path)
+        XCTAssertEqual(build.version, "v0.10-686-g746207a7")
+        XCTAssertEqual(build.commit, "746207a7")
+        let none = Server.build(executable: directory.appendingPathComponent("elsewhere/bin/x").path)
+        XCTAssertNil(none.version)
     }
 
     /// The shell words the console prints survive a path with a space — the

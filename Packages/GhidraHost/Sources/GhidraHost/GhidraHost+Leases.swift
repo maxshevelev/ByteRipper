@@ -129,6 +129,7 @@ extension GhidraHost {
         leaseBook.leases[module.hex] = lease
         if leaseBook.closed[module.hex]?.holder == holder { leaseBook.closed[module.hex] = nil }
         try saveLeaseBook()
+        note(ActivityLog.Kind.leaseTake, module, holder: holder)
         return lease
     }
 
@@ -181,11 +182,25 @@ extension GhidraHost {
 
     enum ActivityKind { case read, write, publish }
 
-    /// The lease given back by its holder.
-    func dropLease(_ module: SHA256Digest) throws {
-        guard leaseBook.leases.removeValue(forKey: module.hex) != nil else { return }
+    /// The lease given back by its holder: with the revision its last
+    /// publish made, or why nothing was published (`discarded`, `forgotten`).
+    func dropLease(_ module: SHA256Digest, name known: String? = nil, reason: String? = nil,
+                   revision: Int? = nil) throws {
+        guard let held = leaseBook.leases.removeValue(forKey: module.hex) else { return }
+        let name = known ?? (try? project(module).state().module.name)
         try saveLeaseBook()
         wakeLeaseWaiters(module)
+        note(ActivityLog.Kind.leaseRelease, module, name: name, holder: held.holder,
+             revision: reason == nil ? revision ?? held.revision : nil, reason: reason)
+    }
+
+    /// An event of the module for the Activity page, with its name.
+    func note(_ kind: String, _ module: SHA256Digest, name known: String? = nil, holder: String? = nil,
+              by: String? = nil, revision: Int? = nil, reason: String? = nil) {
+        guard let events = configuration.events else { return }
+        let name = known ?? (try? project(module).state().module.name)
+        events.append(.init(kind: kind, module: module.hex, name: name, holder: holder, by: by,
+                            revision: revision, reason: reason))
     }
 
     /// An administrator's close: the owner stopped, the working project to
@@ -195,12 +210,15 @@ extension GhidraHost {
         guard let held = leaseBook.leases[module.hex] else {
             throw GhidraHostError(.refused, "the module is not in work: no lease to close", status: 404)
         }
+        // Its name before the project goes to the Trash.
+        let name = try? project(module).state().module.name
         try await discardWorkingProject(module)
         let closed = LeaseEnd(holder: held.holder, since: held.since, closedBy: administrator, at: Self.now(), told: false)
         leaseBook.leases[module.hex] = nil
         leaseBook.closed[module.hex] = closed
         try saveLeaseBook()
         wakeLeaseWaiters(module)
+        note(ActivityLog.Kind.leaseClose, module, name: name, holder: held.holder, by: administrator)
         return closed
     }
 

@@ -33,13 +33,17 @@ public actor GhidraHost {
         /// checked against at publish; fetched there once when missing. Nil
         /// checks nothing.
         public var edk2Sources: URL?
+        /// Where publishes and leases are written down for the console's
+        /// Activity page (`ActivityLog`); nil writes nothing.
+        public var events: ActivityLog?
 
         public init(projectsRoot: URL = GhidraHost.defaultProjectsRoot, ghidraHome: URL? = nil,
                     sources: OwnerSources = .checkout, idle: Int = 1800,
                     holder: String = "\(NSUserName()) via byteripper-server",
                     startTimeout: TimeInterval = 300, leasesFile: URL? = nil, issuesFile: URL? = nil,
                     ticketsFile: URL? = nil,
-                    edk2Sources: URL? = UEFITypes.Paths(root: UEFITypes.cacheRoot).edk2Library) {
+                    edk2Sources: URL? = UEFITypes.Paths(root: UEFITypes.cacheRoot).edk2Library,
+                    events: ActivityLog? = nil) {
             self.projectsRoot = projectsRoot
             self.ghidraHome = ghidraHome
             self.sources = sources
@@ -50,6 +54,7 @@ public actor GhidraHost {
             self.issuesFile = issuesFile
             self.ticketsFile = ticketsFile
             self.edk2Sources = edk2Sources
+            self.events = events
         }
     }
 
@@ -556,6 +561,26 @@ public actor GhidraHost {
     public func publish(_ module: SHA256Digest, by: String?,
                         options: PublishOptions = PublishOptions(), holder: String? = nil,
                         byHost: Bool = false) async throws -> Publication {
+        // Written down for the Activity page: a new revision, the same one
+        // again, or a refusal and why. The holder is the lease's, the caller's
+        // name where the host publishes for itself.
+        let before = try? project(module).state().published?.rev
+        let caller = byHost ? (leaseBook.leases[module.hex]?.holder ?? by) : holderName(holder)
+        do {
+            let publication = try await publishBody(module, by: by, options: options, holder: holder, byHost: byHost)
+            let rev = publication.manifest.reading?.rev
+            note(rev != nil && rev == before ? ActivityLog.Kind.publishUnchanged : ActivityLog.Kind.publish,
+                 module, holder: caller, by: by, revision: rev)
+            return publication
+        } catch {
+            let reason = (error as? GhidraHostError)?.message ?? "\(error)"
+            note(ActivityLog.Kind.publishRefused, module, holder: caller, by: by, reason: String(reason.prefix(2000)))
+            throw error
+        }
+    }
+
+    private func publishBody(_ module: SHA256Digest, by: String?, options: PublishOptions, holder: String?,
+                             byHost: Bool) async throws -> Publication {
         if !byHost { try requireLease(module, holder: holder) }
         let project = self.project(module)
         let record = try await owner(of: module)
@@ -1095,12 +1120,14 @@ public actor GhidraHost {
                         discard: Bool = false) async throws -> Publication? {
         try requireLease(module, holder: holder)
         if discard {
+            // Its name before the project goes to the Trash.
+            let name = try? project(module).state().module.name
             try await discardWorkingProject(module)
-            try dropLease(module)
+            try dropLease(module, name: name, reason: "discarded")
             return nil
         }
         let publication = try await publishChanges(module, by: by)
-        try dropLease(module)
+        try dropLease(module, revision: publication?.manifest.reading?.rev)
         return publication
     }
 
@@ -1194,7 +1221,7 @@ public actor GhidraHost {
         }
         _ = await stop(module)
         leases[module] = nil
-        try dropLease(module)
+        try dropLease(module, reason: "forgotten")
         var trashed: NSURL?
         try FileManager.default.trashItem(at: project.folder, resultingItemURL: &trashed)
         // The store's copy goes with it, or the next open would bring the same

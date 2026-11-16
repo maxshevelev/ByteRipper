@@ -647,6 +647,12 @@ table.lines th.w-time { width: 92px; }
 table.lines th.w-open { width: 160px; }
 table.lines td { vertical-align: middle; }
 table.lines tr.at-work td { background: var(--danger-soft); }
+table.lines th.w-when { width: 132px; }
+table.lines th.w-event { width: 112px; }
+/* The server log scrolls inside its card; new lines come in above. */
+.event-log { max-height: 420px; overflow-y: auto; }
+.event-log thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.event-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .line-who .doc-icon { flex: none; }
 .line-who-text { min-width: 0; flex: 1 1 auto; }

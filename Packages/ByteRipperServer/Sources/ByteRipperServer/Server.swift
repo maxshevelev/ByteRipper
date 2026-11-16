@@ -33,6 +33,11 @@ public final class Server {
     /// When `start` began, and the addresses it bound: the console's Status.
     private var started = Date()
     private var bound: [String] = []
+    /// Publishes, leases, and this server's starts and stops, for the
+    /// console's Activity page: kept with the store, nil without the CAS role.
+    public private(set) var events: ActivityLog?
+    /// Whether this run's start is written down, so its stop is too.
+    private var startNoted = false
 
     public init(configuration: ServerConfiguration,
                 log: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }) {
@@ -68,6 +73,7 @@ public final class Server {
             let cas = try CASService(store: store)
             router.merge(cas.routes())
             self.cas = cas
+            events = ActivityLog(file: store.root.appendingPathComponent("private/events.jsonl"))
             // A write by something else on this machine — byteripper-cas, the
             // skill — lands in the directory, not through a route.
             let feed = cas.feed
@@ -101,7 +107,8 @@ public final class Server {
                                                        issuesFile: cas.store.root
                                                            .appendingPathComponent("private/issues.json"),
                                                        ticketsFile: cas.store.root
-                                                           .appendingPathComponent("private/tickets.json")),
+                                                           .appendingPathComponent("private/tickets.json"),
+                                                       events: events),
                                   writer: writer)
             // An owner a server stopped while it started outlives it with no
             // record, and holds its project's lock: stopped before any route
@@ -187,6 +194,7 @@ public final class Server {
                                   leases: ghidra.map { GhidraRoutes.consoleLeases($0) },
                                   issues: ghidra.flatMap(GhidraRoutes.consoleIssues),
                                   tickets: ghidra.flatMap(GhidraRoutes.consoleTickets),
+                                  events: events.map(Self.consoleEvents),
                                   status: { [weak self] in await self?.status() ?? Self.noStatus })
         } catch {
             stop()
@@ -225,6 +233,7 @@ public final class Server {
             log("listening on \(listen.host)\(address):\(port), token required")
         }
         log("console at http://\(Self.hostForURL(configuration.listens[0].host)):\(first)/admin")
+        noteStart()
         if !registry.rows.isEmpty { log("documents: opening \(registry.rows.count)") }
         opening = Task { [log] in
             do {
@@ -254,6 +263,48 @@ public final class Server {
                              roles: configuration.roles.map(\.rawValue).sorted(),
                              store: configuration.store.path, storeID: cas?.feed.storeID, ghidra: ghidraNote,
                              socket: configuration.mcpSocket.path, tokensFile: configuration.tokensFile.path)
+    }
+
+    /// This run written down once it listens: the version it was built as,
+    /// and whether the run before it ended with no stop — a crash, a kill.
+    private func noteStart() {
+        guard let events, !startNoted else { return }
+        let previous = events.last(of: [ActivityLog.Kind.serverStart, ActivityLog.Kind.serverStop])
+        let build = Self.build()
+        events.append(.init(kind: ActivityLog.Kind.serverStart, version: build.version, commit: build.commit,
+                            pid: getpid(), unclean: previous?.kind == ActivityLog.Kind.serverStart ? true : nil))
+        startNoted = true
+        log("server \(build.version ?? "dev build") started")
+    }
+
+    /// The version and commit an install's `VERSION` file names, beside the
+    /// binary's `bin/` (`Scripts/make-agent-dist.sh`); nil for a build that
+    /// runs from a checkout.
+    nonisolated static func build(executable: String = executablePath()) -> (version: String?, commit: String?) {
+        let file = URL(fileURLWithPath: executable).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("VERSION")
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return (nil, nil) }
+        var fields: [String: String] = [:]
+        for line in text.split(whereSeparator: \.isNewline) {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            fields[line[..<colon].trimmingCharacters(in: .whitespaces)] =
+                line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        }
+        return (fields["version"], fields["commit"])
+    }
+
+    /// The console's view of the log.
+    nonisolated static func consoleEvents(_ log: ActivityLog) -> ConsoleEvents {
+        ConsoleEvents(after: { seq, limit in
+            struct Page: Encodable {
+                let events: [ActivityLog.Event]
+                let last: Int
+            }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let page = Page(events: log.events(after: seq, limit: limit), last: log.lastNumber)
+            return (try? encoder.encode(page)) ?? Data(#"{"events":[],"last":0}"#.utf8)
+        })
     }
 
     /// What the server calls itself to an agent and on the console.
@@ -300,6 +351,12 @@ public final class Server {
     }
 
     public func stop() {
+        if startNoted, let events {
+            let build = Self.build()
+            events.append(.init(kind: ActivityLog.Kind.serverStop, version: build.version, commit: build.commit,
+                                pid: getpid()))
+        }
+        startNoted = false
         mcp?.stop()
         mcp = nil
         documents = nil
