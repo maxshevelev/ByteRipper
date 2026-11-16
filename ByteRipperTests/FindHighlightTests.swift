@@ -120,6 +120,20 @@ final class FindHighlightTests: XCTestCase {
         min(c.r, c.g) - c.b
     }
 
+    /// Whether one pixel is the plate's own yellow, as opposed to the paper,
+    /// the match grey, the shadow, or an edge blended half into one of them.
+    ///
+    /// Measured as `yellowness` rather than by fixed bounds per channel: the
+    /// platform's pure yellow is drawn into the bitmap `cacheDisplay` makes and
+    /// read back through a colour conversion, and what comes out depends on the
+    /// spaces on either side — on one Mac (1, 0.98, 0.40) in device RGB, which
+    /// a `blue < 0.4` cut-off missed by a hair and so found no plate at all.
+    /// The difference between red-and-green and blue survives any such
+    /// conversion; the neutrals around the plate have none of it.
+    private func isIndicatorYellow(_ c: NSColor) -> Bool {
+        yellowness((c.redComponent, c.greenComponent, c.blueComponent)) > 0.4
+    }
+
     /// How far two mean colours are apart — appearance-agnostic, so the same
     /// assertion holds in light and dark.
     private func distance(_ a: (r: CGFloat, g: CGFloat, b: CGFloat),
@@ -487,9 +501,7 @@ final class FindHighlightTests: XCTestCase {
             var last = -CGFloat.greatestFiniteMagnitude
             for y in 0..<rep.pixelsHigh {
                 guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
-                // Yellow: red and green up, blue down.
-                guard c.redComponent > 0.8, c.greenComponent > 0.8, c.blueComponent < 0.4
-                else { continue }
+                guard isIndicatorYellow(c) else { continue }
                 first = min(first, CGFloat(y) / scale)
                 last = max(last, CGFloat(y) / scale)
             }
@@ -582,8 +594,7 @@ final class FindHighlightTests: XCTestCase {
                     for x in Int(band.minX * scale)...Int(band.maxX * scale) {
                         guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
                         else { continue }
-                        guard c.redComponent > 0.8, c.greenComponent > 0.8,
-                              c.blueComponent < 0.4 else { continue }
+                        guard isIndicatorYellow(c) else { continue }
                         minX = min(minX, CGFloat(x) / scale)
                         maxX = max(maxX, CGFloat(x) / scale)
                         minY = min(minY, CGFloat(y) / scale)
