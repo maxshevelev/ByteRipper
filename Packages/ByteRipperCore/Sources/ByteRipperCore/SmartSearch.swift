@@ -65,15 +65,30 @@ public enum SmartSearch {
     /// `DEAD BEEF` included, is text as far as this test is concerned; a reader
     /// who means those four bytes writes them the way every hex dump prints
     /// them.
+    ///
+    /// `??` is a byte of a hex search, but only where it stands as a byte: a
+    /// pair of its own in the paired form — `24 ?? 4D 49` — or a pair inside
+    /// an unbroken run — `24??4D49`. Never half a pair, and never at the edge
+    /// of a run: `be??` and `FACE??` are words with question marks after
+    /// them, and read as hex they would match almost anywhere a 0xBE stands.
     public static func looksLikeHexBytes(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return false }
         let groups = trimmed.split(separator: " ", omittingEmptySubsequences: true)
-        // `??` is a byte of a hex search — `24 ?? 4D 49` is bytes with a hole
-        // in them, written the way it is written to be bytes.
-        guard groups.allSatisfy({ $0.allSatisfy { $0.isHexDigit || $0 == "?" } }) else { return false }
-        if groups.count == 1 { return groups[0].count % 2 == 0 }
-        return groups.allSatisfy { $0.count == 2 }
+        let pairs: [Substring]
+        if groups.count == 1 {
+            let run = groups[0]
+            guard run.count % 2 == 0 else { return false }
+            pairs = stride(from: 0, to: run.count, by: 2).map {
+                let from = run.index(run.startIndex, offsetBy: $0)
+                return run[from..<run.index(from, offsetBy: 2)]
+            }
+            guard pairs.first != "??", pairs.last != "??" else { return false }
+        } else {
+            guard groups.allSatisfy({ $0.count == 2 }) else { return false }
+            pairs = groups
+        }
+        return pairs.allSatisfy { $0 == "??" || $0.allSatisfy(\.isHexDigit) }
     }
 
     /// The encodings a text pattern is tried in, in order: the ones a reader is

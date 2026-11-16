@@ -267,7 +267,8 @@ extension BackgroundOperation: FindActivity {}
         // Whatever a plate is saying is about the search before this one.
         host?.notices.dismiss()
         prepare(pane)
-        let anchor = searchAnchor(in: pane, direction: direction)
+        let anchor = searchAnchor(in: pane, direction: direction,
+                                  matchLength: attempts.map(\.pattern.bytes.count).max() ?? 1)
         // Started here, not inside the task: the search in hand is this one
         // from the press on, so a second press finds it under way.
         let search = pane.finder.start(attempts.map(\.query), from: anchor,
@@ -287,19 +288,24 @@ extension BackgroundOperation: FindActivity {}
         }
     }
 
-    /// Where a search starts from: the caret, or the start of the selection —
-    /// one byte past it going forward, so the match the reader stands on is
-    /// not found again (§11).
-    ///
-    /// By the selection's *start* both ways, not its end going forward:
-    /// matches overlap (#33), and the next one can begin inside the match the
-    /// reader stands on — `FF FF` over a run of 0xFF is found a byte at a
-    /// time. Find Previous is the last match starting before the anchor
+    /// Where a search starts from: the caret, or the selection (§11). Find
+    /// Previous is the last match starting before the selection's start
     /// (`ByteFindContent`, `MatchSet.index(before:)`).
-    private func searchAnchor(in pane: PaneViewModel, direction: SearchDirection) -> UInt64 {
+    ///
+    /// Find Next depends on what is selected. A selection no longer than a
+    /// match — the match the reader stands on — is passed by one byte, not by
+    /// its length: matches overlap (#33), and the next one can begin inside
+    /// it, so `FF FF` over a run of 0xFF is found a byte at a time. A longer
+    /// selection is a stretch the reader marked, and the search goes on after
+    /// it, as it always did. `matchLength` is the longest match the search
+    /// can make.
+    private func searchAnchor(in pane: PaneViewModel, direction: SearchDirection,
+                              matchLength: Int) -> UInt64 {
         let selection = pane.hexSelection()
         guard !selection.isEmpty else { return pane.caretOffset }
-        return direction == .forward ? selection.start + 1 : selection.start
+        guard direction == .forward else { return selection.start }
+        return selection.end - selection.start <= UInt64(max(matchLength, 1))
+            ? selection.start + 1 : selection.end
     }
 
     /// The attempt that found something is *the* search: the bar's popup says
@@ -340,7 +346,8 @@ extension BackgroundOperation: FindActivity {}
     /// where it can answer, by one scan where it cannot.
     private func step(_ direction: SearchDirection, in pane: PaneViewModel) {
         prepare(pane)
-        let anchor = searchAnchor(in: pane, direction: direction)
+        let anchor = searchAnchor(in: pane, direction: direction,
+                                  matchLength: pane.highlightedMatchSet?.matchLength ?? 1)
         // The index answers at once wherever it can: the press lands before it
         // returns, and a run of ⌘G never queues behind itself.
         if let step = pane.finder.indexedStep(direction, from: anchor) {

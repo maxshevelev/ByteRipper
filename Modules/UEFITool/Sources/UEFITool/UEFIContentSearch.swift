@@ -133,7 +133,7 @@ public enum UEFIContentSearch {
     /// Whether a search of these is answered from the last one, without
     /// reading anything — for a test.
     static func isRemembered(_ patterns: [MaskedPattern], from start: NodeID, in tree: LazyUEFITree,
-                             overlapping: Bool = false, keep: Int = defaultKeep,
+                             overlapping: Bool = true, keep: Int = defaultKeep,
                              padding: UInt64 = excerptPadding) -> Bool {
         last?.answers(tree, start, patterns, overlapping, keep, padding) == true
     }
@@ -152,7 +152,7 @@ public enum UEFIContentSearch {
         _ patterns: [MaskedPattern],
         from start: NodeID,
         in tree: LazyUEFITree,
-        overlapping: Bool = false,
+        overlapping: Bool = true,
         keep: Int = defaultKeep,
         padding: UInt64 = excerptPadding,
         progress: @escaping @MainActor (Double) -> Void = { _ in }

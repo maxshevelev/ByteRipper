@@ -13,15 +13,15 @@ extension SearchEngine {
     /// where it starts, handed to `visit` with the pattern's index — `visit`
     /// returns false to stop.
     ///
-    /// A pattern may have holes (`MaskedPattern`), and with `overlapping` a
-    /// match is looked for again one byte after the last one's start rather
-    /// than after its end. The scan is `PatternScan`'s, which the UEFI
+    /// A pattern may have holes (`MaskedPattern`), and matches overlap unless
+    /// `overlapping` is false: a match is looked for again one byte after the
+    /// last one's start rather than after its end. The scan is `PatternScan`'s, which the UEFI
     /// Structure's search through a firmware's volumes runs as well.
     public static func matches(
         of patterns: [MaskedPattern],
         in storage: ByteStorage,
         range: Range<UInt64>? = nil,
-        overlapping: Bool = false,
+        overlapping: Bool = true,
         chunkSize: Int = defaultChunkSize,
         shouldCancel: () -> Bool = { false },
         progress: (Double) -> Void = { _ in },

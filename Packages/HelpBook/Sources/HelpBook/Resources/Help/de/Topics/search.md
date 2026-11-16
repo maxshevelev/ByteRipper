@@ -1,4 +1,4 @@
-@source-sha 74a0bb2c4a17b2c0ea76a89cfe2cca639acfabeacf52eba1296f9b98e4b0c0af
+@source-sha 6f920d0988f6e8cd9e8680296800485be20076cb91b515c0c42c1f543f33d30e
 # Bytes und Text finden
 
 > ⌘F. Suche nach einer Byte-Folge oder einer Zeichenfolge über den ganzen Dump, im Hintergrund.
@@ -31,7 +31,7 @@ Eine Zeichenfolge in einem Dump steht in der Codierung, die der Hersteller der F
 
 Das Eingegebene wird in einer Form nach der anderen gesucht, bis etwas gefunden wird:
 
-- Liest es sich als Byte-Folge — eine gerade Anzahl von Hex-Ziffern, `DEADBEEF`, oder dieselben Ziffern paarweise, `DE AD BE EF`, auch mit `??` für ein beliebiges Byte —, wird es zuerst als Bytes und erst danach als Text gesucht.
+- Liest es sich als Byte-Folge — eine gerade Anzahl von Hex-Ziffern, `DEADBEEF`, oder dieselben Ziffern paarweise, `DE AD BE EF`, auch mit `??` für ein beliebiges Byte —, wird es zuerst als Bytes und erst danach als Text gesucht. `??` gilt nur dort als Byte, wo es an der Stelle eines Bytes steht: als eigenes Paar, `24 ?? 4D 49`, oder als Paar innerhalb einer zusammenhängenden Folge, `24??4D49`. Am Rand einer Folge sind es Fragezeichen; `FACE??` wird daher als Text gesucht.
 - Sonst werden die Codierungen der Reihe nach durchprobiert: ASCII, UTF-8, dann UTF-16 LE und UTF-16 BE.
 - Eine Codierung, die das Eingegebene überhaupt nicht darstellen kann, entfällt: In ihr gibt es nichts zu suchen.
 - Versuche, die auf dieselben Bytes hinauslaufen, werden zu einem Durchlauf zusammengefasst. `abc` als ASCII und als UTF-8 sind dieselben drei Bytes, und der Dump wird für eine Antwort nicht zweimal gelesen.

@@ -1423,16 +1423,30 @@ final class HexView: NSView {
     /// One continuous fill per match, exactly like the selection's: a match
     /// spans its bytes through the word and group gaps, and a match crossing a
     /// row boundary is drawn as its part of each row.
+    ///
+    /// Matches that overlap are one fill: they paint the same grey, and a run
+    /// of 0xFF under a 32-byte `FF…` pattern would otherwise be dozens of
+    /// identical rectangles per row (#33). Matches that only touch stay
+    /// apart, as the gap between their bytes shows where one ends.
     private func drawMatchFills(row: Int, rowStart: UInt64, rowEnd: UInt64,
                                 matches: [Range<UInt64>], layout: HexLayout,
                                 drawsHex: Bool, drawsAscii: Bool) {
         guard !matches.isEmpty else { return }
         let rowFrame = layout.rowFrame(row: row)
         HexTheme.matchFill.setFill()
-        for match in matches {
+        var spans: [Range<UInt64>] = []
+        for match in matches.sorted(by: { $0.lowerBound < $1.lowerBound }) {
             let start = max(match.lowerBound, rowStart)
             let end = min(match.upperBound, rowEnd)
             guard start < end else { continue }
+            if let last = spans.last, start < last.upperBound {
+                spans[spans.count - 1] = last.lowerBound..<max(last.upperBound, end)
+            } else {
+                spans.append(start..<end)
+            }
+        }
+        for span in spans {
+            let start = span.lowerBound, end = span.upperBound
             let firstColumn = Int(start - rowStart)
             let lastColumn = Int(end - rowStart) - 1
             if drawsHex {

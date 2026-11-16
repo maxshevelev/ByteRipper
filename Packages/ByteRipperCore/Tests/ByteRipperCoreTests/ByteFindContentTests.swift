@@ -99,6 +99,10 @@ final class ByteFindContentTests: XCTestCase {
     func testSmartSearchReadsAHexPatternWithHolesAsBytesFirst() throws {
         XCTAssertTrue(SmartSearch.looksLikeHexBytes("24 ?? 4D 49"))
         XCTAssertTrue(SmartSearch.looksLikeHexBytes("24??4D49"))
+        XCTAssertTrue(SmartSearch.looksLikeHexBytes("BE ??"), "a pair of its own is a byte")
+        for text in ["be??", "FACE??", "??4D", "24 ?", "2?4D", "24?? 4D49"] {
+            XCTAssertFalse(SmartSearch.looksLikeHexBytes(text), "\(text) is text: ?? at a run's edge or not a pair")
+        }
         let attempts = SmartSearch.attempts(for: "24 ?? 4D 49", caseSensitive: false)
         XCTAssertEqual(attempts.first?.encoding, .hex)
         XCTAssertEqual(attempts.first?.pattern.isWild, [false, true, false, false])

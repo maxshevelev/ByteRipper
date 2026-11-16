@@ -41,6 +41,9 @@ public struct SearchPattern: Equatable, Sendable {
     public let encoding: SearchEncoding
 
     public init(bytes: [UInt8], isWild: [Bool]? = nil, encoding: SearchEncoding) {
+        // A hole per byte: a shorter or longer mask is a caller's mistake,
+        // caught here rather than as a read past the end inside a scan.
+        precondition(isWild.map { $0.count == bytes.count } ?? true, "isWild must have one entry per byte")
         self.bytes = bytes
         self.isWild = isWild ?? [Bool](repeating: false, count: bytes.count)
         self.encoding = encoding

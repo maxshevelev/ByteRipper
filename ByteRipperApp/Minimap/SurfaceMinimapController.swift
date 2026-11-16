@@ -512,7 +512,10 @@ import UEFIImage
     /// hundreds of thousands of occurrences and the overview has a couple of
     /// thousand rows, so per-match work would be the wrong way round. Each row
     /// stops early once every column is marked or after `perRowMarkLimit`
-    /// matches — by then the row says all it can say at this scale.
+    /// matches — by then the row says all it can say at this scale. A match
+    /// that overlaps the one before it is marked but not counted (#33): a run
+    /// of 0xFF under `FF FF` is one stretch, not a match per byte, and it
+    /// fills the row's columns long before it could use up the limit.
     nonisolated private static func matchOverlay(for set: ByteMatchSet?, current: Range<UInt64>?,
                                                  binning: OverviewBinning,
                                                  rowCount: Int,
@@ -531,13 +534,15 @@ import UEFIImage
             let from = rowStart > reach ? rowStart - reach : 0
             var index = set.index(atOrAfter: from)
             var marks = 0
+            var markedUpTo: UInt64 = 0
             while let i = index, marks < perRowMarkLimit, matched[row] != .max {
                 guard let start = set.start(at: i), start < rowEnd else { break }
+                let end = start + UInt64(set.patternLength)
                 // The whole row range, not this one row: the marking indexes
                 // the bits from the range's start, and the masks are absolute.
-                binning.markHexColumns(start..<start + UInt64(set.patternLength),
-                                       rows: rows, into: &matched)
-                marks += 1
+                binning.markHexColumns(start..<end, rows: rows, into: &matched)
+                if start >= markedUpTo { marks += 1 }
+                markedUpTo = max(markedUpTo, end)
                 index = i + 1 < set.total ? i + 1 : nil
             }
         }

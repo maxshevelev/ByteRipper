@@ -676,6 +676,24 @@ final class FindFlowTests: XCTestCase {
         XCTAssertEqual(bar.countTextForTests, "2 of 4")
     }
 
+    /// A selection longer than a match is a stretch the reader marked, not a
+    /// match stood on: Find Next goes on after it, not one byte into it.
+    func testFindNextFromALongSelectionStartsAfterIt() throws {
+        var bytes = [UInt8](repeating: 0, count: 64)
+        for at in [4, 20, 40] { bytes.replaceSubrange(at..<at + 2, with: [0xAB, 0xCD]) }
+        let (controller, window, url) = try makeController(bytes)
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        let (combo, _, _, _) = try barControls(window)
+        let pane = controller.windowModel.pane1
+
+        pane.select(range: 2..<32)
+        combo.stringValue = "AB CD"
+        try clickFindNext(window)
+        XCTAssertTrue(pumpUntil(3) { pane.hexSelection().start == 40 },
+                      "the matches at 4 and 20 lie inside the selection, and the search starts after it")
+    }
+
     /// Half a byte cannot be masked, and the field says so rather than reading
     /// `2?` as something else.
     func testHalfAByteIsRefusedWithItsOwnReason() throws {

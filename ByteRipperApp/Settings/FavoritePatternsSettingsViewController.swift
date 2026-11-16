@@ -891,8 +891,18 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         save()
     }
 
+    /// Why `pattern` is not a search in `encoding`: the bar's own reason where
+    /// it has one of its own — half a byte masked, holes alone — and otherwise
+    /// the pattern named, so the reader sees which text was refused.
     private static func complaint(about pattern: String, as encoding: SearchEncoding) -> String {
-        encoding == .hex
+        do {
+            _ = try SearchEngine.parsePattern(pattern, encoding: encoding, allowingHoles: true)
+        } catch SearchError.partialByteMask {
+            return PatternQueryControls.errorText(for: SearchError.partialByteMask)
+        } catch SearchError.holesOnly {
+            return PatternQueryControls.errorText(for: SearchError.holesOnly)
+        } catch {}
+        return encoding == .hex
             ? L("“%1$@” is not hex — use pairs like DE AD BE EF.", pattern)
             : L("“%1$@” cannot be written in %2$@.", pattern, encoding.displayName)
     }

@@ -38,7 +38,7 @@ A string in a dump is in whichever encoding the maker of the firmware happened t
 
 What was typed is looked for in one form after another until something is found:
 
-- Where it reads as a byte sequence — an even run of hex digits, `DEADBEEF`, or those digits in pairs, `DE AD BE EF`, with `??` for any byte — it is looked for as bytes first and as text after.
+- Where it reads as a byte sequence — an even run of hex digits, `DEADBEEF`, or those digits in pairs, `DE AD BE EF`, with `??` for any byte — it is looked for as bytes first and as text after. A `??` counts as a byte only where it stands as one: a pair of its own, `24 ?? 4D 49`, or a pair inside a run, `24??4D49`. At the edge of a run it is read as question marks, so `FACE??` is looked for as text.
 - Otherwise the encodings are tried in turn: ASCII, UTF-8, then UTF-16 LE and UTF-16 BE.
 - An encoding that cannot carry what was typed at all is left out: there is nothing to look for in it.
 - Attempts that come to the same bytes are merged into one pass. `abc` as ASCII and as UTF-8 is the same three bytes, and the dump is not read twice for one answer.

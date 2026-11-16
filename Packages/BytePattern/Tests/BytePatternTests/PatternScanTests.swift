@@ -124,4 +124,27 @@ final class PatternScanTests: XCTestCase {
         XCTAssertEqual(try last(try MaskedPattern.hex("24 44 4D 49"), in: bytes, before: 20, chunk: 4), 7)
         XCTAssertEqual(try last(try MaskedPattern.hex("24 44 4D 49"), in: bytes, before: 8, chunk: 4), 7)
     }
+
+    /// Looking through a window from its end back finds what every forward
+    /// match up to the anchor would have ended on — for holes, letters in
+    /// either case, and a match across windows alike.
+    func testFindPreviousAgreesWithTheLastOfTheForwardMatches() throws {
+        var random = SystemRandomNumberGenerator()
+        let alphabet: [UInt8] = [0x00, 0xFF, 0x41, 0x61, 0x42]
+        let patterns = [
+            try MaskedPattern.hex("FF FF"), try MaskedPattern.hex("41 ?? 41"),
+            try MaskedPattern.ascii("aB", ignoringCase: true), try MaskedPattern.hex("00 ?? ?? FF")
+        ]
+        for _ in 0..<200 {
+            let bytes = (0..<Int.random(in: 0...40, using: &random)).map { _ in alphabet.randomElement(using: &random)! }
+            let chunk = Int.random(in: 1...9, using: &random)
+            let anchor = UInt64.random(in: 0...UInt64(bytes.count), using: &random)
+            for pattern in patterns {
+                let forward = try starts([pattern], in: bytes, chunk: chunk, overlapping: true)
+                XCTAssertEqual(try last(pattern, in: bytes, before: anchor, chunk: chunk),
+                               forward.last(where: { $0 < anchor }),
+                               "\(pattern.hexText) in \(bytes) before \(anchor), windows of \(chunk)")
+            }
+        }
+    }
 }
