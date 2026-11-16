@@ -962,14 +962,23 @@
   // on from the last number the page has: the server keeps two weeks of them
   // with its store, so a restart does not empty the list. The list keeps
   // its scroll while new lines come in above.
+  // The card shows the newest few; the button opens all of the two weeks the
+  // server keeps, in a dialog that goes on filling while it is open.
+  const EVENTS_SHOWN = 5;
+
   function eventLog() {
-    const c = card("Server log", "publishes, leases and restarts of the last two weeks, newest first");
+    const c = card("Server log", "publishes, leases and restarts, newest first");
     const scroller = h("div", { class: "event-log" });
+    const badge = h("span", { class: "count-badge" });
+    const more = h("button", { class: "btn small", type: "button", disabled: true, onclick: openFull },
+      icon("scroll", 15), "Full log", badge);
+    c.head.append(more);
     fill(c.body, scroller);
     let rows = [];
     let last = 0;
     let busy = false;
     let drawn = false;
+    let full = null;
 
     async function update() {
       if (busy) return;
@@ -993,19 +1002,40 @@
       }
     }
 
+    function table(shown) {
+      return h("table", { class: "lines" },
+        h("thead", {}, h("tr", {},
+          h("th", { class: "w-when", text: "Time" }), h("th", { class: "w-event", text: "Event" }),
+          h("th", { class: "w-who", text: "Module" }), h("th", { class: "w-who", text: "Holder" }),
+          h("th", { text: "Detail" }))),
+        h("tbody", {}, shown.slice().reverse().map(eventLine)));
+    }
+
     function draw() {
       drawn = true;
+      more.disabled = !rows.length;
+      badge.textContent = rows.length ? String(rows.length) : "";
+      badge.hidden = !rows.length;
+      if (full && !full.isConnected) full = null;
+      if (full) fill(full, table(rows));
       if (!rows.length) {
         fill(scroller, empty("scroll", "Nothing written down yet",
           "A publish, a lease taken or given back, and the server's next start appear here."));
         return;
       }
-      fill(scroller, h("table", { class: "lines" },
-        h("thead", {}, h("tr", {},
-          h("th", { class: "w-when", text: "Time" }), h("th", { class: "w-event", text: "Event" }),
-          h("th", { class: "w-who", text: "Module" }), h("th", { class: "w-who", text: "Holder" }),
-          h("th", { text: "Detail" }))),
-        h("tbody", {}, rows.slice().reverse().map(eventLine))));
+      fill(scroller, table(rows.slice(-EVENTS_SHOWN)));
+    }
+
+    function openFull() {
+      full = h("div", { class: "event-log full" }, table(rows));
+      dialog({
+        icon: "scroll",
+        title: "Server log",
+        text: "Publishes, leases and restarts of the last two weeks, newest first.",
+        body: full,
+        wide: true,
+        actions: [{ label: "Close", kind: "primary", value: true, focus: true }],
+      });
     }
     return { root: c.root, update };
   }
