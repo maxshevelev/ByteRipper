@@ -307,6 +307,17 @@ extension ContentStore {
             guard let out = index.takenOut?[body] else {
                 throw CodeAnalysisError.analysisMismatch("the body \(body) was not taken out of the registry")
             }
+            // The body comes back from the module the restore is asked from, when
+            // that module holds it: that module's function is the one shown to be
+            // this entry's, not the one it was taken out with (issue 55382e47).
+            var variant = out.variant
+            var source = out.source
+            if let module = changedFrom, let manifest = try analysis(module: module),
+               let function = try? artifact(for: manifest).functions.first(where: { $0.body == body }) {
+                variant.module = module
+                source = LibrarySource(module: module, address: function.entry.description,
+                                       rev: manifest.reading?.rev, by: by)
+            }
             var entry: LibraryIndexEntry
             // `name`: the entry comes back under the name the function has now,
             // when another entry took its old one since (issue cd692d8f).
@@ -318,7 +329,7 @@ extension ContentStore {
                         "the body \(body) rejoins the entry \(out.id), \(held.name), which is still there: a `name` "
                         + "is for an entry that comes back on its own; rename the entry with a review instead")
                 }
-                held.variants.append(out.variant)
+                held.variants.append(variant)
                 entry = held
             } else {
                 let name = wanted.flatMap { $0.isEmpty ? nil : $0 } ?? out.name
@@ -341,7 +352,7 @@ extension ContentStore {
                     renamed = data
                 }
                 entry = LibraryIndexEntry(version: out.version, entry: stored, name: name, kind: out.kind,
-                                          source: out.source, variants: [out.variant], role: out.role)
+                                          source: source, variants: [variant], role: out.role)
             }
             entry.version += 1
             index.entries[out.id] = entry

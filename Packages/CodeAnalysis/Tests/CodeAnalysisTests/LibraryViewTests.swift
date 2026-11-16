@@ -453,6 +453,33 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(back.entries[body.key]?.version, out.version + 1)
     }
 
+    /// A body comes back from the module the restore is asked from: that
+    /// module's function is the one shown to be the entry's, not the one it
+    /// was taken out with (issue 55382e47).
+    func testARestoreRecordsTheRestoringModulesBody() throws {
+        try register(try entryObject())
+        try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "x"), by: "agent")
+        let bytes = Data("Restorer".utf8)
+        let restorer = ModuleIdentity(sha256: SHA256Digest(data: bytes), size: bytes.count, name: "Restorer",
+                                      kind: "TE", language: "x86:LE:32:default", imageBase: "0x0")
+        let artifact = try JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2",
+            "functions": [["entry": "0x9000", "name": "CopyMem", "body": body.key]]
+        ])
+        let review = try store.putObject(Data("{}".utf8))
+        try store.putAnalysis(module: restorer, recipe: AnalysisRecipe(id: "code-v10", exporter: 10, ghidra: "12.2",
+                                                                       script: "ExportCode.java"),
+                              artifact: artifact, reading: AnalysisReading(rev: 4, review: review))
+        try store.changeLibrary(.init(action: .restore, body: body.key, reason: "wrong"), by: "agent",
+                                changedFrom: restorer.sha256)
+        let entry = try XCTUnwrap(try store.libraryIndex().entries[body.key])
+        XCTAssertEqual(entry.variants.map(\.module), [restorer.sha256])
+        XCTAssertEqual(entry.source.module, restorer.sha256)
+        XCTAssertEqual(entry.source.address, "0x9000")
+        XCTAssertEqual(entry.source.rev, 4)
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.source.module, restorer.sha256)
+    }
+
     /// A taken-out body whose name another entry took since comes back under
     /// the name its function has now (issue cd692d8f).
     func testARestoreTakesTheNameTheFunctionHasNow() throws {

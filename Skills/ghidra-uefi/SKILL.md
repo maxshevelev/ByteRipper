@@ -618,7 +618,10 @@ the reason and who agreed. What the registry would refuse is refused before it i
   modules. A publish does not offer it again. A function that held it is the module's
   again, with the text its project holds; one with none takes the entry's at its module's
   next open. Open and publish every module that holds it. `change: restore` with `body`
-  takes a wrong decision back.
+  takes a wrong decision back; the body comes back as the proposing `module`'s function,
+  so propose it from a module whose function is the entry's. An entry whose source is the
+  wrong module is put right the same way: take its body out and restore it from the right
+  module.
 - `change: split` with `id`, `body` and `name` makes one body its own entry under a
   narrower name.
 - A text is replaced only by a proposal (below): agents vote, or the person agrees it on

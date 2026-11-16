@@ -74,8 +74,9 @@ extension GhidraTools {
                 The person can agree or reject any proposal in the server's console. \
                 With `change`, the proposal is a change of the registry itself instead, the only way one is \
                 made: `take_out` takes the entry `id` out of the registry (or only its `body`) — its functions \
-                are each module's own again; `restore` puts a taken-out `body` back — under `name`, the name \
-                its function has now, when another entry took the old one since; `split` makes the `body` \
+                are each module's own again; `restore` puts a taken-out `body` back, as `module`'s function \
+                where `module` holds it — under `name`, the name its function has now, when another entry \
+                took the old one since; `split` makes the `body` \
                 an entry of its own under `name`. `module` is where the review found it; no lease is needed. \
                 What the registry would refuse is refused before it is proposed. It is voted the same way, \
                 and the server applies it the moment it is agreed — no publish waits for it; one the \
