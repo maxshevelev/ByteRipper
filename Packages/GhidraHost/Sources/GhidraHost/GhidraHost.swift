@@ -636,7 +636,7 @@ public actor GhidraHost {
         // The registry decides first, on everything this publish offers: the
         // review's candidates, and the changes to entries its functions link to.
         // A refusal leaves all of it as it was, and stores nothing.
-        var offered = try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module)
+        var offered = try await keepingSharedBodies(try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module), module: module)
         // A link reads its entry's text: an entry with none learns it from here.
         let completion = try await Self.completions(exported, offer: offer.proposals, offered: offered,
                                                     reviewed: reviewed, take: take, writer: writer)
@@ -1081,7 +1081,7 @@ public actor GhidraHost {
                     preview["library_taken_as_origin"] = own.names
                 }
             }
-            var offered = try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module)
+            var offered = try await keepingSharedBodies(try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module), module: module)
             let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
                                                         take: takeLibrary, writer: writer)
             offered += completion.proposals

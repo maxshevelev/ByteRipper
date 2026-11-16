@@ -140,6 +140,14 @@ review documents.
   the console, and the module's next publish applies it (2026-11-13); a rename
   is such a replacement. Take-out, split and restore are proposals as well,
   which the server applies the moment they are agreed.
+  An edit only the C shows — a decompiler temporary (`HASH:…`) named or typed,
+  which is no part of the entry's `locals` — counts when it comes from the
+  module the entry's C came from, at the same address, on a function edited
+  since it was bound: a body that prints otherwise than a reprinting is the
+  entry's next version when no other module of its size holds the entry.
+  When others hold it, the edit stays the module's and the publish goes on as
+  if nothing changed: a temporary's name never refuses a publish (the person,
+  2026-11-16). Another module's C is its own printing and changes nothing.
   The next version reaches every reader at once: readers read the entry.
 - **Readers see that a function is the registry's**: the artifact records
   `library_entry` (the entry, its version, and whether the function is the

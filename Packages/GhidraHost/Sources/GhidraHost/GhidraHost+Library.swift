@@ -795,6 +795,31 @@ extension GhidraHost {
         }
     }
 
+    /// The offer with an edit only the C shows — a decompiler temporary named
+    /// or typed in an entry's body by the module its C came from — kept back
+    /// where another module of this size holds the entry: such an edit is the
+    /// entry's next version only from its sole holder, and never refuses a
+    /// publish (the person, 2026-11-16).
+    func keepingSharedBodies(_ proposals: [LibraryProposal], module: SHA256Digest) async throws -> [LibraryProposal] {
+        guard !proposals.isEmpty else { return proposals }
+        let index = try await writer.readLibraryIndex()
+        let bits = moduleBits(module) == 32 ? "Ia32" : "X64"
+        var kept: [LibraryProposal] = []
+        for var proposal in proposals {
+            if !proposal.linked, let id = proposal.basedOn, let held = index.entries[id] {
+                let object = try await writer.readObject(held.entry)
+                let source = LibrarySource(module: module, address: proposal.address, rev: nil, by: nil)
+                if LibraryProposal.sameReview(object, proposal.entry),
+                   LibraryProposal.editsBody(proposal.entry, in: object, heldSource: held.source, source: source),
+                   !(await otherEntryHolders([id], module: module, bits: bits)).isEmpty {
+                    proposal.keepsEntryBody = true
+                }
+            }
+            kept.append(proposal)
+        }
+        return kept
+    }
+
     /// A Codable value as plain JSON objects, to put beside the owner's own.
     /// For each conflicting entry, by id: every field the module's review
     /// changes, as the entry holds it and as the module offers it. The

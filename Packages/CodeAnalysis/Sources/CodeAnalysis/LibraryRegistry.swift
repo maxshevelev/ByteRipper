@@ -315,6 +315,10 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public var teachesBytesOnly: Bool?
     /// The body's code, for a body the registry holds without it. Teaches only that.
     public var code: Data?
+    /// Set by the host when other modules hold the entry: an edit of the
+    /// body that only its C shows — a decompiler temporary named or typed —
+    /// is not offered, and the publish takes the review as the entry's own.
+    public var keepsEntryBody: Bool?
     /// What the body refers to, by offset from its entry, and what it calls:
     /// what decides whether it depends on a module. Nil from an owner that
     /// does not say. Beside the review, not part of it.
@@ -650,6 +654,22 @@ extension LibraryProposal {
         for key in ["c", "c_spans", "c_sites", "c_fields", "c_unreachable"] { function[key] = offered[key] }
         object["function"] = function
         return try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+    }
+
+    /// Whether the module the entry's C came from, at the same address, now
+    /// prints a body that reads otherwise than a reprinting allows: a review's
+    /// edit below the head that the review's fields cannot show — a decompiler
+    /// temporary (`HASH:…`) named or typed is the module's own and never one of
+    /// the entry's `locals`, so only the C carries it.
+    public static func editsBody(_ proposal: Data, in held: Data, heldSource: LibrarySource, source: LibrarySource) -> Bool {
+        guard let object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
+              let function = object["function"] as? [String: Any], let old = function["c"] as? String,
+              let offered = ((try? JSONSerialization.jsonObject(with: proposal)) as? [String: Any])?["function"] as? [String: Any],
+              let new = offered["c"] as? String, old != new else { return false }
+        let origin = function["source"] as? [String: Any]
+        guard (origin?["module"] as? String ?? heldSource.module.hex) == source.module.hex,
+              (origin?["address"] as? String ?? heldSource.address) == source.address else { return false }
+        return !samePrinting(old, new)
     }
 
     /// The held entry with the equates its C prints, or nil when it has them
@@ -1127,7 +1147,14 @@ extension ContentStore {
                     && LibraryProposal.sameReview(heldObject, proposal.entry)
                 let completes = lacksFunction || (!LibraryProposal.hasConstants(heldObject)
                     && LibraryProposal.hasConstants(proposal.entry) && proposal.body == held.variants.first?.body)
-                if LibraryProposal.sameReview(heldObject, proposal.entry), !completes {
+                // The entry's own module, written on since it bound the body,
+                // printing it otherwise: the body's review moved, though every
+                // field the review lists and every name its C prints stands. It changes what the entry
+                // says, so it goes as a replacement.
+                let editsBody = proposal.basedOn == id && !proposal.linked && proposal.keepsEntryBody != true
+                    && LibraryProposal.sameReview(heldObject, proposal.entry)
+                    && LibraryProposal.editsBody(proposal.entry, in: heldObject, heldSource: held.source, source: source)
+                if LibraryProposal.sameReview(heldObject, proposal.entry), !completes, !editsBody {
                     // An entry from before entries recorded their equates learns
                     // them from the module its C came from: no version moves.
                     if let filled = LibraryProposal.fillingEquates(proposal.entry, in: heldObject,
@@ -1179,8 +1206,8 @@ extension ContentStore {
                 // an agreed proposal takes.
                 conflicting.insert(id)
                 let taken = take.all ? allReason : reasons[id]
-                let recordsOnly = LibraryProposal.sameReview(heldObject, proposal.entry)
-                let adds = LibraryProposal.onlyAdds(to: heldObject, offered: proposal.entry)
+                let recordsOnly = !editsBody && LibraryProposal.sameReview(heldObject, proposal.entry)
+                let adds = !editsBody && LibraryProposal.onlyAdds(to: heldObject, offered: proposal.entry)
                 guard adds || (completes && recordsOnly) || taken != nil else {
                     let printed = LibraryProposal.nameChanges(from: heldObject, to: proposal.entry)
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,

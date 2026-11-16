@@ -360,6 +360,50 @@ final class LibraryRegistryTests: XCTestCase {
         }
     }
 
+    /// A decompiler temporary named or typed is in no field of the review, only
+    /// in the C. The entry's own module, written on since it bound the body,
+    /// printing the body otherwise has changed what the entry says: a
+    /// replacement, taken with a reason, as the next version. Kept back by the
+    /// host because others hold the entry, another module's C, or the same
+    /// function bound and clean, it is no change.
+    func testTheEntrysModuleEditingItsBodyBelowTheFieldsIsAChange() throws {
+        let module = SHA256Digest(data: Data("a".utf8))
+        let added = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
+            printed("uVar1 = *(int *)(Base + -4);\nreturn uVar1;", base: nil)])
+        let id = try XCTUnwrap(added.added.first?.id)
+        let held = try XCTUnwrap(try store.libraryIndex().entries[id]?.entry)
+        let edited = printed("IdtBase = *(EFI_PEI_SERVICES ***)(Base + -4);\nreturn IdtBase;", base: 1)
+
+        let dry = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [edited], dryRun: true)
+        XCTAssertTrue(dry.unchanged.isEmpty, "the edit is offered, not taken for the entry's own review")
+        XCTAssertEqual(dry.conflicts.map(\.id), [id])
+        XCTAssertEqual(dry.conflicts.first?.heldBy.module, module)
+        XCTAssertTrue(dry.conflicts.first?.changed?.contains("function") == true)
+
+        var clean = edited
+        clean.linked = true
+        XCTAssertEqual(try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [clean],
+                                                   dryRun: true).unchanged.map(\.id), [id], "bound and clean: nothing to say")
+        var shared = edited
+        shared.keepsEntryBody = true
+        XCTAssertEqual(try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [shared])
+                        .unchanged.map(\.id), [id], "others hold it: the edit stays the module's, and nothing refuses")
+        let other = try store.putLibraryEntries(module: SHA256Digest(data: Data("b".utf8)), rev: 2, by: "agent",
+                                                proposals: [edited], dryRun: true)
+        XCTAssertEqual(other.unchanged.map(\.id), [id], "another module's C is its own printing")
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, held)
+
+        let taken = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [edited],
+                                                take: .all("the temporary is the IDT base"))
+        XCTAssertEqual(taken.updated.map(\.version), [2])
+        let entry = try XCTUnwrap(try store.libraryIndex().entries[id])
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(entry.entry)) as? [String: Any])
+        XCTAssertEqual((object["function"] as? [String: Any])?["c"] as? String,
+                       "IdtBase = *(EFI_PEI_SERVICES ***)(Base + -4);\nreturn IdtBase;")
+        XCTAssertEqual(try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [edited])
+                        .unchanged.map(\.version), [2], "taken, it is the entry's own review")
+    }
+
     func testAnotherModulesReviewIsAConflictTakenOnlyWithAReason() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
         let refused = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
