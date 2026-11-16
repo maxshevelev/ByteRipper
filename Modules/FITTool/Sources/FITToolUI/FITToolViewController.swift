@@ -541,34 +541,15 @@ import ToolModuleKit
                 : rowDetail.title)
             return
         }
-        detail.prepareForRows(subject: subject)
-
-        if !rowDetail.title.isEmpty {
-            let title = NSTextField(labelWithString: rowDetail.title)
-            title.font = ToolPanelFont.title()
-            title.translatesAutoresizingMaskIntoConstraints = false
-            detail.content.addArrangedSubview(title)
-        }
-
-        // One `ToolFieldList` — the rows the UEFI Structure's detail and the
-        // ME panel's are drawn with — so a bench selects and copies them here
-        // as it does there: a drag takes a band of rows, ⌘A the list, and ⌘C
-        // copies with a tab between a name and its value. A value is drawn by
-        // its tone, the same call those panels make: a checksum that does not
+        // The rows the UEFI Structure's detail and the ME panel's are filled
+        // with (`showRows`), so a bench selects and copies them here as it
+        // does there. A value is drawn by its tone: a checksum that does not
         // check out — what Fix Checksum would write — is the one value in here
-        // drawn red. The name column is as wide as the longest name, and never
-        // wider than half the list, where a name that still does not fit
-        // wraps.
-        let fields = ToolFieldList(
-            fields: rowDetail.fields.map {
-                .init(label: $0.label,
-                      value: ($0.isProblem ? ToolValueTone.bad : .standard).attributedValue($0.value))
-            },
-            nameWidth: ToolFieldList.nameWidth(for: rowDetail.fields.map(\.label)))
-        detail.content.addArrangedSubview(fields)
-        // As wide as the list, so a value too long for the column — a GUID, a
-        // hash — wraps inside it instead of running off the side.
-        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
+        // drawn red.
+        detail.showRows(subject: subject, title: rowDetail.title, fields: rowDetail.fields.map {
+            .init(label: $0.label,
+                  value: ($0.isProblem ? ToolValueTone.bad : .standard).attributedValue($0.value))
+        })
     }
 
     /// How tall the findings list is: exactly its rows, up to

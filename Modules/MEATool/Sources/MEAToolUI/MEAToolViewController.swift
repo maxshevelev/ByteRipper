@@ -1012,7 +1012,7 @@ import ToolModuleKit
         switch row.value {
         case .verdict(let verdict, let evidence):
             return .init(label: row.label,
-                         value: toned(verdict, tone: row.tone, evidence: evidence))
+                         value: row.tone.attributedValue(verdict, evidence: evidence))
         case .value:
             return .init(label: row.label, value: row.tone.attributedValue(text))
         case .comingSoon, .pending:
@@ -1021,18 +1021,6 @@ import ToolModuleKit
                 attributes: [.font: ToolPanelFont.body(),
                              .foregroundColor: NSColor.secondaryLabelColor]))
         }
-    }
-
-    /// A verdict in its tone, and what it was read from in brackets after it
-    /// in the ordinary font and colour — one drawing for the Summary's rows and
-    /// the tree's detail, so the two cannot come apart.
-    private static func toned(_ verdict: String, tone: ToolValueTone,
-                              evidence: String) -> NSAttributedString {
-        let drawn = NSMutableAttributedString(attributedString: tone.attributedValue(verdict))
-        if !evidence.isEmpty {
-            drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
-        }
-        return drawn
     }
 
     /// Rebuilds the detail list from the focused row's own fields.
@@ -1051,37 +1039,15 @@ import ToolModuleKit
                 : L("Nothing more to show for this row."))
             return
         }
-        detail.prepareForRows(subject: focus.title)
-
-        let title = NSTextField(labelWithString: focus.title)
-        title.font = ToolPanelFont.title()
-        title.translatesAutoresizingMaskIntoConstraints = false
-        detail.content.addArrangedSubview(title)
-
         // The engine's field names run long — "systemHeaderCRCValid",
-        // "matchesMFSDictionary" — and the shared default column cut them off
-        // mid-word. The column is as wide as the longest name it carries, so
-        // one that fits is shown whole; never narrower than the default, so a
-        // list of short names reads exactly as it did; and never wider than
-        // half the list, where a name that still does not fit wraps rather
-        // than crowding the value out.
-        let fields = ToolFieldList(
-            fields: focus.fields.map {
-                // One rendering for a value that carries a status, wherever it
-                // is drawn — bold, in the tone's colour, and led by the tick
-                // when the status is a passed check. This is the same call the
-                // UEFI Structure's detail makes for the same field, and the
-                // Summary's row asks the tone for the same string, so the
-                // three cannot come apart. Evidence follows in brackets in the
-                // ordinary drawing, as the Summary's verdict rows carry theirs.
-                .init(label: $0.label,
-                      value: Self.toned($0.value, tone: $0.tone, evidence: $0.evidence))
-            },
-            nameWidth: ToolFieldList.nameWidth(for: focus.fields.map(\.label)))
-        detail.content.addArrangedSubview(fields)
-        // As wide as the list, so a value too long for the column — a hash, a
-        // GUID — wraps inside it instead of running off the side.
-        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
+        // "matchesMFSDictionary" — and `showRows` sizes the name column to
+        // them. A value that carries a status is drawn by its tone, with its
+        // evidence in brackets after it, as the Summary's verdict rows carry
+        // theirs: one call (`ToolValueTone.attributedValue(_:evidence:)`), so
+        // the two cannot come apart.
+        detail.showRows(subject: focus.title, title: focus.title, fields: focus.fields.map {
+            .init(label: $0.label, value: $0.tone.attributedValue($0.value, evidence: $0.evidence))
+        })
     }
 }
 

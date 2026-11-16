@@ -1249,29 +1249,17 @@ import UEFITool
                 : node.title)
             return
         }
-        detail.prepareForRows(subject: subject)
-
-        if !node.title.isEmpty {
-            let title = NSTextField(labelWithString: node.title)
-            title.font = ToolPanelFont.title()
-            title.translatesAutoresizingMaskIntoConstraints = false
-            detail.content.addArrangedSubview(title)
-        }
-
-        // A view per field, its text selectable across the rows: a bench
-        // copies an offset or a GUID out of here, and a value it cannot select
-        // is one it has to retype. A value that carries a status is drawn the
-        // way the ME panel draws its own — bold, and in the tone's colour — so
-        // a checksum that does not check out reads here the way a "Configured"
-        // reads there.
-        let fields = ToolFieldList(fields: node.fields.map {
+        // The rows the FIT and ME panels are filled with (`showRows`), their
+        // text selectable across them: a bench copies an offset or a GUID out
+        // of here, and a value it cannot select is one it has to retype. A
+        // value that carries a status is drawn by its tone, as the ME panel
+        // draws its own, so a checksum that does not check out reads here the
+        // way a "Configured" reads there.
+        detail.showRows(subject: subject, title: node.title, fields: node.fields.map {
             .init(label: $0.label, value: $0.tone.attributedValue($0.value))
         })
-        detail.content.addArrangedSubview(fields)
-        // As wide as the list, so a value too long for the column — a GUID, a
-        // hash — wraps inside it instead of running off the side.
-        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
 
+        // What is this panel's own, under the rows.
         for table in node.tables { addTable(table) }
         if let picture = node.picture { addPicture(picture) }
         if let sound = node.sound { addSound(sound) }

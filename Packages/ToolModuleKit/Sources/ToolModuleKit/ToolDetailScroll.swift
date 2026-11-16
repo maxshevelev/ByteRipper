@@ -376,4 +376,36 @@ import Localization
         shownSubject = subject
         documentView?.scroll(.zero)
     }
+
+    /// Fills the list with a subject's rows: its title, if it has one, and its
+    /// fields — the one way every firmware panel's detail is filled, so the
+    /// FIT, UEFI Structure and ME panels draw the same rows the same way.
+    ///
+    /// The name column is as wide as the longest name, never narrower than the
+    /// shared default — a list of short names reads as it always did — and
+    /// never wider than half the list, where a name that still does not fit
+    /// wraps rather than crowding the value out. The list is as wide as the
+    /// content, so a value too long for its column — a GUID, a hash — wraps
+    /// inside it instead of running off the side.
+    ///
+    /// A panel adds what is its own after the list — a table, a picture, a
+    /// player — to `content`, under the rows returned here.
+    @discardableResult
+    public func showRows(subject: String, title: String,
+                         fields: [ToolFieldList.Field]) -> ToolFieldList {
+        prepareForRows(subject: subject)
+
+        if !title.isEmpty {
+            let heading = NSTextField(labelWithString: title)
+            heading.font = ToolPanelFont.title()
+            heading.translatesAutoresizingMaskIntoConstraints = false
+            content.addArrangedSubview(heading)
+        }
+
+        let list = ToolFieldList(fields: fields,
+                                 nameWidth: ToolFieldList.nameWidth(for: fields.map(\.label)))
+        content.addArrangedSubview(list)
+        list.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+        return list
+    }
 }

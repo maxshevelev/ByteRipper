@@ -274,18 +274,12 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
             details.showPlaceholder(L("Select a tool to see what the agent is told about it."))
             return
         }
-        details.prepareForRows(subject: entry.tool.name)
-        let title = NSTextField(labelWithString: entry.tool.name)
-        title.font = ToolPanelFont.title()
-        title.translatesAutoresizingMaskIntoConstraints = false
-        details.content.addArrangedSubview(title)
-        let list = ToolFieldList(fields: Self.detailFields(of: entry, stats[entry.tool.name]).map { field in
+        let list = details.showRows(subject: entry.tool.name, title: entry.tool.name,
+                                    fields: Self.detailFields(of: entry, stats[entry.tool.name]).map { field in
             .init(label: field.label, value: NSAttributedString(string: field.value, attributes: [
                 .font: ToolPanelFont.body(),
                 .foregroundColor: field.isProblem ? SemanticColors.bad : NSColor.labelColor]))
         })
-        details.content.addArrangedSubview(list)
-        list.widthAnchor.constraint(equalTo: details.content.widthAnchor).isActive = true
         var last: NSView = list
         for (heading, text, code) in [(L("Description"), entry.tool.description, false),
                                       (L("Arguments"), entry.tool.inputSchema.prettyText, true)] {

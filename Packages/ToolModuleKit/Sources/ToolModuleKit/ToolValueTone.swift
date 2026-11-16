@@ -83,6 +83,19 @@ public enum ToolValueTone: Sendable, Equatable, Hashable {
         return result
     }
 
+    /// A verdict in this tone, and what it was read from in brackets after it
+    /// in the ordinary drawing. One drawing for a
+    /// verdict and its evidence wherever a panel shows one, so the ME
+    /// Summary, a detail list and any later panel cannot come apart. An empty
+    /// `evidence` is the verdict alone.
+    public func attributedValue(_ verdict: String, evidence: String) -> NSAttributedString {
+        let drawn = NSMutableAttributedString(attributedString: attributedValue(verdict))
+        if !evidence.isEmpty {
+            drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
+        }
+        return drawn
+    }
+
     /// Draws `field` the way the app draws a labelled value — the font, the
     /// colour, and the mark a passed check carries. The one call every panel
     /// makes, so the same fact cannot read two ways in two of them.
