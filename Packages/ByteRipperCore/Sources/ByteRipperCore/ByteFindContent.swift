@@ -16,7 +16,22 @@ public struct ByteQuery: Equatable, Sendable {
 }
 
 /// A dump's bytes as something `FindIndexer` searches: positions are byte
-/// offsets, and the scans are `SearchEngine`'s.
+/// offsets, and the scan is `PatternScan`'s — the one the agent's
+/// `find_bytes` and the UEFI Structure's search run, so all three find the
+/// same.
+///
+/// **Matches overlap, always.** After a match the scan looks again one byte
+/// after its start, not after its end, so `FF FF` over a run of five 0xFF is
+/// four matches. A non-overlapping set depends on where the scan started —
+/// `FF FF` in `FF FF FF` is a match at 0 from offset 0 and at 1 from offset 1
+/// — so Find Next from the caret could land on a match Find All's set does
+/// not hold; an overlapping set is the file's alone. The two differ only for
+/// a pattern that overlaps itself: a run, or a mask such as `24 ?? 24` (#33).
+///
+/// So the steps are by start: Find Next is the first match starting at or
+/// after the anchor, Find Previous the last starting before it — a match the
+/// reader stands on is passed by one byte, not by its length, and a run is
+/// walked a byte at a time either way.
 public struct ByteFindContent: FindContent {
     public let storage: ByteStorage
     public let chunkSize: Int
@@ -33,19 +48,72 @@ public struct ByteFindContent: FindContent {
     public func firstMatch(of query: ByteQuery, from anchor: UInt64, direction: SearchDirection,
                            shouldCancel: () -> Bool,
                            progress: (Double) -> Void) throws -> Range<UInt64>? {
-        try SearchEngine.find(pattern: query.pattern.bytes, in: storage, from: anchor,
-                              direction: direction, folding: query.folding,
-                              chunkSize: chunkSize, shouldCancel: shouldCancel,
-                              progress: progress)
+        let pattern = MaskedPattern(query.pattern, folding: query.folding)
+        switch direction {
+        case .forward:
+            guard anchor < storage.size else { progress(1); return nil }
+            var found: Range<UInt64>?
+            try SearchEngine.matches(of: [pattern], in: storage, range: anchor..<storage.size,
+                                     overlapping: true, chunkSize: chunkSize,
+                                     shouldCancel: shouldCancel, progress: progress) { match, _ in
+                found = match
+                return false
+            }
+            return found
+        case .backward:
+            return try SearchEngine.lastMatch(of: pattern, in: storage, before: anchor,
+                                              chunkSize: chunkSize, shouldCancel: shouldCancel,
+                                              progress: progress)
+        }
     }
 
     public func matchStarts(of query: ByteQuery,
                             shouldCancel: @escaping @Sendable () -> Bool,
                             progress: @escaping @Sendable (Double) -> Void)
         -> AsyncThrowingStream<MatchBatch, any Error> {
-        SearchEngine.matchStartsStream(pattern: query.pattern.bytes, in: storage,
-                                       folding: query.folding, chunkSize: chunkSize,
-                                       shouldCancel: shouldCancel, progress: progress)
+        let storage = storage
+        let chunkSize = chunkSize
+        let pattern = MaskedPattern(query.pattern, folding: query.folding)
+        let batchSize = SearchEngine.defaultBatchSize
+        return AsyncThrowingStream { continuation in
+            let task = Task.detached(priority: .userInitiated) {
+                do {
+                    var batch: [UInt64] = []
+                    batch.reserveCapacity(min(batchSize, 1024))
+                    try SearchEngine.matches(
+                        of: [pattern], in: storage, overlapping: true, chunkSize: chunkSize,
+                        shouldCancel: shouldCancel, progress: progress,
+                        // Every window is an instalment, even an empty one: a
+                        // stretch with no match in it is still a stretch the
+                        // index now knows about.
+                        windowFinished: { covered in
+                            continuation.yield(MatchBatch(starts: batch, scannedUpTo: covered))
+                            batch.removeAll(keepingCapacity: true)
+                        }
+                    ) { match, _ in
+                        batch.append(match.lowerBound)
+                        if batch.count >= batchSize {
+                            // Matches are visited in order of start, and they
+                            // overlap: what is known complete mid-window is
+                            // every start up to this one, not up to its end.
+                            continuation.yield(MatchBatch(starts: batch,
+                                                          scannedUpTo: match.lowerBound + 1))
+                            batch.removeAll(keepingCapacity: true)
+                        }
+                        return true
+                    }
+                    if !batch.isEmpty {
+                        continuation.yield(MatchBatch(starts: batch, scannedUpTo: storage.size))
+                    }
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 }
 

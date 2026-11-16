@@ -13,11 +13,11 @@ import UEFITool
 /// (`Design/AGENT_PLAN.md`, search and extract).
 ///
 /// The search is the find bar's own engine (`SearchEngine.matches`), so an
-/// agent and a person find the same; it is given holes in a hex pattern and,
-/// when asked, matches that overlap. With a node it is the UEFI panel's
-/// Contents search instead: the node and everything decompressed or decoded
-/// under it (`UEFIContentSearch`). A part opens as the window
-/// opens one — Open Zone's way for a range, the UEFI panel's Open for a node —
+/// agent and a person find the same; it is given holes in a hex pattern, and
+/// matches overlap as they do in the find bar unless `overlapping` is false.
+/// With a node it is the UEFI panel's Contents search instead: the node and
+/// everything decompressed or decoded under it (`UEFIContentSearch`). A part
+/// opens as the window opens one — Open Zone's way for a range, the UEFI panel's Open for a node —
 /// over its parent, linked back to it.
 @MainActor
 final class AgentFindTools {
@@ -64,8 +64,8 @@ final class AgentFindTools {
                 `uefi_node_data` reads — and `decoded` ("XOR 77") in a LENV block decoded. With `context`, \
                 a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map \
                 names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the \
-                compressed sections that would not decompress. Matches do not overlap unless \
-                `overlapping`: "AA" in "AAAA" is two, or three with it. Pages: `limit` is a ceiling — a \
+                compressed sections that would not decompress. Matches overlap, as in the find \
+                bar: "AA" in "AAAA" is three, or two with `overlapping` false. Pages: `limit` is a ceiling — a \
                 page also stops before the answer passes the size bound and says `truncated: "size"`; pass \
                 `next` back as `after` until it is null. With `survey`, which dumps of a folder hold a \
                 string.
@@ -77,7 +77,7 @@ final class AgentFindTools {
                 "encoding": AgentSchema.choice(["ascii", "utf16le", "both"],
                                                "How `text` is stored. Default \"both\"."),
                 "ignore_case": AgentSchema.boolean("Letters in either case — ASCII letters of `text`. Default false."),
-                "overlapping": AgentSchema.boolean("Count matches that overlap one another. Default false."),
+                "overlapping": AgentSchema.boolean("Count matches that overlap one another, as the find bar does. Default true."),
                 "offset": AgentSchema.offset("Where the search of the document starts. Default 0x0. Not with `node`."),
                 "end": AgentSchema.offset("The first byte after the searched range. Default: the end. Not with `node`."),
                 "node": AgentSchema.string("Search what the UEFI tree holds at and under this node, decompressed and decoded; \"root\" for the whole image."),
@@ -108,7 +108,8 @@ final class AgentFindTools {
                 return [Wanted(pattern: try MaskedPattern.hex(hex), encoding: "hex")]
             } catch {
                 throw AgentToolError("`hex` is not a byte pattern. Give pairs of hex digits and `??` for any byte, "
-                    + "e.g. \"24 ?? 4D 49\"; a pattern of `??` alone matches everywhere.")
+                    + "e.g. \"24 ?? 4D 49\". A hole is a whole byte — half a byte (`2?`) cannot be masked — "
+                    + "and a pattern of `??` alone matches everywhere.")
             }
         case (.some(let text), _):
             guard !text.isEmpty else { throw AgentToolError("`text` is empty.") }
@@ -135,7 +136,7 @@ final class AgentFindTools {
     private func find(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try diff.resolve(arguments.optionalString("document"))
         let wanted = try patterns(arguments)
-        let overlapping = try arguments.bool("overlapping", default: false)
+        let overlapping = try arguments.bool("overlapping", default: true)
         let context = Int(max(0, min(Int64(Self.maxContext), try arguments.has("context") ? arguments.integer("context") : 0)))
         let limit = try arguments.limit(default: 100, maximum: 1000)
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)

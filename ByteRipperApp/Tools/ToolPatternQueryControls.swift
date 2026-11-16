@@ -64,16 +64,9 @@ final class ToolPatternQueryControls: ToolPatternQuery {
     func attempts() -> [ToolPatternAttempt]? {
         let records = recording
         recording = true
-        let text = controls.text
-        // Bytes with holes — `24 ?? 4D 49` — which the dump's own parse does
-        // not take: hex as the scan reads it, with the holes kept.
-        if text.contains("??"), controls.isSmartSearchEnabled || controls.currentEncoding() == .hex,
-           let masked = try? MaskedPattern.hex(text) {
-            onProblem?(nil, nil)
-            controls.noteSearchStarted(recording: records)
-            return [ToolPatternAttempt(pattern: masked, encoding: SearchEncoding.hex.rawValue,
-                                       encodingName: SearchEncoding.hex.displayName)]
-        }
+        // The field is read as the dump's bar reads it — `24 ?? 4D 49` is
+        // bytes with a hole in them, in hex and in Smart Search's hex attempt
+        // alike — so a pattern finds in a panel what it finds in the dump.
         guard let request = controls.searchRequest() else { return nil }  // said through onProblem
         controls.noteSearchStarted(recording: records)
         switch request {

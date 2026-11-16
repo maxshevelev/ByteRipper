@@ -47,7 +47,9 @@ public protocol FindContent: Sendable {
 
     /// The first match of `query` from `anchor` in `direction`, not wrapping —
     /// forward, the first starting at or after `anchor`; backward, the last
-    /// ending at or before it. Nil when there is none that way.
+    /// starting before it. Both by start, as `MatchSet` steps, so a step
+    /// through a built index and a scan land on the same match. Nil when
+    /// there is none that way.
     ///
     /// Runs on whatever thread calls it. Throws `CancellationError` once
     /// `shouldCancel` says so, and may throw when the content cannot be read
