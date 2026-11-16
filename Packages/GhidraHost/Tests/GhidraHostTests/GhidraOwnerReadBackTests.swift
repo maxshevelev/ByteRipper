@@ -472,8 +472,11 @@ final class GhidraOwnerReadBackTests: XCTestCase {
     // MARK: - Reproductions on copies of kept projects
 
     private func openCopy(of name: String) async throws {
-        guard ProcessInfo.processInfo.environment["GHIDRA_COPY_KEPT"] != nil else { throw XCTSkip("GHIDRA_COPY_KEPT is not set") }
-        let source = GhidraHost.defaultProjectsRoot
+        guard let kept = ProcessInfo.processInfo.environment["GHIDRA_COPY_KEPT"] else { throw XCTSkip("GHIDRA_COPY_KEPT is not set") }
+        // A folder of kept projects — a server's — or any other value for the app's.
+        var isFolder: ObjCBool = false
+        let source = FileManager.default.fileExists(atPath: kept, isDirectory: &isFolder) && isFolder.boolValue
+            ? URL(fileURLWithPath: kept, isDirectory: true) : GhidraHost.defaultProjectsRoot
         guard let original = GhidraProject.all(in: source).first(where: { (try? $0.state().module.name) == name }) else {
             throw XCTSkip("no kept \(name) project to copy")
         }
@@ -686,6 +689,37 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let noOp = try await release()
         XCTAssertNil(noOp)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+    }
+
+    /// A placeholder the C prints that no local or parameter carries — a
+    /// zero-hash temporary has no storage and first use to be named by — is in
+    /// `leftovers.fragment_names`, so a function that still prints one never
+    /// reads as finished (issue bf1f1b38: CpuPei's MtrrLib functions printed
+    /// `uVar1`, `uVar2`, `iVar1` with `leftovers` empty).
+    func testEveryPlaceholderTheCPrintsIsLeftOver() async throws {
+        try await openCopy(of: "CpuPei")
+        let placeholder = try NSRegularExpression(pattern:
+            #"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*Var\d+|local_[0-9a-fA-F]+|extraout_[A-Z0-9]+|in_[A-Z0-9]+|unaff_[A-Z0-9]+)(?![A-Za-z0-9_])"#)
+        var unlisted: [String] = []
+        var printedOnly = 0
+        for entry in try await entries() {
+            let function = try await read("/v1/function/\(entry)")
+            let c = (function["c"] as? String ?? "")
+                .replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
+            let carried = Set(((function["locals"] as? [[String: Any]]) ?? []).compactMap { $0["name"] as? String }
+                + ((function["parameters"] as? [[String: Any]]) ?? []).compactMap { $0["name"] as? String })
+            let printed = Set(placeholder.matches(in: c, range: NSRange(c.startIndex..., in: c)).compactMap {
+                Range($0.range(at: 1), in: c).map { String(c[$0]) }
+            })
+            let leftovers = function["leftovers"] as? [String: Any]
+            let listed = Set(leftovers?["fragment_names"] as? [String] ?? [])
+            for name in printed.subtracting(carried) {
+                printedOnly += 1
+                if !listed.contains(name) { unlisted.append("\(entry) \(function["name"] ?? "") \(name)") }
+            }
+        }
+        XCTAssertEqual(unlisted, [], "printed in the C, carried by no variable, and not left over")
+        print("bf1f1b38: \(printedOnly) printed-only placeholders in CpuPei")
     }
 
     /// A write the store has not got is what a done is for, whatever the session that finds it does first: the

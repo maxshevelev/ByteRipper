@@ -487,9 +487,11 @@ public class Owner {
         DecompileResults results = decompile(function);
         HighFunction high = results == null ? null : results.getHighFunction();
         if (high != null) {
+            java.util.Set<String> known = new java.util.HashSet<>();
             Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
             while (symbols.hasNext()) {
                 HighSymbol symbol = symbols.next();
+                known.add(symbol.getName());
                 if (symbol.isParameter()) continue;
                 if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
                 if (!placeholder(symbol.getName()) && !undefined(symbol.getDataType())) continue;
@@ -501,6 +503,25 @@ public class Owner {
                     fragmentNames.add(symbol.getName());
                 } else {
                     locals++;
+                }
+            }
+            // A placeholder the C prints that no symbol carries — a zero-hash
+            // temporary, or one a stale symbol displaced — has no storage and
+            // first use to be named by: it is a piece of the decompiler's, told
+            // by its name, never a finished function's silence (issue bf1f1b38).
+            if (results.getDecompiledFunction() != null) {
+                String c = results.getDecompiledFunction().getC();
+                c = c == null ? "" : c.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\\n]*", " ");
+                java.util.Set<String> printed = new java.util.TreeSet<>();
+                java.util.regex.Matcher word = java.util.regex.Pattern.compile("(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*").matcher(c);
+                while (word.find()) {
+                    String name = word.group();
+                    if (!name.startsWith("param_") && !name.startsWith("undefined") && placeholder(name)
+                        && !known.contains(name)) printed.add(name);
+                }
+                for (String name : printed) {
+                    fragments++;
+                    fragmentNames.add(name);
                 }
             }
         }
@@ -6818,13 +6839,25 @@ public class Owner {
             JsonArray removed = localsRemoved(function, localsBefore, applied);
             if (removed.size() > 0) answer.add("locals_removed", removed);
         }
-        HighFunction after = decompile(function).getHighFunction();
+        DecompileResults afterResults = decompile(function);
+        HighFunction after = afterResults == null ? null : afterResults.getHighFunction();
         if (after != null) {
             // The decompiler can leave a name out again, as it does for an
             // `in_` value read before this function writes it: not applied.
             boolean taken = false;
             for (Iterator<HighSymbol> scan = after.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
                 if (scan.next().getName().equals(applied)) { taken = true; break; }
+            }
+            // A symbol in the map is not a name in the C: one committed on a
+            // hash no varnode of this decompile has — a zero-hash temporary's
+            // — sits in the map with nothing printed under it, and the C keeps
+            // the placeholder (issue bf1f1b38).
+            if (taken && afterResults.getDecompiledFunction() != null) {
+                // Comments out first: a plate can name the variable it is about.
+                String c = afterResults.getDecompiledFunction().getC();
+                c = c == null ? "" : c.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\\n]*", " ");
+                taken = java.util.regex.Pattern.compile("(?<![A-Za-z0-9_])" + java.util.regex.Pattern.quote(applied)
+                    + "(?![A-Za-z0-9_])").matcher(c == null ? "" : c).find();
             }
             if (!taken) {
                 throw new Failure(409, "the decompiler did not keep the name " + applied + " on " + match.getName()
