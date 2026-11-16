@@ -461,7 +461,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
   holder; and the server's starts and stops with the version and commit of the
   install's `VERSION` file. A start whose run before it has no stop is marked:
   the server died. The card shows the five newest; **Full log** opens the
-  two weeks in a dialog that goes on filling while it is open. `ActivityLog` keeps it in `<store>/private/events.jsonl`,
+  two weeks in the detail sheet tickets and issues open in, which goes on
+  filling while it is open. `ActivityLog` keeps it in `<store>/private/events.jsonl`,
   one JSON line per event, numbered so the page reads on with
   `GET /admin/api/events?after=<n>`. It keeps two weeks; what is older goes at
   most once a day (`events.pruned` holds that time and the last number, so a

@@ -651,9 +651,7 @@ table.lines th.w-when { width: 132px; }
 table.lines th.w-event { width: 112px; }
 /* The server log scrolls inside its card; new lines come in above. */
 .event-log { overflow-y: auto; }
-.event-log.full { max-height: min(640px, calc(100vh - 220px)); }
 .event-log thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
-dialog .event-log thead th { background: var(--panel-solid); }
 .event-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .line-who .doc-icon { flex: none; }
