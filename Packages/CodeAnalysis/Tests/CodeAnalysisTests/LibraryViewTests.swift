@@ -297,6 +297,22 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(other.added.count, 1)
         XCTAssertEqual(try store.libraryIndex().holders(of: wrapper.key).count, 3)
 
+        // The module teaches the entry it made its code: the code goes to that
+        // entry, not to the first one holding the body, which has its own.
+        let setMemCode = Data(#"{"base":"0xDA40","instructions":[]}"#.utf8)
+        let zeroMemCode = Data(#"{"base":"0x3400","instructions":[]}"#.utf8)
+        func teach(_ id: String, _ code: Data) throws {
+            var lesson = LibraryProposal(body: wrapper, name: "", kind: "edk2", address: "0x3400",
+                                         entry: Data("{}".utf8), basedOn: id, teachesBytesOnly: true)
+            lesson.code = code
+            try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [lesson])
+        }
+        try teach(wrapper.key, setMemCode)
+        try teach(id, zeroMemCode)
+        let taught = try store.libraryIndex()
+        XCTAssertEqual(taught.entries[id]?.variants.first?.code, SHA256Digest(data: zeroMemCode))
+        XCTAssertEqual(taught.entries[wrapper.key]?.variants.first?.code, SHA256Digest(data: setMemCode))
+
         // A function reads through the entry its mark names.
         func read(_ mark: String?) -> String? {
             LibraryView.entryID(body: wrapper.key, mark: mark, external: false, thunk: false, referenceBytes: nil,

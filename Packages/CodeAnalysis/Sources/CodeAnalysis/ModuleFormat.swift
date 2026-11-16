@@ -106,6 +106,29 @@ public enum ModuleFormat {
                                    referenceBytes: function["reference_bytes"] as? String, in: index)
     }
 
+    /// For a function no mark names, of a body several entries hold — the
+    /// same bytes calling other functions (issue df8c0e9c) — the entry calling
+    /// what it calls; nil in `numbers` when none does. An entry from before
+    /// callees were recorded is taken when no entry says this function's
+    /// callees. A mark settles it: the owner marks a function after the
+    /// publish that made its entry, and before that only the calls tell.
+    static func choosingByCallees(_ functions: [[String: Any]], numbers: inout [UInt64: String],
+                                  in index: LibraryIndex) {
+        for function in functions where function["instructions"] != nil {
+            guard let at = LibraryCode.address(function["entry"]), numbers[at] != nil,
+                  let key = function["body"] as? String else { continue }
+            let holders = index.holders(of: key)
+            guard holders.count > 1 else { continue }
+            let mark = (function["library_entry"] as? [String: Any])?["id"] as? String ?? function["registry"] as? String
+            if let mark, holders.contains(mark) { continue }
+            guard let code = LibraryCode.build(function: function, number: { numbers[$0] },
+                                               inImage: { _ in false }, label: { _ in nil }) else { continue }
+            let calls = LibraryCode.callees(code: code).sorted()
+            let said = { (id: String) in index.variant(ofEntry: id, body: key)?.callees }
+            numbers[at] = holders.first { said($0) == calls } ?? holders.first { said($0) == nil }
+        }
+    }
+
     /// The code a function reads through, when the registry holds one.
     private static func codeDigest(_ number: String, body: Any?, in index: LibraryIndex) -> SHA256Digest? {
         index.code(ofBody: body as? String, entry: number)
@@ -115,8 +138,16 @@ public enum ModuleFormat {
     public static func codeNeeded(_ raw: Data, index: LibraryIndex) -> [SHA256Digest] {
         guard let object = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any],
               let functions = object["functions"] as? [[String: Any]] else { return [] }
+        var numbers: [UInt64: String] = [:]
+        for function in functions {
+            if let at = LibraryCode.address(function["entry"]), let number = registryNumber(function, in: index) {
+                numbers[at] = number
+            }
+        }
+        choosingByCallees(functions, numbers: &numbers, in: index)
         return Array(Set(functions.compactMap { function -> SHA256Digest? in
-            guard function["instructions"] != nil, let number = registryNumber(function, in: index) else { return nil }
+            guard function["instructions"] != nil, let at = LibraryCode.address(function["entry"]),
+                  let number = numbers[at] else { return nil }
             return codeDigest(number, body: function["body"], in: index)
         }))
     }
@@ -156,6 +187,7 @@ public enum ModuleFormat {
                 numbers[at] = number
             }
         }
+        choosingByCallees(functions, numbers: &numbers, in: index)
         let blocks = (object["blocks"] as? [[String: Any]] ?? []).compactMap { block -> ClosedRange<UInt64>? in
             guard let start = LibraryCode.address(block["start"]), let end = LibraryCode.address(block["end"]),
                   start <= end else { return nil }
@@ -197,6 +229,7 @@ public enum ModuleFormat {
                   let number = registryNumber(function, in: index) else { continue }
             numbers[at] = number
         }
+        choosingByCallees(functions, numbers: &numbers, in: index)
         var targets: [UInt64: [String: String]] = [:]
         var settled = false
         while !settled {

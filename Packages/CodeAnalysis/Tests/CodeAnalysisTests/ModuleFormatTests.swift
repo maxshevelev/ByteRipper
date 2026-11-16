@@ -84,6 +84,62 @@ final class ModuleFormatTests: XCTestCase {
                      "instructions that do not line up say nothing")
     }
 
+    /// A body two entries hold — SetMem and a ZeroMem wrapper, the same bytes
+    /// jumping to other workers — is the one whose callees its own calls are,
+    /// before any mark says so: the publish that makes the ZeroMem entry
+    /// stores the module before the owner marks it (issue df8c0e9c).
+    func testAnUnmarkedBodyOfTwoEntriesIsTheOneItCallsLike() throws {
+        func wrapper(at base: UInt64, calling target: UInt64) -> [String: Any] {
+            func at(_ offset: UInt64) -> String { String(format: "0x%llX", base + offset) }
+            return ["entry": at(0), "body": "4-wrapper-same", "instructions": [
+                ["address": at(0), "bytes": "48 8B C1", "text": "MOV RAX,RCX", "mnemonic": "MOV"],
+                ["address": at(3), "bytes": "E9 00 00 00 00", "text": "JMP", "mnemonic": "JMP",
+                 "references": [["to": String(format: "0x%llX", target), "type": "UNCONDITIONAL_JUMP"]]]
+            ]]
+        }
+        func worker(at base: UInt64, _ key: String) -> [String: Any] {
+            ["entry": String(format: "0x%llX", base), "body": key,
+             "instructions": [["address": String(format: "0x%llX", base), "bytes": "C3", "text": "RET", "mnemonic": "RET"]]]
+        }
+        func code(_ function: [String: Any], _ number: @escaping (UInt64) -> String?) throws -> Data {
+            try XCTUnwrap(LibraryCode.build(function: function, number: number, inImage: { _ in false }, label: { _ in nil }))
+        }
+        let setCore = try code(worker(at: 0xD100, "5-set-core"), { _ in nil })
+        let zeroCore = try code(worker(at: 0x2E0, "5-zero-core"), { _ in nil })
+        let setMem = try code(wrapper(at: 0xDA40, calling: 0xD100), { $0 == 0xD100 ? "5-set-core" : nil })
+        var index = LibraryIndex()
+        func add(_ id: String, _ body: String, code: Data?, callees: [String]?) {
+            let parts = body.split(separator: "-")
+            index.entries[id] = LibraryIndexEntry(
+                version: 1, entry: SHA256Digest(data: Data(id.utf8)), name: id, kind: "edk2",
+                source: LibrarySource(module: module.sha256, address: "0x0", rev: 1, by: "agent"),
+                variants: [LibraryVariant(body: LibraryBody(size: Int(parts[0], radix: 16)!, full: String(parts[1]),
+                                                            specific: String(parts[2])),
+                                          module: module.sha256, code: code.map { SHA256Digest(data: $0) }, callees: callees)])
+            index.hold(body, by: id)
+        }
+        add("5-set-core", "5-set-core", code: setCore, callees: [])
+        add("5-zero-core", "5-zero-core", code: zeroCore, callees: [])
+        add("4-wrapper-same", "4-wrapper-same", code: setMem, callees: nil)
+        let zeroMem = LibraryIndex.calleeID(body: "4-wrapper-same", callees: ["5-zero-core"])
+        add(zeroMem, "4-wrapper-same", code: nil, callees: ["5-zero-core"])
+        let artifact = try JSONSerialization.data(withJSONObject: ["functions": [
+            worker(at: 0x2E0, "5-zero-core"), wrapper(at: 0x3400, calling: 0x2E0)
+        ]])
+        let taught = ModuleFormat.teachings(artifact, index: index)
+        XCTAssertEqual(taught.map(\.id), [zeroMem], "the ZeroMem entry learns its code from 0x3400")
+        let zeroMemCode = try XCTUnwrap(taught.first?.code)
+        index.entries[zeroMem]?.variants[0].code = SHA256Digest(data: zeroMemCode)
+        let held = [setCore, zeroCore, setMem, zeroMemCode].reduce(into: [SHA256Digest: Data]()) {
+            $0[SHA256Digest(data: $1)] = $1
+        }
+        let stored = ModuleFormat.stored(artifact, index: index, code: held)
+        let rows = try XCTUnwrap((try JSONSerialization.jsonObject(with: stored.artifact) as? [String: Any])?["functions"]
+            as? [[String: Any]])
+        XCTAssertEqual(rows.first { $0["entry"] as? String == "0x3400" }?["registry"] as? String, zeroMem,
+                       "stored as a link to the entry it calls like, not to SetMem")
+    }
+
     func testAWordOfTheOldFormDoesNotReachTheStore() throws {
         let rows = try stored([["entry": "0x10", "name": "Orphan", "c": "void Orphan(void) {}", "body": key,
                                 "review_level": "library", "library_kind": "edk2", "copy_free": true, "review_gaps": ["plate"],

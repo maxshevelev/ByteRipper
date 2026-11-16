@@ -1109,7 +1109,15 @@ extension ContentStore {
                     return theirs == calls
                 }
                 func holder() -> (id: String, entry: LibraryIndexEntry)? {
-                    for id in index.holders(of: proposal.body.key) where callsAgree(id) {
+                    // The entry the function was made on or is marked with, when it
+                    // holds the body: what a module teaches an entry of its code
+                    // names it so, and says nothing of its callees.
+                    let holders = index.holders(of: proposal.body.key)
+                    if let based = proposal.basedOn, holders.contains(based), callsAgree(based),
+                       let entry = index.entries[based] {
+                        return (based, entry)
+                    }
+                    for id in holders where callsAgree(id) {
                         if let entry = index.entries[id] { return (id, entry) }
                     }
                     return nil
