@@ -82,7 +82,14 @@ extension GhidraHost {
         }
         answer["name"] = read.name
         if let signature = read.signature { answer["signature"] = signature }
-        if answer["c"] != nil, let c = read.c { answer["c"] = c }
+        if let own = answer["c"] as? String, let c = read.c {
+            answer["c"] = c
+            // The project's own decompile reads otherwise than the entry's
+            // text shown: a name on a temporary, a type, written before the
+            // function was bound again. A reader of `c` is told, so the
+            // entry's placeholders are not taken for the project's.
+            if !LibraryProposal.samePrinting(own, c) { answer["project_c_differs"] = true }
+        }
         answer["text"] = "registry"
         if !read.publisherAddresses.isEmpty { answer["publisher_addresses"] = read.publisherAddresses }
         if let object = try? await writer.readObject(held.row.entry),

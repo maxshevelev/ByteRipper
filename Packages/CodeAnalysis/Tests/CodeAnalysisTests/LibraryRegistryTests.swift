@@ -382,15 +382,18 @@ final class LibraryRegistryTests: XCTestCase {
 
         var clean = edited
         clean.linked = true
-        XCTAssertEqual(try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [clean],
-                                                   dryRun: true).unchanged.map(\.id), [id], "bound and clean: nothing to say")
+        let bound = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [clean], dryRun: true)
+        XCTAssertEqual(bound.unchanged.map(\.id), [id], "bound and clean: nothing to say")
+        XCTAssertEqual(bound.unchanged.first?.why?.hasPrefix("not edited since it was bound"), true)
         var shared = edited
         shared.keepsEntryBody = true
-        XCTAssertEqual(try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [shared])
-                        .unchanged.map(\.id), [id], "others hold it: the edit stays the module's, and nothing refuses")
+        let kept = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [shared])
+        XCTAssertEqual(kept.unchanged.map(\.id), [id], "others hold it: the edit stays the module's, and nothing refuses")
+        XCTAssertEqual(kept.unchanged.first?.why?.hasPrefix("kept in this module"), true)
         let other = try store.putLibraryEntries(module: SHA256Digest(data: Data("b".utf8)), rev: 2, by: "agent",
                                                 proposals: [edited], dryRun: true)
         XCTAssertEqual(other.unchanged.map(\.id), [id], "another module's C is its own printing")
+        XCTAssertEqual(other.unchanged.first?.why?.hasPrefix("not this entry's source module"), true)
         XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, held)
 
         let taken = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [edited],
@@ -400,8 +403,9 @@ final class LibraryRegistryTests: XCTestCase {
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(entry.entry)) as? [String: Any])
         XCTAssertEqual((object["function"] as? [String: Any])?["c"] as? String,
                        "IdtBase = *(EFI_PEI_SERVICES ***)(Base + -4);\nreturn IdtBase;")
-        XCTAssertEqual(try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [edited])
-                        .unchanged.map(\.version), [2], "taken, it is the entry's own review")
+        let own = try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [edited])
+        XCTAssertEqual(own.unchanged.map(\.version), [2], "taken, it is the entry's own review")
+        XCTAssertNil(own.unchanged.first?.why, "the entry's own review needs no reason")
     }
 
     func testAnotherModulesReviewIsAConflictTakenOnlyWithAReason() throws {

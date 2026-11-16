@@ -366,6 +366,9 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         /// nothing, and from a store that predates them.
         public var module: SHA256Digest?
         public var reason: String?
+        /// On an unchanged row whose function was written on, why the write
+        /// did not reach the entry; nil where the review is simply the entry's.
+        public var why: String?
     }
 
     /// The entry for this body holds another review, and this module's was
@@ -662,14 +665,40 @@ extension LibraryProposal {
     /// temporary (`HASH:…`) named or typed is the module's own and never one of
     /// the entry's `locals`, so only the C carries it.
     public static func editsBody(_ proposal: Data, in held: Data, heldSource: LibrarySource, source: LibrarySource) -> Bool {
+        bodyPrint(proposal, in: held, heldSource: heldSource, source: source) == .fromOrigin
+    }
+
+    enum BodyPrint { case same, fromOrigin, fromElsewhere }
+
+    /// Whether the offered C reads otherwise than the entry's, beyond a
+    /// reprinting, and whether it comes from the module and address the
+    /// entry's C came from.
+    static func bodyPrint(_ proposal: Data, in held: Data, heldSource: LibrarySource, source: LibrarySource) -> BodyPrint {
         guard let object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
               let function = object["function"] as? [String: Any], let old = function["c"] as? String,
               let offered = ((try? JSONSerialization.jsonObject(with: proposal)) as? [String: Any])?["function"] as? [String: Any],
-              let new = offered["c"] as? String, old != new else { return false }
+              let new = offered["c"] as? String, old != new, !samePrinting(old, new) else { return .same }
         let origin = function["source"] as? [String: Any]
-        guard (origin?["module"] as? String ?? heldSource.module.hex) == source.module.hex,
-              (origin?["address"] as? String ?? heldSource.address) == source.address else { return false }
-        return !samePrinting(old, new)
+        let fromOrigin = (origin?["module"] as? String ?? heldSource.module.hex) == source.module.hex
+            && (origin?["address"] as? String ?? heldSource.address) == source.address
+        return fromOrigin ? .fromOrigin : .fromElsewhere
+    }
+
+    /// Why a function written on left its entry unchanged, for the row that
+    /// says so; nil when nothing was written that the entry could take.
+    static func unchangedWhy(_ proposal: LibraryProposal, id: String, held: Data?, heldSource: LibrarySource,
+                             source: LibrarySource) -> String? {
+        if proposal.keepsEntryBody == true {
+            return "kept in this module: other modules hold the entry, so a temporary's name stays here"
+        }
+        if proposal.linked {
+            return "not edited since it was bound to the entry: a write that changes nothing, as a re-send "
+                + "of the same name, leaves it bound"
+        }
+        guard proposal.basedOn == id, let held,
+              bodyPrint(proposal.entry, in: held, heldSource: heldSource, source: source) == .fromElsewhere else { return nil }
+        return "not this entry's source module: a name on a temporary changes the entry only from the module "
+            + "its C came from (\(heldSource.module.hex.prefix(8))… at \(heldSource.address))"
     }
 
     /// The held entry with the equates its C prints, or nil when it has them
@@ -690,7 +719,7 @@ extension LibraryProposal {
     /// these are one printing: EDK2 types revision 5 turned `BOOLEAN` into an
     /// enum and `UINT8`/`INT8` into byte numbers, so `'\0'` came to print as
     /// `FALSE` or `0` and `'\xff'` as `0xff`.
-    static func samePrinting(_ old: String, _ new: String) -> Bool {
+    public static func samePrinting(_ old: String, _ new: String) -> Bool {
         func read(_ text: String) -> String {
             numbersOfLiterals(text.replacingOccurrences(of: #"/\*\s*WARNING: Unknown calling convention.*?\*/"#, with: "",
                                       options: .regularExpression)
@@ -1133,7 +1162,9 @@ extension ContentStore {
                 }
                 let held = index.entries[id] ?? found
                 if held.entry == digest {
-                    result.unchanged.append(.init(id: id, name: held.name, version: held.version))
+                    result.unchanged.append(.init(id: id, name: held.name, version: held.version,
+                                                  why: LibraryProposal.unchangedWhy(proposal, id: id, held: nil,
+                                                                                    heldSource: held.source, source: source)))
                     settled[id] = "its review is the entry's own, at version \(held.version)"
                     continue
                 }
@@ -1191,7 +1222,9 @@ extension ContentStore {
                         settled[id] = "its review is the entry's own, at version \(held.version)"
                         continue
                     }
-                    result.unchanged.append(.init(id: id, name: held.name, version: held.version))
+                    result.unchanged.append(.init(id: id, name: held.name, version: held.version,
+                                                  why: LibraryProposal.unchangedWhy(proposal, id: id, held: heldObject,
+                                                                                    heldSource: held.source, source: source)))
                     settled[id] = "its review is the entry's own, at version \(held.version)"
                     continue
                 }

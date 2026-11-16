@@ -125,6 +125,9 @@ public struct PublishAnswer: Codable, Sendable {
     public var typesTakenAsOrigin: [String]?
     /// The registry entries the publish replaced without a vote, as their author.
     public var libraryTakenAsOrigin: [String]?
+    /// Registry entries this module's edit of a temporary did not change,
+    /// because other modules hold them.
+    public var libraryKeptInModule: [String]?
     /// EDK2 functions whose `Evidence:` line does not hold at the pinned tag.
     public var evidence: [GhidraHost.EvidenceWarning]?
     public var evidenceUnchecked: String?
@@ -144,6 +147,7 @@ public struct PublishAnswer: Codable, Sendable {
         typesVersion = publication?.typesVersion
         typesTakenAsOrigin = publication.flatMap { $0.typesTakenAsOrigin.isEmpty ? nil : $0.typesTakenAsOrigin }
         libraryTakenAsOrigin = publication.flatMap { $0.libraryTakenAsOrigin.isEmpty ? nil : $0.libraryTakenAsOrigin }
+        libraryKeptInModule = publication.flatMap { $0.libraryKeptInModule.isEmpty ? nil : $0.libraryKeptInModule }
         evidence = publication.map(\.evidence).flatMap { $0.isEmpty ? nil : $0 }
         evidenceUnchecked = publication?.evidenceUnchecked
         evidenceChecked = publication.flatMap { $0.evidenceChecked > 0 ? $0.evidenceChecked : nil }
@@ -163,6 +167,7 @@ public struct PublishAnswer: Codable, Sendable {
         case typesVersion = "types_version"
         case typesTakenAsOrigin = "types_taken_as_origin"
         case libraryTakenAsOrigin = "library_taken_as_origin"
+        case libraryKeptInModule = "library_kept_in_module"
         case evidence
         case evidenceUnchecked = "evidence_unchecked"
         case evidenceChecked = "evidence_checked"

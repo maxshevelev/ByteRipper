@@ -102,6 +102,9 @@ public actor GhidraHost {
         /// The registry entries this publish replaced without a vote: its
         /// module wrote them and no other module of its size holds them.
         public var libraryTakenAsOrigin: [String] = []
+        /// Entries whose body this module's edit only its C shows, kept in the
+        /// module because other modules hold them.
+        public var libraryKeptInModule: [String] = []
         /// The kept project the store holds for this revision now.
         public var project: ProjectRecord?
         /// Why the project could not be kept: the revision is stored either way,
@@ -636,7 +639,8 @@ public actor GhidraHost {
         // The registry decides first, on everything this publish offers: the
         // review's candidates, and the changes to entries its functions link to.
         // A refusal leaves all of it as it was, and stores nothing.
-        var offered = try await keepingSharedBodies(try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module), module: module)
+        let shared = try await keptSharedBodies(try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module), module: module)
+        var offered = shared.proposals
         // A link reads its entry's text: an entry with none learns it from here.
         let completion = try await Self.completions(exported, offer: offer.proposals, offered: offered,
                                                     reviewed: reviewed, take: take, writer: writer)
@@ -703,6 +707,7 @@ public actor GhidraHost {
         publication.typesVersion = journal.typesVersion?.version
         publication.typesTakenAsOrigin = types?.takenAsOrigin ?? []
         publication.libraryTakenAsOrigin = libraryTakenAsOrigin
+        publication.libraryKeptInModule = shared.kept
         publication.project = journal.project
         publication.projectError = journal.projectError
         publication.evidence = evidence.warnings
@@ -1081,7 +1086,9 @@ public actor GhidraHost {
                     preview["library_taken_as_origin"] = own.names
                 }
             }
-            var offered = try await keepingSharedBodies(try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module), module: module)
+            let shared = try await keptSharedBodies(try await ownWidth(try await Self.withoutLinked(offer.proposals, writer: writer), module: module), module: module)
+            var offered = shared.proposals
+            if !shared.kept.isEmpty { preview["library_kept_in_module"] = shared.kept }
             let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
                                                         take: takeLibrary, writer: writer)
             offered += completion.proposals

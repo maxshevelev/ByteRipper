@@ -229,11 +229,17 @@ final class GhidraHostLibraryTests: XCTestCase {
             // A rename alone is no change to the review: the entry stays.
             let published = try await host.publish(module, by: "agent")
             XCTAssertEqual(published.library?.unchanged.map(\.name).contains("GetHobList"), true)
+            // The entry's own module: its edit is kept in it, and says so, as
+            // another module holds the entry. Any other module's is no offer.
+            XCTAssertEqual(published.libraryKeptInModule.map { $0.hasPrefix("GetHobList (also held by") },
+                           module == source ? [true] : [], "\(published.libraryKeptInModule)")
             XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 1)
             answer = try await read(module, address)
             XCTAssertEqual(answer["text"] as? String, "registry")
             XCTAssertEqual(state(answer), "linked")
             XCTAssertEqual((answer["c"] as? String)?.contains(name), false)
+            XCTAssertEqual(answer["project_c_differs"] as? Bool, true,
+                           "the entry's text is shown, and the project's own C, with the name, reads otherwise")
             XCTAssertNil(answer["project_names"], "a name on a temporary is not kept")
             // The project keeps what it wrote: a publish is no cleaning of it.
             let raw = try json(await host.read(module, "/v1/function/\(address)"))

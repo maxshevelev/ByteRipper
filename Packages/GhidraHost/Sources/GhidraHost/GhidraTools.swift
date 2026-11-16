@@ -643,12 +643,19 @@ public enum GhidraTools {
                     While the registry reads through, a function at its entry answers the entry's name, \
                     signature, plate, comments and C with `text: "registry"`, as the store reads it, and \
                     `publisher_addresses` lists any name that still carries the address of the module \
-                    the entry came from; `locals` are the entry's and `parameters` the project's. Any write in it \
+                    the entry came from; `locals` are the entry's and `parameters` the project's; \
+                    `project_c_differs: true` says the project's own decompile reads otherwise than that \
+                    text — a temporary named or typed there before the function was bound again — and a \
+                    write that changes something makes it `edited`, so the project's C answers and a \
+                    publish can offer it. Any write in it \
                     makes it `edited` (`library_entry.state`): it then answers as Ghidra holds it. A \
                     publish that changes its review makes that the entry's next version, for every \
-                    module that holds it, from any holder; one that does not — a name on a temporary, \
-                    a label, an equate alone — leaves the entry as it is and the function reads as the \
-                    entry again; a name on a temporary is then not kept. \
+                    module that holds it, from any holder. A name or type on a decompiler temporary \
+                    shows only in the C: from the module the entry's C came from it is the entry's next \
+                    version when no other module holds the entry, and otherwise stays in this module's \
+                    project (`library_kept_in_module` in the publish). From any other module it changes \
+                    nothing. A publish binds the function to the entry again as it then reads, so an \
+                    edit published before it took effect needs a fresh write to be offered. \
                     `text_unavailable` says why a marked function has no `text`: the entry could not \
                     be read, or this store has no reading of the function. \
                     `summary: true` leaves the C and the equates out, for walking a module without \
@@ -1455,7 +1462,10 @@ public enum GhidraTools {
                 entry whose current version this module wrote, which no other module of its size holds — no \
                 published review linking it, no module one of its bodies came from, no project with \
                 unpublished writes — is corrected without a vote, as a shared type is: the publish takes it \
-                and says so in `library_taken_as_origin`; with another holder the refusal names it. A \
+                and says so in `library_taken_as_origin`; with another holder the refusal names it. A name \
+                or type on a decompiler temporary, which only the C shows, is taken so only from a sole \
+                holder; with other holders it stays in the module and never refuses the publish, named in \
+                `library_kept_in_module` (the dry run too). A \
                 dirty function short of the \
                 bar of a finished function is refused the same way. Each version names its `module` and \
                 `reason` in the entry's history; `entry_reasons`, an object of entry id to why, says it \

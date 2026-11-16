@@ -801,23 +801,34 @@ extension GhidraHost {
     /// entry's next version only from its sole holder, and never refuses a
     /// publish (the person, 2026-11-16).
     func keepingSharedBodies(_ proposals: [LibraryProposal], module: SHA256Digest) async throws -> [LibraryProposal] {
-        guard !proposals.isEmpty else { return proposals }
+        try await keptSharedBodies(proposals, module: module).proposals
+    }
+
+    /// The same, with what it kept back: each entry's name and the other
+    /// modules that hold it, for `library_kept_in_module`.
+    func keptSharedBodies(_ proposals: [LibraryProposal], module: SHA256Digest) async throws
+        -> (proposals: [LibraryProposal], kept: [String]) {
+        guard !proposals.isEmpty else { return (proposals, []) }
         let index = try await writer.readLibraryIndex()
         let bits = moduleBits(module) == 32 ? "Ia32" : "X64"
         var kept: [LibraryProposal] = []
+        var names: [String] = []
         for var proposal in proposals {
             if !proposal.linked, let id = proposal.basedOn, let held = index.entries[id] {
                 let object = try await writer.readObject(held.entry)
                 let source = LibrarySource(module: module, address: proposal.address, rev: nil, by: nil)
                 if LibraryProposal.sameReview(object, proposal.entry),
-                   LibraryProposal.editsBody(proposal.entry, in: object, heldSource: held.source, source: source),
-                   !(await otherEntryHolders([id], module: module, bits: bits)).isEmpty {
-                    proposal.keepsEntryBody = true
+                   LibraryProposal.editsBody(proposal.entry, in: object, heldSource: held.source, source: source) {
+                    let others = await otherEntryHolders([id], module: module, bits: bits).values.flatMap { $0 }
+                    if !others.isEmpty {
+                        proposal.keepsEntryBody = true
+                        names.append("\(held.name) (also held by \(Set(others).sorted().joined(separator: ", ")))")
+                    }
                 }
             }
             kept.append(proposal)
         }
-        return kept
+        return (kept, names.sorted())
     }
 
     /// A Codable value as plain JSON objects, to put beside the owner's own.
