@@ -151,6 +151,64 @@ final class GhidraHostLibraryTests: XCTestCase {
         XCTAssertEqual((status["released"] as? [[String: Any]])?.first?["address"] as? String, theirs, "\(status)")
     }
 
+    /// A linked function that declines its entry is the module's from then
+    /// on: what the review writes on it offers nothing to the entry, and the
+    /// publish takes it as the module's own function (issue 22b4a577).
+    func testADeclinedEntryLeavesItsFunctionToTheModule() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDeclineTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDeclineTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
+        try await host.take(source)
+        _ = try await host.createCached(module: images[1], name: "Other")
+        try await host.take(other)
+        defer { Task { await host.stop(source); await host.stop(other) } }
+        let at = try await function(of: 43, in: source, host: host)
+        let there = try await function(of: 43, in: other, host: host)
+        _ = try await host.write(source, "/v1/set/signature", body: body([
+            "address": at, "signature": "void * GetHobList(void)", "by": "agent", "reason": "EDK2 HobLib GetHobList"]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "plate", "text": "EDK2 HobLib GetHobList: the plate."]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "eol", "text": "the first step."]))
+        var ordinal = 0
+        let locals = try json(await host.readCall(source, "function/\(at)", query: [:]))["locals"] as? [[String: Any]] ?? []
+        for local in locals where (local["storage"] as? String)?.hasPrefix("HASH") != true {
+            ordinal += 1
+            var change: [String: Any] = ["function": at, "storage": local["storage"] ?? "", "name": "Named\(ordinal)",
+                                         "type": "ushort", "by": "agent"]
+            if let use = local["first_use"] { change["first_use"] = use }
+            _ = try await host.write(source, "/v1/rename/variable", body: body(change))
+        }
+        let first = try await moved(at, of: source, host: host)
+        let id = try XCTUnwrap(first.added.first { $0.name == "GetHobList" }?.id)
+        _ = try await host.library(other, .init(action: .apply, address: there, takeText: true))
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "plate", "text": "The module's own function, not the entry's."]))
+        let declined = try json(await host.library(other, .init(action: .decline, address: there, id: id)))
+        XCTAssertEqual(declined["unmarked"] as? Bool, true, "\(declined)")
+        _ = try await host.write(other, "/v1/rename/function", body: body([
+            "address": there, "name": "OwnHobList", "by": "agent"]))
+        let published = try await host.publish(other, by: "agent")
+        XCTAssertEqual(published.library?.conflicts.count ?? 0, 0, "\(String(describing: published.library))")
+        XCTAssertEqual(published.library?.updated.count ?? 0, 0)
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 1, "the entry is untouched")
+        let rows = try json(await host.readCall(other, "functions", query: [:]))["functions"] as? [[String: Any]]
+        let row = try XCTUnwrap(rows?.first { $0["entry"] as? String == there })
+        XCTAssertNil(row["library_entry"] as? [String: Any], "\(row)")
+        XCTAssertEqual(row["name"] as? String, "OwnHobList")
+    }
+
     /// Two modules holding one body: any write in a marked
     /// function reads back as the review wrote it, on the entry's source and on
     /// another holder. A publish that does not change the review leaves the

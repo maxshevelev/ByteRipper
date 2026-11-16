@@ -4331,6 +4331,17 @@ public class Owner {
         propertyMap(LIBRARY_DECLINED).add(function.getEntryPoint(), String.join(",", ids));
         JsonObject answer = identity();
         answer.addProperty("address", hex(function.getEntryPoint()));
+        // A function declining the entry it is marked with is no longer that
+        // entry's: the mark comes off, so a publish offers nothing to it and
+        // the function's names and text are the module's (issue 22b4a577).
+        // What the review wrote stays as it is.
+        JsonObject mark = libraryMark(function);
+        if (mark != null && id.equals(string(mark, "id", ""))) {
+            program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK).remove(function.getEntryPoint());
+            noLongerLibrary(Harvest.REASON, function.getEntryPoint());
+            noLongerLibrary(Harvest.SIGNATURE_REASON, function.getEntryPoint());
+            answer.addProperty("unmarked", true);
+        }
         JsonArray list = new JsonArray();
         ids.forEach(list::add);
         answer.add("declined", list);

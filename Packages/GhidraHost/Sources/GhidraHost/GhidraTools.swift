@@ -383,7 +383,9 @@ public enum GhidraTools {
                     function: do this before adding to a function of the registry, so that an addition stands on \
                     the entry's text. \
                     `dry_run: true` answers the same and writes nothing. `decline: true` refuses the entry \
-                    for the function (`id`, or the one matched), and it is not offered again.
+                    for the function (`id`, or the one matched), and it is not offered again; a function \
+                    linked to that entry is unlinked (`unmarked`) and publishes as the module's own, its \
+                    names and text as the review wrote them.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
