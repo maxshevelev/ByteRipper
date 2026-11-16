@@ -314,7 +314,10 @@ public enum GhidraTools {
                     is called, or names it and proposes it as a new entry. \
                     `candidates`: bodies of an entry's shape with other constants, \
                     each difference listed (`value`, `entry_value`, `assert`): other functions unless a \
-                    review says why the values make no difference. `declined`: entries a review refused \
+                    review says why the values make no difference; `state: callee_differs`, a body that \
+                    calls another function where the entry's calls its callee — the body's hash leaves call \
+                    targets out, so a ZeroMem wrapper has SetMem's — is another function: no apply links \
+                    it, and `why` names the call. `declined`: entries a review refused \
                     for the function. With `id`: one entry — its index row, its review, its history and \
                     `gaps`, what its review lacks, read from the review itself; `library_registry` reads the \
                     `function_parts` left out of the review. A match's `gaps` are the \
@@ -1271,7 +1274,9 @@ public enum GhidraTools {
                   + "that address, and `ghidra_data` and the artifact's symbols do not list it. Data the new "
                   + "datum overlaps, or sits inside, is cleared and listed in `data_cleared`; a datum it replaces "
                   + "at the same address is `replaced_type`. A name at a function's entry is refused: that is "
-                  + "`ghidra_rename`'s.",
+                  + "`ghidra_rename`'s. `prints_as_constant`: Ghidra's decompiler takes an address with under "
+                  + "three bit transitions (0x1000, 0x3000, 0x3800) for a mask and prints `(EFI_GUID *)0x3000` "
+                  + "whatever the datum is called — name it in an end-of-line comment where the code uses it.",
                   ["address": AgentSchema.string("The address."),
                    "clear_code": AgentSchema.boolean("Remove instructions the type covers and shorten the body."),
                    "name": AgentSchema.string("Its name; empty removes the label."),

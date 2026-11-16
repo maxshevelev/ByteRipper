@@ -56,6 +56,34 @@ final class ModuleFormatTests: XCTestCase {
 
     /// What used to say "library" says nothing now: the function is the module's,
     /// and none of those words reaches the disk.
+    /// A body's hash leaves out where its calls go: SetMem's wrapper and
+    /// ZeroMem's are one body. The code names the callee, and a module's
+    /// instructions say which function it calls there.
+    func testTheCodeSaysWhatABodyCallsAndWhereAModuleCallsIt() throws {
+        func wrapper(at base: UInt64, calling target: UInt64) -> [String: Any] {
+            func at(_ offset: UInt64) -> String { String(format: "0x%llX", base + offset) }
+            return ["entry": at(0), "instructions": [
+                ["address": at(0), "bytes": "48 85 D2", "text": "TEST RDX,RDX", "mnemonic": "TEST"],
+                ["address": at(3), "bytes": "75 04", "text": "JNZ \(at(9))", "mnemonic": "JNZ",
+                 "references": [["to": at(9), "type": "CONDITIONAL_JUMP"]]],
+                ["address": at(5), "bytes": "48 8B C1", "text": "MOV RAX,RCX", "mnemonic": "MOV"],
+                ["address": at(8), "bytes": "C3", "text": "RET", "mnemonic": "RET"],
+                ["address": at(9), "bytes": "E9 00 00 00 00", "text": "JMP", "mnemonic": "JMP",
+                 "references": [["to": String(format: "0x%llX", target), "type": "UNCONDITIONAL_CALL"]]]
+            ]]
+        }
+        let code = try XCTUnwrap(LibraryCode.build(function: wrapper(at: 0xDA40, calling: 0xD100),
+                                                   number: { $0 == 0xD100 ? "set-entry" : nil },
+                                                   inImage: { _ in false }, label: { _ in nil }))
+        XCTAssertEqual(LibraryCode.callees(code: code), ["set-entry"])
+        let other = wrapper(at: 0x3400, calling: 0x2E0)
+        let targets = try XCTUnwrap(LibraryCode.targets(code: code, instructions: other["instructions"] as! [[String: Any]]))
+        XCTAssertEqual(targets["set-entry"].flatMap { CodeAddress(hex: $0)?.value }, 0x2E0,
+                       "where the entry calls SetMem's worker, this module calls 0x2E0")
+        XCTAssertNil(LibraryCode.targets(code: code, instructions: Array((other["instructions"] as! [[String: Any]]).prefix(4))),
+                     "instructions that do not line up say nothing")
+    }
+
     func testAWordOfTheOldFormDoesNotReachTheStore() throws {
         let rows = try stored([["entry": "0x10", "name": "Orphan", "c": "void Orphan(void) {}", "body": key,
                                 "review_level": "library", "library_kind": "edk2", "copy_free": true, "review_gaps": ["plate"],

@@ -81,6 +81,13 @@ review documents.
   keeps the constants, so `LibAmdMemRead` fixed to a byte and fixed to a dword
   differ. Ghidra's own minimum applies: a body shorter than its short-hash
   length (a `ret` stub, a three-byte `mov al,1; ret`) is not keyed.
+  Because the hash leaves call targets out, two wrappers that differ only in
+  what they call — `SetMem` jumping to `InternalMemSetMem`, a ZeroMem wrapper
+  jumping to `InternalMemZeroMem` — share a body. The match is checked against
+  the entry's code: a function whose callee at that place is not the entry's
+  callee is `callee_differs` in `ghidra_library`, never linked by an apply,
+  and stays the module's (issue dda320fc). The store's `ModuleFormat.stored`
+  makes the same check, so an apply that skipped it linked nothing.
 - **An entry is the review of that body**: name, kind, signature, the
   parameters' and locals' names and types by storage, the plate, and step
   comments by offset from the entry; the evidence line the skill requires; and

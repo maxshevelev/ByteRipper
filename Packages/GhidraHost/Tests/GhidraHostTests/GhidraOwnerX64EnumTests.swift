@@ -46,6 +46,31 @@ final class GhidraOwnerX64EnumTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// The decompiler prints an address with under three bit transitions as a
+    /// cast constant, whatever the datum there is called; the answer says so
+    /// rather than leaving a review to wonder why the name never shows.
+    func testANameTheDecompilerWillNotPrintIsSaidToBeSo() async throws {
+        func transitions(_ value: UInt64) -> Int {
+            var value = value, count = 0, last = value & 1
+            for _ in 1..<64 {
+                value >>= 1
+                if value & 1 != last { count += 1; last = value & 1 }
+                if value == 0 { break }
+            }
+            return count
+        }
+        let hello = try await read("/v1/hello")
+        let base = try XCTUnwrap(CodeAddress(hex: hello["image_base"] as? String ?? "")).value
+        let mask = base + 0x1000
+        guard transitions(mask) < 3 else { throw XCTSkip("the image's base \(base) gives no mask-like address") }
+        let masked = try await post("/v1/set/data", ["address": String(format: "0x%llX", mask), "name": "ProbeMasked"])
+        XCTAssertEqual(masked["prints_as_constant"] as? Bool, true, "\(masked)")
+        let plain = try await post("/v1/set/data", ["address": String(format: "0x%llX", mask + 0x10), "name": "ProbePlain"])
+        XCTAssertNil(plain["prints_as_constant"], "\(plain)")
+        let outside = try await post("/v1/set/data", ["address": "0xFED00000", "name": "ProbeOutside"])
+        XCTAssertNil(outside["prints_as_constant"], "an MMIO name is not the decompiler's datum: \(outside)")
+    }
+
     func testASixtyFourBitStatusCodeGetsAnEightByteEnum() async throws {
         // CoreEfiNotAvailableYet: MOV RAX, 0xA000000000000002, which the
         // listing prints signed.

@@ -7675,7 +7675,28 @@ public class Owner {
             answer.addProperty("replaced_type", replacedType);
         }
         if (dataCleared.size() > 0) answer.add("data_cleared", dataCleared);
+        // The decompiler takes a constant with under three bit transitions —
+        // 0x1000, 0x3000, 0x3800 — for a mask, not a pointer
+        // (ActionConstantPtr::isPointer, bit_transitions), and prints
+        // `(EFI_GUID *)0x3000` whatever the datum is called (issue 0e32de90).
+        if (named != null && program.getMemory().contains(address)
+                && bitTransitions(address.getOffset(), program.getDefaultPointerSize()) < 3) {
+            answer.addProperty("prints_as_constant", true);
+        }
         return answer;
+    }
+
+    /** Ghidra's decompiler's `bit_transitions` (address.cc), word for word. */
+    static int bitTransitions(long value, int size) {
+        int transitions = 0;
+        long last = value & 1;
+        for (int i = 1; i < 8 * size; i++) {
+            value >>>= 1;
+            long current = value & 1;
+            if (current != last) { transitions++; last = current; }
+            if (value == 0) break;
+        }
+        return transitions;
     }
 
     /**

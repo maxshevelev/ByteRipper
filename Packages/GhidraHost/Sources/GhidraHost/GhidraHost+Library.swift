@@ -145,7 +145,7 @@ extension GhidraHost {
         /// signature for its callers to print. Everything else is the entry's.
         public var mode: String?
         /// `unnamed`, `named`, `copy`, `newer_version`, `assert_codes`, `applied`,
-        /// `edited`, `candidate`, `short_candidate`, `reference_bytes` or `declined`.
+        /// `edited`, `candidate`, `short_candidate`, `reference_bytes`, `callee_differs` or `declined`.
         public var state: String
         public var codes: [String]?
         public var differences: [LibraryConstant]?
@@ -643,6 +643,13 @@ extension GhidraHost {
         if let step = at(plan.toApply) { return [step] }
         if var step = at(plan.candidates) {
             if step.state == "short_candidate" { return [step] }
+            // Another callee is another function, whatever a reason says: the
+            // store would not hold it as the entry's link.
+            if step.state == "callee_differs" {
+                throw GhidraHostError(.refused, "the function at \(address) is not \(step.entryName): "
+                    + (step.why ?? "it calls other functions than the entry") + "; review it as a function of its own",
+                    status: 409)
+            }
             guard !reason.isEmpty else {
                 throw GhidraHostError(.refused, "the function at \(address) holds other constants than "
                     + "\(step.entryName): say in `reason` why they make no difference, or review it as a "
@@ -709,6 +716,7 @@ extension GhidraHost {
         }
         var plan = Self.libraryPlan(answer.matches, index: index, hashed: answer.hashed,
                                     comparisons: comparisons)
+        plan = try await calleesChecked(plan, matches: answer.matches, index: index, port: record.port)
         // Both reviews' gaps, for the comparison a decision is made on. The
         // function's are the last published analysis's, not the listing's:
         // the listing's locals include stack slots the decompiled C never
@@ -733,6 +741,65 @@ extension GhidraHost {
         plan.candidates = attached(plan.candidates)
         plan.declined = attached(plan.declined)
         return (plan, index)
+    }
+
+    /// The plan with every function whose callees are not the entry's taken
+    /// off a link: the body's hash leaves out where its calls go, so a ZeroMem
+    /// wrapper has SetMem's body, and only what it calls tells the two apart.
+    /// The store would not hold such a function as a link either
+    /// (`ModuleFormat.stored`); the module keeps it as its own.
+    func calleesChecked(_ plan: LibraryPlan, matches: [LibraryMatch], index: LibraryIndex,
+                        port: Int) async throws -> LibraryPlan {
+        var plan = plan
+        var byAddress: [UInt64: LibraryMatch] = [:]
+        for match in matches { if let at = CodeAddress(hex: match.address) { byAddress[at.value] = match } }
+        func entryOf(_ at: UInt64) -> String? {
+            guard let match = byAddress[at] else { return nil }
+            return match.exact ?? match.mark?.id
+        }
+        var refused: [String: LibraryStep] = [:]
+        for step in plan.toApply + plan.applied + plan.edited {
+            guard refused[step.address] == nil, let at = CodeAddress(hex: step.address),
+                  let match = byAddress[at.value],
+                  let digest = index.code(ofBody: match.key, entry: step.id),
+                  let code = try? await writer.readObject(digest) else { continue }
+            let callees = LibraryCode.callees(code: code)
+            guard !callees.isEmpty else { continue }
+            let count = (try? JSONSerialization.jsonObject(with: code) as? [String: Any])?["instructions"] as? [Any]
+            let listed = try? await Self.call(port, "GET", "/v1/disassembly/\(step.address)?limit=\(count?.count ?? 0)").data
+            guard let listed, let read = try? JSONSerialization.jsonObject(with: listed) as? [String: Any],
+                  let instructions = read["instructions"] as? [[String: Any]],
+                  let differs = Self.calleeDiffers(code: code, instructions: instructions, entryAt: entryOf) else { continue }
+            let theirs = byAddress[differs.at]?.name ?? differs.place
+            let wanted = index.entries[differs.key]?.name ?? differs.key
+            var moved = step
+            moved.mode = nil
+            moved.state = "callee_differs"
+            moved.why = "it calls \(theirs) at \(differs.place)\(differs.held.map { " (entry \($0))" } ?? "") where the "
+                + "entry calls \(wanted): the same body calling another function is another function, and stays the module's"
+            refused[step.address] = moved
+        }
+        guard !refused.isEmpty else { return plan }
+        plan.toApply.removeAll { refused[$0.address] != nil }
+        plan.applied.removeAll { refused[$0.address] != nil }
+        plan.edited.removeAll { refused[$0.address] != nil }
+        plan.candidates += refused.values.sorted { $0.address < $1.address }
+        return plan
+    }
+
+    /// The first registry callee of `code` that the function, as its module
+    /// lists `instructions`, does not call: where it calls instead, and the
+    /// entry linked there if any. Nil when every callee is the entry's, or
+    /// when the instructions do not line up with the code.
+    static func calleeDiffers(code: Data, instructions: [[String: Any]], entryAt: (UInt64) -> String?)
+        -> (key: String, place: String, at: UInt64, held: String?)? {
+        guard let targets = LibraryCode.targets(code: code, instructions: instructions) else { return nil }
+        for key in LibraryCode.callees(code: code).sorted() {
+            guard let place = targets[key], let target = CodeAddress(hex: place) else { continue }
+            let held = entryAt(target.value)
+            if held != key { return (key, place, target.value, held) }
+        }
+        return nil
     }
 
     /// 32 or 64 for a module with a project here, as its archive or its image

@@ -463,6 +463,38 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x9000", id: nil, reason: nil))
     }
 
+    /// A body's hash leaves call targets out, so SetMem's wrapper matches a
+    /// function that jumps to ZeroMem's worker (issue dda320fc). What the
+    /// function calls tells the two apart, and an apply never links it.
+    func testABodyCallingAnotherFunctionIsNotTheEntrys() throws {
+        func wrapper(at base: UInt64, jumpingTo target: UInt64) -> [String: Any] {
+            func at(_ offset: UInt64) -> String { String(format: "0x%llX", base + offset) }
+            return ["entry": at(0), "instructions": [
+                ["address": at(0), "bytes": "4C 8B C9", "text": "MOV R9,RCX", "mnemonic": "MOV"],
+                ["address": at(3), "bytes": "E9 00 00 00 00", "text": "JMP", "mnemonic": "JMP",
+                 "references": [["to": String(format: "0x%llX", target), "type": "UNCONDITIONAL_JUMP"]]]
+            ]]
+        }
+        let code = try XCTUnwrap(LibraryCode.build(function: wrapper(at: 0xDA40, jumpingTo: 0x1060),
+                                                   number: { $0 == 0x1060 ? "8-setmem" : nil },
+                                                   inImage: { _ in false }, label: { _ in nil }))
+        let other = try XCTUnwrap(wrapper(at: 0x3400, jumpingTo: 0x2E0)["instructions"] as? [[String: Any]])
+        let differs = try XCTUnwrap(GhidraHost.calleeDiffers(code: code, instructions: other,
+                                                             entryAt: { $0 == 0x2E0 ? "d-zeromem" : nil }))
+        XCTAssertEqual(differs.key, "8-setmem")
+        XCTAssertEqual(differs.at, 0x2E0)
+        XCTAssertEqual(differs.held, "d-zeromem")
+        let same = try XCTUnwrap(wrapper(at: 0x5000, jumpingTo: 0x4000)["instructions"] as? [[String: Any]])
+        XCTAssertNil(GhidraHost.calleeDiffers(code: code, instructions: same,
+                                              entryAt: { $0 == 0x4000 ? "8-setmem" : nil }),
+                     "a function calling the entry's callee is the entry's")
+        let plan = GhidraHost.LibraryPlan(entries: 1, hashed: 1, candidates: [.init(
+            address: "0x3400", name: "SetMem_X64", entryName: "SetMem_X64", id: "4-setmem", version: 3,
+            mode: nil, state: "callee_differs", codes: nil, differences: nil, why: "it calls InternalMemZeroMem_X64")])
+        XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x3400", id: nil, reason: "same bytes"),
+                             "no reason links another function")
+    }
+
     /// A body applied as a variant is offered with the entry it joins and
     /// its codes; an assert routine with its role.
     func testTheOfferCarriesVariantsAndRoles() throws {

@@ -52,9 +52,26 @@ public enum LibraryCode {
     /// What a module has to hold for `function` to read through `code`; nil when
     /// the code does not give that function's instructions.
     public static func bind(code: Data, to function: [String: Any]) -> [String: String]? {
-        guard let source = read(code), let entry = address(function["entry"]),
+        guard let entry = address(function["entry"]),
               let real = function["instructions"] as? [[String: Any]],
-              real.count == source.instructions.count else { return nil }
+              let targets = targets(code: code, instructions: real) else { return nil }
+        guard let rebuilt = instructions(code: code, entry: entry, targets: targets) else { return nil }
+        for (made, ours) in zip(rebuilt, real) {
+            guard address(made["address"]) == address(ours["address"]),
+                  byteList(made["bytes"]) == byteList(ours["bytes"]),
+                  made["text"] as? String == ours["text"] as? String,
+                  made["mnemonic"] as? String == ours["mnemonic"] as? String else { return nil }
+        }
+        return targets
+    }
+
+    /// Where a module's instructions reach what the code names outside the
+    /// function — each callee's registry number and each label, with the
+    /// address it has in the module — instruction by instruction, reference
+    /// by reference of a type. Nil when the two do not line up. The bytes are
+    /// not compared: `bind` does that.
+    public static func targets(code: Data, instructions real: [[String: Any]]) -> [String: String]? {
+        guard let source = read(code), real.count == source.instructions.count else { return nil }
         var targets: [String: String] = [:]
         for (theirs, ours) in zip(source.instructions, real) {
             let mine = Dictionary(grouping: ours["references"] as? [[String: Any]] ?? [], by: { $0["type"] as? String ?? "" })
@@ -69,14 +86,14 @@ public enum LibraryCode {
                 targets[key] = hex(to)
             }
         }
-        guard let rebuilt = instructions(code: code, entry: entry, targets: targets) else { return nil }
-        for (made, ours) in zip(rebuilt, real) {
-            guard address(made["address"]) == address(ours["address"]),
-                  byteList(made["bytes"]) == byteList(ours["bytes"]),
-                  made["text"] as? String == ours["text"] as? String,
-                  made["mnemonic"] as? String == ours["mnemonic"] as? String else { return nil }
-        }
         return targets
+    }
+
+    /// The registry numbers the code calls: what a function of this body
+    /// must call for it to be this entry's.
+    public static func callees(code: Data) -> Set<String> {
+        guard let source = read(code) else { return [] }
+        return Set(source.instructions.flatMap { ($0["references"] as? [[String: Any]] ?? []).compactMap { $0["entry"] as? String } })
     }
 
     /// The function's instructions in a module: the registry's code at the
@@ -256,7 +273,7 @@ extension LibraryIndex {
     }
 
     /// The code the registry keeps for a body.
-    func code(ofBody body: String?, entry id: String) -> SHA256Digest? {
+    public func code(ofBody body: String?, entry id: String) -> SHA256Digest? {
         variant(ofEntry: id, body: body)?.code
     }
 }
