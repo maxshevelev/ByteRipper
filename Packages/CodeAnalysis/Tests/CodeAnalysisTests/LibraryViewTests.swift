@@ -359,6 +359,31 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(back.entries[body.key]?.version, out.version + 1)
     }
 
+    /// A taken-out body whose name another entry took since comes back under
+    /// the name its function has now (issue cd692d8f).
+    func testARestoreTakesTheNameTheFunctionHasNow() throws {
+        try register(try entryObject())
+        try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "x"), by: "agent")
+        var index = try store.libraryIndex()
+        let out = try XCTUnwrap(index.takenOut?[body.key])
+        let squatter = LibraryBody(size: 0x15, full: "99112233445566aa", specific: "cccccccccccccccc")
+        index.entries[squatter.key] = LibraryIndexEntry(version: 1, entry: out.entry, name: "CopyMem", kind: "edk2",
+                                                        source: out.source, variants: [LibraryVariant(body: squatter, module: source)])
+        index.bodies[squatter.key] = squatter.key
+        try store.mirrorLibrary(index)
+
+        XCTAssertThrowsError(try store.changeLibrary(.init(action: .restore, body: body.key, reason: "r"), by: "agent")) {
+            XCTAssertTrue("\($0)".contains("restore with `name`"), "\($0)")
+        }
+        try store.changeLibrary(.init(action: .restore, body: body.key, name: "CopyMem_Checked", reason: "r"), by: "agent")
+        let back = try store.libraryIndex()
+        let entry = try XCTUnwrap(back.entries[body.key])
+        XCTAssertEqual(entry.name, "CopyMem_Checked")
+        let review = try XCTUnwrap(JSONSerialization.jsonObject(with: try store.object(entry.entry)) as? [String: Any])
+        XCTAssertEqual(review["name"] as? String, "CopyMem_Checked", "the review carries the name too")
+        XCTAssertEqual(back.entries[squatter.key]?.name, "CopyMem", "the other entry is untouched")
+    }
+
     /// One body of a two-body entry leaves; the entry and its other body stay.
     func testOneBodyOfAnEntryCanBeTakenOutOrSplitOff() throws {
         let second = LibraryBody(size: 0x15, full: "00112233445566aa", specific: "aaaaaaaaaaaaaaaa")

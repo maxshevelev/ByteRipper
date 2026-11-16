@@ -151,6 +151,18 @@ final class EDK2EvidenceTests: XCTestCase {
         XCTAssertEqual(findings.last?.definedAt, 29)
     }
 
+    /// A line that cites a function and one inlined in it, `;` between them:
+    /// each is checked (issue a3cd4090).
+    func testEachCitationOfOneLineIsChecked() {
+        let both = EDK2Evidence.check(plate: "Evidence: GetFirstGuidHob, MdePkg/Library/PeiHobLib/HobLib.c:17; "
+            + "GetNextGuidHob, MdePkg/Library/PeiHobLib/HobLib.c:29", checkout: checkout)
+        XCTAssertEqual(both.map(\.outcome), [.ok, .ok], "\(both)")
+        XCTAssertEqual(both.map { $0.citation?.function }, ["GetFirstGuidHob", "GetNextGuidHob"])
+        let second = EDK2Evidence.check(plate: "Evidence: GetFirstGuidHob, MdePkg/Library/PeiHobLib/HobLib.c:17; "
+            + "GetNextGuidHob, MdePkg/Library/PeiHobLib/HobLib.c:31; a remark", checkout: checkout)
+        XCTAssertEqual(second.map(\.outcome), [.ok, .notDefinition], "a remark after `;` is no citation")
+    }
+
     /// The tree the reviewers read: GetFirstGuidHob is at 181 at the tag, and
     /// the 211 the registry holds is master's.
     func testThePinnedTreeHoldsGetFirstGuidHobAt181() throws {
@@ -166,5 +178,10 @@ final class EDK2EvidenceTests: XCTestCase {
                                        checkout: tree)
         XCTAssertEqual(wrong.first?.outcome, .notDefinition)
         XCTAssertEqual(wrong.first?.definedAt, 181)
+        // A DxeCore function and the library one it wraps (issue a3cd4090).
+        let core = EDK2Evidence.check(plate: "Evidence: DxeMainUefiDecompressGetInfo, "
+            + "MdeModulePkg/Core/Dxe/DxeMain/DxeMain.c:906; UefiDecompressGetInfo, "
+            + "MdePkg/Library/BaseUefiDecompressLib/BaseUefiDecompressLib.c:678", checkout: tree)
+        XCTAssertEqual(core.map(\.outcome), [.ok, .ok], "\(core)")
     }
 }

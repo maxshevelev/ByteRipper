@@ -209,6 +209,58 @@ final class GhidraHostLibraryTests: XCTestCase {
         XCTAssertEqual(row["name"] as? String, "OwnHobList")
     }
 
+    /// An entry made where the function keeps EDX names that program's own
+    /// convention, `…_keeps_EDX`; a program that links it makes the same
+    /// convention, rather than failing on a name it has not got (issue df74bdc2).
+    func testAnEntrysOwnConventionIsMadeWhereItLinks() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostConventionTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostConventionTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
+        try await host.take(source)
+        _ = try await host.createCached(module: images[1], name: "Other")
+        try await host.take(other)
+        defer { Task { await host.stop(source); await host.stop(other) } }
+        let at = try await function(of: 43, in: source, host: host)
+        let there = try await function(of: 43, in: other, host: host)
+        let set = try json(await host.write(source, "/v1/set/signature", body: body([
+            "address": at, "signature": "void * GetHobList(void)", "by": "agent", "reason": "EDK2 HobLib GetHobList",
+            "unaffected": ["edx"]])))
+        let convention = try XCTUnwrap(set["calling_convention"] as? String)
+        XCTAssertTrue(convention.hasSuffix("_keeps_EDX"), "\(set)")
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "plate", "text": "EDK2 HobLib GetHobList: the plate."]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "eol", "text": "the first step."]))
+        var ordinal = 0
+        let locals = try json(await host.readCall(source, "function/\(at)", query: [:]))["locals"] as? [[String: Any]] ?? []
+        for local in locals where (local["storage"] as? String)?.hasPrefix("HASH") != true {
+            ordinal += 1
+            var change: [String: Any] = ["function": at, "storage": local["storage"] ?? "", "name": "Named\(ordinal)",
+                                         "type": "ushort", "by": "agent"]
+            if let use = local["first_use"] { change["first_use"] = use }
+            _ = try await host.write(source, "/v1/rename/variable", body: body(change))
+        }
+        let first = try await moved(at, of: source, host: host)
+        XCTAssertNotNil(first.added.first { $0.name == "GetHobList" })
+        let applied = try json(await host.library(other, .init(action: .apply, address: there, takeText: true)))
+        let results = applied["results"] as? [[String: Any]] ?? []
+        XCTAssertEqual(results.first?["ok"] as? Bool, true, "\(applied)")
+        let linked = try json(await host.read(other, "/v1/function/\(there)"))
+        XCTAssertEqual(linked["calling_convention"] as? String, convention, "\(linked["calling_convention"] ?? "none")")
+        XCTAssertEqual(linked["unaffected_kept"] as? [String], ["EDX"])
+    }
+
     /// Two modules holding one body: any write in a marked
     /// function reads back as the review wrote it, on the entry's source and on
     /// another holder. A publish that does not change the review leaves the

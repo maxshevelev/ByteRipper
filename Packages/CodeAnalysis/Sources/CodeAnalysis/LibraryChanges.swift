@@ -273,15 +273,39 @@ extension ContentStore {
                 throw CodeAnalysisError.analysisMismatch("the body \(body) was not taken out of the registry")
             }
             var entry: LibraryIndexEntry
+            // `name`: the entry comes back under the name the function has now,
+            // when another entry took its old one since (issue cd692d8f).
+            let wanted = change.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            var renamed: Data?
             if var held = index.entries[out.id] {
+                if let wanted, !wanted.isEmpty, wanted != held.name {
+                    throw CodeAnalysisError.analysisMismatch(
+                        "the body \(body) rejoins the entry \(out.id), \(held.name), which is still there: a `name` "
+                        + "is for an entry that comes back on its own; rename the entry with a review instead")
+                }
                 held.variants.append(out.variant)
                 entry = held
             } else {
-                if let other = index.entries.first(where: { $0.value.name == out.name }) {
-                    throw CodeAnalysisError.analysisMismatch(
-                        "the entry \(other.key) holds the name \(out.name) now: rename one of them first")
+                let name = wanted.flatMap { $0.isEmpty ? nil : $0 } ?? out.name
+                guard !LibraryEntryReview.isPlaceholder(name) else {
+                    throw CodeAnalysisError.analysisMismatch("\(name) is not a name a review gives")
                 }
-                entry = LibraryIndexEntry(version: out.version, entry: out.entry, name: out.name, kind: out.kind,
+                if let other = index.entries.first(where: { $0.value.name == name }) {
+                    throw CodeAnalysisError.analysisMismatch(
+                        "the entry \(other.key) holds the name \(name) now: restore with `name`, the name the "
+                        + "function has now, or rename one of them first")
+                }
+                var stored = out.entry
+                if name != out.name {
+                    guard var review = try JSONSerialization.jsonObject(with: try object(out.entry)) as? [String: Any] else {
+                        throw CodeAnalysisError.analysisMismatch("the taken-out review of \(body) is not an object")
+                    }
+                    Self.rename(&review, from: out.name, to: name)
+                    let data = try JSONSerialization.data(withJSONObject: review, options: [.sortedKeys, .withoutEscapingSlashes])
+                    stored = SHA256Digest(data: data)
+                    renamed = data
+                }
+                entry = LibraryIndexEntry(version: out.version, entry: stored, name: name, kind: out.kind,
                                           source: out.source, variants: [out.variant], role: out.role)
             }
             entry.version += 1
@@ -294,6 +318,7 @@ extension ContentStore {
             var result = LibraryWriteResult()
             result.updated = [.init(id: out.id, name: entry.name, version: entry.version)]
             if dryRun { return result }
+            if let renamed { _ = try putObject(renamed) }
             try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(out.id))
             try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             return result

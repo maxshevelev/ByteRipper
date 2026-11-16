@@ -74,7 +74,8 @@ extension GhidraTools {
                 The person can agree or reject any proposal in the server's console. \
                 With `change`, the proposal is a change of the registry itself instead, the only way one is \
                 made: `take_out` takes the entry `id` out of the registry (or only its `body`) — its functions \
-                are each module's own again; `restore` puts a taken-out `body` back; `split` makes the `body` \
+                are each module's own again; `restore` puts a taken-out `body` back — under `name`, the name \
+                its function has now, when another entry took the old one since; `split` makes the `body` \
                 an entry of its own under `name`. `module` is where the review found it; no lease is needed. \
                 What the registry would refuse is refused before it is proposed. It is voted the same way, \
                 and the server applies it the moment it is agreed — no publish waits for it; one the \
@@ -90,7 +91,7 @@ extension GhidraTools {
                                              "A change of the registry itself, instead of this module's definitions."),
                 "id": AgentSchema.string("With `change`: the entry, for `take_out` and `split`."),
                 "body": AgentSchema.string("With `change`: one body key — the one taken out, restored or split off."),
-                "name": AgentSchema.string("With `split`: the new entry's name.")
+                "name": AgentSchema.string("With `split`: the new entry's name. With `restore`: the name the entry comes back under, when its old one is taken.")
             ], required: ["agent", "module", "reason"]),
             annotations: .edit
         ) { call in

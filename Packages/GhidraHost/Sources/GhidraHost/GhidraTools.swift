@@ -316,7 +316,8 @@ public enum GhidraTools {
                     each difference listed (`value`, `entry_value`, `assert`): other functions unless a \
                     review says why the values make no difference; `state: callee_differs`, a body that \
                     calls another function where the entry's calls its callee — the body's hash leaves call \
-                    targets out, so a ZeroMem wrapper has SetMem's — is another function: no apply links \
+                    targets out, so a ZeroMem wrapper has SetMem's — or whose other constant is in a call (another \
+                    EFI_PEI_SERVICES slot, another service) is another function: no apply links \
                     it, and `why` names the call. `declined`: entries a review refused \
                     for the function. With `id`: one entry — its index row, its review, its history and \
                     `gaps`, what its review lacks, read from the review itself; `library_registry` reads the \

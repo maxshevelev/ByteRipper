@@ -33,9 +33,12 @@ public enum UEFITypes {
 
         public init(root: URL) { self.root = root }
         public var edk2: URL { root.appendingPathComponent(edk2Tag, isDirectory: true) }
-        /// The tag's library sources, which `EDK2Evidence` checks a plate's
-        /// citation against, with the tag's whole file list beside them.
-        public var edk2Library: URL { root.appendingPathComponent("\(edk2Tag)-library", isDirectory: true) }
+        /// The tag's library, core and universal-driver sources, which
+        /// `EDK2Evidence` checks a plate's citation against, with the tag's
+        /// whole file list beside them. A new name for a new set: the folder
+        /// named `-library` held the libraries only, and a DxeCore function
+        /// citing `MdeModulePkg/Core/…` read `not_in_checkout` (issue a3cd4090).
+        public var edk2Library: URL { root.appendingPathComponent("\(edk2Tag)-sources", isDirectory: true) }
         public var gdtX64: URL { root.appendingPathComponent("uefi_X64-\(types).gdt") }
         public var gdtIa32: URL { root.appendingPathComponent("uefi_Ia32-\(types).gdt") }
         public var guidsCSV: URL { root.appendingPathComponent("guids.csv") }
@@ -114,7 +117,8 @@ public enum UEFITypes {
         let tar = URL(fileURLWithPath: "/usr/bin/tar")
         let status = try Subprocess.run(
             tar, ["-xzf", file.path, "-C", partial.path, "--strip-components", "1",
-                  "--include", "*/*Pkg/Library/*", "--exclude", "*/CryptoPkg/*"],
+                  "--include", "*/*Pkg/Library/*", "--include", "*/*Pkg/Core/*", "--include", "*/*Pkg/Universal/*",
+                  "--exclude", "*/CryptoPkg/*"],
             log: log, timeout: 900)
         let listing = partial.appendingPathExtension("list")
         defer { try? FileManager.default.removeItem(at: listing) }

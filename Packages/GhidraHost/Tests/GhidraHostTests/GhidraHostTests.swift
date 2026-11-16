@@ -495,6 +495,24 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
                              "no reason links another function")
     }
 
+    /// A constant that differs in a call — another slot of EFI_PEI_SERVICES —
+    /// is another callee, not a constant of the same function (issue 968b956b).
+    func testAConstantInACallIsAnotherCallee() {
+        let instructions: [[String: Any]] = [
+            ["address": "0x9AA528A", "text": "PUSH EBP"],
+            ["address": "0x9AA52A8", "text": "MOV ECX,dword ptr [EAX]"],
+            ["address": "0x9AA52AB", "text": "CALL dword ptr [ECX + 0x34]"],
+            ["address": "0x9AA52AE", "text": "PUSH 0x10"]
+        ]
+        let slot = GhidraHost.LibraryConstant(offset: "0x21", operand: 0, value: "0x34", entryValue: "0x48", isAssert: false)
+        let found = GhidraHost.constantInACall([slot], instructions: instructions, entry: 0x9AA528A)
+        XCTAssertEqual(found?.address, "0x9AA52AB")
+        XCTAssertEqual(found?.text, "CALL dword ptr [ECX + 0x34]")
+        let pushed = GhidraHost.LibraryConstant(offset: "0x24", operand: 0, value: "0x10", entryValue: "0x20", isAssert: false)
+        XCTAssertNil(GhidraHost.constantInACall([pushed], instructions: instructions, entry: 0x9AA528A),
+                     "a constant the function computes with is a candidate's difference, as before")
+    }
+
     /// A body applied as a variant is offered with the entry it joins and
     /// its codes; an assert routine with its role.
     func testTheOfferCarriesVariantsAndRoles() throws {

@@ -3986,7 +3986,7 @@ public class Owner {
         setSignature(request);
         String convention = namedConvention(entry);
         if (convention != null && !convention.equals(function.getCallingConventionName())) {
-            function.setCallingConvention(convention);
+            useConvention(function, convention);
         }
         JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
         Parameter[] current = function.getParameters();
@@ -7161,6 +7161,29 @@ public class Owner {
             decompilers.reopen();
         }
         function.setCallingConvention(name);
+    }
+
+    /**
+     * Sets a convention an entry names. One of a program's own
+     * (`__fastcall_keeps_EDX`) exists only where a review made it, so in
+     * another program it is made the same way first: its root convention
+     * plus the registers its name lists (issue df74bdc2).
+     */
+    private void useConvention(Function function, String name) throws Exception {
+        if (!name.contains(KEEPS) || program.getCompilerSpec().getCallingConvention(name) != null) {
+            function.setCallingConvention(name);
+            return;
+        }
+        String root = name.substring(0, name.indexOf(KEEPS));
+        if (program.getCompilerSpec().getCallingConvention(root) == null) {
+            throw new Failure(400, "the convention " + name + " is made from " + root + ", which this program's language has not got");
+        }
+        function.setCallingConvention(root);
+        JsonArray registers = new JsonArray();
+        for (String register : name.substring(name.indexOf(KEEPS) + KEEPS.length()).split("_")) {
+            if (!register.isEmpty()) registers.add(register);
+        }
+        keepRegisters(function, registers);
     }
 
     /** The registers a function's own convention adds as unaffected, or null for a plain one. */

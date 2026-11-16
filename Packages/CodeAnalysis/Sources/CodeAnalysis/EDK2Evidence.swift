@@ -88,10 +88,21 @@ public enum EDK2Evidence {
         let lines = evidenceLines(in: plate)
         guard !lines.isEmpty else { return [Finding(outcome: .noEvidence)] }
         let listing = self.listing(checkout)
-        return lines.map { text, citation in
-            guard let citation else { return Finding(outcome: .unparseable, evidence: text) }
-            return check(citation, evidence: text, checkout: checkout, listing: listing)
+        return lines.flatMap { text, citation -> [Finding] in
+            guard let citation else { return [Finding(outcome: .unparseable, evidence: text)] }
+            // `A, a.c:10; B, b.c:20`: a function and the one inlined in it are
+            // each cited, and each is checked (issue a3cd4090).
+            return ([citation] + moreCitations(text)).map {
+                check($0, evidence: text, checkout: checkout, listing: listing)
+            }
         }
+    }
+
+    /// The citations after the first on one `Evidence:` line, separated by
+    /// `;`. A part that is no citation is the reviewer's remark.
+    static func moreCitations(_ text: String) -> [Citation] {
+        let body = text.range(of: "Evidence:").map { String(text[$0.upperBound...]) } ?? text
+        return body.split(separator: ";").dropFirst().compactMap { citation(String($0)) }
     }
 
     static func check(_ citation: Citation, evidence: String, checkout: URL, listing: Set<String>?) -> Finding {

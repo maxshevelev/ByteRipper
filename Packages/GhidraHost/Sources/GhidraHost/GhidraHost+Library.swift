@@ -779,12 +779,52 @@ extension GhidraHost {
                 + "entry calls \(wanted): the same body calling another function is another function, and stays the module's"
             refused[step.address] = moved
         }
-        guard !refused.isEmpty else { return plan }
+        // A candidate's other constant in a call is another callee too: a
+        // PEI service called through another slot of EFI_PEI_SERVICES
+        // (`CALL [EAX + 0x34]`, CreateHob, where the entry has 0x48,
+        // AllocatePages) is another service (issue 968b956b).
+        var calling: [String: LibraryStep] = [:]
+        for step in plan.candidates where step.state == "candidate" && !(step.differences ?? []).isEmpty {
+            guard let at = CodeAddress(hex: step.address),
+                  let listed = try? await Self.call(port, "GET", "/v1/disassembly/\(step.address)").data,
+                  let read = try? JSONSerialization.jsonObject(with: listed) as? [String: Any],
+                  let instructions = read["instructions"] as? [[String: Any]],
+                  let found = Self.constantInACall(step.differences ?? [], instructions: instructions, entry: at.value)
+            else { continue }
+            var moved = step
+            moved.mode = nil
+            moved.state = "callee_differs"
+            moved.why = "its \(found.constant.value) where the entry has \(found.constant.entryValue) is in the call "
+                + "`\(found.text)` at \(found.address): it calls another function there, so it is another function, "
+                + "and stays the module's"
+            calling[step.address] = moved
+        }
+        guard !refused.isEmpty || !calling.isEmpty else { return plan }
         plan.toApply.removeAll { refused[$0.address] != nil }
         plan.applied.removeAll { refused[$0.address] != nil }
         plan.edited.removeAll { refused[$0.address] != nil }
+        plan.candidates = plan.candidates.map { calling[$0.address] ?? $0 }
         plan.candidates += refused.values.sorted { $0.address < $1.address }
         return plan
+    }
+
+    /// The first of `differences` that lies in a call or a jump — a
+    /// constant that says where the function goes, not what it computes —
+    /// with that instruction. `offset` is from the function's `entry`.
+    static func constantInACall(_ differences: [LibraryConstant], instructions: [[String: Any]], entry: UInt64)
+        -> (constant: LibraryConstant, text: String, address: String)? {
+        let rows = instructions.compactMap { row -> (UInt64, String, String)? in
+            guard let address = row["address"] as? String, let at = CodeAddress(hex: address)?.value else { return nil }
+            return (at, address, row["text"] as? String ?? "")
+        }.sorted { $0.0 < $1.0 }
+        for difference in differences {
+            guard let offset = CodeAddress(hex: difference.offset)?.value else { continue }
+            let place = entry &+ offset
+            guard let row = rows.last(where: { $0.0 <= place }) else { continue }
+            let mnemonic = row.2.split(separator: " ").first.map { $0.uppercased() } ?? ""
+            if mnemonic == "CALL" || mnemonic.hasPrefix("J") { return (difference, row.2, row.1) }
+        }
+        return nil
     }
 
     /// The first registry callee of `code` that the function, as its module
