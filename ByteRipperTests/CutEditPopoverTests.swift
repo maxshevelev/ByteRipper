@@ -50,6 +50,37 @@ final class CutEditPopoverTests: XCTestCase {
         XCTAssertEqual(beeps(), 0, "a legal commit is quiet")
     }
 
+    /// A sum commits the cut at what it comes to (issue #9).
+    func testCommitMakesACutAtWhatASumComesTo() {
+        var committed: UInt64?
+        let (controller, beeps) = makeController(commit: { committed = $0; _ = $1 })
+
+        controller.offsetField.stringValue = "0x4 + 6"
+        controller.commit()
+
+        XCTAssertEqual(committed, 10)
+        XCTAssertEqual(beeps(), 0)
+    }
+
+    /// A sum that ends at its operator is not red — it is not wrong yet — but
+    /// Return refuses it, and one that comes to an illegal cut is red.
+    func testAnUnfinishedSumIsNotRedButDoesNotCommit() {
+        var committed: UInt64?
+        let (controller, beeps) = makeController(commit: { committed = $0; _ = $1 })
+
+        controller.offsetField.stringValue = "0x4 +"
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+        XCTAssertTrue(controller.offsetField.textColor == .labelColor)
+        controller.commit()
+        XCTAssertNil(committed)
+        XCTAssertEqual(beeps(), 1)
+
+        controller.offsetField.stringValue = "0x4 + 12"   // EOF of a 16-byte file
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
+        XCTAssertEqual(controller.offsetField.resultText, "= 0x10", "what it came to is still shown")
+    }
+
     /// A decimal offset is parsed too — the field accepts whatever the dialogs
     /// accept, not just hex.
     func testCommitParsesADecimalOffset() {

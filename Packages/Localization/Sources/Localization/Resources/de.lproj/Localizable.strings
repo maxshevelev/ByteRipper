@@ -133,6 +133,7 @@
 "Adding a microcode" = "Microcode wird hinzugefügt";
 "Additional files ignored" = "Weitere Dateien übergangen";
 "Address" = "Adresse im Speicher";
+"Addresses and sums entered before" = "Zuvor eingegebene Adressen und Summen";
 "All 256 byte values decoded with the current table. Row headers are the byte value in hex." = "Alle 256 Byte-Werte, decodiert mit der aktuellen Tabelle. Die Zeilenköpfe sind der Byte-Wert in Hex.";
 "All unsaved changes will be discarded." = "Alle ungesicherten Änderungen gehen verloren.";
 "Already a favourite, as “%1$@”." = "Bereits als Favorit vorhanden, unter „%1$@“.";
@@ -175,6 +176,7 @@
 "Microcode replaced" = "Microcode ersetzt";
 "Minor version" = "Nebenversion";
 "No longer found, not opened:" = "Nicht mehr gefunden, nicht geöffnet:";
+"Nothing entered yet" = "Noch nichts eingegeben";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Entpackte Variable öffnen";
 "Open Recent Project" = "Benutzte Projekte";
@@ -201,6 +203,8 @@
 "The project could not be written." = "Das Projekt konnte nicht geschrieben werden.";
 "The project was saved by a newer version of ByteRipper. Open it in that version." = "Das Projekt wurde mit einer neueren Version von ByteRipper gespeichert. Öffnen Sie es mit dieser Version.";
 "The project was saved by an early version of ByteRipper that this one cannot read." = "Das Projekt wurde mit einer frühen Version von ByteRipper gespeichert, die diese Version nicht lesen kann.";
+"The result does not fit in 64 bits." = "Das Ergebnis passt nicht in 64 Bit.";
+"The result is negative." = "Das Ergebnis ist negativ.";
 "The workspace was saved by a newer version of ByteRipper." = "Der Arbeitsbereich wurde mit einer neueren Version von ByteRipper gespeichert.";
 "It is left as it is, for that version to reopen. Until you quit, this version does not keep the workspace: quitting asks about unsaved changes." = "Er bleibt unverändert, damit jene Version ihn wieder öffnet. Bis zum Beenden speichert diese Version den Arbeitsbereich nicht: Beim Beenden fragt sie nach ungesicherten Änderungen.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Nie gesicherte Dokumente kehren ungesichert zurück, und beim Beenden fragt das Programm nicht nach ihnen; nach Änderungen an Dateien auf dem Datenträger fragt es wie bisher.";

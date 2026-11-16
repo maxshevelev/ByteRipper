@@ -1343,6 +1343,9 @@ private extension BookmarkEditPopoverController {
     /// a test can read what it tells the user without knowing the view's shape.
     var labelTexts: [String] {
         func labels(in view: NSView) -> [String] {
+            // The address field's own parts — its result, its list button —
+            // are the field, not text or buttons of the popover.
+            if view is AddressField { return [] }
             let own = (view as? NSTextField).flatMap { $0.isEditable ? nil : $0.stringValue }
             return (own.map { [$0] } ?? []) + view.subviews.flatMap(labels(in:))
         }
@@ -1353,7 +1356,8 @@ private extension BookmarkEditPopoverController {
     /// interface, so a stray OK/Cancel row would be a regression.
     var buttons: [NSButton] {
         func found(in view: NSView) -> [NSButton] {
-            ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(found(in:))
+            if view is AddressField { return [] }
+            return ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(found(in:))
         }
         return found(in: view)
     }

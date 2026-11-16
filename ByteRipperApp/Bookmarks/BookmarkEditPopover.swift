@@ -28,7 +28,7 @@ import Localization
 final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate {
     /// Internal so tests can type into them; a popover cannot be driven by a
     /// synthesized key event without a real key window.
-    private(set) var offsetField: NSTextField!
+    private(set) var offsetField: AddressField!
     private(set) var nameField: NSTextField!
     /// The Delete button, on an existing bookmark only.
     private(set) var deleteButton: NSButton?
@@ -87,8 +87,7 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
         // The address in the shape the dialogs write one (§10), in the dump's own
         // font: this field is read far more often than it is edited, so it has to
         // read as an address first and behave as a field second.
-        let offset = NSTextField(string: row.hexAddress)
-        offset.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        let offset = AddressField(text: row.hexAddress)
         offset.delegate = self
         offset.translatesAutoresizingMaskIntoConstraints = false
         offset.setAccessibilityLabel(L("Bookmark offset"))
@@ -188,7 +187,7 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
     /// bookmark already holds — one row holds one bookmark (§20.1), so that is
     /// as invalid as a typo.
     var editedRow: UInt64? {
-        guard let offset = try? OffsetParser.parse(offsetField.stringValue) else { return nil }
+        guard let offset = offsetField.value else { return nil }
         let candidate = BookmarkStore.row(containing: offset)
         guard candidate == row || rowIsFree(candidate) else { return nil }
         return candidate
@@ -197,9 +196,12 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
     /// Validation as the address is typed, as everywhere else an offset is typed
     /// (§10.1) — but shown in the field itself rather than in a message: a panel
     /// this small has no room for a sentence, and red digits in a field of digits
-    /// say the same thing. Return refuses while they are red.
+    /// say the same thing. Return refuses while they are red. A sum that ends at
+    /// its operator is not red — it is not wrong yet (issue #9) — though Return
+    /// refuses it all the same.
     private func updateOffsetValidation() {
-        offsetField.textColor = editedRow == nil ? SemanticColors.bad : .labelColor
+        let waiting = offsetField.evaluation == .failure(.incomplete)
+        offsetField.textColor = editedRow == nil && !waiting ? SemanticColors.bad : .labelColor
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -220,6 +222,7 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
             return
         }
         settled = true
+        offsetField.recordInHistory()
         onCommit(target, nameField.stringValue)
         popover?.performClose(nil)
     }
@@ -280,6 +283,7 @@ extension BookmarkEditPopoverController: NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         guard !settled else { return }
         settled = true
+        if editedRow != nil { offsetField.recordInHistory() }
         onCommit(editedRow ?? row, nameField.stringValue)
     }
 }

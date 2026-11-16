@@ -1,4 +1,4 @@
-@source-sha 523ee5ff296a08d8286c0f50a3f973ea83149837c2c832b9ddd8b6ac3c7c69ef
+@source-sha ef39ea28dcd6acfc5cc80e433f77e21a068752d4d045da60a6db77a07beeac2f
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -17,9 +17,24 @@ Ein „Unterschied“ ist beim Springen eine ganze Folge abweichender Bytes, nic
 - `0x1FE00` — hexadezimal, mit dem Präfix `0x` (es steht schon im Feld).
 - `130560` — dezimal, ohne Präfix.
 
-Das Feld behält die zuletzt eingegebenen zehn Adressen. Darunter liegt die [[topic:bookmarks|Lesezeichenliste]]: Tab bringt die Tastatur dorthin, Return springt zum ausgewählten Lesezeichen.
+Das Feld behält die letzten zehn Einträge, Summen eingeschlossen (siehe unten). Darunter liegt die [[topic:bookmarks|Lesezeichenliste]]: Tab bringt die Tastatur dorthin, Return springt zum ausgewählten Lesezeichen.
 
 Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse gebunden sind.
+
+## Eine Summe statt einer Zahl
+
+Jedes Feld, das eine Adresse oder eine Länge erwartet, nimmt auch eine Summe an: Zahlen, verbunden durch `+` und `-`, in beliebiger Basis. Das gilt für „Gehe zu“, für **Bearbeiten ▸ Block auswählen…** und **Bearbeiten ▸ Schnitt hinzufügen…** sowie für die Adresse eines Lesezeichens.
+
+- `0x1FE000 + 4096` — eine Adresse hexadezimal plus eine Länge dezimal.
+- `0x2C0000 - 0x400 - 16` — beliebig viele Glieder, von links nach rechts gerechnet.
+
+Die Summe bleibt so im Feld stehen, wie sie eingegeben wurde. Ihr Ergebnis steht am rechten Rand des Feldes in kräftigerer Schrift, und der Befehl wird auf dieses Ergebnis angewendet. „Gehe zu“ und „Block auswählen“ wiederholen die Summe zusätzlich unter dem Feld, jedes Glied hexadezimal und das Ergebnis in beiden Basen: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
+
+! Ein Glied ohne das Präfix `0x`, das nur aus Dezimalziffern besteht, ist dezimal: `0x1FE000 + 40` addiert vierzig, nicht `0x40`. Die Zeile unter dem Feld zeigt, wie jedes Glied gelesen wurde. Aus demselben Grund zeigt eine einzelne Zahl, die ohne Präfix eingegeben wurde, am rechten Rand ihren Hexadezimalwert.
+
+Klammern und Multiplikation werden nicht unterstützt. Eine Summe mit negativem Ergebnis oder mit einem Ergebnis, das nicht in 64 Bit passt, wird abgewiesen.
+
+Die Pfeiltaste am rechten Rand des Feldes oder **↓** öffnet die Liste der letzten zehn Einträge. Die Liste gilt für alle diese Felder gemeinsam: Sie enthält die Adressen, zu denen „Gehe zu“ gesprungen ist, und jede Summe, mit der ein Befehl ausgeführt wurde, jeweils mit ihrem Ergebnis. Ein gewählter Eintrag wird in das Feld übernommen, wo er geprüft und korrigiert werden kann; bis zur Bestätigung des Befehls geschieht nichts.
 
 ## Zurück, wo man war
 

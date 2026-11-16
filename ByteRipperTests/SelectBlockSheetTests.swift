@@ -184,6 +184,47 @@ final class SelectBlockSheetTests: XCTestCase {
         XCTAssertEqual(selection(), SelectionModel(start: 0x10, length: 0x5, fileSize: 0x100))
     }
 
+    // MARK: - Sums (issue #9)
+
+    /// A start that is an address plus a distance, a length known in decimal:
+    /// the selection is made from what each comes to.
+    func testASumInAFieldSelectsFromItsResult() {
+        let (sheet, selection) = makeSheet(fileSize: 0x400000)
+        sheet.lengthRadio.performClick(nil)
+        sheet.startField.stringValue = "0x1FE000 + 0x40"
+        sheet.lengthField.stringValue = "4096 - 0x40"
+        XCTAssertNil(sheet.validate())
+        XCTAssertEqual(sheet.startField.resultText, "= 0x1FE040")
+        sheet.handleSubmit()
+        XCTAssertEqual(selection(), SelectionModel(start: 0x1FE040, length: 0xFC0, fileSize: 0x400000))
+        XCTAssertEqual(sheet.startField.stringValue, "0x1FE000 + 0x40", "the sum is never rewritten")
+    }
+
+    /// The sum being typed is read back on the message's line, and a sum that
+    /// ends at its operator is waited for rather than called an error — though
+    /// OK still refuses it.
+    func testTheSumIsReadBackAndAnUnfinishedOneIsWaitedFor() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.endField.stringValue = "0x80"
+        window.makeFirstResponder(sheet.startField)
+
+        type("0x10 +", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden, "not wrong yet")
+        XCTAssertTrue(sheet.noteLabel.isHidden)
+        XCTAssertEqual(sheet.validate(), "Invalid start offset.", "but not an offset either")
+
+        type("0x10 + 32", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden)
+        XCTAssertFalse(sheet.noteLabel.isHidden)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)")
+
+        type("0x10 - 32", into: sheet.startField)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+        XCTAssertTrue(sheet.noteLabel.isHidden, "an error and a result are never shown together")
+    }
+
     // MARK: - Validation
 
     func testValidationRejectsStartBeyondFile() {
@@ -245,7 +286,7 @@ final class SelectBlockSheetTests: XCTestCase {
     /// Simulates a keystroke the way the real editing path does: the field
     /// editor's text changes, then the control's `textDidChange` fires (with
     /// the editor as the notification object). That is exactly what
-    /// `HexInputField` uses to trigger live re-validation, so a manual call is
+    /// `AddressField` uses to trigger live re-validation, so a manual call is
     /// required — a programmatic `string` set alone doesn't fire it.
     private func type(_ value: String, into field: NSTextField) {
         guard let editor = field.currentEditor() as? NSTextView else {

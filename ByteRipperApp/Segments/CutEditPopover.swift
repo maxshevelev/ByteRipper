@@ -24,7 +24,7 @@ import Localization
 final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     /// Internal so tests can type into them; a popover cannot be driven by a
     /// synthesized key event without a real key window.
-    private(set) var offsetField: NSTextField!
+    private(set) var offsetField: AddressField!
     private(set) var descriptionField: NSTextField!
 
     /// The offset the field starts at — the caret's for a cut opened from the
@@ -150,8 +150,7 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
         // opened from the Segments form's `+` starts empty — just the "0x" the
         // user types over — because the offset is the thing to be filled in.
         let offsetText = prefillOffset.map { String(format: "0x%X", $0) } ?? "0x"
-        let offset = OffsetField(string: offsetText)
-        offset.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        let offset = AddressField(text: offsetText)
         offset.delegate = self
         offset.translatesAutoresizingMaskIntoConstraints = false
         offset.setAccessibilityLabel(L("Cut offset"))
@@ -259,17 +258,19 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     /// the text does not parse as an offset (§10), or `validate` says it is not
     /// a legal cut here.
     var editedOffset: UInt64? {
-        guard let offset = try? OffsetParser.parse(offsetField.stringValue) else { return nil }
-        guard validate(offset) else { return nil }
+        guard let offset = offsetField.value, validate(offset) else { return nil }
         return offset
     }
 
     /// Validation as the address is typed, as everywhere else an offset is typed
     /// (§10.1) — but shown in the field itself rather than in a message: a panel
     /// this small has no room for a sentence, and red digits in a field of digits
-    /// say the same thing. Return refuses while they are red.
+    /// say the same thing. Return refuses while they are red. A sum that ends at
+    /// its operator is not red — it is not wrong yet (issue #9) — though Return
+    /// refuses it all the same.
     private func updateOffsetValidation() {
-        offsetField.textColor = editedOffset == nil ? SemanticColors.bad : .labelColor
+        let waiting = offsetField.evaluation == .failure(.incomplete)
+        offsetField.textColor = editedOffset == nil && !waiting ? SemanticColors.bad : .labelColor
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -291,6 +292,7 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
             return
         }
         settled = true
+        offsetField.recordInHistory()
         onCommit(target, descriptionField.stringValue)
         popover?.performClose(nil)
     }
@@ -321,21 +323,6 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     }
 }
 
-/// The offset field: it does not select its whole text when it gains focus —
-/// the caret lands after the existing text (the "0x" prefix), the way every
-/// other offset field in the app does (§10), so a field that opens as "0x" is
-/// ready to have hex digits typed after the prefix rather than to replace it.
-private final class OffsetField: NSTextField {
-    override func becomeFirstResponder() -> Bool {
-        let focused = super.becomeFirstResponder()
-        if focused, let editor = currentEditor() as? NSTextView {
-            let length = (stringValue as NSString).length
-            editor.selectedRange = NSRange(location: length, length: 0)
-        }
-        return focused
-    }
-}
-
 extension CutEditPopoverController: NSPopoverDelegate {
     /// A popover dismissed by anything but the two keys — a click outside it,
     /// the window losing focus — keeps what was typed when the offset is legal:
@@ -346,6 +333,7 @@ extension CutEditPopoverController: NSPopoverDelegate {
         guard !settled else { return }
         settled = true
         if let target = editedOffset {
+            offsetField.recordInHistory()
             onCommit(target, descriptionField.stringValue)
         } else {
             // A red field is not a cut the user asked for: it closes without
