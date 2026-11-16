@@ -2683,7 +2683,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // The colour too, for the same reason. Empty padding, free space and
         // an erased pad file read grey, the whole row, the way an empty ME section does; every
         // other row is back to the label colour, whatever the cell wore last.
-        cell.textField?.textColor = UEFITreeDisplay.isEmptySpace(node)
+        // A record of Insyde's `$DMI` that a later one replaced reads grey as
+        // well: it is history, not the value in force.
+        let replaced = node.kind == .insydeDMIRecord
+            && tree?.spaceReaders.reader(for: node.space).map { UEFIInsydeDMIDetail.isReplaced(node, reader: $0) } == true
+        cell.textField?.textColor = UEFITreeDisplay.isEmptySpace(node) || replaced
             ? .secondaryLabelColor
             : .labelColor
         // The Name column wears the row's icons: its problem, with what is

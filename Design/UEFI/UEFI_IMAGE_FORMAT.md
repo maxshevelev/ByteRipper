@@ -2021,6 +2021,101 @@ bytes) with a `dmiField` under the three whose content is known. All are
 classified as UEFITool's padding. The checksums are reported in the details;
 they are not yet among the ones `uefi_checksums` repairs.
 
+**InsydeH2O's `$DMI` store** (`InsydeDMIStore.swift`) is where an InsydeH2O
+firmware keeps the values written over its own SMBIOS tables — what a DMI
+tool writes on the line, or a service centre after a board swap. The flash
+device map names its range `SMBIOS Update` (GUID
+`8964FEDC-6FE7-4E1E-A55E-FF821D71FFCF`); the parser finds it by its content
+all the same, on a 4 KiB boundary of written padding or of a flash-map
+region. Insyde publishes nothing; read off the dumps below (2026-11-16):
+
+| Board | Chip | Store | Records |
+|---|---|---|---|
+| Huawei H98M (`BOHB-WAX9`, BohrB) | 16 MB | `0x6A8000` | 28 |
+| Huawei DA0H9RMBAF0 (`CREF-XX`, `RLEF-XX`; two dumps) | 32 MB | `0x11CC000` | 27 |
+| Acer Swift SF314-57 (Floris Yebisu NB8511) | 16 MB | `0x6CD000` | 8 |
+| Schenker Slim15 SSL15L19 | 16 MB | `0x485000` | 12 |
+
+Over twenty other dumps — Lenovo, Acer Aspire A315-55, Floris, unnamed CSME samples —
+keep the store with no record: `$DMI` and `FF` to at least 4 KiB on.
+
+| Offset | Field |
+|---|---|
+| `0x00` | `$DMI` |
+| `0x04` | records back to back: u8 SMBIOS structure type, u8 the field's offset in the structure, u8 state — `FF` in force, `00` replaced, u16 the record's length with these five bytes, then the value |
+| after | `FF` to the end of the store |
+
+The value is a string without its NUL, or the field's bytes — the UUID
+(type 1, offset 8) is 16 bytes, stored as SMBIOS stores one. The fields seen:
+type 1 at `04` manufacturer, `05` product name, `06` version, `07` serial
+number, `08` UUID, `19` SKU; type 2 at `04` manufacturer, `05` board name,
+`06` version, `07` serial number; type 3 at `04` manufacturer, `06` version,
+`07` serial number, `15` SKU (the offset a chassis structure with no
+contained elements has); type 11, the OEM strings, at `05` (`$HUA001…` on
+Huawei boards). No checksum: every record chains and every tail is `FF`
+with none.
+
+**The store is a log.** Flash turns a bit from 1 to 0 without an erase, so
+a field is written again by appending a record, its state byte left `FF`,
+and clearing the state byte of the record it replaces to `00`. Checked on
+all six filled dumps (2026-11-16): every field has exactly one record with
+`FF`, it is always the field's last, and every earlier one reads `00`. The
+DMI tool writes every field again on each run, so most fields read as a
+pair; fields written once read `FF` alone (DA0H9RMBAF0: the product name,
+the UUID, the serials), the H98M's OEM string was written five times, and
+the Schenker's UUID was written with another value before the one in force.
+The parser takes the `FF` record as the field's value, and the last record
+where a field has no `FF` record or more than one — which the details then
+name.
+
+A store is one when `$DMI` is at a 4 KiB boundary, its records chain — each
+at least 5 bytes long and ending inside the first 4 KiB — up to a byte `FF`
+where the next would start, and everything from there to 4 KiB past the
+signature is `FF`. A store with no record is one too. The node is an
+`insydeDMIStore`, fixed, named `Insyde DMI`, from the signature to the end
+of the last record; under it an `insydeDMIRecord` per record, drawn grey when replaced (subtype = the
+structure type, header 5 bytes), named by the field it writes — or by type
+and offset where the field is not a known one — and shown as
+`Field = value`; nothing under it. The details
+list one value per field, read from the record in force, and every record
+with its state. All are
+classified as UEFITool's padding. An empty store is a row and is found by
+`uefi_dmi`, but the DMI button goes to it only when the image holds no other
+store: on a Lenovo board it sits beside the LENV store that does hold the
+identity.
+
+Huawei's H98M also keeps the board serial (`PM6210219Y000938`, the type 2
+serial) at `0x540000`, the first 16 bytes of a flash-map entry with GUID
+`201D65E5-BE23-4875-80F8-B1D4795E7E08` that the map does not name; the rest
+of its 4 KiB is `FF`.
+
+Open questions — to settle as more dumps are read:
+
+- ~~**The third byte.**~~ Settled 2026-11-16: the state of the record,
+  `FF` in force and `00` replaced (see "The store is a log" above).
+- **Whether the firmware reads the `FF` record.** It follows from the log,
+  and on every dump the `FF` record is also the last one, so either rule
+  gives the same value; a board whose SMBIOS tables can be read in the
+  running OS, together with its dump, would confirm it. Also unseen: what
+  the firmware does with a field that has no `FF` record, or two — a log the
+  tool left half written.
+- **What happens when the store fills.** Presumably the tool erases the
+  block and writes the records in force again; no dump shows it.
+- **The OEM strings' offset byte.** Type 11 has no fields beyond its count at
+  `04`; the records say `05` on every board. Whether it is the string's
+  number, or the offset of the first string, is not known — no board writes
+  a second OEM string.
+- **The store's size.** The H98M's flash map gives it 4 KiB; on every other
+  board the `FF` behind the signature runs on to 4 KiB or further, to the
+  next structure. Whether a store can outgrow 4 KiB is not known; such a
+  store is not read.
+- **The chassis SKU at `15`.** Right for a chassis structure with no
+  contained elements; where one has them, offset `15` would be inside the
+  list. Not seen on any board.
+- **Huawei's copy of the board serial at `0x540000`** (H98M): what writes
+  it, whether the firmware reads it, and whether the DA0H9RMBAF0 boards keep
+  one too — not looked at yet.
+
 **HP's identity** (`HPDMIArea.swift`) is not a block of its own: it is
 NVRAM variables in the main VSS2 store, which HP BIOS Configuration Utility
 (BCU) reads and writes through the firmware. A driver of the firmware lists

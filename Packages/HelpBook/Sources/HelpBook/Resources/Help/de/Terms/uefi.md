@@ -1,4 +1,4 @@
-@source-sha e89fbc5c49134b1c6f9ad970822260bca182a72da0e62b1b58f6f14540d3ffca
+@source-sha 00cc29f7758604caf8f951b88f8412ec2b42dd1e21db9f99f5e87497b9c50823
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -470,7 +470,7 @@ Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — dar
 
 Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation; im Allgemeinen läuft das Übertragen deshalb auf den Vergleich zweier Abbilder hinaus.
 
-Sechs Aufteilungen sind die Ausnahmen, die das Programm lesen kann. Die Firmware Lenovo InsydeH2O hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS-Notebooks mit AMI-Firmware halten sie in einem [[term:gpnv|GPNV]]-Speicher. Acer hält sie in einem 8-KiB-Block im [[term:padding|Padding]] des BIOS-Regions, dem Bereich [[term:acer-dmi|Acer DMI]]. HP hält sie in NVRAM-Variablen des Hauptspeichers [[term:vss|VSS2]], siehe [[term:hp-dmi|HP DMI]]. Apple hält sie im SysF-Speicher des NVRAM, siehe [[term:apple-dmi|Apple DMI]]. Panasonic hält sie in einem Bereich mit einem Verzeichnis von Datensätzen im Padding des BIOS-Regions, siehe [[term:panasonic-dmi|Panasonic DMI]]. Jede Aufteilung wurde aus den Dumps der Maschinen dieses Herstellers erschlossen; keiner der sechs hat sie veröffentlicht.
+Sieben Aufteilungen sind die Ausnahmen, die das Programm lesen kann. Die Firmware Lenovo InsydeH2O hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS-Notebooks mit AMI-Firmware halten sie in einem [[term:gpnv|GPNV]]-Speicher. Acer hält sie in einem 8-KiB-Block im [[term:padding|Padding]] des BIOS-Regions, dem Bereich [[term:acer-dmi|Acer DMI]]. HP hält sie in NVRAM-Variablen des Hauptspeichers [[term:vss|VSS2]], siehe [[term:hp-dmi|HP DMI]]. Apple hält sie im SysF-Speicher des NVRAM, siehe [[term:apple-dmi|Apple DMI]]. Panasonic hält sie in einem Bereich mit einem Verzeichnis von Datensätzen im Padding des BIOS-Regions, siehe [[term:panasonic-dmi|Panasonic DMI]]. Die InsydeH2O-Firmware anderer Hersteller — darunter Huawei, Acer und Schenker — hält sie als Datensätze, die ihre SMBIOS-Tabellen überschreiben, im Speicher `$DMI`, siehe [[term:insyde-dmi|Insyde DMI]]. Jede Aufteilung wurde aus den Dumps der Maschinen erschlossen, die sie verwenden; veröffentlicht ist keine davon.
 
 Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Knoten, **Lenovo DMI**, gleich wo er im Abbild liegt: anstelle der drei Regionen, die die Insyde-Flash-Device-Map als „Unknown" deklariert, oder innerhalb von Padding, wenn es keine Map gibt. Seine Beschreibung nennt den Block, den die Firmware liest, und führt dessen Einträge dekodiert auf, darunter Seriennummer und UUID; ein Klick auf einen Eintrag öffnet seinen Knoten. Unter dem Knoten liegen das Änderungsprotokoll und beide Blöcke, jeder Eintrag mit seinem Wert neben dem Namen.
 
@@ -481,6 +481,7 @@ Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Kn
 @see term:hp-dmi
 @see term:apple-dmi
 @see term:panasonic-dmi
+@see term:insyde-dmi
 @see topic:recipe-board-data
 
 @term acer-dmi
@@ -516,6 +517,26 @@ Panasonic hat den Aufbau nicht veröffentlicht, und eine öffentliche Beschreibu
 
 @see term:dmi
 @see term:padding
+
+@term insyde-dmi
+@name Insyde DMI
+@short Der Speicher, in dem eine InsydeH2O-Firmware die Werte hält, die ihre eigenen SMBIOS-Tabellen überschreiben — Seriennummern, UUID, Modell —, in dem Bereich, den die Flash Device Map SMBIOS Update nennt.
+
+Eine InsydeH2O-Firmware baut ihre [[term:dmi|SMBIOS]]-Tabellen aus Werten, die im BIOS selbst hinterlegt sind, und aus einem Speicher von Werten, die diese überschreiben: dem Speicher `$DMI`. Ein DMI-Werkzeug schreibt die Seriennummern, die UUID und das Modell der Maschine im Werk dorthin und nach einem Platinentausch erneut. Der Speicher liegt im [[term:padding|Padding]] des BIOS-Regions, in dem Bereich, den die [[term:flash-device-map|Flash Device Map]] von Insyde **SMBIOS Update** nennt.
+
+Der Speicher beginnt mit der Signatur `$DMI`. Darauf folgen lückenlos Datensätze aus einem Kopf von fünf Bytes und einem Wert. Der Kopf enthält den Typ der SMBIOS-Struktur (1 das System, 2 die Hauptplatine, 3 das Gehäuse, 11 die OEM-Zeichenketten), den Offset des Feldes in dieser Struktur, ein Statusbyte und die Länge des Datensatzes einschließlich Kopf. Der Wert ist eine Zeichenkette ohne abschließende Null, bei der UUID deren 16 Bytes in SMBIOS-Reihenfolge. Nach dem letzten Datensatz ist der Speicher mit `FF` gefüllt. Eine Prüfsumme hat er nicht.
+
+Der Speicher ist ein Protokoll. Im Flash-Speicher lässt sich ein Bit ohne Löschen von 1 auf 0 setzen, aber nicht zurück; ein Wert wird daher nie an Ort und Stelle überschrieben. Das DMI-Werkzeug hängt einen neuen Datensatz an, dessen Statusbyte `FF` bleibt, und setzt das Statusbyte des ersetzten Datensatzes auf `00`. Gültig ist für ein Feld also der Datensatz mit `FF`; die vorangehenden mit `00` sind Verlauf. Das Werkzeug schreibt bei jedem Lauf alle Felder neu, weshalb die meisten Felder als Paar vorliegen, ein ersetzter und der gültige Datensatz, oft mit gleichem Wert. Auf allen untersuchten Platinen hat jedes Feld genau einen Datensatz mit `FF`, und dieser ist der letzte des Feldes. Das Programm nimmt den Wert aus diesem Datensatz; dass die Firmware ebenso verfährt, folgt aus dem Aufbau des Protokolls, ist aber nicht an den Tabellen einer laufenden Maschine geprüft. Hat ein Feld keinen Datensatz mit `FF` oder mehrere, nimmt das Programm den letzten, und die Details nennen das Feld.
+
+Das [[topic:tool-uefi|UEFI-Werkzeug]] findet den Speicher an seinem Inhalt: `$DMI` an einer 4-KB-Grenze, aufeinanderfolgende Datensätze und `FF` bis 4 KB hinter der Signatur. Der Baum zeigt ihn als Zeile **Insyde DMI** mit dem Produktnamen und der Seriennummer des Systems neben dem Namen; darunter eine Zeile je Datensatz mit dem Feld und seinem Wert, etwa `Platinenversion = M1050`; ist das Feld nicht bekannt, nennt die Zeile stattdessen Strukturtyp und Offset. Die Details eines Datensatzes geben Strukturtyp, Offset in der Struktur, Statusbyte, ob der Datensatz gültig oder ersetzt ist, Länge und Wert an. Die Details des Speichers listen den gültigen Wert jedes Feldes unter **Einträge** und alle Datensätze unter **Datensätze**: Typ, Offset in der Struktur, Status, Feld und Wert. Ein Klick auf eine Zeile einer der beiden Tabellen öffnet die zugehörige Zeile im Baum.
+
+Viele Platinen halten den Speicher leer: die Signatur, danach `FF`. Dann wird nichts über die eingebauten Tabellen geschrieben, und die Zeile lautet **Insyde DMI · leer**. Lenovo hält die Angaben der Maschine in den [[term:lenv|LENV]]-Blöcken; der leere Speicher `$DMI` wird dort ebenfalls gezeigt, **DMI-Bereich zeigen** führt aber zum LENV-Speicher.
+
+Insyde hat den Aufbau nicht veröffentlicht. Er wurde aus Dumps zweier Huawei-Platinen, eines Acer Swift SF314-57 und eines Schenker Slim15 erschlossen, und die Hersteller schreiben unterschiedliche Felder: die Huawei-Platinen die Seriennummern, die UUID, die SKU und eine OEM-Zeichenkette, das Schenker nur den Hersteller, den Produktnamen und die UUID. Wird ein sauberes BIOS oder das einer anderen Maschine auf den Chip geschrieben, ist der Speicher aus dem alten Dump zu übernehmen — vollständig und an dieselbe Adresse —, sonst verliert die Maschine ihre Seriennummern und die UUID.
+
+@see term:dmi
+@see term:padding
+@see term:flash-device-map
 
 @term hp-dmi
 @name HP DMI

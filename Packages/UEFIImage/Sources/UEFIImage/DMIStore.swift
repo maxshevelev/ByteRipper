@@ -5,7 +5,8 @@ import Localization
 /// the model, the Windows key — in a store the tree reads as a row of its
 /// own: Lenovo's DMI store (`LenovoDMIStore`), AMI's GPNV store, ASUS's
 /// (`GPNVRecord`), Acer's DMI area (`AcerDMIStore`), Panasonic's
-/// (`PanasonicDMIStore`), or HP's `HP_MUD`
+/// (`PanasonicDMIStore`), InsydeH2O's `$DMI` store (`InsydeDMIStore`), or
+/// HP's `HP_MUD`
 /// variable (`HPDMIArea`), an NVRAM entry rather than a row of its own, or
 /// Apple's SysF store (`AppleDMIArea`), which is a row of its own but one the
 /// tree has for every Mac. What a bench looks
@@ -13,7 +14,7 @@ import Localization
 /// inside a region, or after a volume's free space.
 public struct DMIStore: Equatable, Sendable {
     /// The row's kind: `.lenovoDMIStore`, `.gpnvStore`, `.acerDMIStore`,
-    /// `.panasonicDMIStore`, or
+    /// `.panasonicDMIStore`, `.insydeDMIStore`, or
     /// `.vssEntry` for HP's `HP_MUD`, `.sysFStore` for Apple's.
     public var kind: UEFINodeKind
     /// Where the row is in the file — what tells the row apart from the
@@ -28,7 +29,7 @@ public struct DMIStore: Equatable, Sendable {
     /// The kinds that are one.
     public static func isStore(_ kind: UEFINodeKind) -> Bool {
         kind == .lenovoDMIStore || kind == .gpnvStore || kind == .acerDMIStore
-            || kind == .panasonicDMIStore
+            || kind == .panasonicDMIStore || kind == .insydeDMIStore
     }
 
     /// Every store in `nodes` and below, in file order. Only in the file:
@@ -53,7 +54,13 @@ public struct DMIStore: Equatable, Sendable {
                 .compactMap { AppleDMIArea.read(store: $0, reader: reader) }
                 .map { DMIStore(kind: .sysFStore, range: $0.store) }
         } ?? []
-        return (rows + hp + apple).sorted { $0.range.lowerBound < $1.range.lowerBound }
+        // An Insyde `$DMI` store with no record is kept on most InsydeH2O
+        // boards beside the store that does hold the identity — Lenovo's,
+        // Acer's: it counts only where nothing else is found.
+        let emptyInsyde = Set(inFile.filter { $0.kind == .insydeDMIStore && $0.children.isEmpty }.map(\.range))
+        let found = rows + hp + apple
+        let filled = found.filter { !($0.kind == .insydeDMIStore && emptyInsyde.contains($0.range)) }
+        return (filled.isEmpty ? found : filled).sorted { $0.range.lowerBound < $1.range.lowerBound }
     }
 }
 

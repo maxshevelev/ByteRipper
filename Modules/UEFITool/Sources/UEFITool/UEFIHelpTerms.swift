@@ -67,6 +67,7 @@ public enum UEFIHelpTerms {
         case .lenovoDMIStore: return HelpTermID("dmi")
         case .acerDMIStore: return HelpTermID("acer-dmi")
         case .panasonicDMIStore, .panasonicDMIRecord: return HelpTermID("panasonic-dmi")
+        case .insydeDMIStore, .insydeDMIRecord: return HelpTermID("insyde-dmi")
         // A field of Acer's area or of HP's `HP_MUD`: what the bench reads
         // these areas for is the page about DMI.
         case .dmiField: return HelpTermID("dmi")

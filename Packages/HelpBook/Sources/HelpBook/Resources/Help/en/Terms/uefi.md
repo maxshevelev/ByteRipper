@@ -469,7 +469,7 @@ Lost fields are not always lost for good. Some vendors — HP and Acer among the
 
 Where the fields sit inside the image is not standardised. Each vendor puts them where it likes and the layout moves between generations, so carrying them over is in general a job of comparing two images.
 
-Six layouts are the exceptions the app reads. Lenovo InsydeH2O firmware keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS laptops on AMI firmware keep them in a [[term:gpnv|GPNV]] store. Acer keeps them in an 8 KiB block in the [[term:padding|padding]] of the BIOS region, the [[term:acer-dmi|Acer DMI]] area. HP keeps them in NVRAM variables of the main [[term:vss|VSS2]] store, [[term:hp-dmi|HP DMI]]. Apple keeps them in the SysF store of the NVRAM, [[term:apple-dmi|Apple DMI]]. Panasonic keeps them in an area with a directory of records in the padding of the BIOS region, [[term:panasonic-dmi|Panasonic DMI]]. Each layout was read off the dumps of that vendor's machines; none of the six vendors has published it.
+Seven layouts are the exceptions the app reads. Lenovo InsydeH2O firmware keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS laptops on AMI firmware keep them in a [[term:gpnv|GPNV]] store. Acer keeps them in an 8 KiB block in the [[term:padding|padding]] of the BIOS region, the [[term:acer-dmi|Acer DMI]] area. HP keeps them in NVRAM variables of the main [[term:vss|VSS2]] store, [[term:hp-dmi|HP DMI]]. Apple keeps them in the SysF store of the NVRAM, [[term:apple-dmi|Apple DMI]]. Panasonic keeps them in an area with a directory of records in the padding of the BIOS region, [[term:panasonic-dmi|Panasonic DMI]]. InsydeH2O firmware of other vendors — Huawei, Acer, Schenker among them — keeps them as records written over its SMBIOS tables, the `$DMI` store, [[term:insyde-dmi|Insyde DMI]]. Each layout was read off the dumps of machines that use it; none of them has been published.
 
 **Tools ▸ UEFI Structure** shows that store as one row of the tree, **Lenovo DMI**, wherever in the image it lies: in place of the three regions the Insyde flash device map declares as "Unknown", or inside padding where there is no map. Its detail names the block the firmware reads and lists that block's entries decoded, the serial number and the UUID among them; a click on an entry opens its row. Under the row are the change log and both blocks, each entry with its value beside its name.
 
@@ -480,6 +480,7 @@ Six layouts are the exceptions the app reads. Lenovo InsydeH2O firmware keeps th
 @see term:hp-dmi
 @see term:apple-dmi
 @see term:panasonic-dmi
+@see term:insyde-dmi
 @see topic:recipe-board-data
 
 @term acer-dmi
@@ -515,6 +516,26 @@ Panasonic has not published the layout, and no public description of it was foun
 
 @see term:dmi
 @see term:padding
+
+@term insyde-dmi
+@name Insyde DMI
+@short The store in which InsydeH2O firmware keeps the values written over its own SMBIOS tables — the serial numbers, the UUID, the model — in the range the flash device map names SMBIOS Update.
+
+InsydeH2O firmware builds its [[term:dmi|SMBIOS]] tables from values compiled into the BIOS and from a store of values written over them, the `$DMI` store. A DMI utility writes the machine's serial numbers, UUID and model there at the factory, and again after a board is replaced. The store lies in the [[term:padding|padding]] of the BIOS region, in the range the Insyde [[term:flash-device-map|flash device map]] names **SMBIOS Update**.
+
+The store begins with the signature `$DMI`. Records follow back to back, each a five-byte header and a value: the SMBIOS structure type (1 the system, 2 the baseboard, 3 the chassis, 11 the OEM strings), the offset of the field within that structure, a state byte, and the record's length, header included. The value is a string without its terminating zero, or, for the UUID, its 16 bytes in SMBIOS byte order. After the last record the store is filled with `FF`. The store has no checksum.
+
+The store is a log. Flash memory can change a bit from 1 to 0 without an erase, but not back, so a value is never overwritten in place: the DMI utility appends a new record, whose state byte stays `FF`, and clears the state byte of the record it replaces to `00`. The record in force for a field is therefore the one with `FF`; the records before it with `00` are history. The utility writes every field again each time it runs, which is why most fields are found as a pair, a replaced record and the one in force, often with the same value. On every board examined each field has exactly one record with `FF`, and it is the field's last. The app takes that record as the field's value; that the firmware does the same follows from the layout of the log, but has not been checked against the tables of a running machine. Where a field has no record marked `FF`, or more than one, the app takes its last record and the details name the field.
+
+The [[topic:tool-uefi|UEFI tool]] finds the store by its content: `$DMI` on a 4 KB boundary, records that follow one another, and `FF` up to 4 KB past the signature. The tree shows it as a row, **Insyde DMI**, with the product name and the system serial number beside the name; under it a row per record, which gives the field and its value, for example `Board version = M1050`; where the field is not a known one, the row names the structure type and the offset instead. A record's details give its structure type, its offset in the structure, the state byte, whether the record is in force or replaced, its length and its value. The details of the store list the value in force of each field under **Entries** and every record under **Records**: its type, its offset in the structure, its state, the field and the value. A click on a row in either table opens that row in the tree.
+
+Many boards keep the store empty: the signature, then `FF`. No value is then written over the built-in tables, and the row reads **Insyde DMI · empty**. Lenovo boards keep the identity in the [[term:lenv|LENV]] blocks instead; their empty `$DMI` store is shown as well, and **Show DMI Area** goes to the LENV store.
+
+Insyde has not published the layout. It was read off dumps of two Huawei boards, an Acer Swift SF314-57 and a Schenker Slim15, and the vendors write different fields: the Huawei boards the serial numbers, the UUID, the SKU and an OEM string; the Schenker only the manufacturer, the product name and the UUID. When a clean BIOS or another machine's BIOS is written to the chip, carry the store over from the old dump — the whole store, to the same address — or the machine loses its serial numbers and UUID.
+
+@see term:dmi
+@see term:padding
+@see term:flash-device-map
 
 @term hp-dmi
 @name HP DMI

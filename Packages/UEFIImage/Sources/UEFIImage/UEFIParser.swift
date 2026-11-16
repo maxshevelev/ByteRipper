@@ -272,6 +272,7 @@ final class Parser {
         read = readingGPNVStores(read, emptyByte: emptyByte)
         read = readingAcerDMIStores(read, emptyByte: emptyByte)
         read = readingPanasonicDMIStores(read, emptyByte: emptyByte)
+        read = readingInsydeDMIStores(read, emptyByte: emptyByte)
         read = readingAMDMicrocode(read, emptyByte: emptyByte)
         // After the microcode: a patch the directories list is already its
         // row, and keeps it.

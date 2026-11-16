@@ -254,7 +254,7 @@ public enum UEFITreeDisplay {
     public static func showsValue(_ node: UEFINode) -> Bool {
         node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .gpnvRecord
             || node.kind == .lenvBlock || node.kind == .lenvEntry || node.kind == .ldbgEntry
-            || node.kind == .dmiField || node.kind == .sysFEntry && AppleDMIArea.identityNames.contains(node.name)
+            || node.kind == .dmiField || node.kind == .insydeDMIRecord || node.kind == .sysFEntry && AppleDMIArea.identityNames.contains(node.name)
     }
 
     private static func kibibytes(_ length: UInt64) -> UInt64 {
@@ -334,6 +334,14 @@ public enum UEFITreeDisplay {
         }
         if node.kind == .panasonicDMIRecord {
             return UEFIPanasonicDMIDetail.recordRow(node, in: language)
+        }
+        // Insyde's `$DMI` says the product and the system serial it writes;
+        // a record the field it writes and its value.
+        if node.kind == .insydeDMIStore, let reader {
+            return UEFIInsydeDMIDetail.row(node, reader: reader, in: language)
+        }
+        if node.kind == .insydeDMIRecord {
+            return UEFIInsydeDMIDetail.recordRow(node, reader: reader, in: language)
         }
         // HP's `HP_MUD` says whose it is: the serial, the rest in the detail —
         // on a copy the store marks deleted as well, which is where most HP
@@ -422,6 +430,7 @@ public enum UEFITreeDisplay {
         case .gpnvStore: return L("ASUS DMI", in: language)
         case .acerDMIStore: return L("Acer DMI", in: language)
         case .panasonicDMIStore: return L("Panasonic DMI", in: language)
+        case .insydeDMIStore: return L("Insyde DMI", in: language)
         case .vssEntry: return L("HP DMI", in: language)
         case .sysFStore: return L("Apple DMI", in: language)
         default: return nil
@@ -582,6 +591,8 @@ public enum UEFITreeDisplay {
         case .acerDMIStore: return L("Acer DMI", in: language)
         case .panasonicDMIStore: return L("Panasonic DMI", in: language)
         case .panasonicDMIRecord: return L("Panasonic DMI record", in: language)
+        case .insydeDMIStore: return L("Insyde DMI", in: language)
+        case .insydeDMIRecord: return L("Insyde DMI record", in: language)
         case .dmiField: return L("DMI field", in: language)
         case .amdEFS: return L("Embedded Firmware Structure", in: language)
         case .amdDirectory: return L("AMD firmware directory", in: language)
