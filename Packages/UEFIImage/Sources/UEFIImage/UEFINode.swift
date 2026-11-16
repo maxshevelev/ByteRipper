@@ -330,6 +330,13 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable, Codable {
     /// UEFITool, as Acer's area is.
     case panasonicDMIStore
     case panasonicDMIRecord
+    /// InsydeH2O's `$DMI` store (`InsydeDMIStore`), the values written over
+    /// the firmware's SMBIOS tables — the serial numbers, the UUID, the
+    /// model — and one record of it, named by the field it writes, whose
+    /// subtype is the SMBIOS structure type. Read out of the padding inside the BIOS region, found
+    /// by its content. Padding to UEFITool, as Panasonic's area is.
+    case insydeDMIStore
+    case insydeDMIRecord
     /// One value of a vendor's identity area kept as a field of the area's
     /// bytes (`DMIField`): under Acer's DMI area, under Panasonic's and its
     /// records, and under HP's `HP_MUD`
