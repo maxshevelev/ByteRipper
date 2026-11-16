@@ -36,8 +36,10 @@ public final class Server {
     /// Publishes, leases, and this server's starts and stops, for the
     /// console's Activity page: kept with the store, nil without the CAS role.
     public private(set) var events: ActivityLog?
-    /// Whether this run's start is written down, so its stop is too.
-    private var startNoted = false
+    /// The build this run started as, once its start is written down, so its
+    /// stop is too, under the same version: an install replaced while it ran
+    /// is the next run's, not this one's.
+    private var ranAs: (version: String?, commit: String?)?
 
     public init(configuration: ServerConfiguration,
                 log: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }) {
@@ -268,12 +270,12 @@ public final class Server {
     /// This run written down once it listens: the version it was built as,
     /// and whether the run before it ended with no stop — a crash, a kill.
     private func noteStart() {
-        guard let events, !startNoted else { return }
+        guard let events, ranAs == nil else { return }
         let previous = events.last(of: [ActivityLog.Kind.serverStart, ActivityLog.Kind.serverStop])
         let build = Self.build()
         events.append(.init(kind: ActivityLog.Kind.serverStart, version: build.version, commit: build.commit,
                             pid: getpid(), unclean: previous?.kind == ActivityLog.Kind.serverStart ? true : nil))
-        startNoted = true
+        ranAs = build
         log("server \(build.version ?? "dev build") started")
     }
 
@@ -351,12 +353,11 @@ public final class Server {
     }
 
     public func stop() {
-        if startNoted, let events {
-            let build = Self.build()
+        if let build = ranAs, let events {
             events.append(.init(kind: ActivityLog.Kind.serverStop, version: build.version, commit: build.commit,
                                 pid: getpid()))
         }
-        startNoted = false
+        ranAs = nil
         mcp?.stop()
         mcp = nil
         documents = nil
