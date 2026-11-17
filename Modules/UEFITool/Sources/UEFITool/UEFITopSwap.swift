@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import UEFIImage
 
@@ -102,6 +103,6 @@ public enum UEFITopSwap {
     }
 
     private static func hex(_ value: UInt64) -> String {
-        String(format: "0x%llX", value)
+        value.hexNumber
     }
 }

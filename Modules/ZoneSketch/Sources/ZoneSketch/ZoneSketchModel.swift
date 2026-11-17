@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -86,7 +87,7 @@ public struct ZoneSketchModel: Equatable, Sendable {
 
     /// The offsets a zone covers, as the list shows them.
     public static func rangeText(_ range: Range<UInt64>) -> String {
-        String(format: "%llX – %llX", range.lowerBound, range.upperBound - 1)
+        "\(range.lowerBound.bareHexNumber) – \((range.upperBound - 1).bareHexNumber)"
     }
 }
 

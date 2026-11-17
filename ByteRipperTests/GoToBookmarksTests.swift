@@ -837,8 +837,26 @@ final class GoToBookmarksTests: XCTestCase {
         form.goToTypedOffset()
 
         let message = try XCTUnwrap(controller.lastAlertMessage)
-        XCTAssertTrue(message.contains("0x123456780"), message)
-        XCTAssertTrue(message.contains("(256 bytes)"), message)
+        XCTAssertEqual(message, "Offset 0x123456780 is beyond the end of the file(s) "
+                       + "(size 0x100 (256 bytes)). Moved to the end.")
+    }
+
+    /// With a part's panel in front the jump is the panel's, and its alert
+    /// quotes the offset whole and the part's size in the same form.
+    func testThePanelsPastTheEndAlertQuotesALargeOffsetWhole() throws {
+        let (controller, forms) = try makeController(bytes: [UInt8](repeating: 0x11, count: 0x100))
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<32), named: "part", animated: false))
+        addTeardownBlock { @MainActor in controller.fragments.close(id, animated: false) }
+        controller.goToPosition()
+        let form = try XCTUnwrap(forms().first)
+
+        form.offsetCombo.stringValue = "0x123456780"
+        form.goToTypedOffset()
+
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertTrue(message.hasPrefix("Offset 0x123456780 is beyond the end of "), message)
+        XCTAssertTrue(message.hasSuffix("(size 0x20 (32 bytes)). Moved to the end."), message)
+        XCTAssertEqual(try XCTUnwrap(controller.fragments.pane(id)).hexSelection().start, 0x20)
     }
 
     /// A bookmark is an absolute offset (§8), so going to one moves BOTH panes

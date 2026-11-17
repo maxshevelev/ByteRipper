@@ -1,4 +1,5 @@
 import Cocoa
+import HexText
 import Localization
 
 /// The pane status bar's main readout — the one field the whole line is drawn
@@ -77,7 +78,7 @@ final class StatusLabel: NSTextField {
     /// and every offset field in the app takes it on the way in — so a copied
     /// `0x200000` would be pasted as `0x0x200000` or rejected outright.
     static func copyText(_ bytes: UInt64, as form: SizeForm) -> String {
-        form == .hex ? String(format: "%llX", bytes) : String(bytes)
+        form == .hex ? bytes.bareHexNumber : String(bytes)
     }
 
     /// The room the bar gives the readout, asked for rather than handed over.

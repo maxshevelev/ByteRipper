@@ -98,6 +98,9 @@ final class CopyToOtherPaneTests: XCTestCase {
 
         controller.copyToOtherPane()
         XCTAssertEqual(controller.lastAlertTitle, "Copy to Other Pane", "the refusal says so")
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertTrue(message.hasPrefix("The selection ends at 0x28, past the end of"), message)
+        XCTAssertTrue(message.contains("which ends at 0x20."), message)
         XCTAssertEqual(try bytes(b), [UInt8](repeating: 0x00, count: 32), "nothing written")
         XCTAssertEqual(b.fileSize, 32, "and the destination did not grow")
     }

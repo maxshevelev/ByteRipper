@@ -602,6 +602,8 @@
 "Nothing was changed in %1$@." = "In %1$@ wurde nichts geändert.";
 "Nothing was written inside a Boot Guard or vendor protected range." = "In einen von Boot Guard oder vom Hersteller geschützten Bereich wurde nichts geschrieben.";
 "OEM Configuration" = "OEM-Konfiguration";
+"Offset %1$@ is beyond the end of %2$@ (size %3$@). Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@ (Größe %3$@). Ans Ende bewegt.";
+"Offset %1$@ is beyond the end of the file(s) (size %2$@). Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en) (Größe %2$@). Ans Ende bewegt.";
 "Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Offset 0x%1$@, %2$@ Byte ausgewählt bis 0x%3$@.";
 "Offset 0x%1$@." = "Offset 0x%1$@.";
 "OK" = "OK";
@@ -614,8 +616,6 @@
 "OROM Images" = "OROM-Images";
 "Offset %1$@" = "Offset %1$@";
 "Offset" = "Offset";
-"Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@ (%3$@ Bytes). Ans Ende bewegt.";
-"Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en) (%2$@ Bytes). Ans Ende bewegt.";
 "Offset beyond end of file" = "Offset hinter dem Dateiende";
 "Offset:" = "Offset:";
 "Offsets" = "Offsets";

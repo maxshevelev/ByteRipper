@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -339,5 +340,5 @@ public enum MEAAgentQueries {
         return parts.compactMap { $0 }
     }
 
-    nonisolated static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    nonisolated static func hex(_ value: UInt64) -> String { value.hexNumber }
 }

@@ -1,6 +1,7 @@
 import Cocoa
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import PartCodec
 import UniformTypeIdentifiers
@@ -5076,7 +5077,7 @@ final class MainViewController: NSViewController {
         guard let target = (sender as? NSMenuItem)?.representedObject as? OffsetContextTarget else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(String(target.offset, radix: 16, uppercase: true), forType: .string)
+        pasteboard.setString(target.offset.bareHexNumber, forType: .string)
     }
 
     /// Header context menu > New File: a brand-new untitled document lands in
@@ -6636,9 +6637,9 @@ final class MainViewController: NSViewController {
             if offset > panelPane.fileSize {
                 presentAlert(
                     title: L("Offset beyond end of file"),
-                    message: L("Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end.",
+                    message: L("Offset %1$@ is beyond the end of %2$@ (size %3$@). Moved to the end.",
                                offset.hexNumber, panelPane.status.fileName,
-                               String(panelPane.fileSize))
+                               StatusLabel.exactSizeText(panelPane.fileSize))
                 )
             }
             panelPane.moveCaret(to: target)
@@ -6651,8 +6652,8 @@ final class MainViewController: NSViewController {
         if offset > largerSize {
             presentAlert(
                 title: L("Offset beyond end of file"),
-                message: L("Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end.",
-                           offset.hexNumber, String(largerSize))
+                message: L("Offset %1$@ is beyond the end of the file(s) (size %2$@). Moved to the end.",
+                           offset.hexNumber, StatusLabel.exactSizeText(largerSize))
             )
         }
         let target = min(offset, largerSize)

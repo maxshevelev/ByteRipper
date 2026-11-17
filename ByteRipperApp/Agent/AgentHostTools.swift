@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import HexText
 
 /// The tools the app answers itself, as opposed to the ones a tool-module
 /// contributes: what is open, where the reader is, the bytes, and moving the

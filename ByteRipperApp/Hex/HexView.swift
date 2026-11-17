@@ -3889,14 +3889,6 @@ extension UInt64 {
         "0x" + bareAddress
     }
 
-    /// The value as a number in hex, unpadded: `0x1FE028`, `0x0`. For a size
-    /// or an offset quoted in a message, where the column's eight digits
-    /// would only be noise. Built from the integer itself, never through a
-    /// format string: `String(format: "%X", someUInt64)` reads 32 bits and
-    /// prints `0x123456780` as `0x23456780`.
-    var hexNumber: String {
-        "0x" + String(self, radix: 16, uppercase: true)
-    }
 }
 
 extension Range where Bound == UInt64 {

@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -206,5 +207,5 @@ public enum MEAAgentFiles {
         }
     }
 
-    private nonisolated static func hex(_ value: Int) -> String { String(format: "0x%lX", value) }
+    private nonisolated static func hex(_ value: Int) -> String { value.hexNumber }
 }

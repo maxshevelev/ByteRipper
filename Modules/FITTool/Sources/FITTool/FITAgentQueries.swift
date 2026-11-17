@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -183,5 +184,5 @@ public enum FITAgentQueries {
         return .object(members)
     }
 
-    static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    static func hex(_ value: UInt64) -> String { value.hexNumber }
 }

@@ -1,6 +1,7 @@
 import Cocoa
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -470,8 +471,8 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         // badges of the codecs they came through.
         let shown = annotation.decoded?.range ?? annotation.range
         let address = shown.map { range in
-            range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
-                : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
+            range.count <= 1 ? range.lowerBound.hexNumber
+                : "\(range.lowerBound.hexNumber)–\(range.upperBound.hexNumber)"
         }
         return AnnotationCardView.Content(
             id: annotation.id, title: annotation.title, isOpen: isOpen(annotation),

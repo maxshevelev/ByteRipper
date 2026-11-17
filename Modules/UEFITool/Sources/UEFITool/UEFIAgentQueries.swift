@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -441,5 +442,5 @@ public enum UEFIAgentQueries {
         return .object(members)
     }
 
-    public static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    public static func hex(_ value: UInt64) -> String { value.hexNumber }
 }

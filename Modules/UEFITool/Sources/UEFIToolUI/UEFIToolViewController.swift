@@ -4,6 +4,7 @@ import BytePattern
 import HelpBook
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import MEPresentation
 import ToolModuleKit
@@ -1777,7 +1778,7 @@ import UEFITool
             showContentResults(false)
             return
         }
-        let hex = { (value: UInt64) in String(format: "0x%llX", value) }
+        let hex = { (value: UInt64) in value.hexNumber }
         let label = { [catalogue, image] (id: NodeID?) -> String in
             id.flatMap { UEFITreeDisplay.nameAfterParent(of: $0, in: tree, catalogue: catalogue, image: image, in: Localization.appLanguage) } ?? "—"
         }
