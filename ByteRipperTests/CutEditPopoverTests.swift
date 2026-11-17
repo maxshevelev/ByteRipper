@@ -29,6 +29,7 @@ final class CutEditPopoverTests: XCTestCase {
             onCommit: commit)
         controller.loadViewIfNeeded()
         controller.beep = { beepCount += 1 }
+        controller.isAppActive = { true }
         return (controller, { beepCount })
     }
 
@@ -48,6 +49,133 @@ final class CutEditPopoverTests: XCTestCase {
         XCTAssertEqual(committed?.0, 0x0A, "the cut is at the typed offset")
         XCTAssertEqual(committed?.1, "header", "the name goes with the piece that starts there")
         XCTAssertEqual(beeps(), 0, "a legal commit is quiet")
+    }
+
+    /// A sum commits the cut at what it comes to (issue #9).
+    func testCommitMakesACutAtWhatASumComesTo() {
+        var committed: UInt64?
+        let (controller, beeps) = makeController(commit: { committed = $0; _ = $1 })
+
+        controller.offsetField.stringValue = "0x4 + 6"
+        controller.commit()
+
+        XCTAssertEqual(committed, 10)
+        XCTAssertEqual(beeps(), 0)
+    }
+
+    /// A sum that ends at its operator is not red — it is not wrong yet — but
+    /// Return refuses it, and one that comes to an illegal cut is red.
+    func testAnUnfinishedSumIsNotRedButDoesNotCommit() {
+        var committed: UInt64?
+        let (controller, beeps) = makeController(commit: { committed = $0; _ = $1 })
+
+        controller.offsetField.stringValue = "0x4 +"
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+        XCTAssertTrue(controller.offsetField.textColor == .labelColor)
+        controller.commit()
+        XCTAssertNil(committed)
+        XCTAssertEqual(beeps(), 1)
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad, "Return turns it red")
+
+        controller.offsetField.stringValue = "0x4 + 12"   // EOF of a 16-byte file
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
+        XCTAssertEqual(controller.offsetField.resultText, "= 0x10", "what it came to is still shown")
+    }
+
+    /// Return and Esc typed in the address field reach the popover through the
+    /// field's own editor, as through any field's: the editor asks the form
+    /// first.
+    func testReturnAndEscInTheAddressFieldReachThePopover() throws {
+        var committed: UInt64?
+        let (controller, _) = makeController(commit: { committed = $0; _ = $1 })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        window.contentView = controller.view
+        window.makeFirstResponder(controller.offsetField)
+        let editor = try XCTUnwrap(controller.offsetField.currentEditor() as? NSTextView)
+        editor.insertText("0x4 + 2", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(committed, 6)
+
+        var cancelled = false
+        let other = CutEditPopoverController(
+            prefillOffset: 8, fileSize: 16, isAlreadyACut: { _ in false },
+            onCommit: { _, _ in }, onCancel: { cancelled = true })
+        other.loadViewIfNeeded()
+        window.contentView = other.view
+        window.makeFirstResponder(other.offsetField)
+        try XCTUnwrap(other.offsetField.currentEditor() as? NSTextView)
+            .doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        XCTAssertTrue(cancelled)
+    }
+
+    /// A click outside does not drop an unfinished sum without a word: the
+    /// popover stays open and the field turns red. Esc still closes it.
+    func testAClickOutsideKeepsAnUnfinishedSum() {
+        var committed: UInt64?
+        let (controller, beeps) = makeController(commit: { committed = $0; _ = $1 })
+        let popover = NSPopover()
+        controller.offsetField.stringValue = "0x4 +"
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+
+        XCTAssertFalse(controller.popoverShouldClose(popover))
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
+        XCTAssertEqual(beeps(), 1)
+        XCTAssertNil(committed)
+
+        controller.offsetField.stringValue = "0x4 + 2"
+        XCTAssertTrue(controller.popoverShouldClose(popover), "a finished sum closes as before")
+        controller.offsetField.stringValue = "0x4 +"
+        controller.cancel()
+        XCTAssertTrue(controller.popoverShouldClose(popover), "Esc closes it whatever the field holds")
+    }
+
+    /// Switching to another app is not a click outside: the popover stays,
+    /// the sum kept, with no beep and no red field.
+    func testSwitchingAppsKeepsAnUnfinishedSumQuietly() {
+        let (controller, beeps) = makeController()
+        controller.isAppActive = { false }
+        controller.offsetField.stringValue = "0x4 + 0x"
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+
+        XCTAssertFalse(controller.popoverShouldClose(NSPopover()))
+        XCTAssertTrue(controller.offsetField.textColor == .labelColor)
+        XCTAssertEqual(beeps(), 0)
+        XCTAssertEqual(controller.offsetField.stringValue, "0x4 + 0x")
+    }
+
+    /// An address past 4 GB comes into the field whole, not cut to 32 bits.
+    func testAPrefillPastFourGigabytesIsWhole() {
+        let controller = CutEditPopoverController(
+            prefillOffset: 0x1_2345_6780, fileSize: 0x2_0000_0000,
+            isAlreadyACut: { _ in false }, onCommit: { _, _ in })
+        controller.loadViewIfNeeded()
+        XCTAssertEqual(controller.offsetField.stringValue, "0x123456780")
+        XCTAssertEqual(controller.offsetField.value, 0x1_2345_6780)
+    }
+
+    /// ↓ in the address field opens its list through the field's own editor,
+    /// once the popover — which has no use for the key — has declined it; and
+    /// the entry chosen fills the field.
+    func testDownInTheAddressFieldOpensTheList() throws {
+        let (controller, _) = makeController()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        window.contentView = controller.view
+        window.makeFirstResponder(controller.offsetField)
+        var shown: NSMenu?
+        controller.offsetField.presentHistory = { menu, _ in
+            shown = menu
+            return "0x4 + 2"
+        }
+        try XCTUnwrap(controller.offsetField.currentEditor() as? NSTextView)
+            .doCommand(by: #selector(NSResponder.moveDown(_:)))
+        XCTAssertNotNil(shown)
+        XCTAssertEqual(controller.offsetField.stringValue, "0x4 + 2")
+        XCTAssertEqual(controller.offsetField.value, 6)
     }
 
     /// A decimal offset is parsed too — the field accepts whatever the dialogs

@@ -184,6 +184,152 @@ final class SelectBlockSheetTests: XCTestCase {
         XCTAssertEqual(selection(), SelectionModel(start: 0x10, length: 0x5, fileSize: 0x100))
     }
 
+    // MARK: - Sums (issue #9)
+
+    /// A start that is an address plus a distance, a length known in decimal:
+    /// the selection is made from what each comes to.
+    func testASumInAFieldSelectsFromItsResult() {
+        let (sheet, selection) = makeSheet(fileSize: 0x400000)
+        sheet.lengthRadio.performClick(nil)
+        sheet.startField.stringValue = "0x1FE000 + 0x40"
+        sheet.lengthField.stringValue = "4096 - 0x40"
+        XCTAssertNil(sheet.validate())
+        XCTAssertEqual(sheet.startField.resultText, "= 0x1FE040")
+        sheet.handleSubmit()
+        XCTAssertEqual(selection(), SelectionModel(start: 0x1FE040, length: 0xFC0, fileSize: 0x400000))
+        XCTAssertEqual(sheet.startField.stringValue, "0x1FE000 + 0x40", "the sum is never rewritten")
+    }
+
+    /// The sum being typed is read back on the message's line, and a sum that
+    /// ends at its operator is waited for rather than called an error — though
+    /// OK still refuses it.
+    func testTheSumIsReadBackAndAnUnfinishedOneIsWaitedFor() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.endField.stringValue = "0x80"
+        window.makeFirstResponder(sheet.startField)
+
+        type("0x10 +", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden, "not wrong yet")
+        XCTAssertTrue(sheet.noteLabel.isHidden)
+        XCTAssertEqual(sheet.validate(), "The sum is not finished.", "but OK is told why it refuses")
+
+        type("0x10 + 32", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden)
+        XCTAssertFalse(sheet.noteLabel.isHidden)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)")
+
+        type("0x10 - 32", into: sheet.startField)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+        XCTAssertTrue(sheet.noteLabel.isHidden, "an error and a result are never shown together")
+    }
+
+    /// The message line follows the radio buttons: switched to Length, it
+    /// stops reading back the End field's sum and reads back Length's.
+    func testTheLineFollowsTheFieldSwitchedTo() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.startField.stringValue = "0x10"
+        sheet.lengthField.stringValue = "0x8 + 8"
+        window.makeFirstResponder(sheet.endField)
+        type("0x10 + 0x20", into: sheet.endField)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)")
+
+        sheet.lengthRadio.performClick(nil)
+        XCTAssertFalse(sheet.noteLabel.isHidden)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x8 + 0x8 = 0x10 (16)")
+
+        sheet.lengthField.stringValue = "0x40"
+        sheet.endRadio.performClick(nil)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)")
+    }
+
+    /// Only the field being typed in is waited for: a sum left unfinished in
+    /// Start does not hide what is wrong with End.
+    func testAnUnfinishedSumElsewhereDoesNotHideAnError() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.endField.stringValue = "0x80"
+        window.makeFirstResponder(sheet.startField)
+        type("0x10 +", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden, "Start is still being typed")
+
+        window.makeFirstResponder(sheet.endField)
+        type("0x5 - 0x10", into: sheet.endField)
+        XCTAssertFalse(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The sum is not finished.",
+                       "the unfinished Start is now named, the first thing wrong")
+        window.makeFirstResponder(sheet.startField)
+        type("0x10 + 1", into: sheet.startField)
+        window.makeFirstResponder(sheet.endField)
+        type("0x5 - 0x10", into: sheet.endField)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+    }
+
+    /// Switching the radio does not raise an error for fields nobody has
+    /// typed in, and a Start sum being read back stays on the line.
+    func testSwitchingTheRadioRaisesNoErrorOfItsOwn() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.lengthRadio.performClick(nil)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "", "nothing typed yet, nothing wrong yet")
+        XCTAssertTrue(sheet.noteLabel.isHidden)
+
+        sheet.endField.stringValue = "0x80"
+        sheet.endRadio.performClick(nil)
+        window.makeFirstResponder(sheet.startField)
+        type("0x10 + 0x20", into: sheet.startField)
+        sheet.lengthRadio.performClick(nil)
+        sheet.endRadio.performClick(nil)
+        XCTAssertTrue(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)", "Start's sum stays on the line")
+    }
+
+    /// Switched to a field that already holds a mistake, the sheet says so at
+    /// once rather than at the next keystroke.
+    func testSwitchingToAFieldWithAMistakeShowsIt() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.lengthField.stringValue = "0x10 - 0x20"
+        window.makeFirstResponder(sheet.startField)
+        type("0x10", into: sheet.startField)
+        sheet.endField.stringValue = "0x20"
+        type("0x10", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden || sheet.errorLabel.stringValue.isEmpty)
+
+        sheet.lengthRadio.performClick(nil)
+        XCTAssertFalse(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+    }
+
+    /// An unfinished sum in the field being typed in does not hide what is
+    /// wrong with another field.
+    func testAnUnfinishedSumDoesNotHideAnotherFieldsError() {
+        let (sheet, _) = makeSheet(fileSize: 0x100)
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        window.makeFirstResponder(sheet.startField)
+        type("0x99999999", into: sheet.startField)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "Start is beyond the end of the file.")
+
+        window.makeFirstResponder(sheet.endField)
+        type("0x10 +", into: sheet.endField)
+        XCTAssertFalse(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "Start is beyond the end of the file.")
+    }
+
+    /// An address past 4 GB comes into the field whole, not cut to 32 bits.
+    func testAPresetStartPastFourGigabytesIsWhole() {
+        let (sheet, _) = makeSheet(fileSize: 0x2_0000_0000, presetStart: 0x1_2345_6780)
+        XCTAssertEqual(sheet.startField.stringValue, "0x123456780")
+        XCTAssertEqual(sheet.startField.value, 0x1_2345_6780)
+    }
+
     // MARK: - Validation
 
     func testValidationRejectsStartBeyondFile() {
@@ -245,7 +391,7 @@ final class SelectBlockSheetTests: XCTestCase {
     /// Simulates a keystroke the way the real editing path does: the field
     /// editor's text changes, then the control's `textDidChange` fires (with
     /// the editor as the notification object). That is exactly what
-    /// `HexInputField` uses to trigger live re-validation, so a manual call is
+    /// `AddressField` uses to trigger live re-validation, so a manual call is
     /// required — a programmatic `string` set alone doesn't fire it.
     private func type(_ value: String, into field: NSTextField) {
         guard let editor = field.currentEditor() as? NSTextView else {

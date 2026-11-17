@@ -1,4 +1,4 @@
-@source-sha 523ee5ff296a08d8286c0f50a3f973ea83149837c2c832b9ddd8b6ac3c7c69ef
+@source-sha ab35b79011c2ef1d7cdb855a388c617690fbcab586febea1aac421038f0d354f
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -17,9 +17,24 @@ Ein „Unterschied“ ist beim Springen eine ganze Folge abweichender Bytes, nic
 - `0x1FE00` — hexadezimal, mit dem Präfix `0x` (es steht schon im Feld).
 - `130560` — dezimal, ohne Präfix.
 
-Das Feld behält die zuletzt eingegebenen zehn Adressen. Darunter liegt die [[topic:bookmarks|Lesezeichenliste]]: Tab bringt die Tastatur dorthin, Return springt zum ausgewählten Lesezeichen.
+Das Feld behält die letzten zehn Einträge, Summen eingeschlossen (siehe unten). Darunter liegt die [[topic:bookmarks|Lesezeichenliste]]: Tab bringt die Tastatur dorthin, Return springt zum ausgewählten Lesezeichen.
 
 Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse gebunden sind.
+
+## Eine Summe statt einer Zahl
+
+Jedes Feld, das eine Adresse oder eine Länge erwartet, nimmt auch eine Summe an – Zahlen, verbunden durch `+` und `-`, hexadezimal und dezimal gemischt: in „Gehe zu“, in **Bearbeiten ▸ Block auswählen…**, **Bearbeiten ▸ Schnitt hinzufügen…** und in der Adresse eines Lesezeichens.
+
+- `0x1FE000 + 4096` — eine Adresse hexadezimal plus eine Länge dezimal.
+- `0x2C0000 - 0x400 - 16` — beliebig viele Glieder.
+
+Die Summe bleibt so im Feld stehen, wie sie eingegeben wurde, und lässt sich prüfen und korrigieren. Ihr Ergebnis steht fett am rechten Rand des Feldes, und der Befehl verwendet dieses Ergebnis. „Gehe zu“ und „Block auswählen“ zeigen die ganze Summe zusätzlich hexadezimal unter dem Feld: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
+
+! Eine Zahl ohne `0x` ist dezimal: `0x1FE000 + 40` addiert vierzig, nicht `0x40`. Im Zweifel hilft die Zeile unter dem Feld.
+
+Klammern und Multiplikation werden nicht unterstützt. Ein Befehl wird nicht ausgeführt, solange die Summe unvollständig ist, etwa `0x1FE000 +`, oder ihr Ergebnis negativ ist.
+
+Der Pfeil am rechten Rand des Feldes oder **↓** öffnet die Liste der letzten Adressen und Summen. Ein gewählter Eintrag wird in das Feld übernommen; ausgeführt wird erst nach der Bestätigung.
 
 ## Zurück, wo man war
 
