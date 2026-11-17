@@ -183,9 +183,9 @@ public enum MEACurator {
         let rows = a.regions.map { region -> MEANode in
             var fields: [MEAField] = []
             append(&fields, "Name", region.name, dropEmpty: true)
-            append(&fields, "Offset", MEAText.offset(region.offset))
+            append(&fields, "Offset", region.offset.hexNumber)
             append(&fields, "Size", MEAText.size(region.size))
-            append(&fields, "Flags", MEAText.hex32(region.flags))
+            append(&fields, "Flags", region.flags.hexNumber(digits: 8))
             return MEANode(path: [],
                            title: region.name.isEmpty ? L("(unnamed)", in: language) : region.name,
                            subtitle: MEAText.range(region.offset, region.size),
@@ -203,15 +203,15 @@ public enum MEACurator {
     private static func cseLayout(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let table = a.cseLayoutTable else { return nil }
         var header: [MEAField] = []
-        append(&header, "Offset", MEAText.offset(table.offset))
-        append(&header, "Version", MEAText.hex(table.version))
+        append(&header, "Offset", table.offset.hexNumber)
+        append(&header, "Version", table.version.hexNumber)
         append(&header, "Redundancy", MEAText.yesNo(table.redundancy))
         append(&header, "Checksum Valid",
                table.checksumValid.map(MEAText.yesNo) ?? "— (1.6 has none)")
         let rows = table.partitions.map { p -> MEANode in
             var fields: [MEAField] = []
             append(&fields, "Name", p.name, dropEmpty: true)
-            append(&fields, "Offset", MEAText.offset(p.offset))
+            append(&fields, "Offset", p.offset.hexNumber)
             append(&fields, "Size", MEAText.size(p.size))
             append(&fields, "Empty", MEAText.yesNo(p.empty))
             return MEANode(path: [],
@@ -237,7 +237,7 @@ public enum MEACurator {
         guard let tables = a.bootPartitions, !tables.isEmpty else { return nil }
         let rows = tables.map { bpdt -> MEANode in
             var header: [MEAField] = []
-            append(&header, "Offset", MEAText.offset(bpdt.offset))
+            append(&header, "Offset", bpdt.offset.hexNumber)
             append(&header, "Boot Slot", bpdt.partitionName)
             append(&header, "Version", "IFWI \(bpdt.version == 2 ? "1.7" : "1.6")")
             append(&header, "Redundancy", MEAText.yesNo(bpdt.redundancy))
@@ -256,8 +256,8 @@ public enum MEACurator {
             let entries = bpdt.entries.map { e -> MEANode in
                 var fields: [MEAField] = []
                 append(&fields, "Name", e.name, dropEmpty: true)
-                append(&fields, "Type", MEAText.hex16(e.type))
-                append(&fields, "Offset", MEAText.offset(e.offset))
+                append(&fields, "Type", e.type.hexNumber(digits: 4))
+                append(&fields, "Offset", e.offset.hexNumber)
                 append(&fields, "Size", MEAText.size(e.size))
                 append(&fields, "Empty", MEAText.yesNo(e.empty))
                 return MEANode(path: [],
@@ -284,10 +284,10 @@ public enum MEACurator {
         guard let cp = a.codePartition else { return nil }
         var header: [MEAField] = []
         append(&header, "Name", cp.name)
-        append(&header, "Offset", MEAText.offset(cp.offset))
+        append(&header, "Offset", cp.offset.hexNumber)
         append(&header, "Header", cp.headerVersion == 1 ? "R1" : cp.headerVersion == 2 ? "R2"
             : "R\(cp.headerVersion)")
-        append(&header, "Header Length", MEAText.hex(cp.headerLength))
+        append(&header, "Header Length", cp.headerLength.hexNumber)
         append(&header, "Declared Modules", String(cp.entryCount))
         append(&header, "Decoded Modules", String(cp.modules.count))
         if let ok = cp.checksumValid { append(&header, "Checksum Valid", MEAText.yesNo(ok)) }
@@ -298,7 +298,7 @@ public enum MEACurator {
                 let absolute = cp.offset + m.offset
                 var fields: [MEAField] = []
                 append(&fields, "Name", m.name)
-                append(&fields, "Offset in $CPD", MEAText.offset(m.offset))
+                append(&fields, "Offset in $CPD", m.offset.hexNumber)
                 append(&fields, "Size", MEAText.size(m.size))
                 append(&fields, "Huffman", MEAText.yesNo(m.isHuffman))
                 // Only non-Huffman modules stand for real bytes: a compressed
@@ -333,8 +333,8 @@ public enum MEACurator {
 
     private static func extensionRow(_ ext: CPDExtension) -> MEANode {
         var fields: [MEAField] = []
-        append(&fields, "Tag", MEAText.hexByte(ext.tag))
-        append(&fields, "Offset", MEAText.offset(ext.offset))
+        append(&fields, "Tag", ext.tag.hexNumber(digits: 2))
+        append(&fields, "Offset", ext.offset.hexNumber)
         append(&fields, "Size", MEAText.size(ext.size))
         // The one payload group decoded for this tag — dumped field-by-field;
         // the sub-table rows of the _Mod variants surface as counts (see the
@@ -344,7 +344,7 @@ public enum MEACurator {
         }
         let known = extensionTagNames[ext.tag]
         return MEANode(path: [],
-                       title: known ?? "CSE_Ext \(MEAText.hexByte(ext.tag))",
+                       title: known ?? "CSE_Ext \(ext.tag.hexNumber(digits: 2))",
                        subtitle: MEAText.range(ext.offset, ext.size),
                        range: MEAText.rangeValue(ext.offset, ext.size),
                        fields: fields,
@@ -386,7 +386,7 @@ public enum MEACurator {
         var fields: [MEAField] = []
         append(&fields, "Tag", m.tag)
         append(&fields, "Format", MEAText.manifestFormat(m.format))
-        append(&fields, "Offset", MEAText.offset(m.offset))
+        append(&fields, "Offset", m.offset.hexNumber)
         append(&fields, "Version", MEAText.version(m.major, m.minor, m.hotfix, m.build))
         append(&fields, "SVN", String(m.svn))
         append(&fields, "Date", MEAText.date(year: m.year, month: m.month, day: m.day))
@@ -409,7 +409,7 @@ public enum MEACurator {
                                   _ configPaths: ConfigRecordPaths = .none, in language: AppLanguage) -> MEANode? {
         guard let vol = a.mfsVolume else { return nil }
         var header: [MEAField] = []
-        append(&header, "Offset", MEAText.offset(vol.offset))
+        append(&header, "Offset", vol.offset.hexNumber)
         append(&header, "Page Size", MEAText.size(vol.pageSize))
         append(&header, "Page Count", String(vol.pageCount))
         append(&header, "System / Data Pages", "\(vol.systemPageCount) / \(vol.dataPageCount)")
@@ -420,8 +420,8 @@ public enum MEACurator {
         append(&header, "Used Records", String(vol.usedFileCount))
         append(&header, "Present Files", String(vol.presentFileCount))
         append(&header, "File Bytes", MEAText.size(vol.fileBytes))
-        append(&header, "FTBL Dictionary", MEAText.hex(vol.ftblDictionary))
-        append(&header, "FTBL Platform", MEAText.hex(vol.ftblPlatform))
+        append(&header, "FTBL Dictionary", vol.ftblDictionary.hexNumber)
+        append(&header, "FTBL Platform", vol.ftblPlatform.hexNumber)
         append(&header, "Uses FileTable.dat", MEAText.yesNo(vol.usesFTBL))
         // Where the names on the file rows came from — and whether either half
         // of the table was assumed rather than named by the volume. Only when a
@@ -500,8 +500,8 @@ public enum MEACurator {
             append(&fields, "Integrity", MEAText.yesNo(record.integrity))
             append(&fields, "Encryption", MEAText.yesNo(record.encryption))
             append(&fields, "Anti-Replay", MEAText.yesNo(record.antiReplay))
-            append(&fields, "Group ID", MEAText.hex(record.groupID))
-            append(&fields, "User ID", MEAText.hex(record.userID))
+            append(&fields, "Group ID", record.groupID.hexNumber)
+            append(&fields, "User ID", record.userID.hexNumber)
         }
         // The table that came off the end, as its own row under the file: it is
         // a structure with a dozen fields of its own, and the file's own facts
@@ -539,7 +539,7 @@ public enum MEACurator {
 
     private static func homeGroup(_ home: MFSHomeDirectory, in language: AppLanguage) -> MEANode {
         var fields: [MEAField] = []
-        append(&fields, "Record Size", MEAText.hex(home.homeRecordSize))
+        append(&fields, "Record Size", home.homeRecordSize.hexNumber)
         append(&fields, "Root Records", String(home.rootRecordCount))
         let rows = home.entries.map { homeRow($0) }
         return MEANode(path: [], title: L("Home Directory", in: language),
@@ -738,8 +738,8 @@ public enum MEACurator {
         guard let backup = a.mfsBackup else { return nil }
         var fields: [MEAField] = []
         append(&fields, "Format", backup.format == .r1 ? "R1" : "R0")
-        append(&fields, "Offset", MEAText.offset(backup.offset))
-        append(&fields, "Header CRC", MEAText.hex32(backup.headerCRCStored))
+        append(&fields, "Offset", backup.offset.hexNumber)
+        append(&fields, "Header CRC", backup.headerCRCStored.hexNumber(digits: 8))
         append(&fields, "Header CRC Valid", MEAText.yesNo(backup.headerCRCValid))
         if let allFF = backup.reservedAllFF {
             append(&fields, "Reserved All 0xFF", MEAText.yesNo(allFF))
@@ -758,13 +758,13 @@ public enum MEACurator {
             append(&fields, "File Index", String(entry.fileIndex))
             append(&fields, "File",
                    backupFileNames[entry.fileIndex] ?? "Low-level file \(entry.fileIndex)")
-            append(&fields, "Blob Offset", MEAText.offset(entry.blobOffset))
+            append(&fields, "Blob Offset", entry.blobOffset.hexNumber)
             append(&fields, "Blob Size", MEAText.size(entry.blobSize))
             append(&fields, "Data Size", MEAText.size(entry.dataSize))
             append(&fields, "Revision Valid", MEAText.yesNo(entry.revisionValid))
-            append(&fields, "Header CRC", MEAText.hex32(entry.headerCRCStored))
+            append(&fields, "Header CRC", entry.headerCRCStored.hexNumber(digits: 8))
             append(&fields, "Header CRC Valid", MEAText.yesNo(entry.headerCRCValid))
-            append(&fields, "Data CRC", MEAText.hex32(entry.dataCRCStored))
+            append(&fields, "Data CRC", entry.dataCRCStored.hexNumber(digits: 8))
             append(&fields, "Data CRC Valid", MEAText.yesNo(entry.dataCRCValid))
             return MEANode(path: [], title: L("Entry %1$@", in: language, entry.fileIndex),
                            subtitle: backupFileNames[entry.fileIndex]
@@ -804,7 +804,7 @@ public enum MEACurator {
                                     children: rows))
         }
         return MEANode(path: [], title: L("EFS Volume", in: language),
-                       subtitle: MEAText.offset(efs.offset),
+                       subtitle: efs.offset.hexNumber,
                        fields: fields, children: children,
                        helpTerm: HelpTermID("efs"))
     }
@@ -824,8 +824,8 @@ public enum MEACurator {
             // — the difference is the table taken off the end.
             append(&fields, "Stored Size", MEAText.size(file.storedSize))
         }
-        append(&fields, "Data Offset", MEAText.hex(file.dataOffset))
-        append(&fields, "Metadata Unknown", MEAText.hex(file.metadataUnknown))
+        append(&fields, "Data Offset", file.dataOffset.hexNumber)
+        append(&fields, "Metadata Unknown", file.metadataUnknown.hexNumber)
         let record = names.record(for: file.fileID)
         if let record {
             append(&fields, "Path", record.path)
@@ -833,8 +833,8 @@ public enum MEACurator {
             append(&fields, "Integrity", MEAText.yesNo(record.integrity))
             append(&fields, "Encryption", MEAText.yesNo(record.encryption))
             append(&fields, "Anti-Replay", MEAText.yesNo(record.antiReplay))
-            append(&fields, "Group ID", MEAText.hex(record.groupID))
-            append(&fields, "User ID", MEAText.hex(record.userID))
+            append(&fields, "Group ID", record.groupID.hexNumber)
+            append(&fields, "User ID", record.userID.hexNumber)
         }
         var children: [MEANode] = []
         if let integrity = file.integrity {
@@ -885,7 +885,7 @@ public enum MEACurator {
                                     children: rows))
         }
         return MEANode(path: [], title: L("OEM Configuration", in: language),
-                       subtitle: MEAText.offset(oem.offset),
+                       subtitle: oem.offset.hexNumber,
                        fields: fields, children: children,
                        helpTerm: HelpTermID("oem-config"))
     }
@@ -902,7 +902,7 @@ public enum MEACurator {
         return tokens.map { token in
             var fields: [MEAField] = []
             append(&fields, "Partition", token.partition)
-            append(&fields, "Offset", MEAText.offset(token.offset))
+            append(&fields, "Offset", token.offset.hexNumber)
             append(&fields, "Delayed Authentication Mode",
                    delayedAuthenticationMode(token.delayedAuthMode))
             append(&fields, "Reserved", "0x\(token.reservedHex)")
@@ -910,7 +910,7 @@ public enum MEACurator {
                 path: [],
                 title: tokens.count == 1
                     ? "Unlock Token" : "Unlock Token (\(token.partition))",
-                subtitle: MEAText.offset(token.offset),
+                subtitle: token.offset.hexNumber,
                 range: MEAText.rangeValue(token.offset, UnlockTokenFlags.size),
                 fields: fields,
                 helpTerm: HelpTermID("utok"))
@@ -957,11 +957,11 @@ public enum MEACurator {
         append(&fields, "File ID", record.fileID.hexNumber(digits: 8))
         append(&fields, "Path", path)
         append(&fields, "Size", MEAText.size(record.size))
-        append(&fields, "Offset", MEAText.hex(record.offset))
+        append(&fields, "Offset", record.offset.hexNumber)
         // Upstream's "FIT" column: an OEM `fitc.cfg` setting may override the
         // Intel `intl.cfg` one through the Flash Image Tool.
         append(&fields, "OEM Configurable", MEAText.yesNo(record.oemConfigurable))
-        append(&fields, "Reserved Flags", MEAText.hex(record.unknownFlags))
+        append(&fields, "Reserved Flags", record.unknownFlags.hexNumber)
         return MEANode(path: [],
                        title: path ?? "Record " + record.fileID.hexNumber(digits: 8),
                        subtitle: MEAText.size(record.size),
@@ -986,7 +986,7 @@ public enum MEACurator {
         guard let dir = a.mmeDirectory else { return nil }
         var fields: [MEAField] = []
         append(&fields, "Manifest", dir.manifestTag)
-        append(&fields, "Offset", MEAText.offset(dir.offset))
+        append(&fields, "Offset", dir.offset.hexNumber)
         append(&fields, "Declared Modules", String(dir.declaredModules))
         append(&fields, "Decoded Modules", String(dir.modules.count))
         let rows = dir.modules.enumerated().map { i, m -> MEANode in
@@ -1008,7 +1008,7 @@ public enum MEACurator {
         guard let images = a.oromImages, !images.isEmpty else { return nil }
         let rows = images.enumerated().map { i, img -> MEANode in
             MEANode(path: [], title: L("Image %1$@", in: language, i + 1),
-                    subtitle: MEAText.offset(img.offset),
+                    subtitle: img.offset.hexNumber,
                     fields: MEAValueText.fields(of: img))
         }
         return MEANode(path: [], title: L("OROM Images", in: language),
@@ -1080,7 +1080,7 @@ public enum MEACurator {
         var fields: [MEAField] = []
         append(&fields, "SHA-256", checks.sha256, dropEmpty: true)
         append(&fields, "SHA-384", checks.sha384, dropEmpty: true)
-        if let crc = checks.crc32 { append(&fields, "CRC-32", MEAText.hex32(crc)) }
+        if let crc = checks.crc32 { append(&fields, "CRC-32", crc.hexNumber(digits: 8)) }
         // Asked for and nothing came back — an unreadable file, or a region
         // with no bytes. The group goes rather than standing there empty.
         guard !fields.isEmpty else { return nil }

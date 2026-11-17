@@ -126,14 +126,14 @@ final class AgentDiffTools {
 
         var answer: [String: JSONValue] = [
             "range": AgentHostTools.range(start..<end),
-            "sizes": ["document": AgentHostTools.hex(sizes.0), "against": AgentHostTools.hex(sizes.1)],
+            "sizes": ["document": .string((sizes.0).hexNumber), "against": .string((sizes.1).hexNumber)],
             "totals": ["runs": .count(runs.count), "differing_bytes": .count(Int(differing))]
         ]
         if sizes.0 != sizes.1 {
             let longer = sizes.0 > sizes.1 ? "document" : "against"
-            answer["tail"] = ["in": .string(longer), "start": AgentHostTools.hex(common),
-                              "end": AgentHostTools.hex(max(sizes.0, sizes.1))]
-            answer["truncated_at"] = AgentHostTools.hex(common)
+            answer["tail"] = ["in": .string(longer), "start": .string(common.hexNumber),
+                              "end": .string((max(sizes.0, sizes.1)).hexNumber)]
+            answer["truncated_at"] = .string(common.hexNumber)
         }
 
         answer["document"] = .string(place.id)
@@ -146,9 +146,9 @@ final class AgentDiffTools {
         let places = structure == "auto" ? await locate(host, page.map(\.range)) : page.map { _ in [] }
         let items = zip(page, places).map { run, places -> JSONValue in
             var members: [String: JSONValue] = [
-                "start": AgentHostTools.hex(run.range.lowerBound),
-                "end": AgentHostTools.hex(run.range.upperBound),
-                "length": AgentHostTools.hex(UInt64(run.range.count)),
+                "start": .string(run.range.lowerBound.hexNumber),
+                "end": .string(run.range.upperBound.hexNumber),
+                "length": .string(UInt64(run.range.count).hexNumber),
                 "differing_bytes": .count(Int(run.differing))
             ]
             if structure == "auto" { members["where"] = .array(places.map(Self.placeJSON)) }
@@ -227,8 +227,8 @@ final class AgentDiffTools {
             attributed += bytes
             var members = Self.placeJSON(area)
             if case .object(var fields) = members {
-                fields["start"] = AgentHostTools.hex(bounds.lowerBound)
-                fields["end"] = AgentHostTools.hex(bounds.upperBound)
+                fields["start"] = .string(bounds.lowerBound.hexNumber)
+                fields["end"] = .string(bounds.upperBound.hexNumber)
                 fields["differing_bytes"] = .count(Int(bytes))
                 fields["runs"] = .count(runs.filter { $0.range.overlaps(bounds) }.count)
                 members = .object(fields)

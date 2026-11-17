@@ -117,6 +117,6 @@ final class ZoneSketchModelTests: XCTestCase {
     /// The offsets as the list shows them: inclusive at the end, because that
     /// is how a dialog reads them (§10.1) even though the range is half-open.
     func testTheRangeIsShownWithAnInclusiveEnd() {
-        XCTAssertEqual(ZoneSketchModel.rangeText(0x100..<0x110), "0x100–0x10F")
+        XCTAssertEqual((UInt64(0x100)..<0x110).hexExtent, "0x100–0x10F", "the list writes a zone first to last")
     }
 }

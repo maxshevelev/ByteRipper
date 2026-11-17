@@ -2551,7 +2551,7 @@ its map, so the whole of it is legible at a glance without opening anything.
   colour of a block is the colour of the piece it stands for, and the two agree
   because they are the same source.
 - **Hovering the strip names the piece under the pointer**: `S1 —
-  0x400000…0xC00000, 8 MB · W25Q…bin` — the label, the range, the size, and the
+  0x400000–0xBFFFFF, 8 MB · W25Q…bin` — the label, the range, the size, and the
   piece's name. The name is read from the store at hover time, so a rename shows
   without a repaint. Hovering a boundary near a cut names the cut instead. The
   words are shown in the same callout a bookmark's mark uses (§19.4.3), at once
@@ -2602,7 +2602,7 @@ parse found is legible at a glance beside the bytes it found it in.
   dump are one statement about the file and must not be told apart by their
   looks. The viewport band runs edge to edge and is painted over the gutter, as
   it is over the strip (§19.5).
-- **Hovering a bracket names its zone**: `BIOS region — 0x100…0x2FF, 512 B` — the
+- **Hovering a bracket names its zone**: `BIOS region — 0x100–0x2FF, 512 B` — the
   name, the range and the size, the shape the strip's own hover text takes, in
   the same callout, following the pointer (§19.4.3). A
   zone with no name is named by its range alone. The bracket under the pointer

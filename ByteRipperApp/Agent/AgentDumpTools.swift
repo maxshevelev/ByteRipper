@@ -65,11 +65,11 @@ final class AgentDumpTools {
         let url = try Self.fileURL(try arguments.string("path"))
         try await Self.probe(url)
         if let place = desk.onScreenPlace(of: url) {
-            return .json(["document": .string(place.id), "on_screen": true, "size": AgentHostTools.hex(place.pane.fileSize)])
+            return .json(["document": .string(place.id), "on_screen": true, "size": .string(place.pane.fileSize.hexNumber)])
         }
         let entry = try openBackground(url)
         return .json(["document": .string(desk.id(of: entry)), "on_screen": false,
-                      "size": AgentHostTools.hex(entry.pane.fileSize)])
+                      "size": .string(entry.pane.fileSize.hexNumber)])
     }
 
     private func openBackground(_ url: URL) throws -> AgentBackgroundDocuments.Entry {

@@ -137,7 +137,7 @@ final class AgentEditTools {
         let length = try arguments.offset("length")
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
         guard offset < source.pane.fileSize, length <= source.pane.fileSize - offset else {
-            throw AgentToolError("The range \(offset.hexNumber)+\(length.hexNumber) "
+            throw AgentToolError("The range \((offset..<(offset &+ length)).halfOpenHexText) "
                 + "runs past the end of \(source.named), which is \(source.pane.fileSize.hexNumber) bytes long.")
         }
         guard length <= UInt64(Int.max) else { throw AgentToolError("The range is too long.") }
@@ -160,9 +160,9 @@ final class AgentEditTools {
         var answer: [String: JSONValue] = [
             "from": .string(source.id),
             "to": .string(destination.id),
-            "start": AgentHostTools.hex(range.lowerBound),
-            "end": AgentHostTools.hex(range.upperBound),
-            "length": AgentHostTools.hex(length),
+            "start": .string(range.lowerBound.hexNumber),
+            "end": .string(range.upperBound.hexNumber),
+            "length": .string(length.hexNumber),
             "changed": .int(Int64(changed))
         ]
         let host = PaneToolHost(pane: source.pane, owner: controller, tools: nil)
@@ -325,8 +325,8 @@ final class AgentEditTools {
             "document": .string(place.id),
             "written": .array(zip(checked.writes, before).map { write, before in
                 var members: [String: JSONValue] = [
-                    "start": AgentHostTools.hex(write.offset),
-                    "end": AgentHostTools.hex(write.range.upperBound),
+                    "start": .string(write.offset.hexNumber),
+                    "end": .string(write.range.upperBound.hexNumber),
                     "before": .string(Self.hexText(before))
                 ]
                 if before.count < write.bytes.count { members["before_cut"] = true }

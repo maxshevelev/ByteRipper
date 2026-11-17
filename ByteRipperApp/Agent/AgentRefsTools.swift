@@ -243,12 +243,12 @@ final class AgentRefsTools {
             var members: [String: JSONValue] = ["form": .string(forms[hit.form].name + (forms[hit.form].bytes.count == 8 ? "64" : ""))]
             if let section {
                 members["section"] = .string(section.id.description)
-                members["section_offset"] = AgentHostTools.hex(hit.range.lowerBound - section.range.lowerBound)
+                members["section_offset"] = .string((hit.range.lowerBound - section.range.lowerBound).hexNumber)
             }
             if buffer.space == .file {
-                members["file_start"] = AgentHostTools.hex(hit.range.lowerBound)
+                members["file_start"] = .string(hit.range.lowerBound.hexNumber)
             } else {
-                members["node_start"] = AgentHostTools.hex(hit.range.lowerBound)
+                members["node_start"] = .string(hit.range.lowerBound.hexNumber)
                 members["in_compressed"] = true
             }
             if deepest.id != (section ?? file)?.id { members["node"] = .string(deepest.id.description) }

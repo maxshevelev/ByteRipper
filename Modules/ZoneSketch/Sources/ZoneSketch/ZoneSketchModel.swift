@@ -84,11 +84,6 @@ public struct ZoneSketchModel: Equatable, Sendable {
         let start = zone.range.lowerBound.bareHexNumber(digits: 8)
         return "\(base)_\(start)_\(zone.name).bin"
     }
-
-    /// The offsets a zone covers, as the list shows them.
-    public static func rangeText(_ range: Range<UInt64>) -> String {
-        range.hexExtent
-    }
 }
 
 /// The sketch is the whole of what this tool-module knows, so parking its state

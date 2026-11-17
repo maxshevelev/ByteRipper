@@ -602,7 +602,7 @@
 "Nothing was changed in %1$@." = "In %1$@ wurde nichts geändert.";
 "Nothing was written inside a Boot Guard or vendor protected range." = "In einen von Boot Guard oder vom Hersteller geschützten Bereich wurde nichts geschrieben.";
 "OEM Configuration" = "OEM-Konfiguration";
-"Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@, dessen Größe %3$@ beträgt. Ans Ende bewegt.";
+"Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@; die Größe beträgt %3$@. Ans Ende bewegt.";
 "Offset %1$@ is beyond the end of the file(s), whose size is %2$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en), deren Größe %2$@ beträgt. Ans Ende bewegt.";
 "Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Offset 0x%1$@, %2$@ Byte ausgewählt bis einschließlich 0x%3$@.";
 "Offset 0x%1$@." = "Offset 0x%1$@.";
@@ -860,7 +860,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Die Auswertung von Intel-ME/CSME-Firmware durch das Werkzeug ME Analyzer und die Datenbanken, gegen die ein Dump geprüft wird (MEA.dat, Huffman.dat), jeweils in der vom Projekt veröffentlichten Fassung.";
 "The newest revision the catalogue lists for this processor and platform" = "Die neueste Revision, die der Katalog für diesen Prozessor und diese Plattform führt";
 "the selection" = "die Auswahl";
-"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Die Auswahl reicht bis einschließlich %1$@ und damit über das Ende von „%2$@“ hinaus, dessen Größe %3$@ beträgt. Es wurde nichts kopiert.";
+"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Die Auswahl reicht bis einschließlich %1$@ und damit über das Ende von „%2$@“ hinaus; die Größe beträgt %3$@. Es wurde nichts kopiert.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "Die Top-Swap-Sicherung bei %1$@ hat dort, wohin ihr Zeiger führt, keine FIT";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Die Top-Swap-Sicherung bei %1$@ enthält dieselbe FIT, aber andere Bytes des Blocks weichen ab; Microcode-Änderungen werden daher abgelehnt, bis die Kopien übereinstimmen";
 "The Top Swap backup at 0x%1$@ got the same change." = "Die Top-Swap-Sicherung bei 0x%1$@ hat dieselbe Änderung erhalten.";

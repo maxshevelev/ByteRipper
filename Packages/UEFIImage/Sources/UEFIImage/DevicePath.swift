@@ -49,21 +49,21 @@ public enum DevicePath {
         case (1, 2) where node.count >= 5:
             return "PcCard(\(node[4].hexNumber))"
         case (1, 3) where node.count >= 24:
-            return "MemoryMapped(\((fields.u32(4)).hexNumber),\((fields.u64(8)).hexNumber),\((fields.u64(16)).hexNumber))"
+            return "MemoryMapped(\(fields.u32(4).hexNumber),\(fields.u64(8).hexNumber),\(fields.u64(16).hexNumber))"
         case (1, 4) where node.count >= 20:
             return "VenHw(\(fields.guid(4)))"
         case (1, 5) where node.count >= 8:
-            return "Ctrl(\((fields.u32(4)).hexNumber))"
+            return "Ctrl(\(fields.u32(4).hexNumber))"
         // ACPI.
         case (2, 1) where node.count >= 12:
             return acpiText(hid: fields.u32(4), uid: fields.u32(8))
         case (2, 3) where node.count >= 8:
-            return "AcpiAdr(\((fields.u32(4)).hexNumber))"
+            return "AcpiAdr(\(fields.u32(4).hexNumber))"
         // Messaging.
         case (3, 1) where node.count >= 8:
             return "Ata(\(node[4]),\(node[5]),\(fields.u16(6)))"
         case (3, 2) where node.count >= 8:
-            return "Scsi(\((fields.u16(4)).hexNumber),\((fields.u16(6)).hexNumber))"
+            return "Scsi(\(fields.u16(4).hexNumber),\(fields.u16(6).hexNumber))"
         case (3, 5) where node.count >= 6:
             return "USB(\(node[4].hexNumber),\(node[5].hexNumber))"
         case (3, 10) where node.count >= 20:
@@ -76,12 +76,12 @@ public enum DevicePath {
         case (3, 13):
             return "IPv6()"
         case (3, 15) where node.count >= 11:
-            return "UsbClass(\((fields.u16(4)).hexNumber),\((fields.u16(6)).hexNumber),\(node[8].hexNumber),\(node[9].hexNumber),\(node[10].hexNumber))"
+            return "UsbClass(\(fields.u16(4).hexNumber),\(fields.u16(6).hexNumber),\(node[8].hexNumber),\(node[9].hexNumber),\(node[10].hexNumber))"
         case (3, 18) where node.count >= 10:
-            return "Sata(\((fields.u16(4)).hexNumber),\((fields.u16(6)).hexNumber),\((fields.u16(8)).hexNumber))"
+            return "Sata(\(fields.u16(4).hexNumber),\(fields.u16(6).hexNumber),\(fields.u16(8).hexNumber))"
         case (3, 23) where node.count >= 16:
             let eui = node[8..<16].reversed().map { String(format: "%02X", $0) }.joined(separator: "-")
-            return "NVMe(\((fields.u32(4)).hexNumber),\(eui))"
+            return "NVMe(\(fields.u32(4).hexNumber),\(eui))"
         case (3, 24):
             return "Uri(\(String(decoding: node.dropFirst(4), as: UTF8.self)))"
         case (3, 26) where node.count >= 5:
@@ -92,7 +92,7 @@ public enum DevicePath {
         case (4, 1) where node.count >= 42:
             return hardDriveText(fields, node)
         case (4, 2) where node.count >= 24:
-            return "CDROM(\((fields.u32(4)).hexNumber),\((fields.u64(8)).hexNumber),\((fields.u64(16)).hexNumber))"
+            return "CDROM(\(fields.u32(4).hexNumber),\(fields.u64(8).hexNumber),\(fields.u64(16).hexNumber))"
         case (4, 3) where node.count >= 20:
             return "VenMedia(\(fields.guid(4)))"
         case (4, 4):
@@ -105,13 +105,13 @@ public enum DevicePath {
         case (4, 7) where node.count >= 20:
             return "Fv(\(fields.guid(4)))"
         case (4, 8) where node.count >= 24:
-            return "Offset(\((fields.u64(8)).hexNumber),\((fields.u64(16)).hexNumber))"
+            return "Offset(\(fields.u64(8).hexNumber),\(fields.u64(16).hexNumber))"
         // BIOS boot specification.
         case (5, 1) where node.count >= 8:
             let types: [UInt16: String] = [1: "Floppy", 2: "HD", 3: "CDROM", 4: "PCMCIA", 5: "USB", 6: "Network"]
             let device = fields.u16(4)
             let description = String(decoding: node.dropFirst(8).prefix { $0 != 0 }, as: UTF8.self)
-            return "BBS(\(types[device] ?? device.hexNumber),\(description),\((fields.u16(6)).hexNumber))"
+            return "BBS(\(types[device] ?? device.hexNumber),\(description),\(fields.u16(6).hexNumber))"
         default:
             return "Path(\(type),\(subtype))"
         }
@@ -136,7 +136,7 @@ public enum DevicePath {
     /// A partition: its number, the table it is in, its signature, where it
     /// starts and how long it is, in sectors.
     private static func hardDriveText(_ fields: Fields, _ node: [UInt8]) -> String {
-        let number = fields.u32(4), start = (fields.u64(8)).hexNumber, size = (fields.u64(16)).hexNumber
+        let number = fields.u32(4), start = fields.u64(8).hexNumber, size = fields.u64(16).hexNumber
         switch node[41] {
         case 1: return "HD(\(number),MBR,\(String(format: "0x%08X", fields.u32(24))),\(start),\(size))"
         case 2: return "HD(\(number),GPT,\(fields.guid(24)),\(start),\(size))"

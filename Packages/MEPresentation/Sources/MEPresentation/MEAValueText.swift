@@ -10,25 +10,8 @@ import MEFirmware
 /// Public because two panels format through it: the Full Info tab's curator and the
 /// ME Analyzer's Summary tab (the latter lives in `MEATool`, a different module).
 public enum MEAText {
-    // MARK: Hex
-
-    // Each takes the field at whatever type it has and writes it at that
-    // type's width: an `Int` that went negative is a 64-bit number, and is
-    // never guessed down to a 32-bit word it may not have been.
-
-    /// `0x`-prefixed, no padding — for offsets and small counts.
-    public static func hex(_ v: some BinaryInteger) -> String { v.hexNumber }
-    /// Width-padded to one byte, e.g. an extension tag.
-    public static func hexByte(_ v: some BinaryInteger) -> String { v.hexNumber(digits: 2) }
-    /// Width-padded to two bytes, e.g. a BPDT partition type.
-    public static func hex16(_ v: some BinaryInteger) -> String { v.hexNumber(digits: 4) }
-    /// Width-padded to four bytes, e.g. a region's flags word.
-    public static func hex32(_ v: UInt32) -> String { v.hexNumber(digits: 8) }
-
     // MARK: Ranges and sizes
 
-    /// The detail value for a byte offset.
-    public static func offset(_ v: Int) -> String { hex(v) }
     /// The detail value for a byte count: hex plus the decimal bytes, so a
     /// reader never has to convert one to check the other. A count of zero is
     /// not a number worth two spellings — the area holds nothing, and the row
@@ -39,7 +22,7 @@ public enum MEAText {
     /// The compact row subtitle `0x… · 0x…` (offset · size), with the same
     /// word for a section that holds nothing.
     public static func range(_ offset: Int, _ size: Int) -> String {
-        "\(hex(offset)) · \(size == 0 ? "Empty" : hex(size))"
+        "\(offset.hexNumber) · \(size == 0 ? "Empty" : size.hexNumber)"
     }
     /// The file range a row stands for; nil when the size is empty or negative.
     public static func rangeValue(_ offset: Int, _ size: Int) -> Range<UInt64>? {

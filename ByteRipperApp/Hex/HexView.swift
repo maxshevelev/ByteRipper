@@ -3883,12 +3883,3 @@ extension UInt64 {
         "0x" + bareAddress
     }
 }
-
-extension Range where Bound == UInt64 {
-    /// The range's last byte — the inclusive end of the half-open range, for a
-    /// sentence that names one end on its own ("through 0x…"). A range written
-    /// whole, first to last, is `hexExtent` from HexText, which does the same
-    /// conversion; the two are the only places it lives (§21.3). Only for a
-    /// range that is not empty.
-    var lastByte: UInt64 { upperBound - 1 }
-}

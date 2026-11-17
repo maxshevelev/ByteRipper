@@ -185,8 +185,7 @@ public enum FITDetail {
     /// A size in bytes, said both ways: hex for the dump, decimal for the mind.
     /// Zero is not worth two spellings — the area holds nothing, and the row
     /// says so.
-    private static func size<T: BinaryInteger>(_ bytes: T, in language: AppLanguage) -> String {
-        let value = UInt64(truncatingIfNeeded: bytes)
-        return value == 0 ? L("Empty", in: language) : "\(value.hexNumber) (\(value))"
+    private static func size<T: FixedWidthInteger>(_ bytes: T, in language: AppLanguage) -> String {
+        bytes == 0 ? L("Empty", in: language) : "\(bytes.hexNumber) (\(bytes.decimalNumber))"
     }
 }

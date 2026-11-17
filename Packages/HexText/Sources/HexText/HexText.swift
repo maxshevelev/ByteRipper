@@ -9,8 +9,9 @@
 /// that underflowed — is written as its two's complement at its own type's
 /// width: `0xFFFFFFFF` for an `Int32` of -1, `0xFB` for an `Int8` of -5,
 /// sixteen digits only for a 64-bit type. Never `0x-5`: that is no hex number a
-/// reader or a client can parse.
-extension BinaryInteger {
+/// reader or a client can parse. Fixed-width integers only: a signed type
+/// with no fixed width has no finite two's complement to write.
+extension FixedWidthInteger {
     /// `0x1FE028`, `0x0`.
     public var hexNumber: String {
         "0x" + bareHexNumber
@@ -58,11 +59,11 @@ extension BinaryInteger {
     /// eight digits, a CPUID's platform.
     public func bareHexNumber(digits: Int) -> String {
         let text = bareHexNumber
-        return String(repeating: "0", count: max(0, digits - text.count)) + text
+        return String(repeating: "0", count: Swift.max(0, digits - text.count)) + text
     }
 }
 
-extension Range where Bound: BinaryInteger {
+extension Range where Bound: FixedWidthInteger {
     /// `0x100–0x13F`: a stretch of bytes by its first and its last byte, the
     /// way the status bar, the segment list and every message write one — not
     /// by the first byte after it, which belongs to the next stretch. One
@@ -71,7 +72,16 @@ extension Range where Bound: BinaryInteger {
         // Compared, not subtracted: a signed range wider than the type's
         // maximum would overflow the subtraction.
         guard lowerBound < upperBound, lowerBound + 1 < upperBound else { return lowerBound.hexNumber }
-        return "\(lowerBound.hexNumber)–\((upperBound - 1).hexNumber)"
+        return "\(lowerBound.hexNumber)–\(lastByte.hexNumber)"
+    }
+
+    /// The last byte of the range — the inclusive end of a half-open range,
+    /// for a sentence that names that one end ("through 0x…"). An empty range
+    /// has no last byte, and gives its position rather than trapping. The only
+    /// place the half-open-to-inclusive conversion lives, with `hexExtent`
+    /// built on it (§21.3).
+    public var lastByte: Bound {
+        lowerBound < upperBound ? upperBound - 1 : lowerBound
     }
 
     /// `[0x100, 0x140)`: a range in an agent's own terms, end exclusive, as

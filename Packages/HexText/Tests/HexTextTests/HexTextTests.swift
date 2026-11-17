@@ -52,6 +52,8 @@ final class HexTextTests: XCTestCase {
     func testARangeByItsFirstAndLastByte() {
         XCTAssertEqual((UInt64(0x100)..<0x140).hexExtent, "0x100–0x13F")
         XCTAssertEqual((UInt64(0x20)..<0x21).hexExtent, "0x20", "one byte")
+        XCTAssertEqual((UInt64(0x100)..<0x140).lastByte, 0x13F)
+        XCTAssertEqual((UInt64(0)..<0).lastByte, 0, "an empty range gives its position, never traps")
         XCTAssertEqual((UInt64(0x100)..<0x140).halfOpenHexText, "[0x100, 0x140)", "an agent's terms")
         XCTAssertEqual((UInt64(0x20)..<0x20).hexExtent, "0x20", "empty: its position")
         XCTAssertEqual((0x1_0000_0000..<UInt64(0x1_0000_1000)).hexExtent, "0x100000000–0x100000FFF")

@@ -1038,7 +1038,7 @@ public enum UEFIDetail {
             // type is the common "Type" field.
             fields.append(.init("Base (4 KiB)", (node.range.lowerBound >> 12).hexNumber))
             if node.range.upperBound > 0 {
-                fields.append(.init("Limit (4 KiB)", ((node.range.upperBound - 1) >> 12).hexNumber))
+                fields.append(.init("Limit (4 KiB)", (node.range.lastByte >> 12).hexNumber))
             }
 
         case .vssStore:
@@ -1501,7 +1501,9 @@ public enum UEFIDetail {
 
     /// A protected range as where it runs and what it refuses.
     private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange, in language: AppLanguage) -> String {
-        let span = "\(range.start.hexNumber) – \(range.end.hexNumber)"
+        // The register's limit is its last byte already: first–last, the
+        // way `hexExtent` writes a half-open range.
+        let span = "\(range.start.hexNumber)–\(range.end.hexNumber)"
         switch (range.readProtected, range.writeProtected) {
         case (true, true): return L("%1$@: reads and writes refused", in: language, span)
         case (false, true): return L("%1$@: writes refused", in: language, span)
@@ -2114,7 +2116,7 @@ public enum UEFIDetail {
     /// the controller can colour just that value red.
     private static func checksumRow(
         _ label: String,
-        _ stored: some BinaryInteger,
+        _ stored: some FixedWidthInteger,
         digits: Int,
         repairs: [ChecksumRepair],
         checksumOffset: UInt64, in language: AppLanguage
@@ -2148,7 +2150,7 @@ public enum UEFIDetail {
     /// spellings: the area holds nothing, and the row says so. Offsets,
     /// addresses and codes stay bare hex. Named `sizeText` so it can coexist
     /// with the local `size` variables the header cases bind.
-    private static func sizeText<T: BinaryInteger>(_ bytes: T) -> String {
+    private static func sizeText<T: FixedWidthInteger>(_ bytes: T) -> String {
         bytes == 0 ? "Empty" : "\(bytes.hexNumber) (\(bytes.decimalNumber))"
     }
 

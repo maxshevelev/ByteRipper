@@ -295,7 +295,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
     }
 
     /// `0x40 (64)`: hex for the dump, decimal for the mind.
-    private static func size<T: BinaryInteger>(_ value: T) -> String {
+    private static func size<T: FixedWidthInteger>(_ value: T) -> String {
         value == 0 ? "Empty" : "\(value.hexNumber) (\(value.decimalNumber))"
     }
 }

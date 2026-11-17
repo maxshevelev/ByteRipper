@@ -108,7 +108,7 @@ public enum Checksums {
     /// `(Valid)`: a language puts the brackets, the comma and the verb where
     /// its own grammar wants them.
     public static func text(
-        _ value: some BinaryInteger,
+        _ value: some FixedWidthInteger,
         valid: Bool,
         expected: UInt64? = nil,
         digits: Int = 2

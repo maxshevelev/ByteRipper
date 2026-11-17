@@ -131,16 +131,10 @@ enum DVAR {
         return entries.compactMap { node in
             guard let read = entry(at: node.header.lowerBound, storeEnd: store.range.upperBound, in: reader).entry
             else { return nil }
-            return Copy(node: node, name: name(read.nameId),
+            return Copy(node: node, name: read.nameId.bareHexNumber,
                         guid: read.namespaceGuid ?? namespaces[read.namespaceId],
                         isCurrent: read.state == stored)
         }
-    }
-
-    /// The name a variable's entry carries: its name id, in hex, as the
-    /// reference shows it.
-    static func name(_ nameId: UInt16) -> String {
-        nameId.bareHexNumber
     }
 }
 
@@ -183,7 +177,7 @@ extension Parser {
                 subtype: invalid ? UEFITypes.Sub.invalidDvarEntry
                     : entry.declaresNamespace ? UEFITypes.Sub.namespaceGuidDvarEntry
                     : UEFITypes.Sub.nameIdDvarEntry,
-                name: invalid ? "Invalid" : DVAR.name(entry.nameId),
+                name: invalid ? "Invalid" : entry.nameId.bareHexNumber,
                 guid: entry.namespaceGuid,
                 header: entry.offset..<entry.dataStart,
                 body: entry.dataStart..<entry.end,

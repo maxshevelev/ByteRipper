@@ -403,7 +403,7 @@ public enum UEFITreeDisplay {
         case .sysFStore: kind = L("Apple DMI", in: language)
         default: kind = kindLabel(store.kind, in: language)
         }
-        return L("%1$@ at %2$@", in: language, kind, String(format: "0x%08llX", store.range.lowerBound))
+        return L("%1$@ at %2$@", in: language, kind, store.range.lowerBound.hexNumber(digits: 8))
     }
 
     /// The DMI button's word: whose layout the image's stores are —

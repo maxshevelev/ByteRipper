@@ -193,7 +193,7 @@ extension ZoneSketchViewController: NSTableViewDataSource, NSTableViewDelegate {
             cell.textField?.action = #selector(nameEdited(_:))
             cell.textField?.tag = row
         } else {
-            cell.textField?.stringValue = ZoneSketchModel.rangeText(zone.range)
+            cell.textField?.stringValue = zone.range.hexExtent
             cell.textField?.isEditable = false
             cell.textField?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             cell.textField?.textColor = .secondaryLabelColor

@@ -54,11 +54,9 @@ final class StatusLabel: NSTextField {
         let digits: String
     }
 
-
     /// The exact size, in the form the Details view writes one: the hex address
     /// and the decimal count in brackets beside it — "0x200000 (2097152
-    /// bytes)". 64-bit formats on purpose: `%d` would truncate a file over
-    /// 2 GB to its low half.
+    /// bytes)". Both from HexText, whole past 4 GB.
     static func exactSizeText(_ bytes: UInt64) -> String {
         L("%1$@ (%2$@ bytes)", bytes.hexNumber, bytes.decimalNumber)
     }

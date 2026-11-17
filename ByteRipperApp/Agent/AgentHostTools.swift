@@ -59,7 +59,7 @@ final class AgentHostTools {
                 "id": .string(place.id),
                 "label": .string(place.label),
                 "name": .string(pane.status.fileName),
-                "size": Self.hex(pane.fileSize),
+                "size": .string(pane.fileSize.hexNumber),
                 "slot": .string(place.slot)
             ]
             if let controller = place.controller {
@@ -110,7 +110,7 @@ final class AgentHostTools {
         var answer: [String: JSONValue] = [
             "document": .string(place.id),
             "name": .string(pane.status.fileName),
-            "caret": Self.hex(pane.caretOffset)
+            "caret": .string(pane.caretOffset.hexNumber)
         ]
         let selection = pane.hexSelection()
         answer["selection"] = selection.isEmpty ? .null : Self.range(selection.start..<selection.end)
@@ -175,8 +175,8 @@ final class AgentHostTools {
 
         var answer = AgentBytes.shown(bytes, at: offset, format: format, bigEndian: bigEndian)
         answer["document"] = .string(place.id)
-        answer["offset"] = Self.hex(offset)
-        answer["length"] = Self.hex(end - offset)
+        answer["offset"] = .string(offset.hexNumber)
+        answer["length"] = .string((end - offset).hexNumber)
         if end - offset < asked { answer["cut_at_end_of_file"] = true }
         return .object(answer)
     }
@@ -241,11 +241,10 @@ final class AgentHostTools {
         }
     }
 
-    nonisolated static func hex(_ value: UInt64) -> JSONValue { .string(value.hexNumber) }
 
     /// A half-open range, as the app keeps every range: `end` is the first
     /// byte after it.
     nonisolated static func range(_ range: Range<UInt64>) -> JSONValue {
-        ["start": hex(range.lowerBound), "end": hex(range.upperBound), "length": hex(range.upperBound - range.lowerBound)]
+        ["start": .string(range.lowerBound.hexNumber), "end": .string(range.upperBound.hexNumber), "length": .string((range.upperBound - range.lowerBound).hexNumber)]
     }
 }

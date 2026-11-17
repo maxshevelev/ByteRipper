@@ -75,17 +75,13 @@ public enum FITRowMarks {
         case .latest:
             return (.newest, L("Newest revision the catalogue lists for this processor and platform", in: language))
         case .outdated(let newest):
-            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", in: language, revision(newest)))
+            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", in: language, newest.bareHexNumber))
         case .undecided(let newest):
             return (.newerMaybe,
                     L("Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry", in: language,
-                      revision(newest)))
+                      newest.bareHexNumber))
         case .notRated:
             return nil
         }
-    }
-
-    private static func revision(_ value: UInt32) -> String {
-        value.bareHexNumber
     }
 }
