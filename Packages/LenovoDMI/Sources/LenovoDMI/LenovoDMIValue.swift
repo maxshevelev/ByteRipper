@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import PartCodec
 
@@ -88,14 +89,14 @@ public enum LenovoDMIValue {
     public static func uuid(_ bytes: [UInt8]) -> String {
         precondition(bytes.count == 16)
         let order = [3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15]
-        let digits = order.map { LE.hex(UInt64(bytes[$0]), digits: 2, prefix: false) }
+        let digits = order.map { bytes[$0].bareHexNumber(digits: 2) }
         return [digits[0..<4], digits[4..<6], digits[6..<8], digits[8..<10], digits[10..<16]]
             .map { $0.joined() }
             .joined(separator: "-")
     }
 
     public static func hex(_ bytes: [UInt8]) -> String {
-        bytes.map { LE.hex(UInt64($0), digits: 2, prefix: false) }.joined(separator: " ")
+        bytes.map { $0.bareHexNumber(digits: 2) }.joined(separator: " ")
     }
 
     /// Printable ASCII, then nothing but padding.

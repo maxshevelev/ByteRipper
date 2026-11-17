@@ -336,6 +336,11 @@ final class OffsetContextMenuTests: XCTestCase {
         NSApp.sendAction(zero.items[0].action!, to: zero.items[0].target, from: zero.items[0])
         XCTAssertEqual(pasteboard.string(forType: .string), "0",
                        "offset zero copies as \"0\", unpadded")
+
+        // An offset past 4 GB copies whole, not cut to its low 32 bits.
+        let far = controller.makeOffsetMenu(for: PaneViewModel(), offset: 0x1_2345_6780)
+        NSApp.sendAction(far.items[0].action!, to: far.items[0].target, from: far.items[0])
+        XCTAssertEqual(pasteboard.string(forType: .string), "123456780")
     }
 
     // MARK: - Selection-aware menu (§10.2)

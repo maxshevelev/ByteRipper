@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import HexText
 import ToolModuleKit
 
 /// Two documents compared byte by byte (`Design/AGENT_PLAN.md`, stage 8):
@@ -95,11 +96,11 @@ final class AgentDiffTools {
         let start = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? common
         guard end <= common else {
-            throw AgentToolError("`end` \(hex(end)) is past the end of the shorter document, which is \(hex(common)) bytes long.")
+            throw AgentToolError("`end` \(end.hexNumber) is past the end of the shorter document, which is \(common.hexNumber) bytes long.")
         }
         guard start < end else {
             throw AgentToolError(common == 0 ? "One of the documents is empty; there is nothing to compare."
-                                             : "`offset` \(hex(start)) is not below `end` \(hex(end)).")
+                                             : "`offset` \(start.hexNumber) is not below `end` \(end.hexNumber).")
         }
         let mergeGap = arguments.has("merge_gap") ? UInt64(max(0, min(0x10_0000, try arguments.integer("merge_gap"))))
                                                   : Self.defaultMergeGap
@@ -125,14 +126,14 @@ final class AgentDiffTools {
 
         var answer: [String: JSONValue] = [
             "range": AgentHostTools.range(start..<end),
-            "sizes": ["document": AgentHostTools.hex(sizes.0), "against": AgentHostTools.hex(sizes.1)],
+            "sizes": ["document": .string(sizes.0.hexNumber), "against": .string(sizes.1.hexNumber)],
             "totals": ["runs": .count(runs.count), "differing_bytes": .count(Int(differing))]
         ]
         if sizes.0 != sizes.1 {
             let longer = sizes.0 > sizes.1 ? "document" : "against"
-            answer["tail"] = ["in": .string(longer), "start": AgentHostTools.hex(common),
-                              "end": AgentHostTools.hex(max(sizes.0, sizes.1))]
-            answer["truncated_at"] = AgentHostTools.hex(common)
+            answer["tail"] = ["in": .string(longer), "start": .string(common.hexNumber),
+                              "end": .string((max(sizes.0, sizes.1)).hexNumber)]
+            answer["truncated_at"] = .string(common.hexNumber)
         }
 
         answer["document"] = .string(place.id)
@@ -145,9 +146,9 @@ final class AgentDiffTools {
         let places = structure == "auto" ? await locate(host, page.map(\.range)) : page.map { _ in [] }
         let items = zip(page, places).map { run, places -> JSONValue in
             var members: [String: JSONValue] = [
-                "start": AgentHostTools.hex(run.range.lowerBound),
-                "end": AgentHostTools.hex(run.range.upperBound),
-                "length": AgentHostTools.hex(UInt64(run.range.count)),
+                "start": .string(run.range.lowerBound.hexNumber),
+                "end": .string(run.range.upperBound.hexNumber),
+                "length": .string(run.range.count.hexNumber),
                 "differing_bytes": .count(Int(run.differing))
             ]
             if structure == "auto" { members["where"] = .array(places.map(Self.placeJSON)) }
@@ -226,8 +227,8 @@ final class AgentDiffTools {
             attributed += bytes
             var members = Self.placeJSON(area)
             if case .object(var fields) = members {
-                fields["start"] = AgentHostTools.hex(bounds.lowerBound)
-                fields["end"] = AgentHostTools.hex(bounds.upperBound)
+                fields["start"] = .string(bounds.lowerBound.hexNumber)
+                fields["end"] = .string(bounds.upperBound.hexNumber)
                 fields["differing_bytes"] = .count(Int(bytes))
                 fields["runs"] = .count(runs.filter { $0.range.overlaps(bounds) }.count)
                 members = .object(fields)
@@ -349,7 +350,7 @@ final class AgentDiffTools {
         }
         let sizes = [place.pane.fileSize, other.pane.fileSize]
         guard sizes.allSatisfy({ $0 <= Self.copyLimit }) else {
-            throw AgentToolError("Copies are made of documents up to \(hex(Self.copyLimit)) bytes; "
+            throw AgentToolError("Copies are made of documents up to \(Self.copyLimit.hexNumber) bytes; "
                 + "compare them with `diff`, or open a smaller part.")
         }
         let first = try snapshot(place).read(at: 0, length: Int(sizes[0]))
@@ -487,6 +488,4 @@ final class AgentDiffTools {
             throw AgentToolError(error.description)
         }
     }
-
-    private nonisolated func hex(_ value: UInt64) -> String { AgentHostTools.hexText(value) }
 }

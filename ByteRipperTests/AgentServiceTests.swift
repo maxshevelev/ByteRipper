@@ -224,6 +224,14 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertEqual(pane.caretOffset, 0x40)
     }
 
+    /// A length that wraps past 2^64 is refused, never added up.
+    func testRevealRefusesALengthThatWraps() async throws {
+        _ = try open([UInt8](repeating: 0x11, count: 0x100))
+        let refused = try await call("reveal", ["offset": "0x10", "length": "0xFFFFFFFFFFFFFFFF"])
+        XCTAssertTrue(refused.isError)
+        XCTAssertEqual(refused.answer, "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past any file.")
+    }
+
     /// A place in the comparison's other pane makes that pane the active one.
     func testRevealInTheInactivePaneOfAComparisonActivatesIt() async throws {
         let controller = try open(Self.image, Self.image)

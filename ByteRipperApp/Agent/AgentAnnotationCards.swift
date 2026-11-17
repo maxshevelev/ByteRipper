@@ -1,6 +1,7 @@
 import Cocoa
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -469,10 +470,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         // A place in decoded bytes is told in their addresses, after the
         // badges of the codecs they came through.
         let shown = annotation.decoded?.range ?? annotation.range
-        let address = shown.map { range in
-            range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
-                : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
-        }
+        let address = shown.map(\.hexExtent)
         return AnnotationCardView.Content(
             id: annotation.id, title: annotation.title, isOpen: isOpen(annotation),
             file: fileName, codecs: annotation.decoded?.codecs.map(\.text) ?? [], address: address,

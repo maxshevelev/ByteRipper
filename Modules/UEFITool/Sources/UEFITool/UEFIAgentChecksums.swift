@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -49,7 +50,7 @@ public enum UEFIAgentChecksums {
                 "checksums": .array(wrong.fields.map { field in
                     var members: [String: JSONValue] = [
                         "field": .string(field.field.rawValue),
-                        "at": .string(UEFIAgentQueries.hex(field.offset)),
+                        "at": .string(field.offset.hexNumber),
                         "stored": .string(hexText(field.stored)),
                         "should_be": .string(hexText(field.shouldBe))
                     ]

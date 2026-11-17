@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import IntelCPUID
 import UEFIImage
 
@@ -63,8 +64,7 @@ public struct MicrocodeCatalogueEntry: Equatable, Sendable, Identifiable {
     /// `plat2`.
     public var platformText: String {
         guard let platformID else { return "" }
-        let text = String(platformID, radix: 16, uppercase: true)
-        return text.count < 2 ? "0" + text : text
+        return platformID.bareHexNumber(digits: 2)
     }
 
     public var fileName: String { String(path.split(separator: "/").last ?? "") }
@@ -164,10 +164,10 @@ public enum MicrocodeCatalogue {
             // Leading zeros dropped, so a search for what is on screen matches:
             // AMD writes `00800F11` where Intel writes `906EB`.
             cpuidText: processor.flatMap { UInt32($0, radix: 16) }
-                .map { String($0, radix: 16, uppercase: true) } ?? identifier,
+                .map { $0.bareHexNumber } ?? identifier,
             platformID: hex(after: "plat"),
             revisionText: UInt32(revision, radix: 16)
-                .map { String($0, radix: 16, uppercase: true) } ?? revision,
+                .map { $0.bareHexNumber } ?? revision,
             date: date ?? "",
             isProduction: !fields.contains("PRE"),
             size: size

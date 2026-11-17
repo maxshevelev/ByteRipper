@@ -1,5 +1,6 @@
 import AppKit
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 import ZoneSketch
@@ -60,7 +61,8 @@ import ZoneSketch
         name.width = 150
         let range = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("range"))
         range.title = L("Offsets")
-        range.width = 130
+        // Wide enough for a range past 4 GB, `0x100000000–0x1FFFFFFFF`.
+        range.width = 170
         table.addTableColumn(name)
         table.addTableColumn(range)
 
@@ -192,7 +194,7 @@ extension ZoneSketchViewController: NSTableViewDataSource, NSTableViewDelegate {
             cell.textField?.action = #selector(nameEdited(_:))
             cell.textField?.tag = row
         } else {
-            cell.textField?.stringValue = ZoneSketchModel.rangeText(zone.range)
+            cell.textField?.stringValue = zone.range.hexExtent
             cell.textField?.isEditable = false
             cell.textField?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             cell.textField?.textColor = .secondaryLabelColor

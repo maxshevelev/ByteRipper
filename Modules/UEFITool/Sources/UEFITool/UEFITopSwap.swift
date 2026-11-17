@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import UEFIImage
 
@@ -95,13 +96,9 @@ public enum UEFITopSwap {
         let agreement = ranges.topSwapCopiesMatch ? L("the copies match", in: language) : L("the copies differ", in: language)
         switch role {
         case .copy(let top):
-            return L("Copy of %1$@–%2$@; %3$@", in: language, hex(top.lowerBound), hex(top.upperBound), agreement)
+            return L("Copy of %1$@; %2$@", in: language, top.hexExtent, agreement)
         case .original(let backup):
-            return L("Copied at %1$@–%2$@; %3$@", in: language, hex(backup.lowerBound), hex(backup.upperBound), agreement)
+            return L("Copied at %1$@; %2$@", in: language, backup.hexExtent, agreement)
         }
-    }
-
-    private static func hex(_ value: UInt64) -> String {
-        String(format: "0x%llX", value)
     }
 }

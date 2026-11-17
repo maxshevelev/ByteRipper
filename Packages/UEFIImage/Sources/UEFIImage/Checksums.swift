@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 
 /// The arithmetic every layer of this format checks itself with
@@ -107,24 +108,20 @@ public enum Checksums {
     /// `(Valid)`: a language puts the brackets, the comma and the verb where
     /// its own grammar wants them.
     public static func text(
-        _ value: some BinaryInteger,
+        _ value: some FixedWidthInteger,
         valid: Bool,
         expected: UInt64? = nil,
         digits: Int = 2
     ) -> LocalizedText {
-        let padded = hex(UInt64(truncatingIfNeeded: value), digits: digits)
+        let padded = value.hexNumber(digits: digits)
         if valid { return L("%1$@ (Valid)", padded) }
         if let expected {
-            return L("%1$@ (Invalid), should be %2$@", padded, hex(expected, digits: digits))
+            return L("%1$@ (Invalid), should be %2$@", padded, expected.hexNumber(digits: digits))
         }
         return L("%1$@ (Invalid)", padded)
     }
 
     /// A hex value padded to a field's width — `0x0005` for digits 4.
-    private static func hex(_ value: UInt64, digits: Int) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
-    }
 }
 
 /// Rounds `value` up to the next multiple of `alignment`, or nil when that

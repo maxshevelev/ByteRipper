@@ -4,6 +4,7 @@ import BytePattern
 import HelpBook
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import MEPresentation
 import ToolModuleKit
@@ -1777,7 +1778,6 @@ import UEFITool
             showContentResults(false)
             return
         }
-        let hex = { (value: UInt64) in String(format: "0x%llX", value) }
         let label = { [catalogue, image] (id: NodeID?) -> String in
             id.flatMap { UEFITreeDisplay.nameAfterParent(of: $0, in: tree, catalogue: catalogue, image: image, in: Localization.appLanguage) } ?? "—"
         }
@@ -1795,9 +1795,9 @@ import UEFITool
         contentResults.show(matches.map { match in
             let address: String
             if let range = match.fileRange {
-                address = match.decodedXORKey == nil ? hex(range.lowerBound) : L("%1$@, decoded", hex(range.lowerBound))
+                address = match.decodedXORKey == nil ? range.lowerBound.hexNumber : L("%1$@, decoded", range.lowerBound.hexNumber)
             } else {
-                address = L("%1$@ in %2$@", hex(match.range.lowerBound), name(match.section) ?? "—")
+                address = L("%1$@ in %2$@", match.range.lowerBound.hexNumber, name(match.section) ?? "—")
             }
             return UEFIContentResultsView.Row(
                 node: label(match.node),

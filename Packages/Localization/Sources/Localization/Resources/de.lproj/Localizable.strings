@@ -151,9 +151,9 @@
 "Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne ungesicherte Änderungen, Segmente, Teile und Werkzeugzustand geöffnet:";
 "Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
 "Close Project" = "Projekt schließen";
-"Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
+"Copied at %1$@; %2$@" = "Kopie im Bereich %1$@; %2$@";
 "Copy of" = "Kopie des Abbilds bei";
-"Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
+"Copy of %1$@; %2$@" = "Kopie des Blocks %1$@; %2$@";
 "Could not add the microcode" = "Microcode konnte nicht hinzugefügt werden";
 "Could not remove the microcode" = "Microcode konnte nicht entfernt werden";
 "Could not replace the microcode" = "Microcode konnte nicht ersetzt werden";
@@ -602,7 +602,9 @@
 "Nothing was changed in %1$@." = "In %1$@ wurde nichts geändert.";
 "Nothing was written inside a Boot Guard or vendor protected range." = "In einen von Boot Guard oder vom Hersteller geschützten Bereich wurde nichts geschrieben.";
 "OEM Configuration" = "OEM-Konfiguration";
-"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Offset 0x%1$@, %2$@ Byte ausgewählt bis 0x%3$@.";
+"Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@; die Größe beträgt %3$@. Ans Ende bewegt.";
+"Offset %1$@ is beyond the end of the file(s), whose size is %2$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en), deren Größe %2$@ beträgt. Ans Ende bewegt.";
+"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Offset 0x%1$@, %2$@ Byte ausgewählt bis einschließlich 0x%3$@.";
 "Offset 0x%1$@." = "Offset 0x%1$@.";
 "OK" = "OK";
 "One panel was opened out of it and will lose its way back. Its bytes stay as they are; only the way back goes." = "Ein Bereich wurde daraus geöffnet und verliert den Weg zurück. Seine Bytes bleiben unverändert; verloren geht allein die Verbindung zur Herkunft.";
@@ -614,8 +616,6 @@
 "OROM Images" = "OROM-Images";
 "Offset %1$@" = "Offset %1$@";
 "Offset" = "Offset";
-"Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@ (%3$@ Bytes). Ans Ende bewegt.";
-"Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en) (%2$@ Bytes). Ans Ende bewegt.";
 "Offset beyond end of file" = "Offset hinter dem Dateiende";
 "Offset:" = "Offset:";
 "Offsets" = "Offsets";
@@ -860,7 +860,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Die Auswertung von Intel-ME/CSME-Firmware durch das Werkzeug ME Analyzer und die Datenbanken, gegen die ein Dump geprüft wird (MEA.dat, Huffman.dat), jeweils in der vom Projekt veröffentlichten Fassung.";
 "The newest revision the catalogue lists for this processor and platform" = "Die neueste Revision, die der Katalog für diesen Prozessor und diese Plattform führt";
 "the selection" = "die Auswahl";
-"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Die Auswahl reicht bis %1$@, „%2$@“ endet aber bei %3$@. Es wurde nichts kopiert.";
+"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Die Auswahl reicht bis einschließlich %1$@ und damit über das Ende von „%2$@“ hinaus; die Größe beträgt %3$@. Es wurde nichts kopiert.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "Die Top-Swap-Sicherung bei %1$@ hat dort, wohin ihr Zeiger führt, keine FIT";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Die Top-Swap-Sicherung bei %1$@ enthält dieselbe FIT, aber andere Bytes des Blocks weichen ab; Microcode-Änderungen werden daher abgelehnt, bis die Kopien übereinstimmen";
 "The Top Swap backup at 0x%1$@ got the same change." = "Die Top-Swap-Sicherung bei 0x%1$@ hat dieselbe Änderung erhalten.";
@@ -914,7 +914,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Ordner.";
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Namen.";
 "This file is open read-only." = "Diese Datei ist schreibgeschützt geöffnet.";
-"This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks bei 0x%1$@–0x%2$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
+"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks im Bereich %1$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
 "This microcode is already in the table, in row #%1$@. Nothing was changed." = "Dieser Microcode steht bereits in der Tabelle, in Zeile #%1$@. Es wurde nichts geändert.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Alle Teile werden zu einem Segment. Die Bytes bleiben unverändert — nur die Schnitte verschwinden.";
 "Those bytes could not be read." = "Diese Bytes ließen sich nicht lesen.";
@@ -1288,7 +1288,7 @@
 "%1$@ bytes differ" = "%1$@ Bytes abweichend";
 "%1$@ bytes written in %2$@ parts." = "%1$@ Bytes in %2$@ Bereichen geschrieben.";
 "%1$@ of %2$@ parts identical. To write: %3$@ parts, %4$@ bytes. Kept as they are: %5$@." = "%1$@ von %2$@ Bereichen identisch. Zu schreiben: %3$@ Bereiche, %4$@ Bytes. Unverändert bleiben: %5$@.";
-"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@–%5$@." = "%1$@: Update für AMI BIOS Guard, Plattform %2$@, %3$@ Blöcke. BIOS-Region dieses Dumps: %4$@–%5$@.";
+"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@." = "%1$@: Update für AMI BIOS Guard, Plattform %2$@, %3$@ Blöcke. BIOS-Region dieses Dumps: %4$@.";
 "Block %1$@ of the update file does not read as a block." = "Block %1$@ der Update-Datei lässt sich nicht als Block lesen.";
 "Board data; %1$@ bytes differ" = "Platinendaten; %1$@ Bytes abweichend";
 "Board data; empty in the update" = "Platinendaten; im Update leer";

@@ -46,6 +46,10 @@ packages:
   # its own manifest for why it is not a file inside ToolModuleKit.
   AppPalette:
     path: Packages/AppPalette
+  # How an offset or a size is written in hex, shared by the app and the
+  # tool-modules — see its own manifest.
+  HexText:
+    path: Packages/HexText
   # The shared parser. The tool-modules depend on it transitively, but the app's
   # flow tests build a UEFI image by hand and so import it directly.
   UEFIImage:
@@ -151,6 +155,8 @@ targets:
       - package: ToolModuleKit
       # The app's colour palette: what a colour in this app is allowed to mean.
       - package: AppPalette
+      # How an offset or a size is written in hex.
+      - package: HexText
       # The shared, per-pane lazy UEFI tree (`PaneUEFIState`) and its
       # `ByteSource` adapter over the document's live storage
       # (`PaneToolHost`'s `UEFITreeProviding` conformance) — both live in the
@@ -392,6 +398,7 @@ targets:
       - package: ALSplitView
       - package: ToolModuleKit
       - package: AppPalette
+      - package: HexText
       - package: UEFIImage
       - package: HelpBook
       - package: HelpUI

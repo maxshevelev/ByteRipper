@@ -1,6 +1,7 @@
 import AgentKit
 import ByteRipperCore
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 import UEFITool
@@ -168,12 +169,12 @@ final class AgentRefsTools {
             let bios = Self.biosRegion(in: image) ?? 0..<place.pane.fileSize
             let file = relative ? bios.lowerBound + address : address
             guard file < place.pane.fileSize else {
-                throw AgentToolError("\(AgentHostTools.hexText(file)) is past the end of \(place.named).")
+                throw AgentToolError("\(file.hexNumber) is past the end of \(place.named).")
             }
             // An address outside the BIOS region has no bus or region form.
             guard bios.contains(file) || names.contains("file") else {
-                throw AgentToolError("\(AgentHostTools.hexText(file)) is not inside the BIOS region "
-                    + "\(AgentHostTools.hexText(bios.lowerBound))–\(AgentHostTools.hexText(bios.upperBound)); "
+                throw AgentToolError("\(file.hexNumber) is not inside the BIOS region "
+                    + "\(bios.halfOpenHexText); "
                     + "only the `file` form means anything for it.")
             }
             let made = Self.forms(address: address, relativeToRegion: relative, bios: bios,
@@ -242,12 +243,12 @@ final class AgentRefsTools {
             var members: [String: JSONValue] = ["form": .string(forms[hit.form].name + (forms[hit.form].bytes.count == 8 ? "64" : ""))]
             if let section {
                 members["section"] = .string(section.id.description)
-                members["section_offset"] = AgentHostTools.hex(hit.range.lowerBound - section.range.lowerBound)
+                members["section_offset"] = .string((hit.range.lowerBound - section.range.lowerBound).hexNumber)
             }
             if buffer.space == .file {
-                members["file_start"] = AgentHostTools.hex(hit.range.lowerBound)
+                members["file_start"] = .string(hit.range.lowerBound.hexNumber)
             } else {
-                members["node_start"] = AgentHostTools.hex(hit.range.lowerBound)
+                members["node_start"] = .string(hit.range.lowerBound.hexNumber)
                 members["in_compressed"] = true
             }
             if deepest.id != (section ?? file)?.id { members["node"] = .string(deepest.id.description) }

@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -148,7 +149,7 @@ public enum UEFITreeMarks {
     }
 
     private static func at(_ range: ProtectedRange) -> String {
-        range.range.map { " at 0x" + String($0.lowerBound, radix: 16, uppercase: true) } ?? ""
+        range.range.map { " at " + $0.lowerBound.hexNumber } ?? ""
     }
 
     private static func unique(_ lines: [String]) -> [String] {
@@ -164,7 +165,7 @@ public enum UEFITreeMarks {
         let section = image.innermostNode(containing: outermost)
             .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
             ?? L("a compressed section", in: language)
-        let hex = "0x" + String(outermost, radix: 16, uppercase: true)
+        let hex = outermost.hexNumber
         var text = L("Decompressed from %1$@ at %2$@", in: language, section, hex)
         if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", in: language, text, chain.count) }
         return text

@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// `INTEL_MICROCODE_HEADER` (§7.1).
 ///
@@ -204,7 +205,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
 
     /// The processor signature the way a CPUID is looked up — `806EA`, bare.
     public static func cpuid(_ signature: UInt32) -> String {
-        String(signature, radix: 16, uppercase: true)
+        signature.bareHexNumber
     }
 
     /// What the header says, row by row — the one reading the FIT panel shows
@@ -222,9 +223,9 @@ public struct MicrocodeHeader: Equatable, Sendable {
             MicrocodeField("Processor", Self.processorText(processorSignature)),
             // "Update revision", so it does not read as the same thing as a FIT
             // entry's own Version.
-            MicrocodeField("Update revision", Self.hex(updateRevision)),
+            MicrocodeField("Update revision", updateRevision.hexNumber),
             MicrocodeField("Date", date),
-            MicrocodeField("Platform IDs", Self.hex(platformIDs)),
+            MicrocodeField("Platform IDs", platformIDs.hexNumber),
             MicrocodeField("Platforms", Self.platformsText(platformIDs)),
             // Zero is not an empty update: the specification reads it as 2000
             // bytes, and the row says so rather than "Empty".
@@ -281,7 +282,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
         let extendedFamily = (signature >> 20) & 0xFF
         let displayFamily = family == 0xF ? family + extendedFamily : family
         let displayModel = family == 0x6 || family == 0xF ? extendedModel << 4 | model : model
-        var text = "Family \(hex(displayFamily)), model \(hex(displayModel)), stepping \(hex(stepping))"
+        var text = "Family \(displayFamily.hexNumber), model \(displayModel.hexNumber), stepping \(stepping.hexNumber)"
         if type != 0 { text += ", type \(type)" }
         return text
     }
@@ -293,13 +294,9 @@ public struct MicrocodeHeader: Equatable, Sendable {
         return bits.isEmpty ? "None" : bits.map(String.init).joined(separator: ", ")
     }
 
-    private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        "0x" + String(UInt64(truncatingIfNeeded: value), radix: 16, uppercase: true)
-    }
-
     /// `0x40 (64)`: hex for the dump, decimal for the mind.
-    private static func size<T: BinaryInteger>(_ value: T) -> String {
-        value == 0 ? "Empty" : "\(hex(value)) (\(value))"
+    private static func size<T: FixedWidthInteger>(_ value: T) -> String {
+        value == 0 ? "Empty" : "\(value.hexNumber) (\(value.decimalNumber))"
     }
 }
 

@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -81,7 +82,7 @@ public enum UEFIAgentRegions {
             guard case .object(var members) = UEFIAgentQueries.summary(of: entry.node, in: tree) else { continue }
             members["node"] = members.removeValue(forKey: "id")
             members["children"] = nil
-            if let range = entry.node.fileRange { members["size"] = .string(UEFIAgentQueries.hex(UInt64(range.count))) }
+            if let range = entry.node.fileRange { members["size"] = .string(range.count.hexNumber) }
             if let inner = entry.inner {
                 members["inner"] = ["node": .string(inner.id.description),
                                     "name": .string(UEFITreeDisplay.ownName(of: inner) ?? inner.name)]
@@ -89,14 +90,14 @@ public enum UEFIAgentRegions {
             if let judgement {
                 members["class"] = .string(judgement.kind.rawValue)
                 members["fill"] = .double((judgement.fill * 1000).rounded() / 1000)
-                if let first = judgement.firstNonFill { members["first_nonfill"] = .string(UEFIAgentQueries.hex(first)) }
-                if let last = judgement.lastNonFill { members["last_nonfill"] = .string(UEFIAgentQueries.hex(last)) }
+                if let first = judgement.firstNonFill { members["first_nonfill"] = .string(first.hexNumber) }
+                if let last = judgement.lastNonFill { members["last_nonfill"] = .string(last.hexNumber) }
                 if isSecret(entry.node, in: tree) {
                     members["strings"] = .array([])
                     members["redacted"] = true
                 } else {
                     members["strings"] = .array(judgement.strings.map { found in
-                        ["at": .string(UEFIAgentQueries.hex(found.offset)), "text": .string(found.text),
+                        ["at": .string(found.offset.hexNumber), "text": .string(found.text),
                          "encoding": .string(found.utf16 ? "utf16le" : "ascii")]
                     })
                 }

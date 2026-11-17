@@ -826,6 +826,39 @@ final class GoToBookmarksTests: XCTestCase {
         XCTAssertEqual(controller.windowModel.pane1.hexSelection().start, 0x100)
     }
 
+    /// The alert quotes an offset past 4 GB whole, not cut to 32 bits, and
+    /// the file's size as the count of bytes it says it is.
+    func testThePastTheEndAlertQuotesALargeOffsetWhole() throws {
+        let (controller, forms) = try makeController(bytes: [UInt8](repeating: 0x11, count: 0x100))
+        controller.goToPosition()
+        let form = try XCTUnwrap(forms().first)
+
+        form.offsetCombo.stringValue = "0x123456780"
+        form.goToTypedOffset()
+
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertEqual(message, "Offset 0x123456780 is beyond the end of the file(s), "
+                       + "whose size is 0x100 (256 bytes). Moved to the end.")
+    }
+
+    /// With a part's panel in front the jump is the panel's, and its alert
+    /// quotes the offset whole and the part's size in the same form.
+    func testThePanelsPastTheEndAlertQuotesALargeOffsetWhole() throws {
+        let (controller, forms) = try makeController(bytes: [UInt8](repeating: 0x11, count: 0x100))
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<32), named: "part", animated: false))
+        addTeardownBlock { @MainActor in controller.fragments.close(id, animated: false) }
+        controller.goToPosition()
+        let form = try XCTUnwrap(forms().first)
+
+        form.offsetCombo.stringValue = "0x123456780"
+        form.goToTypedOffset()
+
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertTrue(message.hasPrefix("Offset 0x123456780 is beyond the end of "), message)
+        XCTAssertTrue(message.hasSuffix(", whose size is 0x20 (32 bytes). Moved to the end."), message)
+        XCTAssertEqual(try XCTUnwrap(controller.fragments.pane(id)).hexSelection().start, 0x20)
+    }
+
     /// A bookmark is an absolute offset (§8), so going to one moves BOTH panes
     /// of a comparison — the same rule a typed offset follows (§10.1).
     func testAJumpFromTheListMovesBothPanesOfAComparison() throws {

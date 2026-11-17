@@ -38,6 +38,11 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 - **Addresses and sizes are hex strings**, `"0x7F3000"`, in every answer.
   Every address argument takes a hex string or a decimal integer.
 - **Ranges are half-open**: `{start, end, length}`, `end` the first byte after.
+  A range written as one string — a `runs[]` entry, a range named in a
+  refusal — is half-open too, and is written as an interval, `[0x1, 0x3)`.
+  A `label` is the exception: it is for the person, and writes a range first
+  to last byte, `0x668000–0x669FFF`, as the app does; never pass its end back
+  as an `end`.
 - **Documents** are named by ids `d1`, `d2`… minted when an agent first sees
   a document and good while it stays open. A tool that takes `document`
   defaults to the focused one.
@@ -125,7 +130,7 @@ answer names — in `uefi_tree`, `uefi_node`, `uefi_find`, `uefi_at`,
 `find_bytes` — has a `label`: its name as the panel's Name column shows it,
 and, where that name is only a kind (`Unused`, `Unknown`, `Padding`,
 `Empty padding`, `Free space`, `Non-UEFI data`, `Raw`, or its own Type or
-Subtype), its file addresses — `Unused, 0x668000–0x66A000` — or, inside a
+Subtype), its file addresses — `Unused, 0x668000–0x669FFF` — or, inside a
 compressed section, the nearest named node: `Raw in SmbiosDxe`.
 
 On a document that is a file on disk, each such node also has a `link`: the
@@ -174,7 +179,7 @@ container opened:
 | Tool | Arguments | Answer |
 |---|---|---|
 | `variables` | `name` (part, any case), `guid`, `store` (node id), `deleted`; `limit` (80, ≤ 300) | `variables[]` — `name`, `guid`, `size`, `value` (read as its type, or hex up to 32 bytes), `store`, `entry`, `start`/`end` or `in_compressed`, `copies` when over 1, `deleted`; `stores[]` the page's rows are in (`id`, `type`, `name` when it differs, `variables`, `start`/`end`); `total`; `note` when the image has no store. Paged (`next`, `after`). A row too large alone comes without `value`. |
-| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200); `after` | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. Paged as one sequence — `changed`, `only_in_document`, `only_in_against` — `counts` and `same` of the whole. A changed variable too large alone comes without its values. |
+| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200); `after` | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, each written `[0x1, 0x3)` (until 2026-11 a one-byte run was `0x1` and a longer one `0x1–0x3`), sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. Paged as one sequence — `changed`, `only_in_document`, `only_in_against` — `counts` and `same` of the whole. A changed variable too large alone comes without its values. |
 
 A variable is the copy that stands for it: the current one, or for a deleted
 variable the copy it was deleted as. The stores read are VSS, VSS2, NVAR, Dell

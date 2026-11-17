@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -272,13 +273,13 @@ public enum UEFIAgentQueries {
     ) { host, arguments in
         let offset = try arguments.offset("offset")
         guard offset < host.contentSize else {
-            throw AgentToolError("Offset \(hex(offset)) is past the end of the file, which is \(hex(host.contentSize)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of the file, which is \(host.contentSize.hexNumber) bytes long.")
         }
         let tree = try await readyTree(host)
         let chain = await withCheckedContinuation { continuation in
             tree.materialize(containing: offset) { continuation.resume(returning: $0) }
         }
-        return .json(["offset": .string(hex(offset)), "chain": .array(chain.map { summary(of: $0, in: tree) })])
+        return .json(["offset": .string(offset.hexNumber), "chain": .array(chain.map { summary(of: $0, in: tree) })])
     }
 
     // MARK: - The tree
@@ -337,11 +338,11 @@ public enum UEFIAgentQueries {
         if !subtype.isEmpty { entry["subtype"] = .string(subtype) }
         if let guid = node.guid { entry["guid"] = .string(guid.description) }
         if let range = node.fileRange {
-            entry["start"] = .string(hex(range.lowerBound))
-            entry["end"] = .string(hex(range.upperBound))
+            entry["start"] = .string(range.lowerBound.hexNumber)
+            entry["end"] = .string(range.upperBound.hexNumber)
         } else {
             entry["in_compressed"] = true
-            entry["size"] = .string(hex(node.range.upperBound - node.range.lowerBound))
+            entry["size"] = .string((node.range.upperBound - node.range.lowerBound).hexNumber)
         }
         if node.isExpandable, node.children.isEmpty {
             entry["children"] = "unread"
@@ -386,7 +387,7 @@ public enum UEFIAgentQueries {
         let name = UEFITreeDisplay.ownName(of: node) ?? node.name
         guard isPlaceholder(name, of: node) else { return name }
         if let range = node.fileRange {
-            return "\(name), \(hex(range.lowerBound))–\(hex(range.upperBound))"
+            return "\(name), \(range.hexExtent)"
         }
         // In a buffer: the nearest node above with a name of its own.
         if let tree {
@@ -440,6 +441,4 @@ public enum UEFIAgentQueries {
         members.merge(more) { _, new in new }
         return .object(members)
     }
-
-    public static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
 }

@@ -40,6 +40,9 @@ let package = Package(
         // a control says what it does.
         .package(path: "../../Packages/HelpUI"),
 
+        // How an offset or a size is written in hex: one copy for the app and
+        // every tool-module, with no format string to read 32 bits of 64.
+        .package(path: "../../Packages/HexText"),
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/MEFirmware"),
@@ -54,6 +57,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "MEATool", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),

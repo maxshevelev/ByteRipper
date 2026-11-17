@@ -27,6 +27,8 @@ let package = Package(
         .library(name: "LenovoDMI", targets: ["LenovoDMI"])
     ],
     dependencies: [
+        // How an offset or a size is written in hex, shared across the app.
+        .package(path: "../HexText"),
         // Every word this shows the user comes from the one catalogue the
         // whole app is translated in.
         .package(path: "../Localization"),
@@ -35,6 +37,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "LenovoDMI", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "PartCodec", package: "PartCodec")
         ]),

@@ -1,6 +1,7 @@
 import AgentKit
 import ByteRipperCore
 import Foundation
+import HexText
 import LenovoDMI
 import Localization
 import PartCodec
@@ -151,9 +152,18 @@ final class AgentFindTools {
         // `offset` and `end` are the document's addresses.
         let offset = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
-        guard offset < end, end <= UInt64(scope.count) else {
-            throw AgentToolError("The range \(AgentHostTools.hexText(offset))–\(AgentHostTools.hexText(end)) is not inside "
-                + "\(place.named), which is \(AgentHostTools.hexText(UInt64(scope.count))) bytes long.")
+        guard !scope.isEmpty else { throw AgentToolError("\(place.named) holds no bytes to search.") }
+        guard offset < UInt64(scope.count) else {
+            throw AgentToolError("`offset` \(offset.hexNumber) is past the end of \(place.named), "
+                + "which is \(scope.count.hexNumber) bytes long.")
+        }
+        guard offset < end else {
+            throw AgentToolError("`end` \(end.hexNumber) is not after `offset` \(offset.hexNumber): "
+                + "the range holds no bytes.")
+        }
+        guard end <= UInt64(scope.count) else {
+            throw AgentToolError("The range \((offset..<end).halfOpenHexText) is not inside "
+                + "\(place.named), which is \(scope.count.hexNumber) bytes long.")
         }
         let range = (scope.lowerBound + offset)..<(scope.lowerBound + end)
         envelope["range"] = AgentHostTools.range(offset..<end)
@@ -186,8 +196,8 @@ final class AgentFindTools {
                 "encoding": .string(wanted[match.pattern].encoding),
                 "where": .array(places)
             ]
-            members["start"] = AgentHostTools.hex(match.range.lowerBound)
-            members["end"] = AgentHostTools.hex(match.range.upperBound)
+            members["start"] = .string(match.range.lowerBound.hexNumber)
+            members["end"] = .string(match.range.upperBound.hexNumber)
             // An area the flash map names for a secret — MSDM, a password, a
             // key — gives its matches but not the bytes around them.
             let secret = places.contains { UEFIAgentRegions.isSecretName($0["name"]?.stringValue ?? "") }
@@ -240,7 +250,7 @@ final class AgentFindTools {
         var envelope: [String: JSONValue] = [
             "document": .string(place.id),
             "total": .count(result.total),
-            "searched": AgentHostTools.hex(result.searchedBytes),
+            "searched": .string(result.searchedBytes.hexNumber),
             "buffers": .count(result.buffers)
         ]
         if start == .root {
@@ -356,9 +366,9 @@ final class AgentFindTools {
                 answer["part"] = .string(which)
                 answer["in_compressed"] = .bool(which == "decompressed")
                 answer["source"] = AgentHostTools.range(name.source)
-                answer["size"] = AgentHostTools.hex(name.size)
+                answer["size"] = .string(name.size.hexNumber)
                 if let reused = reusedPart(controller, place, source: name.source, layout: name.layout,
-                                           codec: name.codec, defaultName: name.name) {
+                                           codec: name.codec, defaultName: name.name, acceptsEarlierName: false) {
                     return reuse(reused, controller: controller, answer: answer)
                 }
                 opening = controller.openPart(named: named ?? name.name, from: place.pane, source: name.source,
@@ -386,7 +396,7 @@ final class AgentFindTools {
             answer["part"] = .string(which)
             answer["in_compressed"] = .bool(open.space != .file)
             answer["source"] = AgentHostTools.range(open.source)
-            answer["size"] = AgentHostTools.hex(UInt64(open.range.count))
+            answer["size"] = .string(open.range.count.hexNumber)
             // A LENV block opened as it is reads as XOR noise, and nothing in
             // the answer said there was a decoded way to open it.
             if let reader = found.tree.spaceReaders.reader(for: .file),
@@ -395,7 +405,7 @@ final class AgentFindTools {
                     + "part: \"decoded\" opens it decoded.")
             }
             if let reused = reusedPart(controller, place, source: open.source, layout: open.layout,
-                                       codec: codec, defaultName: defaultName) {
+                                       codec: codec, defaultName: defaultName, acceptsEarlierName: false) {
                 return reuse(reused, controller: controller, answer: answer)
             }
             opening = controller.openPart(named: named ?? defaultName,
@@ -408,11 +418,11 @@ final class AgentFindTools {
             let length = try arguments.offset("length")
             let size = place.pane.fileSize
             guard length > 0, offset < size, length <= size - offset else {
-                throw AgentToolError("\(AgentHostTools.hexText(offset)) and \(AgentHostTools.hexText(length)) bytes "
-                    + "do not fit in \(place.named), which is \(AgentHostTools.hexText(size)) bytes long.")
+                throw AgentToolError("\(offset.hexNumber) and \(length.hexNumber) bytes "
+                    + "do not fit in \(place.named), which is \(size.hexNumber) bytes long.")
             }
             let source = offset..<(offset + length)
-            let defaultName = "\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
+            let defaultName = source.hexExtent
             let name = named ?? defaultName
             // As Open Zone: a stretch that is a structure of the image goes
             // back through the rebuild planner, any other as it is.
@@ -423,9 +433,9 @@ final class AgentFindTools {
                 .map { UEFIPartCodec(target: $0) }
                 ?? CopyPartCodec()
             answer["source"] = AgentHostTools.range(source)
-            answer["size"] = AgentHostTools.hex(length)
+            answer["size"] = .string(length.hexNumber)
             if let reused = reusedPart(controller, place, source: source, layout: layout,
-                                       codec: codec, defaultName: defaultName) {
+                                       codec: codec, defaultName: defaultName, acceptsEarlierName: true) {
                 return reuse(reused, controller: controller, answer: answer)
             }
             opening = controller.openPart(named: name, from: place.pane, source: source, layout: layout, codec: codec)
@@ -439,16 +449,28 @@ final class AgentFindTools {
     /// copy beside it — a copy the reader has to close, and edits that would
     /// then be in one of two places.
     private func reusedPart(_ controller: MainViewController, _ place: AgentDesk.Place, source: Range<UInt64>,
-                            layout: UEFIRootLayout, codec: any PartCodec, defaultName: String)
+                            layout: UEFIRootLayout, codec: any PartCodec, defaultName: String,
+                            acceptsEarlierName: Bool)
         -> (id: FragmentDock.PanelID, pane: PaneViewModel)? {
         for id in controller.fragments.panelsLinked(to: place.pane) {
             guard let pane = controller.fragments.pane(id), let origin = pane.origin,
                   origin.sourceRange == source, origin.layout == layout,
-                  type(of: origin.codec) == type(of: codec), origin.partName == defaultName
+                  type(of: origin.codec) == type(of: codec),
+                  origin.partName == defaultName
+                    || (acceptsEarlierName && origin.partName == Self.earlierDefaultName(source))
             else { continue }
             return (id, pane)
         }
         return nil
+    }
+
+    /// The name a part opened by address got before builds wrote a range
+    /// first to last: `0x100-0x140`, the end exclusive. A workspace may still
+    /// hold a part under it, and asking for the same bytes by address again
+    /// finds that panel rather than opening a second one over them. Only by
+    /// address: a node asked for is never taken for a part opened by address.
+    private nonisolated static func earlierDefaultName(_ source: Range<UInt64>) -> String {
+        "\(source.lowerBound.hexNumber)-\(source.upperBound.hexNumber)"
     }
 
     private func reuse(_ part: (id: FragmentDock.PanelID, pane: PaneViewModel), controller: MainViewController,
