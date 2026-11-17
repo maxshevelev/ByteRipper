@@ -1014,7 +1014,15 @@ final class WorkspaceRestoreTests: XCTestCase {
         WorkspaceSettings.set(restoresWorkspace: true)
         let delay = ContentKeeper.moveSheetDelay
         ContentKeeper.moveSheetDelay = .milliseconds(10)
-        ContentKeeper.beforeMoveRound = { Thread.sleep(forTimeInterval: 0.3) }
+        // The move is held until the sheet has been seen, not for a fixed
+        // time: on a busy main thread the sheet's short delay runs long, and
+        // a hold of a few hundred milliseconds could end before it showed.
+        // Once let go, every round after passes the gate at once.
+        let gate = DispatchSemaphore(value: 0)
+        ContentKeeper.beforeMoveRound = {
+            _ = gate.wait(timeout: .now() + 10)
+            gate.signal()
+        }
         addTeardownBlock {
             await MainActor.run {
                 ContentKeeper.moveSheetDelay = delay
@@ -1032,8 +1040,11 @@ final class WorkspaceRestoreTests: XCTestCase {
         let (recorder, folderURL) = recorder([window])
         recorder.record()
         try pane.pasteWrite([0x01, 0x02])                  // what the sheet cannot stop
-        try await Task.sleep(nanoseconds: 100_000_000)
+        for _ in 0..<250 where (controller.presentedViewControllers ?? []).isEmpty {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertFalse(controller.presentedViewControllers?.isEmpty ?? true, "a move past the delay shows itself")
+        gate.signal()
         await recorder.keeper.settleMoves()
         let journal = try XCTUnwrap(pane.document?.undoHistory.journal?.url)
         XCTAssertEqual(journal.deletingLastPathComponent().standardizedFileURL,
