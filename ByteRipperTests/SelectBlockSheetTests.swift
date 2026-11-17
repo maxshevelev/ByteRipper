@@ -252,6 +252,7 @@ final class SelectBlockSheetTests: XCTestCase {
         let (sheet, _) = makeSheet()
         let window = hostingWindow(for: sheet)
         defer { window.orderOut(nil) }
+        sheet.endField.stringValue = "0x80"
         window.makeFirstResponder(sheet.startField)
         type("0x10 +", into: sheet.startField)
         XCTAssertTrue(sheet.errorLabel.isHidden, "Start is still being typed")
@@ -266,6 +267,42 @@ final class SelectBlockSheetTests: XCTestCase {
         window.makeFirstResponder(sheet.endField)
         type("0x5 - 0x10", into: sheet.endField)
         XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+    }
+
+    /// Switching the radio does not raise an error for fields nobody has
+    /// typed in, and a Start sum being read back stays on the line.
+    func testSwitchingTheRadioRaisesNoErrorOfItsOwn() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.lengthRadio.performClick(nil)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "", "nothing typed yet, nothing wrong yet")
+        XCTAssertTrue(sheet.noteLabel.isHidden)
+
+        sheet.endField.stringValue = "0x80"
+        sheet.endRadio.performClick(nil)
+        window.makeFirstResponder(sheet.startField)
+        type("0x10 + 0x20", into: sheet.startField)
+        sheet.lengthRadio.performClick(nil)
+        sheet.endRadio.performClick(nil)
+        XCTAssertTrue(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)", "Start's sum stays on the line")
+    }
+
+    /// An unfinished sum in the field being typed in does not hide what is
+    /// wrong with another field.
+    func testAnUnfinishedSumDoesNotHideAnotherFieldsError() {
+        let (sheet, _) = makeSheet(fileSize: 0x100)
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        window.makeFirstResponder(sheet.startField)
+        type("0x99999999", into: sheet.startField)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "Start is beyond the end of the file.")
+
+        window.makeFirstResponder(sheet.endField)
+        type("0x10 +", into: sheet.endField)
+        XCTAssertFalse(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "Start is beyond the end of the file.")
     }
 
     /// An address past 4 GB comes into the field whole, not cut to 32 bits.

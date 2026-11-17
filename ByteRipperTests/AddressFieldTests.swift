@@ -89,6 +89,17 @@ final class AddressFieldTests: XCTestCase {
         XCTAssertEqual(AddressHistoryStore.recent.count, 2, "nothing that names no number")
     }
 
+    /// One sum typed with other spacing or case, or with a term in the other
+    /// base, is one entry: the latest typing stands.
+    func testOneSumIsOneEntryHoweverItWasTyped() {
+        AddressHistoryStore.record(0x7AF00)
+        for text in ["0x1FE000+40", "0x1FE000 + 40", "0x1fe000 + 0x28"] {
+            AddressField(text: text).recordInHistory()
+        }
+        AddressField(text: "0x7af00").recordInHistory(always: true)
+        XCTAssertEqual(AddressHistoryStore.recent, ["0x0007AF00", "0x1fe000 + 0x28"])
+    }
+
     /// The list shows a sum with what it comes to, and picking a row gives the
     /// field the sum alone — the text a field can evaluate again.
     func testTheListShowsSumsWithTheirResults() throws {

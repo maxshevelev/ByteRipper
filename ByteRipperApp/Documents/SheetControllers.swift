@@ -89,6 +89,8 @@ class SheetViewController: NSViewController {
         noteLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         noteLabel.textColor = .secondaryLabelColor
         noteLabel.lineBreakMode = .byTruncatingMiddle
+        // A long sum is cut in the middle rather than widening the sheet.
+        noteLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         noteLabel.isSelectable = true
         noteLabel.isHidden = true
         let errorRow = NSStackView(views: [errorIndent, errorLabel, noteLabel])
@@ -143,6 +145,15 @@ class SheetViewController: NSViewController {
         // the buttons, because the slack had to go somewhere.
         contentView.frame = NSRect(x: 0, y: 0, width: 420, height: 170)
         view = contentView
+    }
+
+    /// The starting frame is made as wide as the rows the subclass added in its
+    /// own `loadView`: it is only where layout starts from, but rows wider than
+    /// it — the address rows, a longer translation — are laid out clipped until
+    /// a window resizes it.
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.frame.size.width = max(view.frame.width, view.fittingSize.width)
     }
 
     override func viewDidAppear() {
@@ -201,7 +212,7 @@ class SheetViewController: NSViewController {
         noteLabel.isHidden = true
     }
 
-    private func showNote(_ note: String?) {
+    fileprivate func showNote(_ note: String?) {
         noteLabel.stringValue = note ?? ""
         noteLabel.isHidden = note == nil
     }
@@ -213,12 +224,7 @@ class SheetViewController: NSViewController {
     /// inputs validate the same way `submitPressed` does. `fileprivate` so the
     /// subclasses' field builders can wire `onTextChange` to it.
     fileprivate func updateLiveError() {
-        if isStillTyping {
-            // A sum that ends at its operator is not a mistake yet: the sheet
-            // waits for the rest and says nothing (issue #9).
-            errorLabel.isHidden = true
-            showNote(nil)
-        } else if let error = validate() {
+        if let error = liveProblem() {
             showError(error)
         } else {
             errorLabel.isHidden = true
@@ -226,10 +232,11 @@ class SheetViewController: NSViewController {
         }
     }
 
-    /// True while a field holds something that is unfinished rather than wrong.
-    /// Only the live message waits for it — OK still refuses, through
-    /// `validate()`.
-    var isStillTyping: Bool { false }
+    /// What is wrong while the user types (default: `validate()`). A sheet
+    /// whose field can hold something unfinished rather than wrong — a sum
+    /// ending at its operator — excuses that field here, and only that one:
+    /// OK still refuses it, through `validate()`.
+    func liveProblem() -> String? { validate() }
 
     /// What to show on the message's line while the input is valid (default:
     /// nothing).
@@ -371,11 +378,6 @@ final class SelectBlockSheetController: SheetViewController {
         buttonRow.insertArrangedSubview(toBeginningButton, at: 0)
         buttonRow.insertArrangedSubview(toEndButton, at: 1)
 
-        // Address rows are wider than the base sheet's starting frame allows
-        // for; the frame is only where layout starts from, but it has to hold
-        // the rows, or they are laid out clipped until a window resizes it.
-        view.frame.size.width = 472
-
         startField = addAddressRow(label: L("Start:"),
                                    initial: presetStart.map(OffsetExpression.hex) ?? "0x")
 
@@ -429,10 +431,18 @@ final class SelectBlockSheetController: SheetViewController {
         lengthRadio.state = useLength ? .on : .off
         endField.isEnabled = !useLength
         lengthField.isEnabled = useLength
-        // The message line is about the field now in use: its sum, or what
-        // is wrong with it — not the one just switched off.
-        lastEditedAddressField = secondField
-        updateLiveError()
+        // A sum read back from the field just switched off goes, and the one
+        // in the field switched on takes its place; Start's stays. An error
+        // already shown is checked again — but the switch does not raise one
+        // for a field nobody has typed in yet.
+        if lastEditedAddressField === (useLength ? endField : lengthField) {
+            lastEditedAddressField = secondField
+        }
+        if errorLabel.isHidden || errorLabel.stringValue.isEmpty {
+            showNote(liveNote())
+        } else {
+            updateLiveError()
+        }
     }
 
     /// The End or Length field, whichever the radios make the active one.
@@ -440,18 +450,31 @@ final class SelectBlockSheetController: SheetViewController {
         endRadio.state == .on ? endField : lengthField
     }
 
-    /// Why `field` names no number, or nil when it names one: the sentence for
-    /// a sum that comes to nothing usable, else the field's own `invalid`.
-    private func problem(in field: AddressField, invalid: String) -> String? {
-        guard case .failure(let error) = field.evaluation else { return nil }
-        return AddressField.message(for: error) ?? invalid
+    /// What a field holds, as the checks need it: the number it names, the
+    /// sentence for why it names none — or, for the field being typed in, a sum
+    /// still waiting for its last term.
+    private enum Reading {
+        case number(UInt64)
+        case wrong(String)
+        case waiting
+    }
+
+    private func read(_ field: AddressField, invalid: String, waiting: AddressField?) -> Reading {
+        switch field.evaluation {
+        case .success(let expression):
+            return .number(expression.value)
+        case .failure(.incomplete) where field === waiting:
+            return .waiting
+        case .failure(let error):
+            return .wrong(AddressField.message(for: error) ?? invalid)
+        }
     }
 
     /// Only the field being typed in waits: an unfinished sum left behind in
-    /// another field is a mistake the line can name.
-    override var isStillTyping: Bool {
-        guard let field = lastEditedAddressField, field.isEnabled else { return false }
-        return field.evaluation == .failure(.incomplete)
+    /// another field, or any other mistake in one, is named as usual.
+    override func liveProblem() -> String? {
+        let typing = lastEditedAddressField.flatMap { $0.isEnabled ? $0 : nil }
+        return problem(waitingFor: typing)
     }
 
     /// The sum being typed, read back in hex with its result (issue #9).
@@ -460,25 +483,48 @@ final class SelectBlockSheetController: SheetViewController {
         return field.breakdown
     }
 
-    override func validate() -> String? {
-        if let error = startError() { return error }
-        guard let start = startField.value else { return nil }
+    override func validate() -> String? { problem(waitingFor: nil) }
+
+    /// The first thing wrong, or nil. With no field `waiting`, nil means every
+    /// field in use names a number — there is no path that lets a field with
+    /// none through.
+    private func problem(waitingFor waiting: AddressField?) -> String? {
+        let start: UInt64?
+        switch startReading(waitingFor: waiting) {
+        case .wrong(let message): return message
+        case .waiting: start = nil
+        case .number(let value): start = value
+        }
         if endRadio.state == .on {
-            if let error = problem(in: endField, invalid: L("Invalid end offset.")) { return error }
-            guard let end = endField.value else { return nil }
-            if start > end {
-                return L("Start must not exceed end.")
+            switch read(endField, invalid: L("Invalid end offset."), waiting: waiting) {
+            case .wrong(let message):
+                return message
+            case .waiting:
+                break
+            case .number(let end):
+                if let start, start > end {
+                    return L("Start must not exceed end.")
+                }
+                // End is the address of the block's LAST byte, so it must point
+                // at a real byte — the maximum is fileSize - 1 (the selection's
+                // half-open upper bound is end + 1).
+                if end >= fileSize {
+                    return L("End is beyond the end of the file.")
+                }
             }
-            // End is the address of the block's LAST byte, so it must point at
-            // a real byte — the maximum is fileSize - 1 (the selection's
-            // half-open upper bound is end + 1).
-            if end >= fileSize {
-                return L("End is beyond the end of the file.")
-            }
-        } else if let error = problem(in: lengthField, invalid: L("Invalid length.")) {
-            return error
+        } else if case .wrong(let message) = read(lengthField, invalid: L("Invalid length."), waiting: waiting) {
+            return message
         }
         return nil
+    }
+
+    /// The Start field read, with the file's end checked as well.
+    private func startReading(waitingFor waiting: AddressField?) -> Reading {
+        let reading = read(startField, invalid: L("Invalid start offset."), waiting: waiting)
+        if case .number(let start) = reading, start > fileSize {
+            return .wrong(L("Start is beyond the end of the file."))
+        }
+        return reading
     }
 
     override func handleSubmit() {
@@ -510,10 +556,7 @@ final class SelectBlockSheetController: SheetViewController {
     /// position. The two boundary buttons ignore the End/Length option, so they
     /// validate only what they actually use.
     private func startError() -> String? {
-        if let error = problem(in: startField, invalid: L("Invalid start offset.")) { return error }
-        guard let start = startField.value, start <= fileSize else {
-            return L("Start is beyond the end of the file.")
-        }
+        if case .wrong(let message) = startReading(waitingFor: nil) { return message }
         return nil
     }
 

@@ -49,9 +49,17 @@ enum AddressHistoryStore {
     }
 
     private static func record(entry: String) {
-        var entries = recent.filter { $0 != entry }
+        // One entry per sum however it was spaced or cased: `0x1FE000+40` and
+        // `0x1fe000 + 0x28` are the same sum, and the latest typing stands.
+        let key = sameness(entry)
+        var entries = recent.filter { sameness($0) != key }
         entries.insert(entry, at: 0)
         defaults.set(Array(entries.prefix(limit)), forKey: userDefaultsKey)
+    }
+
+    /// What two entries are compared by: their terms in hex, in order.
+    private static func sameness(_ entry: String) -> String {
+        (try? OffsetExpression.parse(entry))?.hexText ?? entry
     }
 }
 
@@ -214,10 +222,14 @@ final class AddressField: CaretAtEndTextField {
                                     value: isEnabled ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
                                     range: NSRange(location: 0, length: 1))
         }
+        historyButton.isEnabled = isEnabled
+        // A keystroke that leaves the result as it was — most of them inside
+        // a term, and the form's own colour change after it — changes nothing.
+        guard attributed != resultLabel.attributedStringValue || resultLabel.isHidden != text.isEmpty else { return }
         resultLabel.attributedStringValue = attributed
         resultLabel.isHidden = text.isEmpty
-        historyButton.isEnabled = isEnabled
-        needsLayout = true
+        // At once rather than at the next layout pass: the field editor has to
+        // make room before the next key lands.
         layoutAdornments()
     }
 
@@ -335,21 +347,14 @@ final class AddressField: CaretAtEndTextField {
 
     /// **↓** in the field opens the list — unless the form's delegate takes
     /// it first. The field editor asks the field about every command key before
-    /// acting on it. AppKit's own answer, which hands the key to the delegate,
-    /// is not public, so it is reached through the runtime rather than through
-    /// `super`; should it ever be gone, the delegate is asked directly, so
-    /// Return and Esc still reach the form.
+    /// acting on it, and a text field's answer is its delegate's
+    /// (`control(_:textView:doCommandBy:)`, the public half of the exchange):
+    /// this asks the delegate the same way, so Return and Esc reach the form
+    /// as before, and nothing calls into AppKit's own implementation.
     @objc(textView:doCommandBySelector:)
     func textView(_ textView: NSTextView, doCommandBy command: Selector) -> Bool {
-        typealias Answer = @convention(c) (AnyObject, Selector, NSTextView, Selector) -> Bool
-        let selector = #selector(NSTextViewDelegate.textView(_:doCommandBy:))
-        let handled: Bool
-        if let method = class_getInstanceMethod(NSTextField.self, selector) {
-            handled = unsafeBitCast(method_getImplementation(method), to: Answer.self)(self, selector, textView, command)
-        } else {
-            handled = (delegate as? NSControlTextEditingDelegate)?
-                .control?(self, textView: textView, doCommandBy: command) ?? false
-        }
+        let handled = (delegate as? NSControlTextEditingDelegate)?
+            .control?(self, textView: textView, doCommandBy: command) ?? false
         if handled { return true }
         if command == #selector(NSResponder.moveDown(_:)) {
             showHistory()

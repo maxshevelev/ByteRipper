@@ -136,6 +136,8 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         breakdownLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         breakdownLabel.textColor = .secondaryLabelColor
         breakdownLabel.lineBreakMode = .byTruncatingMiddle
+        // A long sum is cut in the middle rather than widening the form.
+        breakdownLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         breakdownLabel.isSelectable = true
         breakdownLabel.translatesAutoresizingMaskIntoConstraints = false
         errorRow.addSubview(breakdownLabel)
