@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import LenovoDMI
 import Localization
 import ToolModuleKit
@@ -377,7 +378,6 @@ public enum UEFILenovoDMIDetail {
     }
 
     private static func hex(_ value: UInt64, _ digits: Int) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
+        value.hexNumber(digits: digits)
     }
 }

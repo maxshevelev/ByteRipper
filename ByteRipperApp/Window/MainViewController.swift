@@ -6637,7 +6637,7 @@ final class MainViewController: NSViewController {
             if offset > panelPane.fileSize {
                 presentAlert(
                     title: L("Offset beyond end of file"),
-                    message: L("Offset %1$@ is beyond the end of %2$@ (size %3$@). Moved to the end.",
+                    message: L("Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end.",
                                offset.hexNumber, panelPane.status.fileName,
                                StatusLabel.exactSizeText(panelPane.fileSize))
                 )
@@ -6652,7 +6652,7 @@ final class MainViewController: NSViewController {
         if offset > largerSize {
             presentAlert(
                 title: L("Offset beyond end of file"),
-                message: L("Offset %1$@ is beyond the end of the file(s) (size %2$@). Moved to the end.",
+                message: L("Offset %1$@ is beyond the end of the file(s), whose size is %2$@. Moved to the end.",
                            offset.hexNumber, StatusLabel.exactSizeText(largerSize))
             )
         }

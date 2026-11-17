@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -85,11 +86,10 @@ public enum FITRowMarks {
     }
 
     private static func revision(_ value: UInt32) -> String {
-        String(value, radix: 16, uppercase: true)
+        value.bareHexNumber
     }
 
     private static func hex(_ value: UInt32) -> String {
-        let digits = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, 8 - digits.count)) + digits
+        value.hexNumber(digits: 8)
     }
 }

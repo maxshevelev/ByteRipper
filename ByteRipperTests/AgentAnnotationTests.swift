@@ -236,9 +236,10 @@ final class AgentAnnotationTests: XCTestCase {
         // A card: the title, the file and the place, the note,
         // and the annotations it is about as links.
         // A file that is all padding has no node worth naming: the place is
-        // said by its addresses.
-        XCTAssertEqual(list.shownTexts(of: "a1"), ["Table", "● \(name)", "0x100–0x140"])
-        XCTAssertEqual(list.shownTexts(of: "a2"), ["Pointer", "● \(name)", "0x20–0x24",
+        // said by its addresses — first and last byte, as the status bar and
+        // the segment list write a range.
+        XCTAssertEqual(list.shownTexts(of: "a1"), ["Table", "● \(name)", "0x100–0x13F"])
+        XCTAssertEqual(list.shownTexts(of: "a2"), ["Pointer", "● \(name)", "0x20–0x23",
                                                    "→ a1 Table"])
         let pointer = try XCTUnwrap(list.collection.visibleItems().compactMap { $0.view as? AnnotationCardView }
             .first { $0.texts.first == "Pointer" })

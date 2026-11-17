@@ -2,6 +2,7 @@ import AppKit
 import AppPalette
 import FITTool
 import HelpUI
+import HexText
 import IntelCPUID
 import Localization
 import ToolModuleKit
@@ -297,7 +298,7 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
             // A pre-release is worth telling apart before it goes into a board.
             cell.textField?.textColor = entry.isProduction ? .labelColor : .systemOrange
         default:
-            cell.textField?.stringValue = "0x" + String(entry.size, radix: 16, uppercase: true)
+            cell.textField?.stringValue = entry.size.hexNumber
         }
         return cell
     }

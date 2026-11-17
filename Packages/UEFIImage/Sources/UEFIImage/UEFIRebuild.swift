@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import FirmwareCompression
 
@@ -1121,7 +1122,7 @@ public enum UEFIRebuild {
     }
 
     static func hex(_ value: UInt64) -> String {
-        String(value, radix: 16, uppercase: true)
+        value.bareHexNumber
     }
 }
 

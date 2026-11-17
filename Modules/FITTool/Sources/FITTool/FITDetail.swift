@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import UEFIImage
 
@@ -190,7 +191,6 @@ public enum FITDetail {
     }
 
     private static func hex<T: BinaryInteger>(_ value: T, digits: Int = 0) -> String {
-        let text = String(UInt64(truncatingIfNeeded: value), radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
+        value.hexNumber(digits: digits)
     }
 }

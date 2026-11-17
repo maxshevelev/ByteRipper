@@ -1,6 +1,7 @@
 import AppKit
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 import UEFITool
@@ -159,7 +160,7 @@ import UEFITool
     @objc private func cancelClicked() { onCancel?() }
 
     static func hex(_ value: UInt64) -> String {
-        "0x" + String(value, radix: 16, uppercase: true)
+        value.hexNumber
     }
 }
 

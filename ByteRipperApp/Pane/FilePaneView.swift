@@ -2,6 +2,7 @@ import Cocoa
 import ALSplitView
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -1767,7 +1768,7 @@ final class FilePaneView: NSView {
         // aligned columns, zero-padded to that width (§21.3).
         let width = status.fileSize > 0 ? String(status.fileSize, radix: 16).count : 1
         func address(_ value: UInt64) -> String {
-            String(value, radix: 16, uppercase: true).leftPadded(to: width, with: "0")
+            value.bareHexNumber(digits: width)
         }
         var parts: [String] = []
         // The offset is the line's first part, and the bar always leads with it:

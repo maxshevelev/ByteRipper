@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import MEFirmware
 
@@ -12,13 +13,13 @@ public enum MEAText {
     // MARK: Hex
 
     /// `0x`-prefixed, no padding — for offsets and small counts.
-    public static func hex(_ v: Int) -> String { String(format: "0x%X", v) }
+    public static func hex(_ v: Int) -> String { v.hexNumber }
     /// Width-padded to one byte, e.g. an extension tag.
-    public static func hexByte(_ v: Int) -> String { String(format: "0x%02X", v) }
+    public static func hexByte(_ v: Int) -> String { v.hexNumber(digits: 2) }
     /// Width-padded to two bytes, e.g. a BPDT partition type.
-    public static func hex16(_ v: Int) -> String { String(format: "0x%04X", v) }
+    public static func hex16(_ v: Int) -> String { v.hexNumber(digits: 4) }
     /// Width-padded to four bytes, e.g. a region's flags word.
-    public static func hex32(_ v: UInt32) -> String { String(format: "0x%08X", v) }
+    public static func hex32(_ v: UInt32) -> String { v.hexNumber(digits: 8) }
 
     // MARK: Ranges and sizes
 
@@ -29,7 +30,7 @@ public enum MEAText {
     /// not a number worth two spellings — the area holds nothing, and the row
     /// says so.
     public static func size(_ v: Int) -> String {
-        v == 0 ? "Empty" : String(format: "0x%X (%d bytes)", v, v)
+        v == 0 ? "Empty" : "\(v.hexNumber) (\(v) bytes)"
     }
     /// The compact row subtitle `0x… · 0x…` (offset · size), with the same
     /// word for a section that holds nothing.
@@ -304,7 +305,7 @@ enum MEAValueText {
             || l.hasSuffix(".type") || l == "type"
             || l.contains("deviceid") || l.contains("vendorid")
         if isCode {
-            return "0x" + String(value, radix: 16, uppercase: true)
+            return value.hexNumber
         }
         return String(value)
     }

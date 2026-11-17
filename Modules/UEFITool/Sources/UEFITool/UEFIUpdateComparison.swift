@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -176,7 +177,7 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
     }
 
     static func hex(_ value: UInt64) -> String {
-        "0x" + String(value, radix: 16, uppercase: true)
+        value.hexNumber
     }
 }
 

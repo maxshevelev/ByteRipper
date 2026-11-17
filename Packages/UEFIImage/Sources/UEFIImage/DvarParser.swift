@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// Dell's DVAR variable store (§9): the format Dell firmware keeps its own
 /// settings in, beside or instead of the standard VSS store.
@@ -139,7 +140,7 @@ enum DVAR {
     /// The name a variable's entry carries: its name id, in hex, as the
     /// reference shows it.
     static func name(_ nameId: UInt16) -> String {
-        String(nameId, radix: 16, uppercase: true)
+        nameId.bareHexNumber
     }
 }
 

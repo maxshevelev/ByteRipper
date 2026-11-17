@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import MEFirmware
 
@@ -50,7 +51,7 @@ extension MEAText {
         // Written the way MFIT writes it: a number of its own in hex (`0x02` is
         // how its byte fields read in its own panel), everything else as it is.
         let hex = layout?.hex ?? (setting.bytes != nil)
-        return hex ? String(format: "0x%X", number) : String(number)
+        return hex ? number.hexNumber : String(number)
     }
 
     /// A text field's characters: the bytes as they stand, cut at the first

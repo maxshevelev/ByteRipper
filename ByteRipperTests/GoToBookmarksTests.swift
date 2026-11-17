@@ -837,8 +837,8 @@ final class GoToBookmarksTests: XCTestCase {
         form.goToTypedOffset()
 
         let message = try XCTUnwrap(controller.lastAlertMessage)
-        XCTAssertEqual(message, "Offset 0x123456780 is beyond the end of the file(s) "
-                       + "(size 0x100 (256 bytes)). Moved to the end.")
+        XCTAssertEqual(message, "Offset 0x123456780 is beyond the end of the file(s), "
+                       + "whose size is 0x100 (256 bytes). Moved to the end.")
     }
 
     /// With a part's panel in front the jump is the panel's, and its alert
@@ -855,7 +855,7 @@ final class GoToBookmarksTests: XCTestCase {
 
         let message = try XCTUnwrap(controller.lastAlertMessage)
         XCTAssertTrue(message.hasPrefix("Offset 0x123456780 is beyond the end of "), message)
-        XCTAssertTrue(message.hasSuffix("(size 0x20 (32 bytes)). Moved to the end."), message)
+        XCTAssertTrue(message.hasSuffix(", whose size is 0x20 (32 bytes). Moved to the end."), message)
         XCTAssertEqual(try XCTUnwrap(controller.fragments.pane(id)).hexSelection().start, 0x20)
     }
 

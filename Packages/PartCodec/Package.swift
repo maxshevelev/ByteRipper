@@ -29,12 +29,15 @@ let package = Package(
         .library(name: "PartCodec", targets: ["PartCodec"])
     ],
     dependencies: [
+        // How an offset or a size is written in hex, shared across the app.
+        .package(path: "../HexText"),
         // Every word this shows the user comes from the one catalogue the
         // whole app is translated in.
         .package(path: "../Localization")
     ],
     targets: [
         .target(name: "PartCodec", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "Localization", package: "Localization")
         ]),
         .testTarget(name: "PartCodecTests", dependencies: ["PartCodec"])

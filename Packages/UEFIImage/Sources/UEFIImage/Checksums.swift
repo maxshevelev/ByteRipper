@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 
 /// The arithmetic every layer of this format checks itself with
@@ -122,8 +123,7 @@ public enum Checksums {
 
     /// A hex value padded to a field's width — `0x0005` for digits 4.
     private static func hex(_ value: UInt64, digits: Int) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
+        value.hexNumber(digits: digits)
     }
 }
 

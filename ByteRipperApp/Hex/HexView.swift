@@ -1,6 +1,7 @@
 import AppPalette
 import ByteRipperCore
 import Cocoa
+import HexText
 import Localization
 
 /// What changed in the pane's content, so the hex view can invalidate only the
@@ -1126,7 +1127,7 @@ final class HexView: NSView {
 
         // Offset column, on top of the tint.
         if drawsOffset {
-            let offsetText = String(rowStart, radix: 16, uppercase: true).leftPadded(to: layout.offsetColumnChars, with: "0")
+            let offsetText = rowStart.bareHexNumber(digits: layout.offsetColumnChars)
             let offsetFrame = layout.offsetColumnFrame(row: row)
             if isBookmarked {
                 // A bookmarked row's address stands on a purple right-pointing
@@ -3882,7 +3883,7 @@ extension UInt64 {
     /// menu titles all share. `hexAddress` adds the `0x` prefix the offset input
     /// fields carry on their own.
     var bareAddress: String {
-        String(self, radix: 16, uppercase: true).leftPadded(to: 8, with: "0")
+        bareHexNumber(digits: 8)
     }
 
     var hexAddress: String {

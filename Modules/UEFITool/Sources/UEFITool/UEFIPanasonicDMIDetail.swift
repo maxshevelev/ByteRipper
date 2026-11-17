@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import UEFIImage
 
@@ -48,7 +49,7 @@ public enum UEFIPanasonicDMIDetail {
             rows: area.records.map { record in
                 [.init(String(format: "0x%02X", record.id)),
                  .init(String(format: "0x%08X", record.address)),
-                 .init("0x" + String(record.range.count, radix: 16, uppercase: true)),
+                 .init(record.range.count.hexNumber),
                  .init(record.checksumIsValid ? L("OK", in: language) : L("Invalid", in: language),
                        tone: record.checksumIsValid ? .yes : .no),
                  .init(PanasonicDMIArea.meaning(of: record.id)?.text(in: language) ?? L("Unknown", in: language))]
@@ -78,7 +79,7 @@ public enum UEFIPanasonicDMIDetail {
         if let id = node.subtype {
             fields.append(.init(L("ID", in: language), String(format: "0x%02X", id)))
         }
-        fields.append(.init(L("Length", in: language), "0x" + String(header.length, radix: 16, uppercase: true)))
+        fields.append(.init(L("Length", in: language), header.length.hexNumber))
         let valid = sum == 0
         fields.append(.init(
             L("Checksum", in: language),

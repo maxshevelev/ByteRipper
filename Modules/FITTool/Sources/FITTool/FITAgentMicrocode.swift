@@ -1,3 +1,4 @@
+import HexText
 import AgentKit
 import Foundation
 import IntelCPUID
@@ -111,7 +112,7 @@ public enum FITAgentMicrocode {
         if let replaced = outcome.replaced {
             members["replaced"] = [
                 "cpuid": .string(MicrocodeHeader.cpuid(replaced.processorSignature)),
-                "revision": .string(String(format: "0x%X", replaced.updateRevision)),
+                "revision": .string(replaced.updateRevision.hexNumber),
                 "date": .string(replaced.date)
             ]
         }
@@ -199,7 +200,7 @@ public enum FITAgentMicrocode {
                     ["cpuid": .string(MicrocodeHeader.cpuid(pair.signature)),
                      "platforms": .string(String(format: "0x%02X", pair.platformIDs))]
                 }),
-                "revision": .string(String(format: "0x%X", header.updateRevision)),
+                "revision": .string(header.updateRevision.hexNumber),
                 "date": .string(header.date)
             ]
             switch MicrocodeCatalogue.latest(of: header, in: catalogue) {
@@ -207,10 +208,10 @@ public enum FITAgentMicrocode {
                 members["catalogue"] = "latest"
             case .outdated(let newest):
                 members["catalogue"] = "outdated"
-                members["newest_revision"] = .string(String(format: "0x%X", newest))
+                members["newest_revision"] = .string(newest.hexNumber)
             case .undecided(let newest):
                 members["catalogue"] = "undecided"
-                members["newest_revision"] = .string(String(format: "0x%X", newest))
+                members["newest_revision"] = .string(newest.hexNumber)
             case .notRated:
                 members["catalogue"] = "not_rated"
             }

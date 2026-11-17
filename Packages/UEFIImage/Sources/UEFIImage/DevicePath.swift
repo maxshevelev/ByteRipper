@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// A UEFI device path in the text form of UEFI §10.6 —
 /// `PciRoot(0x0)/Pci(0x1F,0x2)/Sata(0x0,0xFFFF,0x0)/HD(1,GPT,…)/\EFI\BOOT\BOOTX64.EFI`.
@@ -153,6 +154,6 @@ public enum DevicePath {
     }
 
     private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        "0x" + String(UInt64(truncatingIfNeeded: value), radix: 16, uppercase: true)
+        value.hexNumber
     }
 }

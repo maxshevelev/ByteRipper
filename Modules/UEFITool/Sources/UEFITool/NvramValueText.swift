@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import UEFIImage
 
@@ -111,7 +112,7 @@ public enum NvramValueText {
     /// A number in decimal, and in hex as well where the two read
     /// differently: `1`, `300 (0x12C)`.
     static func numberText(_ number: UInt64) -> String {
-        number < 10 ? "\(number)" : "\(number) (0x\(String(number, radix: 16, uppercase: true)))"
+        number < 10 ? "\(number)" : "\(number) (\(number.hexNumber))"
     }
 
     /// One certificate by its subject; anything more counted by type, in the
@@ -166,7 +167,7 @@ public enum NvramValueText {
         if attributes & 0x2 != 0 { words.append("ForceReconnect") }
         if attributes & 0x8 != 0 { words.append("Hidden") }
         if attributes & 0x1F00 == 0x100 { words.append("App") }
-        let hex = "0x" + String(attributes, radix: 16, uppercase: true)
+        let hex = attributes.hexNumber
         return words.isEmpty ? hex : "\(hex) (\(words.joined(separator: ", ")))"
     }
 

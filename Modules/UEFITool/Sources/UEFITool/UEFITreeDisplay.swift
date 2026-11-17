@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import LenovoDMI
 import Localization
 import UEFIImage
@@ -508,7 +509,7 @@ public enum UEFITreeDisplay {
     static func dvarValue(_ value: [UInt8], setting: DellSetup.Setting?, in language: AppLanguage) -> String? {
         guard !value.isEmpty, value.count <= 8 else { return nil }
         let number = value.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
-        let hex = "0x" + String(number, radix: 16, uppercase: true)
+        let hex = number.hexNumber
         guard let setting, let meaning = dvarMeaning(number, setting: setting, in: language) else { return hex }
         return "\(meaning) (\(hex))"
     }

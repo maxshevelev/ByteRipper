@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// `INTEL_MICROCODE_HEADER` (§7.1).
 ///
@@ -204,7 +205,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
 
     /// The processor signature the way a CPUID is looked up — `806EA`, bare.
     public static func cpuid(_ signature: UInt32) -> String {
-        String(signature, radix: 16, uppercase: true)
+        signature.bareHexNumber
     }
 
     /// What the header says, row by row — the one reading the FIT panel shows
@@ -294,7 +295,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
     }
 
     private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        "0x" + String(UInt64(truncatingIfNeeded: value), radix: 16, uppercase: true)
+        value.hexNumber
     }
 
     /// `0x40 (64)`: hex for the dump, decimal for the mind.

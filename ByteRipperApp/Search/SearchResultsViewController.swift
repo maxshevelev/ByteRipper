@@ -1,6 +1,7 @@
 import Cocoa
 import ByteRipperCore
 import HelpUI
+import HexText
 import Localization
 
 /// The Search All results panel (§11): a header ("Search results (NNN)" + a ×)
@@ -567,7 +568,7 @@ final class SearchResultsViewController: NSViewController {
     /// offset column, which shows the row address in ink blue (§6).
     private func offsetText(_ offset: UInt64) -> NSAttributedString {
         let digits = max(8, String(fileSize, radix: 16).count)
-        let text = String(offset, radix: 16, uppercase: true).leftPadded(to: digits, with: "0")
+        let text = offset.bareHexNumber(digits: digits)
         return NSAttributedString(string: text, attributes: [
             .font: regularFont, .foregroundColor: HexTheme.inkBlue,
         ])

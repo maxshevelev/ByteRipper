@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import IntelCPUID
 import Localization
 import ToolModuleKit
@@ -527,11 +528,11 @@ public enum FITPresenter {
             // and that is where the panel says them (`processorGroups`).
             // Two digits at least for the platforms, as the catalogue's file
             // names write it.
-            let platform = String(header.platformIDs, radix: 16, uppercase: true)
+            let platform = header.platformIDs.bareHexNumber(digits: 2)
             parts = [
-                L("r.%1$@", in: language, String(header.updateRevision, radix: 16, uppercase: true)),
+                L("r.%1$@", in: language, header.updateRevision.bareHexNumber),
                 header.date,
-                L("platform %1$@", in: language, platform.count < 2 ? "0" + platform : platform)
+                L("platform %1$@", in: language, platform)
             ]
             return parts.joined(separator: " · ")
         case .emptyMicrocodeSlot:
@@ -627,7 +628,6 @@ public enum FITPresenter {
     }
 
     private static func hex(_ value: UInt64, digits: Int = 0) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
+        value.hexNumber(digits: digits)
     }
 }

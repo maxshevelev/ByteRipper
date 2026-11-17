@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 
 /// The fixed numbers of the store, as `LenovoVariableDxe` hard-codes them.
@@ -140,9 +141,7 @@ enum LE {
     }
 
     static func hex(_ value: UInt64, digits: Int, prefix: Bool = true) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        let padded = String(repeating: "0", count: max(0, digits - text.count)) + text
-        return prefix ? "0x" + padded : padded
+        prefix ? value.hexNumber(digits: digits) : value.bareHexNumber(digits: digits)
     }
 }
 

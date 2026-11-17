@@ -1,6 +1,7 @@
 import AppKit
 import FITTool
 import HelpBook
+import HexText
 import IntelCPUID
 import Localization
 import ToolModuleKit
@@ -980,19 +981,19 @@ struct FITParkedState: PersistableToolSessionState {
     private static func topSwapNote(_ backup: Range<UInt64>?) -> String {
         guard let backup else { return "" }
         return " " + L("The Top Swap backup at 0x%1$@ got the same change.",
-                       String(backup.lowerBound, radix: 16, uppercase: true))
+                       backup.lowerBound.bareHexNumber)
     }
 
     /// What the panel says afterwards, with what the protected ranges said.
     private static func note(for outcome: FITEditOutcome, describedAs description: String) -> String {
-        let at = "0x" + String(outcome.range.lowerBound, radix: 16, uppercase: true)
+        let at = outcome.range.lowerBound.hexNumber
         let caveat = topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)
         guard let replaced = outcome.replaced else {
             return L("Added %1$@ at %2$@.", description, at) + caveat
         }
         // Whole sentences per case: the count decides the noun's form, and
         // English's "s" is not a form any other language can be built from.
-        let was = String(replaced.updateRevision, radix: 16, uppercase: true)
+        let was = replaced.updateRevision.bareHexNumber
         let note: String
         switch outcome.moved {
         case 0:
@@ -1053,7 +1054,7 @@ struct FITParkedState: PersistableToolSessionState {
         }
         if let erased = outcome.erased {
             parts.append(L("0x%1$@ bytes erased at the end of the run",
-                           String(erased.count, radix: 16, uppercase: true)))
+                           erased.count.bareHexNumber))
         }
         return parts.joined(separator: "; ") + "."
             + topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)

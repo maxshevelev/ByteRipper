@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// Something wrong with the image, reported rather than thrown.
 ///
@@ -270,7 +271,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
     }
 
     private func hex(_ value: UInt64) -> String {
-        "0x" + String(value, radix: 16, uppercase: true)
+        value.hexNumber
     }
 }
 

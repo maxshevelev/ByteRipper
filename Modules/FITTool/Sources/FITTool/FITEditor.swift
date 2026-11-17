@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -67,7 +68,7 @@ public enum FITEditProblem: Equatable, Sendable, Error {
                      after)
         case .theRunCannotGrow(let needed, let inside):
             return L("The microcode run needs 0x%1$@ more bytes than are free after it, in %2$@.",
-                     String(needed, radix: 16, uppercase: true), inside)
+                     needed.bareHexNumber, inside)
         case .cannotRemoveTheHeader:
             return L("The header is not an entry.")
         case .cannotRemoveTheLastMicrocode:
@@ -80,14 +81,14 @@ public enum FITEditProblem: Equatable, Sendable, Error {
             return L("There is no FIT table in this file to change.")
         case .insideProtectedRange(let name, let at):
             return L("The change writes at 0x%1$@ inside a %2$@: the processor checks it before the firmware runs, and with Boot Guard enforced the platform would not start. Nothing was changed.",
-                     String(at, radix: 16, uppercase: true), name)
+                     at.bareHexNumber, name)
         case .topSwapCopiesDiffer(let backup):
             return L("This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed.",
-                     String(backup.lowerBound, radix: 16, uppercase: true),
-                     String(backup.upperBound, radix: 16, uppercase: true))
+                     backup.lowerBound.bareHexNumber,
+                     backup.upperBound.bareHexNumber)
         case .topSwapWriteCrossesTheBlocks(let at):
             return L("The change writes at 0x%1$@ across a Top Swap block boundary, where it cannot be made in both copies. Nothing was changed.",
-                     String(at, radix: 16, uppercase: true))
+                     at.bareHexNumber)
         case .alreadyInTheTable(let entry):
             return L("This microcode is already in the table, in row #%1$@. Nothing was changed.", entry + 1)
         case .servedByAnotherRow(let entry, let cpuids):
@@ -423,7 +424,7 @@ public enum FITEditor {
                 return .failure(.insideProtectedRange(name: range.kind.name, at: at))
             }
             let warning = L("It writes at 0x%1$@ inside a %2$@: the hash the firmware checks it against no longer matches.", in: language,
-                            String(at, radix: 16, uppercase: true), range.kind.name)
+                            at.bareHexNumber, range.kind.name)
             if !warnings.contains(warning) { warnings.append(warning) }
         }
         record(&outcome, warnings)
@@ -567,7 +568,7 @@ public enum FITEditor {
         }
         func whatIsThere() -> RoomAfterTheTable {
             let head = bytes.prefix(4).map { String(format: "%02X", $0) }.joined(separator: " ")
-            return .taken("\(head)… at 0x" + String(end, radix: 16, uppercase: true))
+            return .taken("\(head)… at " + end.hexNumber)
         }
 
         // Whose are they? Bytes in the same element as the table are nobody
@@ -587,8 +588,7 @@ public enum FITEditor {
             break
         default:
             guard sameElement else {
-                return .taken("inside \(theirs.name) at 0x"
-                    + String(theirs.range.lowerBound, radix: 16, uppercase: true))
+                return .taken("inside \(theirs.name) at " + theirs.range.lowerBound.hexNumber)
             }
         }
         // Filler to the end of whatever holds it, whatever byte the tool that
@@ -1055,9 +1055,7 @@ public enum FITEditor {
         var growth: (write: ToolTransaction.Write, grown: UEFINode)?
         if next > oldEnd {
             let area = spareArea(around: start, image: image, reader: reader, in: language)
-            let where_ = "\(area.name) at 0x"
-                + String(area.range.lowerBound, radix: 16, uppercase: true) + "–0x"
-                + String(area.range.upperBound, radix: 16, uppercase: true)
+            let where_ = "\(area.name) at \(area.range.lowerBound.hexNumber)–\(area.range.upperBound.hexNumber)"
             guard next <= reader.count,
                   isFree(oldEnd..<next, upTo: area.range.upperBound, in: reader)
             else {

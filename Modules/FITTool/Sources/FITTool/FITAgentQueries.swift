@@ -167,7 +167,7 @@ public enum FITAgentQueries {
             members["target_end"] = .string(hex(target.upperBound))
         }
         if !row.cpuids.isEmpty {
-            members["cpuids"] = .array(row.cpuids.map { .string(String(format: "%X", $0)) })
+            members["cpuids"] = .array(row.cpuids.map { .string($0.bareHexNumber) })
         }
         if row.hasProblem { members["problem"] = true }
         return .object(members)

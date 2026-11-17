@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -2268,6 +2269,6 @@ public enum UEFIDetail {
     }
 
     private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        "0x" + String(UInt64(truncatingIfNeeded: value), radix: 16, uppercase: true)
+        value.hexNumber
     }
 }

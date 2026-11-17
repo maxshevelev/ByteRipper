@@ -382,7 +382,7 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(listed?.first?["note"], "A stray byte.")
 
         let cards = NotesWindowController.instance.cards
-        XCTAssertTrue(cards.shownTexts(of: "a1").contains("0x8000–0x8008"), "\(cards.shownTexts(of: "a1"))")
+        XCTAssertTrue(cards.shownTexts(of: "a1").contains("0x8000–0x8007"), "\(cards.shownTexts(of: "a1"))")
 
         service.annotationTools.show("a1")
         let selection = controller.windowModel.pane1.hexSelection()

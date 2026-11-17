@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import UEFIImage
 
@@ -131,6 +132,6 @@ public struct FITProblem: Equatable, Sendable {
     }
 
     private func hex(_ value: UInt64) -> String {
-        "0x" + String(value, radix: 16, uppercase: true)
+        value.hexNumber
     }
 }
