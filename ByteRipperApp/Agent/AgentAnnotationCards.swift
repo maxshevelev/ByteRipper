@@ -470,10 +470,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         // A place in decoded bytes is told in their addresses, after the
         // badges of the codecs they came through.
         let shown = annotation.decoded?.range ?? annotation.range
-        let address = shown.map { range in
-            range.count <= 1 ? range.lowerBound.hexNumber
-                : "\(range.lowerBound.hexNumber)–\(range.lastByte.hexNumber)"
-        }
+        let address = shown.map(\.hexExtent)
         return AnnotationCardView.Content(
             id: annotation.id, title: annotation.title, isOpen: isOpen(annotation),
             file: fileName, codecs: annotation.decoded?.codecs.map(\.text) ?? [], address: address,

@@ -65,6 +65,7 @@ let package = Package(
             .product(name: "IntelCPUID", package: "IntelCPUID")
         ]),
         .target(name: "FITToolUI", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "HelpUI", package: "HelpUI"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),

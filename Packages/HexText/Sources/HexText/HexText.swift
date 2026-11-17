@@ -6,9 +6,10 @@
 /// bits.
 ///
 /// A negative value — a signed field read from a damaged structure, a size
-/// that underflowed — is written as its 64-bit two's complement,
-/// `0xFFFFFFFFFFFFFFFB` for -5, the way `%llX` wrote it. Never `0x-5`: that is
-/// no hex number a reader or a client can parse.
+/// that underflowed — is written as its two's complement at its own type's
+/// width: `0xFFFFFFFF` for an `Int32` of -1, `0xFB` for an `Int8` of -5,
+/// sixteen digits only for a 64-bit type. Never `0x-5`: that is no hex number a
+/// reader or a client can parse.
 extension BinaryInteger {
     /// `0x1FE028`, `0x0`.
     public var hexNumber: String {
@@ -20,7 +21,9 @@ extension BinaryInteger {
     /// the prefix itself.
     public var bareHexNumber: String {
         guard Self.isSigned, self < 0 else { return String(self, radix: 16, uppercase: true) }
-        return String(UInt64(truncatingIfNeeded: self), radix: 16, uppercase: true)
+        let bits = UInt64(truncatingIfNeeded: self)
+        let width = bitWidth
+        return String(width >= 64 ? bits : bits & (1 << UInt64(width) - 1), radix: 16, uppercase: true)
     }
 
     /// `0x0005` for `digits` 4: padded with zeros to a field's width, never
@@ -34,5 +37,16 @@ extension BinaryInteger {
     public func bareHexNumber(digits: Int) -> String {
         let text = bareHexNumber
         return String(repeating: "0", count: max(0, digits - text.count)) + text
+    }
+}
+
+extension Range where Bound: BinaryInteger {
+    /// `0x100–0x13F`: a stretch of bytes by its first and its last byte, the
+    /// way the status bar, the segment list and every message write one — not
+    /// by the first byte after it, which belongs to the next stretch. One
+    /// byte is that byte's address alone; an empty range is its position.
+    public var hexExtent: String {
+        guard upperBound - lowerBound > 1 else { return lowerBound.hexNumber }
+        return "\(lowerBound.hexNumber)–\((upperBound - 1).hexNumber)"
     }
 }

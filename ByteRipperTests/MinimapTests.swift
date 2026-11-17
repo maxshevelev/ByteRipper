@@ -1,5 +1,6 @@
 import ByteRipperCore
 import ALSplitView
+import HexText
 import XCTest
 @testable import ByteRipper
 
@@ -1558,8 +1559,11 @@ final class MinimapTests: XCTestCase {
 
         let visible = try XCTUnwrap(panel.viewport(forMapAt: 0))
         let value = try XCTUnwrap(panel.accessibilityValue() as? String)
-        XCTAssertTrue(value.contains("0x" + String(visible.lowerBound, radix: 16).uppercased()),
-                      "the value names the first visible offset: \(value)")
+        // From the first byte on screen through the last — not the first byte
+        // past the screen, which the next row holds.
+        XCTAssertTrue(value.hasPrefix("Pane showing 0x\(visible.lowerBound.bareHexNumber) "
+                                      + "through 0x\((visible.upperBound - 1).bareHexNumber)."),
+                      "the value names the first and last visible byte: \(value)")
         XCTAssertTrue(value.contains("100000 bytes"), "and the file's size: \(value)")
         XCTAssertTrue(value.hasPrefix("Pane showing"), "singular for one file: \(value)")
     }

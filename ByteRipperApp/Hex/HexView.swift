@@ -675,7 +675,7 @@ final class HexView: NSView {
 
     private func makeLayout() -> HexLayout {
         let fileSize = dataSource?.fileSize ?? 0
-        let digits = max(8, fileSize > 0 ? String(fileSize, radix: 16).count : 8)
+        let digits = max(8, fileSize.bareHexNumber.count)
         return HexLayout(charWidth: charWidth, rowHeight: rowHeight,
                          offsetColumnChars: digits, wordSize: WordSize.current.rawValue)
     }
@@ -870,7 +870,7 @@ final class HexView: NSView {
         guard let dataSource else { return "" }
         let selection = dataSource.hexSelection()
         let size = dataSource.fileSize
-        let start = String(selection.start, radix: 16).uppercased()
+        let start = selection.start.bareHexNumber
         // The bookmark mark is purely visual otherwise, so the row the caret is
         // on says whether it is marked, and what the mark is called — the only
         // way a bookmark reaches a screen reader while moving through the dump
@@ -881,7 +881,8 @@ final class HexView: NSView {
         if selection.isEmpty {
             return L("Offset 0x%1$@.", start) + mark + " " + sizeText
         }
-        let end = String(selection.end, radix: 16).uppercased()
+        // "through" names the last selected byte; `end` is the one after it.
+        let end = (selection.end - 1).bareHexNumber
         return L("Offset 0x%1$@, %2$@ bytes selected through 0x%3$@.",
                  start, selection.count, end) + mark + " " + sizeText
     }
@@ -3869,14 +3870,6 @@ enum HexTheme {
     }
 }
 
-extension String {
-    /// Left-pads with `pad` until the string is at least `length` characters.
-    func leftPadded(to length: Int, with pad: String) -> String {
-        guard count < length else { return self }
-        return String(repeating: pad, count: length - count) + self
-    }
-}
-
 extension UInt64 {
     /// The app's address for this offset: upper-case hex, at least eight digits
     /// (§10) — the shape the Offset column, the bookmark list, and the context-
@@ -3889,7 +3882,6 @@ extension UInt64 {
     var hexAddress: String {
         "0x" + bareAddress
     }
-
 }
 
 extension Range where Bound == UInt64 {

@@ -76,4 +76,21 @@ final class OffsetMessageTests: XCTestCase {
         XCTAssertEqual(messages(), ["Insert 2 byte(s) at offset 0x24. Existing bytes from this offset on will shift."])
         XCTAssertEqual(pane.fileSize, 0x40, "cancelled")
     }
+
+    /// VoiceOver reads a selection through its last byte, not through the
+    /// first byte after it.
+    func testASelectionIsReadThroughItsLastByte() throws {
+        let url = try tempFile([UInt8](repeating: 0x11, count: 0x40))
+        urls.append(url)
+        let pane = PaneViewModel()
+        try pane.open(url: url)
+        let hex = HexView()
+        hex.dataSource = pane
+        hex.delegate = pane
+        hex.reloadData()
+        pane.select(range: 0x10..<0x20)
+
+        let value = try XCTUnwrap(hex.accessibilityValue() as? String)
+        XCTAssertTrue(value.hasPrefix("Offset 0x10, 16 bytes selected through 0x1F."), value)
+    }
 }

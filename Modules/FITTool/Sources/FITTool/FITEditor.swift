@@ -85,7 +85,7 @@ public enum FITEditProblem: Equatable, Sendable, Error {
         case .topSwapCopiesDiffer(let backup):
             return L("This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed.",
                      backup.lowerBound.bareHexNumber,
-                     backup.upperBound.bareHexNumber)
+                     (backup.upperBound - 1).bareHexNumber)
         case .topSwapWriteCrossesTheBlocks(let at):
             return L("The change writes at 0x%1$@ across a Top Swap block boundary, where it cannot be made in both copies. Nothing was changed.",
                      at.bareHexNumber)
@@ -1055,7 +1055,7 @@ public enum FITEditor {
         var growth: (write: ToolTransaction.Write, grown: UEFINode)?
         if next > oldEnd {
             let area = spareArea(around: start, image: image, reader: reader, in: language)
-            let where_ = "\(area.name) at \(area.range.lowerBound.hexNumber)–\(area.range.upperBound.hexNumber)"
+            let where_ = "\(area.name) at \(area.range.hexExtent)"
             guard next <= reader.count,
                   isFree(oldEnd..<next, upTo: area.range.upperBound, in: reader)
             else {
