@@ -96,9 +96,9 @@ public enum UEFITopSwap {
         let agreement = ranges.topSwapCopiesMatch ? L("the copies match", in: language) : L("the copies differ", in: language)
         switch role {
         case .copy(let top):
-            return L("Copy of %1$@–%2$@; %3$@", in: language, top.lowerBound.hexNumber, top.upperBound.hexNumber, agreement)
+            return L("Copy of %1$@; %2$@", in: language, top.hexExtent, agreement)
         case .original(let backup):
-            return L("Copied at %1$@–%2$@; %3$@", in: language, backup.lowerBound.hexNumber, backup.upperBound.hexNumber, agreement)
+            return L("Copied at %1$@; %2$@", in: language, backup.hexExtent, agreement)
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import HelpBook
+import HexText
 import Localization
 import MEFirmware
 
@@ -953,7 +954,7 @@ public enum MEACurator {
                                     _ payloadOffset: Int?) -> MEANode {
         let path = paths.path(for: record.fileID)
         var fields: [MEAField] = []
-        append(&fields, "File ID", String(format: "0x%08X", record.fileID))
+        append(&fields, "File ID", record.fileID.hexNumber(digits: 8))
         append(&fields, "Path", path)
         append(&fields, "Size", MEAText.size(record.size))
         append(&fields, "Offset", MEAText.hex(record.offset))
@@ -962,7 +963,7 @@ public enum MEACurator {
         append(&fields, "OEM Configurable", MEAText.yesNo(record.oemConfigurable))
         append(&fields, "Reserved Flags", MEAText.hex(record.unknownFlags))
         return MEANode(path: [],
-                       title: path ?? String(format: "Record 0x%08X", record.fileID),
+                       title: path ?? "Record " + record.fileID.hexNumber(digits: 8),
                        subtitle: MEAText.size(record.size),
                        range: payloadOffset.flatMap {
                            MEAText.rangeValue($0 + record.offset, record.size)

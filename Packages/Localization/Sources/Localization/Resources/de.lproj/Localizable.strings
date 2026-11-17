@@ -151,9 +151,9 @@
 "Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne ungesicherte Änderungen, Segmente, Teile und Werkzeugzustand geöffnet:";
 "Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
 "Close Project" = "Projekt schließen";
-"Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
+"Copied at %1$@; %2$@" = "Kopie im Bereich %1$@; %2$@";
 "Copy of" = "Kopie des Abbilds bei";
-"Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
+"Copy of %1$@; %2$@" = "Kopie des Blocks %1$@; %2$@";
 "Could not add the microcode" = "Microcode konnte nicht hinzugefügt werden";
 "Could not remove the microcode" = "Microcode konnte nicht entfernt werden";
 "Could not replace the microcode" = "Microcode konnte nicht ersetzt werden";
@@ -860,7 +860,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Die Auswertung von Intel-ME/CSME-Firmware durch das Werkzeug ME Analyzer und die Datenbanken, gegen die ein Dump geprüft wird (MEA.dat, Huffman.dat), jeweils in der vom Projekt veröffentlichten Fassung.";
 "The newest revision the catalogue lists for this processor and platform" = "Die neueste Revision, die der Katalog für diesen Prozessor und diese Plattform führt";
 "the selection" = "die Auswahl";
-"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Die Auswahl reicht bis %1$@, „%2$@“ endet aber bei %3$@. Es wurde nichts kopiert.";
+"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Die Auswahl reicht bis einschließlich %1$@ und damit über das Ende von „%2$@“ hinaus, dessen Größe %3$@ beträgt. Es wurde nichts kopiert.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "Die Top-Swap-Sicherung bei %1$@ hat dort, wohin ihr Zeiger führt, keine FIT";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Die Top-Swap-Sicherung bei %1$@ enthält dieselbe FIT, aber andere Bytes des Blocks weichen ab; Microcode-Änderungen werden daher abgelehnt, bis die Kopien übereinstimmen";
 "The Top Swap backup at 0x%1$@ got the same change." = "Die Top-Swap-Sicherung bei 0x%1$@ hat dieselbe Änderung erhalten.";
@@ -914,7 +914,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Ordner.";
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Namen.";
 "This file is open read-only." = "Diese Datei ist schreibgeschützt geöffnet.";
-"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks bei %1$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
+"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks im Bereich %1$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
 "This microcode is already in the table, in row #%1$@. Nothing was changed." = "Dieser Microcode steht bereits in der Tabelle, in Zeile #%1$@. Es wurde nichts geändert.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Alle Teile werden zu einem Segment. Die Bytes bleiben unverändert — nur die Schnitte verschwinden.";
 "Those bytes could not be read." = "Diese Bytes ließen sich nicht lesen.";

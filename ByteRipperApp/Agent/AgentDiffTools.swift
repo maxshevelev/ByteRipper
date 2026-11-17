@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import HexText
 import ToolModuleKit
 
 /// Two documents compared byte by byte (`Design/AGENT_PLAN.md`, stage 8):

@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import HexText
 import UEFITool
 
 /// Work across many dumps (`Design/AGENT_PLAN.md`, "Background documents and

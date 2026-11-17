@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import UEFIImage
 
 /// A match of the search through what the tree holds (`UEFIContentSearch`), as

@@ -151,9 +151,9 @@
 "Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Изменились на диске после прошлой сессии. Открыты без несохранённых правок, сегментов, частей и состояния инструментов:";
 "Click to change the background" = "Кликните, чтобы сменить фон";
 "Close Project" = "Закрыть проект";
-"Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
+"Copied at %1$@; %2$@" = "Копия расположена в диапазоне %1$@; %2$@";
 "Copy of" = "Копия образа по адресу";
-"Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
+"Copy of %1$@; %2$@" = "Копия блока %1$@; %2$@";
 "Could not add the microcode" = "Не удалось добавить микрокод";
 "Could not remove the microcode" = "Не удалось удалить микрокод";
 "Could not replace the microcode" = "Не удалось заменить микрокод";
@@ -860,7 +860,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Разбор прошивок Intel ME/CSME инструментом ME Analyzer и базы данных, по которым сверяется дамп (MEA.dat, Huffman.dat), загружаемые по мере их публикации проектом.";
 "The newest revision the catalogue lists for this processor and platform" = "Самая свежая ревизия, которую каталог указывает для этого процессора и платформы";
 "the selection" = "выделение";
-"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Выделение доходит до адреса %1$@, а «%2$@» кончается на %3$@. Ничего не скопировано.";
+"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Выделение доходит до адреса %1$@ включительно, а это за концом «%2$@», размер которого %3$@. Ничего не скопировано.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "В резервной копии Top Swap по %1$@ нет FIT там, куда ведёт её указатель";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Резервная копия Top Swap по %1$@ содержит ту же FIT, но прочие байты блока отличаются, поэтому правка микрокода запрещена, пока копии не совпадут";
 "The Top Swap backup at 0x%1$@ got the same change." = "В резервную копию Top Swap по 0x%1$@ внесено то же изменение.";
@@ -914,7 +914,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder." = "В этом дампе есть сегменты, взятые из %1$@, и запись туда заменит файлы, с которыми эти сегменты сравниваются. Выберите другую папку.";
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "В этом дампе есть сегменты, взятые из %1$@, и запись туда заменит файлы, с которыми эти сегменты сравниваются. Выберите другое имя.";
 "This file is open read-only." = "Файл открыт только для чтения.";
-"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "В образе есть резервная копия Top Swap загрузочного блока по адресу %1$@, и она не совпадает с блоком, где лежит FIT, поэтому правку нельзя внести в обе копии. Ничего не изменено.";
+"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "В образе есть резервная копия Top Swap загрузочного блока в диапазоне %1$@, и она не совпадает с блоком, где лежит FIT, поэтому правку нельзя внести в обе копии. Ничего не изменено.";
 "This microcode is already in the table, in row #%1$@. Nothing was changed." = "Этот микрокод уже есть в таблице, в строке #%1$@. Ничего не изменено.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Все сегменты сольются в один. Байты не меняются — убираются только разрезы.";
 "Those bytes could not be read." = "Эти байты не удалось прочитать.";

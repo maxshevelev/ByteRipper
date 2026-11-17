@@ -881,8 +881,8 @@ final class HexView: NSView {
         if selection.isEmpty {
             return L("Offset 0x%1$@.", start) + mark + " " + sizeText
         }
-        // "through" names the last selected byte; `end` is the one after it.
-        let end = (selection.end - 1).bareHexNumber
+        // "through" names the last selected byte, not the one after it.
+        let end = (selection.start..<selection.end).lastByte.bareHexNumber
         return L("Offset 0x%1$@, %2$@ bytes selected through 0x%3$@.",
                  start, selection.count, end) + mark + " " + sizeText
     }
@@ -3885,10 +3885,10 @@ extension UInt64 {
 }
 
 extension Range where Bound == UInt64 {
-    /// The range's last byte — the inclusive end of the half-open range, so a
-    /// piece read as "first…last" names the bytes it holds, not the first byte
-    /// past them. The one place the half-open-to-inclusive conversion lives, so
-    /// every site that shows a piece's address range (the status bar, the strip
-    /// tooltip, the cut-edit header) reads the same first-to-last bytes (§21.3).
+    /// The range's last byte — the inclusive end of the half-open range, for a
+    /// sentence that names one end on its own ("through 0x…"). A range written
+    /// whole, first to last, is `hexExtent` from HexText, which does the same
+    /// conversion; the two are the only places it lives (§21.3). Only for a
+    /// range that is not empty.
     var lastByte: UInt64 { upperBound - 1 }
 }

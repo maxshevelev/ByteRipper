@@ -453,7 +453,7 @@ public enum UEFIDetail {
                 columns: [L("Name", in: language), L("Switch", in: language), L("Blocks", in: language), L("Offset in the region", in: language), L("Size", in: language)],
                 rows: layout.entries.map { entry in
                     [.init(entry.name), .init(entry.key), .init("\(entry.blockCount)"),
-                     .init(entry.range.lowerBound.hexNumber), .init((UInt64(entry.range.count)).hexNumber)]
+                     .init(entry.range.lowerBound.hexNumber), .init(entry.range.count.hexNumber)]
                 }
             ))
         }
@@ -763,7 +763,7 @@ public enum UEFIDetail {
         }
         if !change.changed.isEmpty {
             var runs = change.changed.prefix(4).map { run in
-                run.count == 1 ? "+" + run.lowerBound.hexNumber : "+" + run.lowerBound.hexNumber + "–" + (run.upperBound - 1).hexNumber
+                "+" + run.hexExtent
             }
             if change.changed.count > 4 { runs.append("…") }
             parts.append(L("changed bytes: %1$@, at %2$@", in: language, change.changedBytes, runs.joined(separator: ", ")))
@@ -801,7 +801,7 @@ public enum UEFIDetail {
             columns: [L("Range", in: language), L("Kind", in: language), L("Listed at", in: language), L("Hash", in: language)],
             rows: ranges.map { range in
                 [
-                    .init(range.range.map { "\($0.lowerBound.hexNumber)–\($0.upperBound.hexNumber)" } ?? L("Not placed", in: language)),
+                    .init(range.range.map(\.hexExtent) ?? L("Not placed", in: language)),
                     .init(range.kind.name),
                     .init(range.source.lowerBound.hexNumber),
                     verdictCell(range, in: language)
@@ -1719,7 +1719,7 @@ public enum UEFIDetail {
                       L("Length", in: language)],
             rows: mip.blocks.map { block in
                 [.init(mipBlockName(block.type, in: language)),
-                 .init((UInt64(block.offset)).hexNumber),
+                 .init(block.offset.hexNumber),
                  .init("\(block.length)")]
             }
         )
@@ -2149,8 +2149,7 @@ public enum UEFIDetail {
     /// addresses and codes stay bare hex. Named `sizeText` so it can coexist
     /// with the local `size` variables the header cases bind.
     private static func sizeText<T: BinaryInteger>(_ bytes: T) -> String {
-        let value = UInt64(truncatingIfNeeded: bytes)
-        return value == 0 ? "Empty" : "\(bytes.hexNumber) (\(value))"
+        bytes == 0 ? "Empty" : "\(bytes.hexNumber) (\(bytes.decimalNumber))"
     }
 
     private static func kindLabel(_ kind: UEFINodeKind, in language: AppLanguage) -> String {

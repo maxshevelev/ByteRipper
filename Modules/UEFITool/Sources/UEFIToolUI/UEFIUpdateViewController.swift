@@ -187,7 +187,7 @@ extension UEFIUpdateViewController: NSTableViewDataSource, NSTableViewDelegate {
         case Column.address:
             cell.textField?.stringValue = entry.range.lowerBound.hexNumber
         case Column.size:
-            cell.textField?.stringValue = (UInt64(entry.range.count)).hexNumber
+            cell.textField?.stringValue = entry.range.count.hexNumber
         default:
             cell.textField?.stringValue = entry.stateText.text
             cell.textField?.font = .systemFont(ofSize: 11)

@@ -31,6 +31,14 @@ final class HexTextTests: XCTestCase {
         XCTAssertEqual(Int.min.hexNumber, "0x8000000000000000")
     }
 
+    /// The decimal form names the same number as the hex beside it.
+    func testTheDecimalIsTheSameNumber() {
+        XCTAssertEqual(Int32(-1).decimalNumber, "4294967295")
+        XCTAssertEqual(Int(-1).decimalNumber, "18446744073709551615")
+        XCTAssertEqual(UInt64(0x100).decimalNumber, "256")
+        XCTAssertEqual(Int(0x1_0000_0000).decimalNumber, "4294967296")
+    }
+
     /// A type wider than 64 bits keeps all of its digits.
     func testAWideNegativeValueKeepsItsWidth() {
         guard #available(macOS 15, *) else { return }
@@ -44,6 +52,7 @@ final class HexTextTests: XCTestCase {
     func testARangeByItsFirstAndLastByte() {
         XCTAssertEqual((UInt64(0x100)..<0x140).hexExtent, "0x100–0x13F")
         XCTAssertEqual((UInt64(0x20)..<0x21).hexExtent, "0x20", "one byte")
+        XCTAssertEqual((UInt64(0x100)..<0x140).halfOpenHexText, "[0x100, 0x140)", "an agent's terms")
         XCTAssertEqual((UInt64(0x20)..<0x20).hexExtent, "0x20", "empty: its position")
         XCTAssertEqual((0x1_0000_0000..<UInt64(0x1_0000_1000)).hexExtent, "0x100000000–0x100000FFF")
         // A signed range wider than the type's maximum does not trap.

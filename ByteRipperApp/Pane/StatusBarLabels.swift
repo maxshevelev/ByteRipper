@@ -54,18 +54,13 @@ final class StatusLabel: NSTextField {
         let digits: String
     }
 
-    /// The hex half of the exact form — the address a size is written as, the
-    /// way the bar writes every other number.
-    static func hexSizeText(_ bytes: UInt64) -> String {
-        bytes.hexNumber
-    }
 
     /// The exact size, in the form the Details view writes one: the hex address
     /// and the decimal count in brackets beside it — "0x200000 (2097152
     /// bytes)". 64-bit formats on purpose: `%d` would truncate a file over
     /// 2 GB to its low half.
     static func exactSizeText(_ bytes: UInt64) -> String {
-        L("%1$@ (%2$@ bytes)", hexSizeText(bytes), String(bytes))
+        L("%1$@ (%2$@ bytes)", bytes.hexNumber, bytes.decimalNumber)
     }
 
     /// What a right-click on one half of the exact form puts on the clipboard:
@@ -245,7 +240,7 @@ final class StatusLabel: NSTextField {
         geometry = Geometry(
             abbreviated: start..<(size.upperBound + Self.hitSlack),
             exact: start..<(size.lowerBound + width(Self.exactSizeText(self.size)) + Self.hitSlack),
-            exactHexEnd: size.lowerBound + width(Self.hexSizeText(self.size)),
+            exactHexEnd: size.lowerBound + width(self.size.hexNumber),
             address: address)
     }
 

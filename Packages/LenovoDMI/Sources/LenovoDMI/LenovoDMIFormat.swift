@@ -73,11 +73,11 @@ public struct LenovoDMIKey: Hashable, Sendable {
 
     /// The type as the panel writes it: four hex digits, the way upstream and
     /// the firmware's own constants write it.
-    public var typeText: String { LE.hex(UInt64(type), digits: 4) }
+    public var typeText: String { type.hexNumber(digits: 4) }
 
     /// The namespace as hex bytes, for one nobody has named.
     public var namespaceText: String {
-        namespace.map { LE.hex(UInt64($0), digits: 2, prefix: false) }.joined(separator: " ")
+        namespace.map { $0.bareHexNumber(digits: 2) }.joined(separator: " ")
     }
 }
 
@@ -140,9 +140,6 @@ enum LE {
         [UInt8(value & 0xFF), UInt8(value >> 8)]
     }
 
-    static func hex(_ value: UInt64, digits: Int, prefix: Bool = true) -> String {
-        prefix ? value.hexNumber(digits: digits) : value.bareHexNumber(digits: digits)
-    }
 }
 
 extension Array where Element == UInt8 {

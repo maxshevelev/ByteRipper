@@ -208,7 +208,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unknownFileSystem(let guid):
             return "unknown volume file system \(guid)"
         case .unknownType(let structure, let code):
-            return "unknown \(structure.label) type \((UInt64(code)).hexNumber)"
+            return "unknown \(structure.label) type \(code.hexNumber)"
         case .recursionLimit:
             return "nesting is too deep to be an image"
         case .addressesUnknown:
@@ -239,10 +239,10 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unknownVendorHashFileSize(let size):
             return "AMI vendor hash table of \(size.hexNumber) bytes is of no known version"
         case .unknownRevision(let structure, let revision):
-            return "\(structure.label) revision \((UInt64(revision)).hexNumber) is later than any this parser reads"
+            return "\(structure.label) revision \(revision.hexNumber) is later than any this parser reads"
         case .unknownFlashDeviceMapEntries(let size, let format):
-            return "Insyde flash device map entries of \((UInt64(size)).hexNumber) bytes in format "
-                + "\((UInt64(format)).hexNumber) are of no known layout"
+            return "Insyde flash device map entries of \(size.hexNumber) bytes in format "
+                + "\(format.hexNumber) are of no known layout"
         case .nonUEFIDataInPadFile:
             return "padding file holds data that is not UEFI"
         case .nonUEFIDataInSections:
@@ -252,7 +252,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unreadableNvarEntry:
             return "NVAR entry cannot be read; the store is kept as padding from here"
         case .fileHeaderMarkedInvalid(let state):
-            return "file state \((UInt64(state)).hexNumber) marks its header invalid; its checksums are not checked"
+            return "file state \(state.hexNumber) marks its header invalid; its checksums are not checked"
         case .unknownDvarEntry:
             return "DVAR entry of an unknown state, flags or type; the store is kept as padding from here"
         case .dvarNamespaceMissing:

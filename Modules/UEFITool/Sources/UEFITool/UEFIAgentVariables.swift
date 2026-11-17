@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -338,8 +339,8 @@ public enum UEFIAgentVariables {
             "against_size": .count(b.count),
             "differing_bytes": .count(runs.reduce(0) { $0 + $1.count }),
             "runs": .array(runs.prefix(runLimit).map { run in
-                .string(run.count == 1 ? (UInt64(run.lowerBound)).hexNumber
-                        : "\((UInt64(run.lowerBound)).hexNumber)–\((UInt64(run.upperBound)).hexNumber)")
+                .string(run.count == 1 ? run.lowerBound.hexNumber
+                        : "\(run.lowerBound.hexNumber)–\(run.upperBound.hexNumber)")
             }),
             "entry": .string(mine.entry.id.description),
             "against_entry": .string(theirs.entry.id.description)

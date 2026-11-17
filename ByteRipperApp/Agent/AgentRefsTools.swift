@@ -1,6 +1,7 @@
 import AgentKit
 import ByteRipperCore
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 import UEFITool
@@ -173,7 +174,7 @@ final class AgentRefsTools {
             // An address outside the BIOS region has no bus or region form.
             guard bios.contains(file) || names.contains("file") else {
                 throw AgentToolError("\(file.hexNumber) is not inside the BIOS region "
-                    + "\(bios.lowerBound.hexNumber)–\(bios.upperBound.hexNumber); "
+                    + "\(bios.halfOpenHexText); "
                     + "only the `file` form means anything for it.")
             }
             let made = Self.forms(address: address, relativeToRegion: relative, bios: bios,

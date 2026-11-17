@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -81,7 +82,7 @@ public enum UEFIAgentRegions {
             guard case .object(var members) = UEFIAgentQueries.summary(of: entry.node, in: tree) else { continue }
             members["node"] = members.removeValue(forKey: "id")
             members["children"] = nil
-            if let range = entry.node.fileRange { members["size"] = .string((UInt64(range.count)).hexNumber) }
+            if let range = entry.node.fileRange { members["size"] = .string(range.count.hexNumber) }
             if let inner = entry.inner {
                 members["inner"] = ["node": .string(inner.id.description),
                                     "name": .string(UEFITreeDisplay.ownName(of: inner) ?? inner.name)]

@@ -451,7 +451,7 @@ public enum FITPresenter {
         if !table.checksumIsChecked {
             parts.append(L("checksum unused", in: language))
         } else if table.checksumIsCorrect {
-            parts.append(L("checksum %1$@", in: language, (UInt64(table.storedChecksum)).hexNumber(digits: 2)))
+            parts.append(L("checksum %1$@", in: language, table.storedChecksum.hexNumber(digits: 2)))
             // A wrong checksum is not restated here: it is a problem, and the
             // list below already says so in red, where it is meant to be read.
         }

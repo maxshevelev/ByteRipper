@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 

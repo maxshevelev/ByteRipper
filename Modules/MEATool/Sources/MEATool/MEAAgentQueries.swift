@@ -277,7 +277,7 @@ public enum MEAAgentQueries {
         case .filesNotNamed:
             return "the EFS volume was read, but its files are known only from the firmware database's file table, which was not available"
         case .unreadable(let offset):
-            return "unreadable: the partition table lists an EFS partition at \((UInt64(offset)).hexNumber), but no EFS volume could be read there"
+            return "unreadable: the partition table lists an EFS partition at \(offset.hexNumber), but no EFS volume could be read there"
         case .noPartition:
             return "no EFS partition"
         }

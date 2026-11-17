@@ -1,6 +1,7 @@
 import AgentKit
 import ByteRipperCore
 import Foundation
+import HexText
 import LenovoDMI
 import Localization
 import PartCodec
@@ -152,8 +153,8 @@ final class AgentFindTools {
         let offset = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
         guard offset < end, end <= UInt64(scope.count) else {
-            throw AgentToolError("The range \(offset.hexNumber)–\(end.hexNumber) is not inside "
-                + "\(place.named), which is \((UInt64(scope.count)).hexNumber) bytes long.")
+            throw AgentToolError("The range \((offset..<max(offset, end)).halfOpenHexText) is not inside "
+                + "\(place.named), which is \(scope.count.hexNumber) bytes long.")
         }
         let range = (scope.lowerBound + offset)..<(scope.lowerBound + end)
         envelope["range"] = AgentHostTools.range(offset..<end)

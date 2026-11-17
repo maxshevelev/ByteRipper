@@ -387,7 +387,7 @@ public enum UEFIAgentQueries {
         let name = UEFITreeDisplay.ownName(of: node) ?? node.name
         guard isPlaceholder(name, of: node) else { return name }
         if let range = node.fileRange {
-            return "\(name), \(range.lowerBound.hexNumber)–\(range.upperBound.hexNumber)"
+            return "\(name), \(range.hexExtent)"
         }
         // In a buffer: the nearest node above with a name of its own.
         if let tree {

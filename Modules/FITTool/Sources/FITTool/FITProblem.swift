@@ -97,15 +97,15 @@ public struct FITProblem: Equatable, Sendable {
         case .tableRunsPastTheEnd(let entries):
             return L("The header claims %1$@ entries, which runs past the end of the image", entries)
         case .firstEntryIsNotTheHeader(let type):
-            return L("The first entry is type %1$@, not the header", (UInt64(type)).hexNumber)
+            return L("The first entry is type %1$@, not the header", type.hexNumber)
         case .secondHeader:
             return L("A second header entry, where there may be only one")
         case .typesOutOfOrder(let previous, let type):
             return L("Type %1$@ after type %2$@: entries must not decrease in type",
-                     (UInt64(type)).hexNumber, (UInt64(previous)).hexNumber)
+                     type.hexNumber, previous.hexNumber)
         case .checksumMismatch(let stored, let computed):
             return L("The table checksum is %1$@, and should be %2$@",
-                     (UInt64(stored)).hexNumber, (UInt64(computed)).hexNumber)
+                     stored.hexNumber, computed.hexNumber)
         case .noMicrocodeEntry:
             return L("No microcode entry, and there must be at least one")
         case .addressOutsideTheImage(let address):
@@ -115,7 +115,7 @@ public struct FITProblem: Equatable, Sendable {
         case .notMicrocodeAtTheAddress(let address):
             return L("No microcode header at %1$@, and it is not an empty slot", address.hexNumber)
         case .reservedIsNotZero(let value):
-            return L("The reserved byte is %1$@, and should be zero", (UInt64(value)).hexNumber)
+            return L("The reserved byte is %1$@, and should be zero", value.hexNumber)
         case .topSwapBackupHasNoTable(let backupAt):
             return L("The Top Swap backup at %1$@ has no FIT where its pointer leads", backupAt.hexNumber)
         case .topSwapTableDiffers(let at):

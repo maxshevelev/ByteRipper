@@ -5254,10 +5254,10 @@ final class MainViewController: NSViewController {
         }
         guard range.upperBound <= destination.fileSize else {
             presentAlert(title: name,
-                         message: L("The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied.",
-                                    range.upperBound.hexNumber,
+                         message: L("The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied.",
+                                    range.lastByte.hexNumber,
                                     destination.status.fileName,
-                                    destination.fileSize.hexNumber))
+                                    StatusLabel.exactSizeText(destination.fileSize)))
             return
         }
         do {

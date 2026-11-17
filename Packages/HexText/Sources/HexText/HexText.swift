@@ -20,14 +20,20 @@ extension BinaryInteger {
     /// (every offset field adds the `0x` on its own) or a sentence that writes
     /// the prefix itself.
     public var bareHexNumber: String {
-        guard Self.isSigned, self < 0 else { return String(self, radix: 16, uppercase: true) }
-        // `words` is the two's complement, least significant first, sign-
-        // extended to whole words: write them all, keep the type's own digits.
-        let all = words.reversed().map { word in
-            let digits = String(word, radix: 16, uppercase: true)
-            return String(repeating: "0", count: UInt.bitWidth / 4 - digits.count) + digits
-        }.joined()
-        return String(all.suffix((bitWidth + 3) / 4))
+        String(asUnsigned, radix: 16, uppercase: true)
+    }
+
+    /// The same number `hexNumber` writes, in decimal: `0xFFFFFFFF
+    /// (4294967295)` for an `Int32` of -1, never `(-1)` beside it — the two
+    /// halves of a size cell name one number.
+    public var decimalNumber: String {
+        String(asUnsigned)
+    }
+
+    /// The bits as an unsigned number of the same width: a negative value's
+    /// two's complement, any other value itself.
+    private var asUnsigned: Magnitude {
+        Magnitude(truncatingIfNeeded: self)
     }
 
     /// `0x0005` for `digits` 4: padded with zeros to a field's width, never
@@ -54,5 +60,12 @@ extension Range where Bound: BinaryInteger {
         // maximum would overflow the subtraction.
         guard lowerBound < upperBound, lowerBound + 1 < upperBound else { return lowerBound.hexNumber }
         return "\(lowerBound.hexNumber)–\((upperBound - 1).hexNumber)"
+    }
+
+    /// `[0x100, 0x140)`: a range in an agent's own terms, end exclusive, as
+    /// its protocol and its arguments give one. Written as an interval so it
+    /// is never read as the person's `0x100–0x13F`.
+    public var halfOpenHexText: String {
+        "[\(lowerBound.hexNumber), \(upperBound.hexNumber))"
     }
 }

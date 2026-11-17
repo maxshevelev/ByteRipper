@@ -402,7 +402,7 @@ public enum UEFIRebuild {
                 guard newSpace.count == original.count else {
                     throw Refusal(
                         L("“%1$@” would inflate to 0x%2$@ bytes, and the BIOS directory gives 0x%3$@. The directory is not rewritten, so the image has to keep its size.",
-                          section.name, (UInt64(newSpace.count)).bareHexNumber, (UInt64(original.count)).bareHexNumber)
+                          section.name, newSpace.count.bareHexNumber, original.count.bareHexNumber)
                     )
                 }
                 let caution = Refusal.Caution.pspBIOSImage(name: section.name)
@@ -790,7 +790,7 @@ public enum UEFIRebuild {
                 }
                 throw Refusal(
                     L("“%1$@” has 0x%2$@ bytes free where it can take room, and the change needs 0x%3$@.",
-                      volume.name, (absorbEnd - absorbStart).bareHexNumber, (UInt64(newAbsorbStart - Int64(absorbStart))).bareHexNumber)
+                      volume.name, (absorbEnd - absorbStart).bareHexNumber, (newAbsorbStart - Int64(absorbStart)).bareHexNumber)
                 )
             }
             if let pad = padBeforeTop {

@@ -1,5 +1,6 @@
 import Cocoa
 import AgentKit
+import HexText
 import Localization
 import ToolModuleKit
 
