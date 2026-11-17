@@ -338,10 +338,9 @@ public enum UEFIAgentVariables {
             "size": .count(a.count),
             "against_size": .count(b.count),
             "differing_bytes": .count(runs.reduce(0) { $0 + $1.count }),
-            "runs": .array(runs.prefix(runLimit).map { run in
-                .string(run.count == 1 ? run.lowerBound.hexNumber
-                        : "\(run.lowerBound.hexNumber)–\(run.upperBound.hexNumber)")
-            }),
+            // Half-open, as the protocol gives every range, and written as an
+            // interval so it is never read as the person's first–last dash.
+            "runs": .array(runs.prefix(runLimit).map { .string($0.halfOpenHexText) }),
             "entry": .string(mine.entry.id.description),
             "against_entry": .string(theirs.entry.id.description)
         ]

@@ -60,7 +60,8 @@ import ZoneSketch
         name.width = 150
         let range = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("range"))
         range.title = L("Offsets")
-        range.width = 130
+        // Wide enough for a range past 4 GB, `0x100000000–0x1FFFFFFFF`.
+        range.width = 170
         table.addTableColumn(name)
         table.addTableColumn(range)
 

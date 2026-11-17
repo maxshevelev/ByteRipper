@@ -60,6 +60,15 @@ final class HexTextTests: XCTestCase {
         XCTAssertEqual((-5..<Int.max).hexExtent, "0xFFFFFFFFFFFFFFFB–0x7FFFFFFFFFFFFFFE")
     }
 
+    /// The digit count agrees with the digits written.
+    func testTheDigitCountMatchesTheText() {
+        for value: UInt64 in [0, 1, 0xF, 0x10, 0xFFFF_FFFF, 0x1_0000_0000, .max] {
+            XCTAssertEqual(value.hexDigitCount, value.bareHexNumber.count, "\(value)")
+        }
+        XCTAssertEqual(Int32(-1).hexDigitCount, 8)
+        XCTAssertEqual(Int(0x1FF).hexDigitCount, 3)
+    }
+
     /// Padded to a field's width, and never cut short of it.
     func testPaddedToAWidth() {
         XCTAssertEqual(UInt64(5).hexNumber(digits: 4), "0x0005")

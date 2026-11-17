@@ -36,6 +36,18 @@ extension BinaryInteger {
         Magnitude(truncatingIfNeeded: self)
     }
 
+    /// How many digits `bareHexNumber` has, counted from the bits rather than
+    /// by writing the string: for a column width asked for on every row.
+    public var hexDigitCount: Int {
+        var rest = Magnitude(truncatingIfNeeded: self)
+        var digits = 1
+        while rest > 0xF {
+            rest >>= 4
+            digits += 1
+        }
+        return digits
+    }
+
     /// `0x0005` for `digits` 4: padded with zeros to a field's width, never
     /// cut — a value wider than the field shows every digit it has.
     public func hexNumber(digits: Int) -> String {

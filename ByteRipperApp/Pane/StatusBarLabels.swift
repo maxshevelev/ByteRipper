@@ -73,7 +73,7 @@ final class StatusLabel: NSTextField {
     /// and every offset field in the app takes it on the way in — so a copied
     /// `0x200000` would be pasted as `0x0x200000` or rejected outright.
     static func copyText(_ bytes: UInt64, as form: SizeForm) -> String {
-        form == .hex ? bytes.bareHexNumber : String(bytes)
+        form == .hex ? bytes.bareHexNumber : bytes.decimalNumber
     }
 
     /// The room the bar gives the readout, asked for rather than handed over.

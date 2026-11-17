@@ -604,7 +604,7 @@
 "OEM Configuration" = "OEM-конфигурация";
 "Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end." = "Адрес %1$@ за концом %2$@, размер которого %3$@. Переход в конец.";
 "Offset %1$@ is beyond the end of the file(s), whose size is %2$@. Moved to the end." = "Адрес %1$@ за концом файла(ов), размер которых %2$@. Переход в конец.";
-"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Адрес 0x%1$@, выделено %2$@ байт по адрес 0x%3$@.";
+"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Адрес 0x%1$@, выделено %2$@ байт, до адреса 0x%3$@ включительно.";
 "Offset 0x%1$@." = "Адрес 0x%1$@.";
 "OK" = "OK";
 "One panel was opened out of it and will lose its way back. Its bytes stay as they are; only the way back goes." = "Из неё открыта одна панель, и она потеряет обратный путь: байты в ней остаются прежними, утрачивается только связь с источником.";
@@ -1288,7 +1288,7 @@
 "%1$@ bytes differ" = "Отличается байт: %1$@";
 "%1$@ bytes written in %2$@ parts." = "Записано байт: %1$@, областей: %2$@.";
 "%1$@ of %2$@ parts identical. To write: %3$@ parts, %4$@ bytes. Kept as they are: %5$@." = "Совпадает областей: %1$@ из %2$@. К записи: областей — %3$@, байт — %4$@. Остаются без изменений: %5$@.";
-"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@–%5$@." = "%1$@: обновление AMI BIOS Guard для %2$@, блоков: %3$@. BIOS-регион этого дампа: %4$@–%5$@.";
+"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@." = "%1$@: обновление AMI BIOS Guard для %2$@, блоков: %3$@. BIOS-регион этого дампа: %4$@.";
 "Block %1$@ of the update file does not read as a block." = "Блок %1$@ файла обновления не читается как блок.";
 "Board data; %1$@ bytes differ" = "Данные платы; отличается байт: %1$@";
 "Board data; empty in the update" = "Данные платы; в обновлении пусто";

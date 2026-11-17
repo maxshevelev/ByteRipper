@@ -152,8 +152,12 @@ final class AgentFindTools {
         // `offset` and `end` are the document's addresses.
         let offset = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
-        guard offset < end, end <= UInt64(scope.count) else {
-            throw AgentToolError("The range \((offset..<max(offset, end)).halfOpenHexText) is not inside "
+        guard offset < end else {
+            throw AgentToolError("`end` \(end.hexNumber) is not after `offset` \(offset.hexNumber): "
+                + "the range holds no bytes.")
+        }
+        guard end <= UInt64(scope.count) else {
+            throw AgentToolError("The range \((offset..<end).halfOpenHexText) is not inside "
                 + "\(place.named), which is \(scope.count.hexNumber) bytes long.")
         }
         let range = (scope.lowerBound + offset)..<(scope.lowerBound + end)
@@ -413,7 +417,7 @@ final class AgentFindTools {
                     + "do not fit in \(place.named), which is \(size.hexNumber) bytes long.")
             }
             let source = offset..<(offset + length)
-            let defaultName = "\(offset.hexNumber)-\(source.upperBound.hexNumber)"
+            let defaultName = source.hexExtent
             let name = named ?? defaultName
             // As Open Zone: a stretch that is a structure of the image goes
             // back through the rebuild planner, any other as it is.

@@ -58,9 +58,8 @@ import UEFITool
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         let region = comparison.region
         let source = ToolWrappingLabel(string: L(
-            "%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@–%5$@.",
-            fileName, comparison.platform, blockCount,
-            region.lowerBound.hexNumber, (region.upperBound - 1).hexNumber
+            "%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@.",
+            fileName, comparison.platform, blockCount, region.hexExtent
         ))
         source.font = .systemFont(ofSize: 11)
         let scope = ToolWrappingLabel(string: L(

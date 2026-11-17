@@ -254,8 +254,8 @@ final class AgentEditTools {
         case .refused(let refusal):
             throw AgentToolError("\(refusal.title.text(in: .english)). \(refusal.message.text(in: .english)) Nothing was written.")
         case .sourceChanged:
-            throw AgentToolError("The bytes \(place.named) was opened from (\(sourceBefore.lowerBound.hexNumber)–"
-                + "\(sourceBefore.upperBound.hexNumber) in \(parentName)) have changed there since. "
+            throw AgentToolError("The bytes \(place.named) was opened from (\(sourceBefore.halfOpenHexText) "
+                + "in \(parentName)) have changed there since. "
                 + "Updating would overwrite those changes. Nothing was written. Ask the person; call again with "
                 + "`overwrite_changed_source: true` only if they agree.")
         case .parentChanged:

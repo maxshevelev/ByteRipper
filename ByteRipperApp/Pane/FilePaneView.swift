@@ -1766,7 +1766,7 @@ final class FilePaneView: NSView {
         // file's largest address — the last piece's exclusive end, which can be
         // the file's own size — so the offset and the segment's bounds read as
         // aligned columns, zero-padded to that width (§21.3).
-        let width = status.fileSize.bareHexNumber.count
+        let width = status.fileSize.hexDigitCount
         func address(_ value: UInt64) -> String {
             value.bareHexNumber(digits: width)
         }

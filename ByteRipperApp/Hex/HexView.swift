@@ -675,7 +675,7 @@ final class HexView: NSView {
 
     private func makeLayout() -> HexLayout {
         let fileSize = dataSource?.fileSize ?? 0
-        let digits = max(8, fileSize.bareHexNumber.count)
+        let digits = max(8, fileSize.hexDigitCount)
         return HexLayout(charWidth: charWidth, rowHeight: rowHeight,
                          offsetColumnChars: digits, wordSize: WordSize.current.rawValue)
     }
