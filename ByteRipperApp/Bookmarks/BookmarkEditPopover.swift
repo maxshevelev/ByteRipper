@@ -51,6 +51,10 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
     /// What a refused Return sounds like. A closure so a test can hear it: a
     /// beep leaves no trace of its own.
     var beep: () -> Void = { NSSound.beep() }
+    /// Whether the app is the active one — asked when the popover is told to
+    /// close. A closure so a test can say, the test host's own state being
+    /// whatever the run left it.
+    var isAppActive: () -> Bool = { NSApp.isActive }
 
     /// The popover this controller is shown in, so committing or cancelling can
     /// close it. Weak: the popover owns the controller.
@@ -208,8 +212,13 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
     /// it without a word — the bookmark keeps its old row and the new name, the address typed lost — from a field that never turned red.
     /// The popover stays, and the field turns red; Return, Esc and a finished
     /// sum close it as before.
+    ///
+    /// Switching to another app asks the same question, with no click behind
+    /// it: the popover stays then too — behind the other app, the sum kept —
+    /// but without a beep or a red field for a key that was not about it.
     func popoverShouldClose(_ popover: NSPopover) -> Bool {
         guard !settled, offsetField.evaluation == .failure(.incomplete) else { return true }
+        guard isAppActive() else { return false }
         updateOffsetValidation(acting: true)
         beep()
         return false

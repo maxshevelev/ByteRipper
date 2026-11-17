@@ -24,7 +24,8 @@ import Foundation
 public struct OffsetExpression: Equatable, Sendable {
     public enum ParseError: Error, Equatable, Sendable {
         /// Not a sum of numbers: a stray character, an operator with nothing
-        /// before it, two operators in a row.
+        /// before it, two operators in a row — or a term too large to be a
+        /// number at all, which is as much a typo as a stray character.
         case invalidInput
         /// A sum still being typed: it ends at an operator, or at a term that is
         /// so far only its `0x`. Told apart from `invalidInput` so a field
@@ -32,7 +33,7 @@ public struct OffsetExpression: Equatable, Sendable {
         case incomplete
         /// The sum comes to less than zero.
         case negative
-        /// A term, or the sum, does not fit in 64 bits.
+        /// The sum does not fit in 64 bits, though every term does.
         case outOfRange
     }
 
@@ -87,7 +88,9 @@ public struct OffsetExpression: Equatable, Sendable {
             do {
                 terms.append(Term(isSubtracted: subtracting, value: try OffsetParser.parse(piece)))
             } catch OffsetParser.ParseError.outOfRange {
-                throw ParseError.outOfRange
+                // A term too large is a mistake in that term, not a result
+                // that overflowed: the field's own "invalid" names it.
+                throw ParseError.invalidInput
             } catch {
                 // The last term may simply not be finished: nothing after the
                 // operator yet, or a prefix waiting for its digits.

@@ -116,6 +116,7 @@ final class AddressField: CaretAtEndTextField {
         ControlHelp.describe(button, L("Addresses and sums entered before"))
         addSubview(button)
         historyButton = button
+        presentHistory = { [unowned self] menu, point in popUpHistory(menu, at: point) }
 
         stringValue = text
     }
@@ -159,23 +160,19 @@ final class AddressField: CaretAtEndTextField {
     /// The sentence for a sum that comes to no address, for a form that says
     /// what is wrong in words. Nil when the text names a number, and when the
     /// form's own "invalid" message — which names the field — is the right
-    /// one: text that is no number, or a lone number too large, there being no
-    /// sum to have a result. A form that waits for an unfinished sum while it
-    /// is typed asks only once the user acts on it.
+    /// one: text that is no number, a number too large among them. A form that
+    /// waits for an unfinished sum while it is typed asks only once the user
+    /// acts on it.
     var problemMessage: String? {
         guard case .failure(let error) = evaluation else { return nil }
         switch error {
         case .negative: return L("The result is negative.")
-        case .outOfRange: return isTypedAsSum ? L("The result does not fit in 64 bits.") : nil
+        case .outOfRange: return L("The result does not fit in 64 bits.")
         case .incomplete: return L("The sum is not finished.")
         case .invalidInput: return nil
         }
     }
 
-    /// The text has an operator in it — whatever its terms come to.
-    private var isTypedAsSum: Bool {
-        stringValue.contains { $0 == "+" || $0 == "-" }
-    }
 
     /// Puts what the field holds into the list of recent entries — called by the
     /// form once it has acted on it. A sum is always worth keeping; a lone
@@ -334,11 +331,20 @@ final class AddressField: CaretAtEndTextField {
         // popover a window of its own beside it: AppKit shows a menu there and
         // lets a row be chosen, and then does not deliver the row's action to
         // a target outside the modal window — the field stayed as it was.
+        guard let entry = presentHistory(menu, below) else { return }
+        pick(entry)
+    }
+
+    /// Shows the list at a point under the field and returns the entry
+    /// chosen, or nil. Swappable so a test can stand in for the user: a menu
+    /// being tracked cannot be driven from one.
+    var presentHistory: (NSMenu, NSPoint) -> String? = { _, _ in nil }
+
+    private func popUpHistory(_ menu: NSMenu, at point: NSPoint) -> String? {
         let choice = HistoryChoice()
         menu.delegate = choice
-        guard menu.popUp(positioning: nil, at: below, in: self),
-              let entry = choice.item?.representedObject as? String else { return }
-        pick(entry)
+        guard menu.popUp(positioning: nil, at: point, in: self) else { return nil }
+        return choice.item?.representedObject as? String
     }
 
     /// Fills the field with an entry of the list, as if it had been typed: the

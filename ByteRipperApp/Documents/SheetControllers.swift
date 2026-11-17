@@ -429,13 +429,15 @@ final class SelectBlockSheetController: SheetViewController {
         endField.isEnabled = !useLength
         lengthField.isEnabled = useLength
         // A sum read back from the field just switched off goes, and the one
-        // in the field switched on takes its place; Start's stays. An error
-        // already shown is checked again — but the switch does not raise one
-        // for a field nobody has typed in yet.
+        // in the field switched on takes its place; Start's stays. The fields
+        // are checked again when an error is already shown or the field
+        // switched to holds something typed — but the switch does not raise
+        // an error over a field nobody has typed in yet.
         if lastEditedAddressField === (useLength ? endField : lengthField) {
             lastEditedAddressField = secondField
         }
-        if errorLabel.isHidden || errorLabel.stringValue.isEmpty {
+        let untouched = ["", "0x"].contains(secondField.stringValue.trimmingCharacters(in: .whitespaces).lowercased())
+        if (errorLabel.isHidden || errorLabel.stringValue.isEmpty) && untouched {
             showNote(liveNote())
         } else {
             updateLiveError()

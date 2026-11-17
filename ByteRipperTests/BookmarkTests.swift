@@ -645,6 +645,7 @@ final class BookmarkTests: XCTestCase {
         controller.loadViewIfNeeded()
         var beeps = 0
         controller.beep = { beeps += 1 }
+        controller.isAppActive = { true }
         controller.offsetField.stringValue = "0x20 + 0x"
         XCTAssertFalse(controller.popoverShouldClose(NSPopover()))
         XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)

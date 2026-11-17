@@ -35,20 +35,18 @@ In comparison mode the jump moves **both** panes, which are locked to the same a
 
 ## A sum in place of a number
 
-Every field that takes an address or a length also takes a sum — numbers joined by `+` and `-`, in either base. This applies to Go To, **Edit ▸ Select Block…**, **Edit ▸ Add Cut…** and the address of a bookmark.
+Every field that takes an address or a length also takes a sum of numbers joined by `+` and `-`, hex and decimal mixed: in Go To, **Edit ▸ Select Block…**, **Edit ▸ Add Cut…** and a bookmark's address.
 
 - `0x1FE000 + 4096` — an address in hex plus a length in decimal.
-- `0x2C0000 - 0x400 - 16` — any number of terms, taken from left to right.
+- `0x2C0000 - 0x400 - 16` — any number of terms.
 
-The sum remains in the field as it was typed. Its result is shown at the right edge of the field in heavier type, and the command acts on that result. Go To and Select Block also repeat the sum below the field, with every term in hex and the result in both bases: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
+The sum stays in the field as typed, so it can be checked and corrected. Its result is shown in bold at the right edge of the field, and the command uses the result. Go To and Select Block also show the whole sum in hex below the field: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
 
-! A term without the `0x` prefix that consists of decimal digits only is decimal: `0x1FE000 + 40` adds forty, not `0x40`. The line below the field shows how each term was read. For the same reason a single number typed without the prefix shows its hex value at the right edge.
+! A number without `0x` is decimal: `0x1FE000 + 40` adds forty, not `0x40`. Check the line below the field when in doubt.
 
-Brackets and multiplication are not supported. A sum whose result is negative, or does not fit in 64 bits, is refused.
+Brackets and multiplication are not supported. A command is not carried out while the sum is unfinished, such as `0x1FE000 +`, or its result is negative.
 
-A sum that ends in `+` or `-` is not marked as an error while it is being typed. When the command is confirmed with it, the field reports that the sum is not finished. A cut or bookmark panel clicked away from with such a sum does not close: the field turns red, and the sum stays to be completed or the panel to be closed with Esc.
-
-The arrow button at the right edge of the field, or **↓**, lists the last ten entries. The list is shared by all of these fields: it holds the addresses Go To has jumped to and every sum a command was carried out with, each sum with its result. Choosing an entry places it in the field, where it can be checked and corrected; nothing happens until the command is confirmed.
+The arrow at the right edge of the field, or **↓**, lists recent addresses and sums. Choosing one puts it in the field; nothing happens until the command is confirmed.
 
 ## Back to where you were
 

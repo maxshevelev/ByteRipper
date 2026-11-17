@@ -29,6 +29,7 @@ final class CutEditPopoverTests: XCTestCase {
             onCommit: commit)
         controller.loadViewIfNeeded()
         controller.beep = { beepCount += 1 }
+        controller.isAppActive = { true }
         return (controller, { beepCount })
     }
 
@@ -129,6 +130,52 @@ final class CutEditPopoverTests: XCTestCase {
         controller.offsetField.stringValue = "0x4 +"
         controller.cancel()
         XCTAssertTrue(controller.popoverShouldClose(popover), "Esc closes it whatever the field holds")
+    }
+
+    /// Switching to another app is not a click outside: the popover stays,
+    /// the sum kept, with no beep and no red field.
+    func testSwitchingAppsKeepsAnUnfinishedSumQuietly() {
+        let (controller, beeps) = makeController()
+        controller.isAppActive = { false }
+        controller.offsetField.stringValue = "0x4 + 0x"
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+
+        XCTAssertFalse(controller.popoverShouldClose(NSPopover()))
+        XCTAssertTrue(controller.offsetField.textColor == .labelColor)
+        XCTAssertEqual(beeps(), 0)
+        XCTAssertEqual(controller.offsetField.stringValue, "0x4 + 0x")
+    }
+
+    /// An address past 4 GB comes into the field whole, not cut to 32 bits.
+    func testAPrefillPastFourGigabytesIsWhole() {
+        let controller = CutEditPopoverController(
+            prefillOffset: 0x1_2345_6780, fileSize: 0x2_0000_0000,
+            isAlreadyACut: { _ in false }, onCommit: { _, _ in })
+        controller.loadViewIfNeeded()
+        XCTAssertEqual(controller.offsetField.stringValue, "0x123456780")
+        XCTAssertEqual(controller.offsetField.value, 0x1_2345_6780)
+    }
+
+    /// ↓ in the address field opens its list through the field's own editor,
+    /// once the popover — which has no use for the key — has declined it; and
+    /// the entry chosen fills the field.
+    func testDownInTheAddressFieldOpensTheList() throws {
+        let (controller, _) = makeController()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        window.contentView = controller.view
+        window.makeFirstResponder(controller.offsetField)
+        var shown: NSMenu?
+        controller.offsetField.presentHistory = { menu, _ in
+            shown = menu
+            return "0x4 + 2"
+        }
+        try XCTUnwrap(controller.offsetField.currentEditor() as? NSTextView)
+            .doCommand(by: #selector(NSResponder.moveDown(_:)))
+        XCTAssertNotNil(shown)
+        XCTAssertEqual(controller.offsetField.stringValue, "0x4 + 2")
+        XCTAssertEqual(controller.offsetField.value, 6)
     }
 
     /// A decimal offset is parsed too — the field accepts whatever the dialogs

@@ -154,6 +154,31 @@ final class AddressFieldTests: XCTestCase {
         XCTAssertTrue(editor.undoManager?.canUndo ?? false, "the pick can be taken back")
     }
 
+    /// A form's delegate that takes ↓ for itself gets it first: the list
+    /// stays shut.
+    func testADelegateThatTakesDownKeepsTheListShut() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 80),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        let field = AddressField(text: "0x")
+        field.frame = NSRect(x: 20, y: 20, width: 300, height: 22)
+        try XCTUnwrap(window.contentView).addSubview(field)
+        let taker = DownTaker()
+        field.delegate = taker
+        var shown = 0
+        field.presentHistory = { _, _ in shown += 1; return nil }
+        window.makeFirstResponder(field)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+
+        editor.doCommand(by: #selector(NSResponder.moveDown(_:)))
+        XCTAssertEqual(taker.taken, 1)
+        XCTAssertEqual(shown, 0)
+
+        taker.takes = false
+        editor.doCommand(by: #selector(NSResponder.moveDown(_:)))
+        XCTAssertEqual(shown, 1, "declined, the key opens the list")
+    }
+
     /// An entry picked while the field is being edited is an edit of its own:
     /// it is announced as typing is, and **⌘Z** brings back what was typed.
     func testAPickInTheEditorIsUndoable() throws {
@@ -215,5 +240,17 @@ final class AddressFieldTests: XCTestCase {
         XCTAssertTrue(field.currentEditor() === editor, "still being edited")
         XCTAssertEqual(field.frame.width, 300)
         XCTAssertEqual(field.stringValue, "0x1FE000 + 40")
+    }
+}
+
+/// A form delegate that wants ↓ for itself — or, told so, does not.
+private final class DownTaker: NSObject, NSTextFieldDelegate {
+    var takes = true
+    private(set) var taken = 0
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard takes, commandSelector == #selector(NSResponder.moveDown(_:)) else { return false }
+        taken += 1
+        return true
     }
 }

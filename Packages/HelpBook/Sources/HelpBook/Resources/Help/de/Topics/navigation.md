@@ -1,4 +1,4 @@
-@source-sha 82b6c0d6e399a3c95a527c86ad27cc8c49e210fee36404e6b2361487ee39da00
+@source-sha ab35b79011c2ef1d7cdb855a388c617690fbcab586febea1aac421038f0d354f
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -23,20 +23,18 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse
 
 ## Eine Summe statt einer Zahl
 
-Jedes Feld, das eine Adresse oder eine Länge erwartet, nimmt auch eine Summe an: Zahlen, verbunden durch `+` und `-`, in beliebiger Basis. Das gilt für „Gehe zu“, für **Bearbeiten ▸ Block auswählen…** und **Bearbeiten ▸ Schnitt hinzufügen…** sowie für die Adresse eines Lesezeichens.
+Jedes Feld, das eine Adresse oder eine Länge erwartet, nimmt auch eine Summe an – Zahlen, verbunden durch `+` und `-`, hexadezimal und dezimal gemischt: in „Gehe zu“, in **Bearbeiten ▸ Block auswählen…**, **Bearbeiten ▸ Schnitt hinzufügen…** und in der Adresse eines Lesezeichens.
 
 - `0x1FE000 + 4096` — eine Adresse hexadezimal plus eine Länge dezimal.
-- `0x2C0000 - 0x400 - 16` — beliebig viele Glieder, von links nach rechts gerechnet.
+- `0x2C0000 - 0x400 - 16` — beliebig viele Glieder.
 
-Die Summe bleibt so im Feld stehen, wie sie eingegeben wurde. Ihr Ergebnis steht am rechten Rand des Feldes in kräftigerer Schrift, und der Befehl wird auf dieses Ergebnis angewendet. „Gehe zu“ und „Block auswählen“ wiederholen die Summe zusätzlich unter dem Feld, jedes Glied hexadezimal und das Ergebnis in beiden Basen: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
+Die Summe bleibt so im Feld stehen, wie sie eingegeben wurde, und lässt sich prüfen und korrigieren. Ihr Ergebnis steht fett am rechten Rand des Feldes, und der Befehl verwendet dieses Ergebnis. „Gehe zu“ und „Block auswählen“ zeigen die ganze Summe zusätzlich hexadezimal unter dem Feld: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
 
-! Ein Glied ohne das Präfix `0x`, das nur aus Dezimalziffern besteht, ist dezimal: `0x1FE000 + 40` addiert vierzig, nicht `0x40`. Die Zeile unter dem Feld zeigt, wie jedes Glied gelesen wurde. Aus demselben Grund zeigt eine einzelne Zahl, die ohne Präfix eingegeben wurde, am rechten Rand ihren Hexadezimalwert.
+! Eine Zahl ohne `0x` ist dezimal: `0x1FE000 + 40` addiert vierzig, nicht `0x40`. Im Zweifel hilft die Zeile unter dem Feld.
 
-Klammern und Multiplikation werden nicht unterstützt. Eine Summe mit negativem Ergebnis oder mit einem Ergebnis, das nicht in 64 Bit passt, wird abgewiesen.
+Klammern und Multiplikation werden nicht unterstützt. Ein Befehl wird nicht ausgeführt, solange die Summe unvollständig ist, etwa `0x1FE000 +`, oder ihr Ergebnis negativ ist.
 
-Eine Summe, die auf `+` oder `-` endet, gilt während der Eingabe nicht als Fehler. Wird der Befehl mit ihr bestätigt, meldet das Formular, dass die Summe unvollständig ist. Das Popover für einen Schnitt oder ein Lesezeichen schließt sich bei einem Klick außerhalb dann nicht: Das Adressfeld wird rot markiert, und die Summe kann ergänzt oder das Popover mit Esc geschlossen werden.
-
-Die Pfeiltaste am rechten Rand des Feldes oder **↓** öffnet die Liste der letzten zehn Einträge. Die Liste gilt für alle diese Felder gemeinsam: Sie enthält die Adressen, zu denen „Gehe zu“ gesprungen ist, und jede Summe, mit der ein Befehl ausgeführt wurde, jeweils mit ihrem Ergebnis. Ein gewählter Eintrag wird in das Feld übernommen, wo er geprüft und korrigiert werden kann; bis zur Bestätigung des Befehls geschieht nichts.
+Der Pfeil am rechten Rand des Feldes oder **↓** öffnet die Liste der letzten Adressen und Summen. Ein gewählter Eintrag wird in das Feld übernommen; ausgeführt wird erst nach der Bestätigung.
 
 ## Zurück, wo man war
 

@@ -289,6 +289,24 @@ final class SelectBlockSheetTests: XCTestCase {
         XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)", "Start's sum stays on the line")
     }
 
+    /// Switched to a field that already holds a mistake, the sheet says so at
+    /// once rather than at the next keystroke.
+    func testSwitchingToAFieldWithAMistakeShowsIt() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.lengthField.stringValue = "0x10 - 0x20"
+        window.makeFirstResponder(sheet.startField)
+        type("0x10", into: sheet.startField)
+        sheet.endField.stringValue = "0x20"
+        type("0x10", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden || sheet.errorLabel.stringValue.isEmpty)
+
+        sheet.lengthRadio.performClick(nil)
+        XCTAssertFalse(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+    }
+
     /// An unfinished sum in the field being typed in does not hide what is
     /// wrong with another field.
     func testAnUnfinishedSumDoesNotHideAnotherFieldsError() {

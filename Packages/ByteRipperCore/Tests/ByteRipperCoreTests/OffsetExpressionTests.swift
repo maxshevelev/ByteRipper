@@ -75,8 +75,11 @@ final class OffsetExpressionTests: XCTestCase {
             ("1 - 2", .negative),
             ("0x100 - 0x200 + 0xFF", .negative),
             ("0xFFFFFFFFFFFFFFFF + 1", .outOfRange),
-            ("0x10000000000000000 + 1", .outOfRange),
-            ("1 + 99999999999999999999", .outOfRange),
+            ("0xFFFFFFFFFFFFFFFF + 0xFFFFFFFFFFFFFFFF - 0xFFFFFFFFFFFFFFFF + 1", .outOfRange),
+            // A term too large is a bad term, not a result past 64 bits.
+            ("0x10000000000000000 + 1", .invalidInput),
+            ("1 + 99999999999999999999", .invalidInput),
+            ("0x10000000000000000", .invalidInput),
         ]
         for testCase in cases {
             XCTAssertThrowsError(try OffsetExpression.parse(testCase.input), "\"\(testCase.input)\"") { error in
