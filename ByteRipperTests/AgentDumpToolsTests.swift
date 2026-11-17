@@ -355,6 +355,18 @@ final class AgentDumpToolsTests: XCTestCase {
 
     // MARK: - show
 
+    /// A length that wraps past 2^64 is refused before any tab is opened.
+    func testShowRefusesALengthThatWraps() async throws {
+        _ = try openWindow()
+        let url = try write([UInt8](repeating: 7, count: 0x100), "wraps.bin")
+        let openedFile = try await client.answer("open_dump", ["path": .string(url.path)])
+        let id = try XCTUnwrap(openedFile["document"]?.stringValue)
+        let refused = try await client.call("show", ["document": .string(id), "offset": "0x10",
+                                                     "length": "0xFFFFFFFFFFFFFFFF"])
+        XCTAssertTrue(refused.isError)
+        XCTAssertEqual(refused.answer, "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past any file.")
+    }
+
     func testShowPutsABackgroundDumpOnScreenUnderANewId() async throws {
         let controller = try openWindow()
         let url = try write([UInt8](repeating: 7, count: 0x100), "later.bin")

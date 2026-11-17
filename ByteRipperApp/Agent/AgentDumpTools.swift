@@ -131,6 +131,7 @@ final class AgentDumpTools {
         let place = try resolve(arguments.string("document"))
         let offset = try arguments.optionalOffset("offset") ?? 0
         let length = try arguments.optionalOffset("length") ?? 0
+        let asked = try AgentArguments.range(at: offset, length: length)
         let onScreen: AgentDesk.Place
         var replaced: String?
         if place.isOnScreen {
@@ -153,7 +154,7 @@ final class AgentDumpTools {
         guard offset <= size else {
             throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(onScreen.id).")
         }
-        let end = min(offset + length, size)
+        let end = min(asked.upperBound, size)
         let controller = try onScreen.onScreen()
         desk.bringForward(onScreen)
         controller.recordJump(in: onScreen.pane)

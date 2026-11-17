@@ -35,7 +35,6 @@ let package = Package(
         // The `?` button, the per-term popover and `ControlHelp` — the one way
         // a control says what it does.
         .package(path: "../../Packages/HelpUI"),
-
         // How an offset or a size is written in hex: one copy for the app and
         // every tool-module, with no format string to read 32 bits of 64.
         .package(path: "../../Packages/HexText"),
@@ -48,6 +47,7 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ]),
         .target(name: "ZoneSketchUI", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "HelpUI", package: "HelpUI"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),

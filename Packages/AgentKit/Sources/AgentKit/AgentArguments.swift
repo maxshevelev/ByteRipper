@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// A tool's arguments, read the way every tool reads them.
 ///
@@ -175,5 +176,19 @@ public enum AgentSchema {
     /// The `after` every paged list takes.
     public static var after: JSONValue {
         string("The `next` of the page before, to go on from where it stopped.")
+    }
+}
+
+extension AgentArguments {
+    /// `offset` and `length` as one half-open range, or a refusal when the
+    /// two add up past 2^64. The one place a tool turns them into a range, so
+    /// no tool can trap on a length that wraps — an agent's argument is any
+    /// hex string, `0xFFFFFFFFFFFFFFFF` included.
+    public static func range(at offset: UInt64, length: UInt64) throws -> Range<UInt64> {
+        let (end, wraps) = offset.addingReportingOverflow(length)
+        guard !wraps else {
+            throw AgentToolError("`length` \(length.hexNumber) from `offset` \(offset.hexNumber) runs past any file.")
+        }
+        return offset..<end
     }
 }

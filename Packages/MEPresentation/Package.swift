@@ -52,6 +52,7 @@ let package = Package(
         ]),
         .testTarget(name: "MEPresentationTests", dependencies: [
             "MEPresentation",
+            .product(name: "HexText", package: "HexText"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),

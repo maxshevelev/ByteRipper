@@ -152,6 +152,7 @@ final class AgentFindTools {
         // `offset` and `end` are the document's addresses.
         let offset = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
+        guard !scope.isEmpty else { throw AgentToolError("\(place.named) holds no bytes to search.") }
         guard offset < UInt64(scope.count) else {
             throw AgentToolError("`offset` \(offset.hexNumber) is past the end of \(place.named), "
                 + "which is \(scope.count.hexNumber) bytes long.")
@@ -367,7 +368,7 @@ final class AgentFindTools {
                 answer["source"] = AgentHostTools.range(name.source)
                 answer["size"] = .string(name.size.hexNumber)
                 if let reused = reusedPart(controller, place, source: name.source, layout: name.layout,
-                                           codec: name.codec, defaultName: name.name) {
+                                           codec: name.codec, defaultName: name.name, acceptsEarlierName: false) {
                     return reuse(reused, controller: controller, answer: answer)
                 }
                 opening = controller.openPart(named: named ?? name.name, from: place.pane, source: name.source,
@@ -395,7 +396,7 @@ final class AgentFindTools {
             answer["part"] = .string(which)
             answer["in_compressed"] = .bool(open.space != .file)
             answer["source"] = AgentHostTools.range(open.source)
-            answer["size"] = .string(UInt64(open.range.count).hexNumber)
+            answer["size"] = .string(open.range.count.hexNumber)
             // A LENV block opened as it is reads as XOR noise, and nothing in
             // the answer said there was a decoded way to open it.
             if let reader = found.tree.spaceReaders.reader(for: .file),
@@ -404,7 +405,7 @@ final class AgentFindTools {
                     + "part: \"decoded\" opens it decoded.")
             }
             if let reused = reusedPart(controller, place, source: open.source, layout: open.layout,
-                                       codec: codec, defaultName: defaultName) {
+                                       codec: codec, defaultName: defaultName, acceptsEarlierName: false) {
                 return reuse(reused, controller: controller, answer: answer)
             }
             opening = controller.openPart(named: named ?? defaultName,
@@ -434,7 +435,7 @@ final class AgentFindTools {
             answer["source"] = AgentHostTools.range(source)
             answer["size"] = .string(length.hexNumber)
             if let reused = reusedPart(controller, place, source: source, layout: layout,
-                                       codec: codec, defaultName: defaultName) {
+                                       codec: codec, defaultName: defaultName, acceptsEarlierName: true) {
                 return reuse(reused, controller: controller, answer: answer)
             }
             opening = controller.openPart(named: name, from: place.pane, source: source, layout: layout, codec: codec)
@@ -448,13 +449,15 @@ final class AgentFindTools {
     /// copy beside it — a copy the reader has to close, and edits that would
     /// then be in one of two places.
     private func reusedPart(_ controller: MainViewController, _ place: AgentDesk.Place, source: Range<UInt64>,
-                            layout: UEFIRootLayout, codec: any PartCodec, defaultName: String)
+                            layout: UEFIRootLayout, codec: any PartCodec, defaultName: String,
+                            acceptsEarlierName: Bool)
         -> (id: FragmentDock.PanelID, pane: PaneViewModel)? {
         for id in controller.fragments.panelsLinked(to: place.pane) {
             guard let pane = controller.fragments.pane(id), let origin = pane.origin,
                   origin.sourceRange == source, origin.layout == layout,
                   type(of: origin.codec) == type(of: codec),
-                  origin.partName == defaultName || origin.partName == Self.earlierDefaultName(source)
+                  origin.partName == defaultName
+                    || (acceptsEarlierName && origin.partName == Self.earlierDefaultName(source))
             else { continue }
             return (id, pane)
         }
@@ -463,8 +466,9 @@ final class AgentFindTools {
 
     /// The name a part opened by address got before builds wrote a range
     /// first to last: `0x100-0x140`, the end exclusive. A workspace may still
-    /// hold a part under it, and asking for the same bytes again finds that
-    /// panel rather than opening a second one over them.
+    /// hold a part under it, and asking for the same bytes by address again
+    /// finds that panel rather than opening a second one over them. Only by
+    /// address: a node asked for is never taken for a part opened by address.
     private nonisolated static func earlierDefaultName(_ source: Range<UInt64>) -> String {
         "\(source.lowerBound.hexNumber)-\(source.upperBound.hexNumber)"
     }

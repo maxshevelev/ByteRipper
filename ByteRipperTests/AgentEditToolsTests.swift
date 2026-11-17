@@ -309,7 +309,7 @@ final class AgentEditToolsTests: XCTestCase {
                                               "length": "0xFFFFFFFFFFFFFFFF"])
         XCTAssertTrue(wrapping.isError)
         XCTAssertTrue(wrapping.answer.stringValue?.hasPrefix(
-            "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past the end of") == true, "\(wrapping.answer)")
+            "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past any file.") == true, "\(wrapping.answer)")
         XCTAssertEqual(try bytes(b, 0..<4), [9, 9, 9, 9], "nothing written")
     }
 

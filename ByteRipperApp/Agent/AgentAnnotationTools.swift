@@ -335,13 +335,11 @@ final class AgentAnnotationTools {
         let offset = try arguments.optionalOffset("offset")
         let length = try arguments.optionalOffset("length") ?? 1
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
-        if let offset, offset.addingReportingOverflow(length).overflow {
-            throw AgentToolError("`length` \(length.hexNumber) from `offset` \(offset.hexNumber) runs past any file.")
-        }
+        let asked = try offset.map { try AgentArguments.range(at: $0, length: length) }
         var node = try arguments.optionalString("node")
         // Without `node`, `offset` is in the document; with it, in the node.
-        var range = node == nil ? offset.map { $0..<($0 + length) } : nil
-        let within = node == nil ? nil : offset.map { $0..<($0 + length) }
+        var range = node == nil ? asked : nil
+        let within = node == nil ? nil : asked
         if node == nil, arguments.has("length"), offset == nil {
             throw AgentToolError("Give `offset` with `length`.")
         }

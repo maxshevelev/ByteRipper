@@ -441,5 +441,4 @@ public enum UEFIAgentQueries {
         members.merge(more) { _, new in new }
         return .object(members)
     }
-
 }

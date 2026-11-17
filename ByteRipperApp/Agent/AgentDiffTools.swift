@@ -126,7 +126,7 @@ final class AgentDiffTools {
 
         var answer: [String: JSONValue] = [
             "range": AgentHostTools.range(start..<end),
-            "sizes": ["document": .string((sizes.0).hexNumber), "against": .string((sizes.1).hexNumber)],
+            "sizes": ["document": .string(sizes.0.hexNumber), "against": .string(sizes.1.hexNumber)],
             "totals": ["runs": .count(runs.count), "differing_bytes": .count(Int(differing))]
         ]
         if sizes.0 != sizes.1 {
@@ -148,7 +148,7 @@ final class AgentDiffTools {
             var members: [String: JSONValue] = [
                 "start": .string(run.range.lowerBound.hexNumber),
                 "end": .string(run.range.upperBound.hexNumber),
-                "length": .string(UInt64(run.range.count).hexNumber),
+                "length": .string(run.range.count.hexNumber),
                 "differing_bytes": .count(Int(run.differing))
             ]
             if structure == "auto" { members["where"] = .array(places.map(Self.placeJSON)) }
@@ -488,5 +488,4 @@ final class AgentDiffTools {
             throw AgentToolError(error.description)
         }
     }
-
 }

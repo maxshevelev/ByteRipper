@@ -209,6 +209,7 @@ final class AgentHostTools {
         let place = try desk.place(named: arguments.optionalString("document"))
         let offset = try arguments.offset("offset")
         let length = try arguments.optionalOffset("length") ?? 0
+        let asked = try AgentArguments.range(at: offset, length: length)
         let select = try arguments.bool("select", default: length > 0)
         let controller = try place.onScreen()
         let size = place.pane.fileSize
@@ -216,7 +217,7 @@ final class AgentHostTools {
             throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(place.named), "
                 + "which is \(size.hexNumber) bytes long.")
         }
-        let end = min(offset + length, size)
+        let end = min(asked.upperBound, size)
         desk.bringForward(place)
         // The place the reader is leaving goes into the history first, so
         // their Back undoes what the agent did.
@@ -240,7 +241,6 @@ final class AgentHostTools {
             throw AgentToolError(error.description)
         }
     }
-
 
     /// A half-open range, as the app keeps every range: `end` is the first
     /// byte after it.

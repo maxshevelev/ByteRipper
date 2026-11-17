@@ -339,5 +339,4 @@ public enum MEAAgentQueries {
         }
         return parts.compactMap { $0 }
     }
-
 }

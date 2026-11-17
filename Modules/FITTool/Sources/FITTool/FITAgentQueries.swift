@@ -183,5 +183,4 @@ public enum FITAgentQueries {
         if problem.inBackup { members["in_backup"] = true }
         return .object(members)
     }
-
 }

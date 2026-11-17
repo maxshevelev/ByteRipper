@@ -139,7 +139,6 @@ enum LE {
     static func bytes16(_ value: UInt16) -> [UInt8] {
         [UInt8(value & 0xFF), UInt8(value >> 8)]
     }
-
 }
 
 extension Array where Element == UInt8 {

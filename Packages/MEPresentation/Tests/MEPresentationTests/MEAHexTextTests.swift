@@ -1,3 +1,4 @@
+import HexText
 import MEPresentation
 import XCTest
 
