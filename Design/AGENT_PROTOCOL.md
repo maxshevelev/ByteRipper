@@ -6,8 +6,9 @@
 > here is a change to an interface an agent may have been told about — say
 > why in the commit.
 
-Draft until stage 12 marks it version 1. The tool list grows by stage; what
-is listed here is what the code answers today.
+Version 1 (stage 12 of the plan, issue #23 closed). A tool added later is
+listed here when it lands; a change to an existing tool's arguments or answer
+says why in the commit, as above.
 
 ## Transport
 

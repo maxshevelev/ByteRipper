@@ -594,7 +594,11 @@ Each ends in something that works and is committed.
 12. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked
    version 1; the README; whether an ad-hoc signed, quarantined helper runs
-   when a client launches it, tried on a clean account.
+   when a client launches it, tried on a clean account. *(Done. The help, the
+   README and the Settings controls landed with the stages they describe; the
+   protocol document is version 1; the helper runs when a client launches it —
+   checked by hand, 2026-11-16 — so the window's button needs no step that
+   clears the quarantine attribute. Issue #23 closed.)*
 
 Stages 3 and 4 can swap. Stage 6 is where the work for #4, #6 and #8 starts
 paying.
@@ -636,9 +640,9 @@ beside it.
 - **Which era clients speak.** Both are served. Which one Claude Code and
   Claude Desktop actually open with is recorded at stage 2, and the protocol
   document says which transcripts the tests are checked against.
-- **The relay and Gatekeeper.** Whether a quarantined helper inside an app the
-  person has already let run is let run by a client. Tried at stage 12; if it is
-  refused, the window's button also clears the attribute on the helper.
+- **The relay and Gatekeeper.** Settled at stage 12: a quarantined helper
+  inside an app the person has already let run is let run by a client, so
+  nothing clears the attribute.
 - **A chat inside the window.** Not in this plan. Everything above is what
   such a panel would call; whether to build one is decided after the external
   client has been used on real work.
