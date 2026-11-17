@@ -503,7 +503,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     /// that it did nothing (§10.1).
     @objc func goToTypedOffset() {
         guard let offset = offsetCombo.value else {
-            updateValidation()
+            updateValidation(acting: true)
             beep()
             return
         }
@@ -527,7 +527,10 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     /// its "0x" prefix, which is not yet an offset, and greeting the user with
     /// an error about text they have not typed would be scolding them for
     /// arriving. The button is still disabled: there is nowhere to go yet.
-    private func updateValidation(showsError: Bool = true) {
+    ///
+    /// `acting` is true when Return was pressed on the text: an unfinished sum
+    /// the form waited on while it was typed is then named.
+    private func updateValidation(showsError: Bool = true, acting: Bool = false) {
         switch offsetCombo.evaluation {
         case .success:
             goButton.isEnabled = true
@@ -536,12 +539,12 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         case .failure(let error):
             goButton.isEnabled = false
             breakdownLabel.stringValue = ""
-            if error == .incomplete {
+            if error == .incomplete && !acting {
                 // A sum still being typed is not a mistake yet: the button
                 // waits, and the form says nothing.
                 errorLabel.stringValue = ""
             } else if showsError {
-                errorLabel.stringValue = AddressField.message(for: error)
+                errorLabel.stringValue = offsetCombo.problemMessage
                     ?? L("Invalid offset — use hex with 0x prefix or decimal.")
             }
         }

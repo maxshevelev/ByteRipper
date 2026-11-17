@@ -74,11 +74,61 @@ final class CutEditPopoverTests: XCTestCase {
         controller.commit()
         XCTAssertNil(committed)
         XCTAssertEqual(beeps(), 1)
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad, "Return turns it red")
 
         controller.offsetField.stringValue = "0x4 + 12"   // EOF of a 16-byte file
         controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
         XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
         XCTAssertEqual(controller.offsetField.resultText, "= 0x10", "what it came to is still shown")
+    }
+
+    /// Return and Esc typed in the address field reach the popover through the
+    /// field's own editor, as through any field's: the editor asks the form
+    /// first.
+    func testReturnAndEscInTheAddressFieldReachThePopover() throws {
+        var committed: UInt64?
+        let (controller, _) = makeController(commit: { committed = $0; _ = $1 })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        window.contentView = controller.view
+        window.makeFirstResponder(controller.offsetField)
+        let editor = try XCTUnwrap(controller.offsetField.currentEditor() as? NSTextView)
+        editor.insertText("0x4 + 2", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(committed, 6)
+
+        var cancelled = false
+        let other = CutEditPopoverController(
+            prefillOffset: 8, fileSize: 16, isAlreadyACut: { _ in false },
+            onCommit: { _, _ in }, onCancel: { cancelled = true })
+        other.loadViewIfNeeded()
+        window.contentView = other.view
+        window.makeFirstResponder(other.offsetField)
+        try XCTUnwrap(other.offsetField.currentEditor() as? NSTextView)
+            .doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        XCTAssertTrue(cancelled)
+    }
+
+    /// A click outside does not drop an unfinished sum without a word: the
+    /// popover stays open and the field turns red. Esc still closes it.
+    func testAClickOutsideKeepsAnUnfinishedSum() {
+        var committed: UInt64?
+        let (controller, beeps) = makeController(commit: { committed = $0; _ = $1 })
+        let popover = NSPopover()
+        controller.offsetField.stringValue = "0x4 +"
+        controller.controlTextDidChange(Notification(name: .init("typed"), object: controller.offsetField))
+
+        XCTAssertFalse(controller.popoverShouldClose(popover))
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
+        XCTAssertEqual(beeps(), 1)
+        XCTAssertNil(committed)
+
+        controller.offsetField.stringValue = "0x4 + 2"
+        XCTAssertTrue(controller.popoverShouldClose(popover), "a finished sum closes as before")
+        controller.offsetField.stringValue = "0x4 +"
+        controller.cancel()
+        XCTAssertTrue(controller.popoverShouldClose(popover), "Esc closes it whatever the field holds")
     }
 
     /// A decimal offset is parsed too — the field accepts whatever the dialogs

@@ -213,7 +213,7 @@ final class SelectBlockSheetTests: XCTestCase {
         type("0x10 +", into: sheet.startField)
         XCTAssertTrue(sheet.errorLabel.isHidden, "not wrong yet")
         XCTAssertTrue(sheet.noteLabel.isHidden)
-        XCTAssertEqual(sheet.validate(), "Invalid start offset.", "but not an offset either")
+        XCTAssertEqual(sheet.validate(), "The sum is not finished.", "but OK is told why it refuses")
 
         type("0x10 + 32", into: sheet.startField)
         XCTAssertTrue(sheet.errorLabel.isHidden)
@@ -260,7 +260,7 @@ final class SelectBlockSheetTests: XCTestCase {
         window.makeFirstResponder(sheet.endField)
         type("0x5 - 0x10", into: sheet.endField)
         XCTAssertFalse(sheet.errorLabel.isHidden)
-        XCTAssertEqual(sheet.errorLabel.stringValue, "Invalid start offset.",
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The sum is not finished.",
                        "the unfinished Start is now named, the first thing wrong")
         window.makeFirstResponder(sheet.startField)
         type("0x10 + 1", into: sheet.startField)

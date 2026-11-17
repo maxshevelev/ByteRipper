@@ -632,6 +632,26 @@ final class BookmarkTests: XCTestCase {
                        "a half-typed address leaves the bookmark on its own row, named")
     }
 
+    /// A click outside does not drop an address left as an unfinished sum: the
+    /// popover stays open with the field red, rather than keeping the old row
+    /// without a word.
+    func testAClickOutsideKeepsAnUnfinishedAddress() throws {
+        var events: [String] = []
+        let controller = BookmarkEditPopoverController(
+            row: 0x10, existingName: nil,
+            onCommit: { events.append("commit:\($0):\($1)") },
+            onCancel: { events.append("cancel") }
+        )
+        controller.loadViewIfNeeded()
+        var beeps = 0
+        controller.beep = { beeps += 1 }
+        controller.offsetField.stringValue = "0x20 + 0x"
+        XCTAssertFalse(controller.popoverShouldClose(NSPopover()))
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
+        XCTAssertEqual(beeps, 1)
+        XCTAssertEqual(events, [])
+    }
+
     /// Only the first outcome counts: the close that follows a Return or an Esc
     /// must not commit a second time.
     func testThePopoverSettlesOnce() throws {

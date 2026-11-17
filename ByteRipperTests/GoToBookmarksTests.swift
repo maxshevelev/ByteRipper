@@ -227,6 +227,7 @@ final class GoToBookmarksTests: XCTestCase {
         form.goToTypedOffset()
         XCTAssertEqual(jumps(), [])
         XCTAssertEqual(beeps, 1)
+        XCTAssertEqual(form.errorLabel.stringValue, "The sum is not finished.", "Return is told why")
     }
 
     /// A sum that comes to less than nothing says so, rather than "invalid".
@@ -780,7 +781,6 @@ final class GoToBookmarksTests: XCTestCase {
         let recent = AddressHistoryStore.recent
         XCTAssertEqual(recent.count, AddressHistoryStore.limit)
         XCTAssertEqual(recent.first, "0x000000C0", "12 * 0x10, the most recent")
-        XCTAssertEqual(AddressHistoryStore.mostRecent, recent.first)
         XCTAssertFalse(recent.contains("0x00000010"), "the oldest two fell off")
     }
 

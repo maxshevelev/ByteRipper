@@ -5,11 +5,6 @@ import Localization
 
 // MARK: - Shared sheet chrome
 
-/// The Fill sheet's field — a byte sequence, not an address (those are
-/// `AddressField`). The caret lands after the pattern offered, so it can be
-/// added to as well as replaced.
-private final class HexInputField: CaretAtEndTextField {}
-
 /// Base class for the input dialogs (Go To Position, Select Block).
 /// Builds a titled sheet with a field stack, an inline error label, and a
 /// Cancel/Submit button row; subclasses add fields and validation (§10).
@@ -250,7 +245,9 @@ class SheetViewController: NSViewController {
 
     /// Builds a label + text field row inside `contentStack` and returns the field.
     func addFieldRow(label text: String, initial: String) -> NSTextField {
-        let field = HexInputField(string: initial)
+        // A byte sequence, not an address (those are `AddressField`): the
+        // caret lands after the pattern offered, so it can be added to.
+        let field = CaretAtEndTextField(string: initial)
         field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         field.onTextChange = { [weak self] in self?.updateLiveError() }
         addRow(leading: fieldLabel(text), field: field, width: 240, name: text)
@@ -465,8 +462,8 @@ final class SelectBlockSheetController: SheetViewController {
             return .number(expression.value)
         case .failure(.incomplete) where field === waiting:
             return .waiting
-        case .failure(let error):
-            return .wrong(AddressField.message(for: error) ?? invalid)
+        case .failure:
+            return .wrong(field.problemMessage ?? invalid)
         }
     }
 

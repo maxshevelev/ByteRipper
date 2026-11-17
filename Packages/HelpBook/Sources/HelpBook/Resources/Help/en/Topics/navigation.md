@@ -46,6 +46,8 @@ The sum remains in the field as it was typed. Its result is shown at the right e
 
 Brackets and multiplication are not supported. A sum whose result is negative, or does not fit in 64 bits, is refused.
 
+A sum that ends in `+` or `-` is not marked as an error while it is being typed. When the command is confirmed with it, the field reports that the sum is not finished. A cut or bookmark panel clicked away from with such a sum does not close: the field turns red, and the sum stays to be completed or the panel to be closed with Esc.
+
 The arrow button at the right edge of the field, or **↓**, lists the last ten entries. The list is shared by all of these fields: it holds the addresses Go To has jumped to and every sum a command was carried out with, each sum with its result. Choosing an entry places it in the field, where it can be checked and corrected; nothing happens until the command is confirmed.
 
 ## Back to where you were

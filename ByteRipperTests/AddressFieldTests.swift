@@ -120,6 +120,40 @@ final class AddressFieldTests: XCTestCase {
         XCTAssertEqual(changes, 1, "a picked entry re-validates the form, as typing does")
     }
 
+    /// The words for what is wrong: a sum's result, an unfinished sum — and
+    /// nothing for a lone number, where the form's own message names the field.
+    func testTheProblemIsNamedOnlyForASum() {
+        XCTAssertNil(AddressField(text: "0x10").problemMessage)
+        XCTAssertNil(AddressField(text: "zz").problemMessage)
+        XCTAssertNil(AddressField(text: "0x1FFFFFFFFFFFFFFFF").problemMessage, "too large, but no sum")
+        XCTAssertEqual(AddressField(text: "0xFFFFFFFFFFFFFFFF + 1").problemMessage,
+                       "The result does not fit in 64 bits.")
+        XCTAssertEqual(AddressField(text: "0x10 - 0x20").problemMessage, "The result is negative.")
+        XCTAssertEqual(AddressField(text: "0x10 +").problemMessage, "The sum is not finished.")
+    }
+
+    /// The field edits in a field editor of its own — the one that opens the
+    /// list on ↓ — and an entry picked into a field not being edited makes it
+    /// the one being edited, so the pick can be undone there too.
+    func testAPickIntoAnUnfocusedFieldFocusesIt() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 120),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        let other = NSTextField(string: "")
+        other.frame = NSRect(x: 20, y: 70, width: 300, height: 22)
+        let field = AddressField(text: "0x40")
+        field.frame = NSRect(x: 20, y: 20, width: 300, height: 22)
+        try XCTUnwrap(window.contentView).addSubview(other)
+        try XCTUnwrap(window.contentView).addSubview(field)
+        window.makeFirstResponder(other)
+
+        field.pick("0x1FE000 + 40")
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        XCTAssertFalse(editor === window.fieldEditor(false, for: nil), "the field's own editor")
+        XCTAssertEqual(field.stringValue, "0x1FE000 + 40")
+        XCTAssertTrue(editor.undoManager?.canUndo ?? false, "the pick can be taken back")
+    }
+
     /// An entry picked while the field is being edited is an edit of its own:
     /// it is announced as typing is, and **⌘Z** brings back what was typed.
     func testAPickInTheEditorIsUndoable() throws {

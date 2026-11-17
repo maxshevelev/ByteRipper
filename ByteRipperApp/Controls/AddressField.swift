@@ -31,9 +31,6 @@ enum AddressHistoryStore {
         defaults.stringArray(forKey: userDefaultsKey) ?? []
     }
 
-    /// The entry recorded last.
-    static var mostRecent: String? { recent.first }
-
     /// Records an address: moves it to the front, dropping any older entry for
     /// the same address, and caps the list at `limit`.
     static func record(_ offset: UInt64) {
@@ -160,14 +157,24 @@ final class AddressField: CaretAtEndTextField {
     }
 
     /// The sentence for a sum that comes to no address, for a form that says
-    /// what is wrong in words. Nil when the form's own "invalid" message is the
-    /// right one — or when there is nothing to say yet, the sum being unfinished.
-    static func message(for error: OffsetExpression.ParseError) -> String? {
+    /// what is wrong in words. Nil when the text names a number, and when the
+    /// form's own "invalid" message — which names the field — is the right
+    /// one: text that is no number, or a lone number too large, there being no
+    /// sum to have a result. A form that waits for an unfinished sum while it
+    /// is typed asks only once the user acts on it.
+    var problemMessage: String? {
+        guard case .failure(let error) = evaluation else { return nil }
         switch error {
         case .negative: return L("The result is negative.")
-        case .outOfRange: return L("The result does not fit in 64 bits.")
-        case .invalidInput, .incomplete: return nil
+        case .outOfRange: return isTypedAsSum ? L("The result does not fit in 64 bits.") : nil
+        case .incomplete: return L("The sum is not finished.")
+        case .invalidInput: return nil
         }
+    }
+
+    /// The text has an operator in it — whatever its terms come to.
+    private var isTypedAsSum: Bool {
+        stringValue.contains { $0 == "+" || $0 == "-" }
     }
 
     /// Puts what the field holds into the list of recent entries — called by the
@@ -208,9 +215,19 @@ final class AddressField: CaretAtEndTextField {
         super.textDidChange(notification)
     }
 
+    /// What the result was last drawn from — compared rather than the label's
+    /// own attributed string, which comes back with attributes of its own.
+    private var drawnResult: (text: String, color: NSColor?, enabled: Bool)?
+
     private func refreshResult() {
         guard historyButton != nil else { return }   // a setter run by `super.init`
         let text = resultText
+        historyButton.isEnabled = isEnabled
+        // A keystroke that leaves the result as it was — most of them inside
+        // a term, and the form's own colour change after it — changes nothing.
+        if let drawnResult, drawnResult.text == text, drawnResult.color == textColor,
+           drawnResult.enabled == isEnabled { return }
+        drawnResult = (text, textColor, isEnabled)
         let font = NSFont.monospacedSystemFont(ofSize: self.font?.pointSize ?? 12, weight: .semibold)
         // The result is the number acted on, so it reads first: the text's own
         // colour — red with it when a form refuses the address — in heavier
@@ -222,10 +239,6 @@ final class AddressField: CaretAtEndTextField {
                                     value: isEnabled ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
                                     range: NSRange(location: 0, length: 1))
         }
-        historyButton.isEnabled = isEnabled
-        // A keystroke that leaves the result as it was — most of them inside
-        // a term, and the form's own colour change after it — changes nothing.
-        guard attributed != resultLabel.attributedStringValue || resultLabel.isHidden != text.isEmpty else { return }
         resultLabel.attributedStringValue = attributed
         resultLabel.isHidden = text.isEmpty
         // At once rather than at the next layout pass: the field editor has to
@@ -282,8 +295,11 @@ final class AddressField: CaretAtEndTextField {
     func historyMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        let regular = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        let strong = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        // The Find bar's row size, so the app's lists of recent entries read
+        // alike; monospaced, since these are addresses.
+        let size = PatternQueryControls.menuRowSize
+        let regular = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        let strong = NSFont.monospacedSystemFont(ofSize: size, weight: .semibold)
         for entry in AddressHistoryStore.recent {
             // No action: the row chosen is read back from the menu when it
             // closes (`showHistory`), not sent as one.
@@ -328,6 +344,10 @@ final class AddressField: CaretAtEndTextField {
     /// Fills the field with an entry of the list, as if it had been typed: the
     /// form re-validates, nothing is acted on, and **⌘Z** takes it back.
     func pick(_ entry: String) {
+        // The list's button never takes the focus, so the field may not be
+        // the one being edited: it is made so first, and the entry goes in as
+        // an edit there — undoable like any other.
+        if currentEditor() == nil { window?.makeFirstResponder(self) }
         if let editor = currentEditor() as? NSTextView {
             // Through the text view's own edit, so the undo stack holds the
             // replacement and the change is announced as a typed one is.
@@ -337,30 +357,26 @@ final class AddressField: CaretAtEndTextField {
             editor.didChangeText()
             editor.selectedRange = NSRange(location: (entry as NSString).length, length: 0)
         } else {
+            // A field in no window: nothing to undo in, nothing to focus.
             stringValue = entry
             onTextChange?()
             (delegate as? NSControlTextEditingDelegate)?
                 .controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: self))
-            window?.makeFirstResponder(self)
         }
     }
+}
 
-    /// **↓** in the field opens the list — unless the form's delegate takes
-    /// it first. The field editor asks the field about every command key before
-    /// acting on it, and a text field's answer is its delegate's
-    /// (`control(_:textView:doCommandBy:)`, the public half of the exchange):
-    /// this asks the delegate the same way, so Return and Esc reach the form
-    /// as before, and nothing calls into AppKit's own implementation.
-    @objc(textView:doCommandBySelector:)
-    func textView(_ textView: NSTextView, doCommandBy command: Selector) -> Bool {
-        let handled = (delegate as? NSControlTextEditingDelegate)?
-            .control?(self, textView: textView, doCommandBy: command) ?? false
-        if handled { return true }
-        if command == #selector(NSResponder.moveDown(_:)) {
-            showHistory()
-            return true
-        }
-        return false
+/// The field's own field editor, so **↓** can open the list with nothing of
+/// AppKit's overridden: the key reaches the text view's `moveDown(_:)` only
+/// after the form's delegate has been offered it and declined, as with any
+/// field — and a field editor of a cell's own is public API
+/// (`NSCell.fieldEditor(for:)`).
+private final class AddressFieldEditor: NSTextView {
+    weak var field: AddressField?
+
+    override func moveDown(_ sender: Any?) {
+        guard let field else { return super.moveDown(sender) }
+        field.showHistory()
     }
 }
 
@@ -379,6 +395,20 @@ private final class HistoryChoice: NSObject, NSMenuDelegate {
 /// The field's cell: the text stops short of the result and the list button.
 private final class AddressFieldCell: NSTextFieldCell {
     var trailingInset: CGFloat = 0
+
+    private lazy var editor: AddressFieldEditor = {
+        let editor = AddressFieldEditor(frame: .zero)
+        editor.isFieldEditor = true
+        editor.isRichText = false
+        editor.importsGraphics = false
+        editor.allowsUndo = true
+        return editor
+    }()
+
+    override func fieldEditor(for controlView: NSView) -> NSTextView? {
+        editor.field = controlView as? AddressField
+        return editor
+    }
 
     override func drawingRect(forBounds rect: NSRect) -> NSRect {
         var inner = super.drawingRect(forBounds: rect)

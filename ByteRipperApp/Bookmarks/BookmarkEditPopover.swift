@@ -197,11 +197,22 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
     /// (§10.1) — but shown in the field itself rather than in a message: a panel
     /// this small has no room for a sentence, and red digits in a field of digits
     /// say the same thing. Return refuses while they are red. A sum that ends at
-    /// its operator is not red — it is not wrong yet (issue #9) — though Return
-    /// refuses it all the same.
-    private func updateOffsetValidation() {
-        let waiting = offsetField.evaluation == .failure(.incomplete)
+    /// its operator is not red while it is typed — it is not wrong yet (issue
+    /// #9). Acted on — Return, a click outside — it is: `acting` turns it red.
+    private func updateOffsetValidation(acting: Bool = false) {
+        let waiting = !acting && offsetField.evaluation == .failure(.incomplete)
         offsetField.textColor = editedRow == nil && !waiting ? SemanticColors.bad : .labelColor
+    }
+
+    /// A click outside does not settle an unfinished sum: closing would drop
+    /// it without a word — the bookmark keeps its old row and the new name, the address typed lost — from a field that never turned red.
+    /// The popover stays, and the field turns red; Return, Esc and a finished
+    /// sum close it as before.
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        guard !settled, offsetField.evaluation == .failure(.incomplete) else { return true }
+        updateOffsetValidation(acting: true)
+        beep()
+        return false
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -218,6 +229,7 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
     func commit() {
         guard !settled else { return }
         guard let target = editedRow else {
+            updateOffsetValidation(acting: true)
             beep()
             return
         }

@@ -1,4 +1,4 @@
-@source-sha ef39ea28dcd6acfc5cc80e433f77e21a068752d4d045da60a6db77a07beeac2f
+@source-sha 82b6c0d6e399a3c95a527c86ad27cc8c49e210fee36404e6b2361487ee39da00
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -33,6 +33,8 @@ Die Summe bleibt so im Feld stehen, wie sie eingegeben wurde. Ihr Ergebnis steht
 ! Ein Glied ohne das Präfix `0x`, das nur aus Dezimalziffern besteht, ist dezimal: `0x1FE000 + 40` addiert vierzig, nicht `0x40`. Die Zeile unter dem Feld zeigt, wie jedes Glied gelesen wurde. Aus demselben Grund zeigt eine einzelne Zahl, die ohne Präfix eingegeben wurde, am rechten Rand ihren Hexadezimalwert.
 
 Klammern und Multiplikation werden nicht unterstützt. Eine Summe mit negativem Ergebnis oder mit einem Ergebnis, das nicht in 64 Bit passt, wird abgewiesen.
+
+Eine Summe, die auf `+` oder `-` endet, gilt während der Eingabe nicht als Fehler. Wird der Befehl mit ihr bestätigt, meldet das Formular, dass die Summe unvollständig ist. Das Popover für einen Schnitt oder ein Lesezeichen schließt sich bei einem Klick außerhalb dann nicht: Das Adressfeld wird rot markiert, und die Summe kann ergänzt oder das Popover mit Esc geschlossen werden.
 
 Die Pfeiltaste am rechten Rand des Feldes oder **↓** öffnet die Liste der letzten zehn Einträge. Die Liste gilt für alle diese Felder gemeinsam: Sie enthält die Adressen, zu denen „Gehe zu“ gesprungen ist, und jede Summe, mit der ein Befehl ausgeführt wurde, jeweils mit ihrem Ergebnis. Ein gewählter Eintrag wird in das Feld übernommen, wo er geprüft und korrigiert werden kann; bis zur Bestätigung des Befehls geschieht nichts.
 
