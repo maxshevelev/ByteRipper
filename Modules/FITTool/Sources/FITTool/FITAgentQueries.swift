@@ -47,14 +47,14 @@ public enum FITAgentQueries {
         }
         if let table = report.table {
             answer["table"] = [
-                "start": .string(hex(table.range.lowerBound)), "end": .string(hex(table.range.upperBound)),
-                "pointer_at": .string(hex(table.pointerOffset)), "pointer": .string(hex(table.pointerAddress)),
+                "start": .string(table.range.lowerBound.hexNumber), "end": .string(table.range.upperBound.hexNumber),
+                "pointer_at": .string(table.pointerOffset.hexNumber), "pointer": .string(table.pointerAddress.hexNumber),
                 "checksum": .string(String(format: "0x%02X", table.storedChecksum)),
                 "checksum_should_be": .string(String(format: "0x%02X", table.computedChecksum)),
                 "checksum_checked": .bool(table.checksumIsChecked)
             ]
         } else if !report.candidates.isEmpty {
-            answer["tables_found_elsewhere"] = .array(report.candidates.map { .string(hex($0)) })
+            answer["tables_found_elsewhere"] = .array(report.candidates.map { .string($0.hexNumber) })
         }
         let main = display.rows.filter { !$0.isBackup }
         let backup = display.rows.filter(\.isBackup)
@@ -159,12 +159,12 @@ public enum FITAgentQueries {
             "address": .string(row.addressText),
             "size": .string(row.sizeText),
             "version": .string(row.versionText),
-            "row_start": .string(hex(row.rowRange.lowerBound))
+            "row_start": .string(row.rowRange.lowerBound.hexNumber)
         ]
         if !row.targetText.isEmpty { members["points_at"] = .string(row.targetText) }
         if let target = row.targetRange {
-            members["target_start"] = .string(hex(target.lowerBound))
-            members["target_end"] = .string(hex(target.upperBound))
+            members["target_start"] = .string(target.lowerBound.hexNumber)
+            members["target_end"] = .string(target.upperBound.hexNumber)
         }
         if !row.cpuids.isEmpty {
             members["cpuids"] = .array(row.cpuids.map { .string($0.bareHexNumber) })
@@ -179,10 +179,9 @@ public enum FITAgentQueries {
             "severity": .string(problem.severity == .error ? "error" : "warning")
         ]
         if let index = problem.entryIndex { members["entry"] = .count(index) }
-        if let offset = problem.offset { members["offset"] = .string(hex(offset)) }
+        if let offset = problem.offset { members["offset"] = .string(offset.hexNumber) }
         if problem.inBackup { members["in_backup"] = true }
         return .object(members)
     }
 
-    static func hex(_ value: UInt64) -> String { value.hexNumber }
 }

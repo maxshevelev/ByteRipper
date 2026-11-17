@@ -3693,8 +3693,8 @@ final class MinimapTests: XCTestCase {
         let text = panel.segmentStripHoverText(at: NSPoint(x: strip.midX, y: y))
         XCTAssertTrue(text.contains("S1"), "the hover names the piece: \(text)")
         XCTAssertTrue(text.contains("0x40"), "it gives the piece's start: \(text)")
-        // The range is first-to-last byte: S1 = [64, 128) → 0x40…0x7F.
-        XCTAssertTrue(text.contains("0x7F"), "and its last byte: \(text)")
+        // The range is first-to-last byte: S1 = [64, 128) → 0x40–0x7F.
+        XCTAssertTrue(text.contains("0x40–0x7F"), "and its last byte: \(text)")
         XCTAssertTrue(text.contains("64"), "and its size: \(text)")
         XCTAssertEqual(panel.segmentStripMark(at: NSPoint(x: strip.midX, y: y)),
                        .segment(HexTheme.segmentTints[1]), "and wears S1's tint")

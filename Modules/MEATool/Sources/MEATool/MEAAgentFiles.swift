@@ -171,8 +171,8 @@ public enum MEAAgentFiles {
         if row.status == .incomplete { entry["why"] = "A chain of chunks broke off; the file is not known whole." }
         if row.status == .unknown { entry["why"] = "Neither the bytes nor a digest to compare." }
         var sizes: [String: JSONValue] = [:]
-        if let a = row.a { sizes["document"] = .string(hex(a.contentSize)) }
-        if let b = row.b { sizes["against"] = .string(hex(b.contentSize)) }
+        if let a = row.a { sizes["document"] = .string(a.contentSize.hexNumber) }
+        if let b = row.b { sizes["against"] = .string(b.contentSize.hexNumber) }
         entry["size"] = .object(sizes)
         if let differing = row.differingBytes { entry["differing_bytes"] = .count(differing) }
         if let integrity = row.integrityDiffers { entry["integrity_differs"] = .bool(integrity) }
@@ -187,7 +187,7 @@ public enum MEAAgentFiles {
     }
 
     private nonisolated static func stretches(_ extents: [Range<Int>]) -> JSONValue {
-        .array(extents.map { .object(["start": .string(hex($0.lowerBound)), "end": .string(hex($0.upperBound))]) })
+        .array(extents.map { .object(["start": .string($0.lowerBound.hexNumber), "end": .string($0.upperBound.hexNumber)]) })
     }
 
     nonisolated static func reason(_ gap: MEFileComparison.Gap) -> String {
@@ -207,5 +207,4 @@ public enum MEAAgentFiles {
         }
     }
 
-    private nonisolated static func hex(_ value: Int) -> String { value.hexNumber }
 }

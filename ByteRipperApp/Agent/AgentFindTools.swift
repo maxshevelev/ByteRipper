@@ -152,8 +152,8 @@ final class AgentFindTools {
         let offset = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
         guard offset < end, end <= UInt64(scope.count) else {
-            throw AgentToolError("The range \(AgentHostTools.hexText(offset))–\(AgentHostTools.hexText(end)) is not inside "
-                + "\(place.named), which is \(AgentHostTools.hexText(UInt64(scope.count))) bytes long.")
+            throw AgentToolError("The range \(offset.hexNumber)–\(end.hexNumber) is not inside "
+                + "\(place.named), which is \((UInt64(scope.count)).hexNumber) bytes long.")
         }
         let range = (scope.lowerBound + offset)..<(scope.lowerBound + end)
         envelope["range"] = AgentHostTools.range(offset..<end)
@@ -408,11 +408,11 @@ final class AgentFindTools {
             let length = try arguments.offset("length")
             let size = place.pane.fileSize
             guard length > 0, offset < size, length <= size - offset else {
-                throw AgentToolError("\(AgentHostTools.hexText(offset)) and \(AgentHostTools.hexText(length)) bytes "
-                    + "do not fit in \(place.named), which is \(AgentHostTools.hexText(size)) bytes long.")
+                throw AgentToolError("\(offset.hexNumber) and \(length.hexNumber) bytes "
+                    + "do not fit in \(place.named), which is \(size.hexNumber) bytes long.")
             }
             let source = offset..<(offset + length)
-            let defaultName = "\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
+            let defaultName = "\(offset.hexNumber)-\(source.upperBound.hexNumber)"
             let name = named ?? defaultName
             // As Open Zone: a stretch that is a structure of the image goes
             // back through the rebuild planner, any other as it is.

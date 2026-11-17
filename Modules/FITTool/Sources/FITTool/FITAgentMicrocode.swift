@@ -148,7 +148,7 @@ public enum FITAgentMicrocode {
     }
 
     private static func range(_ range: Range<UInt64>) -> JSONValue {
-        ["start": .string(FITAgentQueries.hex(range.lowerBound)), "end": .string(FITAgentQueries.hex(range.upperBound))]
+        ["start": .string(range.lowerBound.hexNumber), "end": .string(range.upperBound.hexNumber)]
     }
 
     // MARK: - The catalogue against the image
@@ -229,7 +229,7 @@ public enum FITAgentMicrocode {
             "revision": .string("0x" + entry.revisionText),
             "date": .string(entry.date),
             "production": .bool(entry.isProduction),
-            "size": .string(FITAgentQueries.hex(entry.size))
+            "size": .string(entry.size.hexNumber)
         ]
         // The other CPUIDs the file's update serves (its extended signature
         // table), as the form's Extended CPUIDs column shows them.

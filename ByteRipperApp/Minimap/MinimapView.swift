@@ -1088,10 +1088,8 @@ final class MinimapView: NSView {
             guard let pieceIndex = segmentPiece(at: point, onMapAt: index) else { continue }
             let block = segmentBlocks[index][pieceIndex]
             let label = Segment.label(for: pieceIndex)
-            let start = block.range.lowerBound.bareHexNumber
-            let end = block.range.lastByte.bareHexNumber
             let size = FilePaneView.friendlySize(UInt64(block.range.count))
-            var text = "\(label) — 0x\(start)…0x\(end), \(size)"
+            var text = "\(label) — \(block.range.hexExtent), \(size)"
             if let name = segmentPieceName?(index, pieceIndex), !name.isEmpty {
                 text += " · \(name)"
             }
@@ -1109,10 +1107,8 @@ final class MinimapView: NSView {
         for index in zoneBrackets.indices {
             guard let bracketIndex = zoneBracket(at: point, onMapAt: index) else { continue }
             let bracket = zoneBrackets[index][bracketIndex]
-            let start = bracket.range.lowerBound.bareHexNumber
-            let end = bracket.range.lastByte.bareHexNumber
             let size = FilePaneView.friendlySize(UInt64(bracket.range.count))
-            let extent = "0x\(start)…0x\(end), \(size)"
+            let extent = "\(bracket.range.hexExtent), \(size)"
             return bracket.name.isEmpty ? extent : "\(bracket.name) — \(extent)"
         }
         return ""

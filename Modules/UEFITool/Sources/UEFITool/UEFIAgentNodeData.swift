@@ -95,8 +95,8 @@ public enum UEFIAgentNodeData {
         guard let outer, let range = outer.fileRange else { return nil }
         var members: [String: JSONValue] = [
             "section": .string(outer.id.description),
-            "start": .string(UEFIAgentQueries.hex(range.lowerBound)),
-            "end": .string(UEFIAgentQueries.hex(range.upperBound))
+            "start": .string(range.lowerBound.hexNumber),
+            "end": .string(range.upperBound.hexNumber)
         ]
         if let algorithm = outer.compression?.algorithm { members["algorithm"] = .string(algorithm) }
         if depth > 1 { members["nested"] = .count(depth - 1) }
@@ -155,8 +155,8 @@ public enum UEFIAgentNodeData {
         let found = try await bytes(host, node: arguments.string("node"), part: part)
         let size = UInt64(found.range.count)
         guard offset < size else {
-            throw AgentToolError("Offset \(UEFIAgentQueries.hex(offset)) is past the end of the \(part.rawValue), "
-                + "which is \(UEFIAgentQueries.hex(size)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of the \(part.rawValue), "
+                + "which is \(size.hexNumber) bytes long.")
         }
         let length = min(asked, size - offset)
         let start = found.range.lowerBound + offset
@@ -166,11 +166,11 @@ public enum UEFIAgentNodeData {
         var answer = AgentBytes.shown(read, at: offset, format: format, bigEndian: bigEndian)
         answer["node"] = .string(found.node.id.description)
         answer["part"] = .string(part.rawValue)
-        answer["offset"] = .string(UEFIAgentQueries.hex(offset))
-        answer["length"] = .string(UEFIAgentQueries.hex(length))
-        answer["size"] = .string(UEFIAgentQueries.hex(size))
+        answer["offset"] = .string(offset.hexNumber)
+        answer["length"] = .string(length.hexNumber)
+        answer["size"] = .string(size.hexNumber)
         answer["in_compressed"] = .bool(found.isCompressed)
-        if let fileRange = found.fileRange { answer["file_start"] = .string(UEFIAgentQueries.hex(fileRange.lowerBound)) }
+        if let fileRange = found.fileRange { answer["file_start"] = .string(fileRange.lowerBound.hexNumber) }
         if let source = source(of: found.node, in: found.tree, including: part == .decompressed) {
             answer["source"] = source
         }

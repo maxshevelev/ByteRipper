@@ -83,9 +83,8 @@ public enum FITEditProblem: Equatable, Sendable, Error {
             return L("The change writes at 0x%1$@ inside a %2$@: the processor checks it before the firmware runs, and with Boot Guard enforced the platform would not start. Nothing was changed.",
                      at.bareHexNumber, name)
         case .topSwapCopiesDiffer(let backup):
-            return L("This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed.",
-                     backup.lowerBound.bareHexNumber,
-                     (backup.upperBound - 1).bareHexNumber)
+            return L("This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed.",
+                     backup.hexExtent)
         case .topSwapWriteCrossesTheBlocks(let at):
             return L("The change writes at 0x%1$@ across a Top Swap block boundary, where it cannot be made in both copies. Nothing was changed.",
                      at.bareHexNumber)

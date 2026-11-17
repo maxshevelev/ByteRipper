@@ -168,12 +168,12 @@ final class AgentRefsTools {
             let bios = Self.biosRegion(in: image) ?? 0..<place.pane.fileSize
             let file = relative ? bios.lowerBound + address : address
             guard file < place.pane.fileSize else {
-                throw AgentToolError("\(AgentHostTools.hexText(file)) is past the end of \(place.named).")
+                throw AgentToolError("\(file.hexNumber) is past the end of \(place.named).")
             }
             // An address outside the BIOS region has no bus or region form.
             guard bios.contains(file) || names.contains("file") else {
-                throw AgentToolError("\(AgentHostTools.hexText(file)) is not inside the BIOS region "
-                    + "\(AgentHostTools.hexText(bios.lowerBound))–\(AgentHostTools.hexText(bios.upperBound)); "
+                throw AgentToolError("\(file.hexNumber) is not inside the BIOS region "
+                    + "\(bios.lowerBound.hexNumber)–\(bios.upperBound.hexNumber); "
                     + "only the `file` form means anything for it.")
             }
             let made = Self.forms(address: address, relativeToRegion: relative, bios: bios,

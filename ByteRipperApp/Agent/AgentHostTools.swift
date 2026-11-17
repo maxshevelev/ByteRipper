@@ -166,8 +166,8 @@ final class AgentHostTools {
         }
         let size = place.pane.fileSize
         guard offset < size else {
-            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
-                + "which is \(Self.hexText(size)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(place.named), "
+                + "which is \(size.hexNumber) bytes long.")
         }
         let end = min(offset + asked, size)
         guard let storage = place.pane.byteStorage else { throw AgentDeskError.nothingOpen }
@@ -213,8 +213,8 @@ final class AgentHostTools {
         let controller = try place.onScreen()
         let size = place.pane.fileSize
         guard offset < size || (offset == size && length == 0) else {
-            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
-                + "which is \(Self.hexText(size)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(place.named), "
+                + "which is \(size.hexNumber) bytes long.")
         }
         let end = min(offset + length, size)
         desk.bringForward(place)
@@ -241,9 +241,7 @@ final class AgentHostTools {
         }
     }
 
-    nonisolated static func hexText(_ value: UInt64) -> String { value.hexNumber }
-
-    nonisolated static func hex(_ value: UInt64) -> JSONValue { .string(hexText(value)) }
+    nonisolated static func hex(_ value: UInt64) -> JSONValue { .string(value.hexNumber) }
 
     /// A half-open range, as the app keeps every range: `end` is the first
     /// byte after it.

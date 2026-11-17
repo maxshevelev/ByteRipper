@@ -285,8 +285,8 @@ public enum UEFIAgentVariables {
             if variable.copies > 1 { members["copies"] = .count(variable.copies) }
             if variable.isDeleted { members["deleted"] = true }
             if let range = rangeInFile(variable) {
-                members["start"] = .string(UEFIAgentQueries.hex(range.lowerBound))
-                members["end"] = .string(UEFIAgentQueries.hex(range.upperBound))
+                members["start"] = .string(range.lowerBound.hexNumber)
+                members["end"] = .string(range.upperBound.hexNumber)
             } else {
                 members["in_compressed"] = true
             }
@@ -321,8 +321,8 @@ public enum UEFIAgentVariables {
         let name = UEFITreeDisplay.ownName(of: store) ?? store.name
         if name != type { members["name"] = .string(name) }
         if let range = store.fileRange {
-            members["start"] = .string(UEFIAgentQueries.hex(range.lowerBound))
-            members["end"] = .string(UEFIAgentQueries.hex(range.upperBound))
+            members["start"] = .string(range.lowerBound.hexNumber)
+            members["end"] = .string(range.upperBound.hexNumber)
         }
         return members
     }
@@ -338,8 +338,8 @@ public enum UEFIAgentVariables {
             "against_size": .count(b.count),
             "differing_bytes": .count(runs.reduce(0) { $0 + $1.count }),
             "runs": .array(runs.prefix(runLimit).map { run in
-                .string(run.count == 1 ? UEFIAgentQueries.hex(UInt64(run.lowerBound))
-                        : "\(UEFIAgentQueries.hex(UInt64(run.lowerBound)))–\(UEFIAgentQueries.hex(UInt64(run.upperBound)))")
+                .string(run.count == 1 ? (UInt64(run.lowerBound)).hexNumber
+                        : "\((UInt64(run.lowerBound)).hexNumber)–\((UInt64(run.upperBound)).hexNumber)")
             }),
             "entry": .string(mine.entry.id.description),
             "against_entry": .string(theirs.entry.id.description)

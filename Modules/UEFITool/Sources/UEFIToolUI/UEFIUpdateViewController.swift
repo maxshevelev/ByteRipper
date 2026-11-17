@@ -60,7 +60,7 @@ import UEFITool
         let source = ToolWrappingLabel(string: L(
             "%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@–%5$@.",
             fileName, comparison.platform, blockCount,
-            Self.hex(region.lowerBound), Self.hex(region.upperBound - 1)
+            region.lowerBound.hexNumber, (region.upperBound - 1).hexNumber
         ))
         source.font = .systemFont(ofSize: 11)
         let scope = ToolWrappingLabel(string: L(
@@ -158,10 +158,6 @@ import UEFITool
 
     @objc private func writeClicked() { onWrite?(chosen) }
     @objc private func cancelClicked() { onCancel?() }
-
-    static func hex(_ value: UInt64) -> String {
-        value.hexNumber
-    }
 }
 
 extension UEFIUpdateViewController: NSTableViewDataSource, NSTableViewDelegate {
@@ -189,9 +185,9 @@ extension UEFIUpdateViewController: NSTableViewDataSource, NSTableViewDelegate {
             cell.textField?.stringValue = entry.nameText.text
             cell.textField?.font = .systemFont(ofSize: 11)
         case Column.address:
-            cell.textField?.stringValue = Self.hex(entry.range.lowerBound)
+            cell.textField?.stringValue = entry.range.lowerBound.hexNumber
         case Column.size:
-            cell.textField?.stringValue = Self.hex(UInt64(entry.range.count))
+            cell.textField?.stringValue = (UInt64(entry.range.count)).hexNumber
         default:
             cell.textField?.stringValue = entry.stateText.text
             cell.textField?.font = .systemFont(ofSize: 11)

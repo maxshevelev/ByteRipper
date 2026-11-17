@@ -95,11 +95,11 @@ final class AgentDiffTools {
         let start = try arguments.optionalOffset("offset") ?? 0
         let end = try arguments.optionalOffset("end") ?? common
         guard end <= common else {
-            throw AgentToolError("`end` \(hex(end)) is past the end of the shorter document, which is \(hex(common)) bytes long.")
+            throw AgentToolError("`end` \(end.hexNumber) is past the end of the shorter document, which is \(common.hexNumber) bytes long.")
         }
         guard start < end else {
             throw AgentToolError(common == 0 ? "One of the documents is empty; there is nothing to compare."
-                                             : "`offset` \(hex(start)) is not below `end` \(hex(end)).")
+                                             : "`offset` \(start.hexNumber) is not below `end` \(end.hexNumber).")
         }
         let mergeGap = arguments.has("merge_gap") ? UInt64(max(0, min(0x10_0000, try arguments.integer("merge_gap"))))
                                                   : Self.defaultMergeGap
@@ -349,7 +349,7 @@ final class AgentDiffTools {
         }
         let sizes = [place.pane.fileSize, other.pane.fileSize]
         guard sizes.allSatisfy({ $0 <= Self.copyLimit }) else {
-            throw AgentToolError("Copies are made of documents up to \(hex(Self.copyLimit)) bytes; "
+            throw AgentToolError("Copies are made of documents up to \(Self.copyLimit.hexNumber) bytes; "
                 + "compare them with `diff`, or open a smaller part.")
         }
         let first = try snapshot(place).read(at: 0, length: Int(sizes[0]))
@@ -488,5 +488,4 @@ final class AgentDiffTools {
         }
     }
 
-    private nonisolated func hex(_ value: UInt64) -> String { AgentHostTools.hexText(value) }
 }

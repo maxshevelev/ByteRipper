@@ -83,14 +83,14 @@ public enum FITDetail {
         // The type leads: it is what the row is, and the title already says it,
         // so the fields open with it rather than with where it sits.
         var fields: [FITDetailField] = [
-            .init(L("Type", in: language), "\(FIT.typeName(entry.type)) · \(hex(entry.type, digits: 2))")
+            .init(L("Type", in: language), "\(FIT.typeName(entry.type)) · \(entry.type.hexNumber(digits: 2))")
         ]
         // Two addresses, side by side: where the entry sits in the dump, and
         // the address its own `Address` field holds. English tells them apart
         // by the two words; a language that has one word for both says which
         // is which, which is why the file one carries a context of its own.
-        fields.append(.init(L("Offset", context: "fit", in: language), hex(entry.offset, digits: 8)))
-        fields.append(.init(L("Address", in: language), entry.isHeader ? "_FIT_" : hex(entry.address, digits: 8)))
+        fields.append(.init(L("Offset", context: "fit", in: language), entry.offset.hexNumber(digits: 8)))
+        fields.append(.init(L("Address", in: language), entry.isHeader ? "_FIT_" : entry.address.hexNumber(digits: 8)))
         fields.append(.init(L("Size", in: language), sizeText(entry, in: language)))
         fields.append(.init(L("Version", in: language), entry.versionText))
         // The checksum byte is the header's (§5), so it is shown on the header
@@ -113,7 +113,7 @@ public enum FITDetail {
                                        expected: checksumShouldBe.map(UInt64.init)).text(in: language),
                         isProblem: checksumShouldBe != nil)
                 : .init(L("Checksum", in: language),
-                        L("%1$@ (Not checked)", in: language, hex(entry.checksum, digits: 2))))
+                        L("%1$@ (Not checked)", in: language, entry.checksum.hexNumber(digits: 2))))
         }
         return fields
     }
@@ -146,12 +146,12 @@ public enum FITDetail {
             // (§7.3). A register, a width and a bit position are all things
             // the trade names in its own language, so these read in it.
             return [
-                .init(L("Index register", in: language), hex(d.indexRegister, digits: 4)),
-                .init(L("Data register", in: language), hex(d.dataRegister, digits: 4)),
+                .init(L("Index register", in: language), d.indexRegister.hexNumber(digits: 4)),
+                .init(L("Data register", in: language), d.dataRegister.hexNumber(digits: 4)),
                 .init(L("Access width", in: language), d.accessWidth == 1
                     ? L("1 byte", in: language) : L("%1$@ bytes", in: language, d.accessWidth)),
                 .init(L("Bit position", in: language), "\(d.bitPosition)"),
-                .init(L("Index", in: language), hex(d.index, digits: 4))
+                .init(L("Index", in: language), d.index.hexNumber(digits: 4))
             ]
         case .outsideTheImage:
             return [.init(L("Points at", in: language), L("outside this image", in: language))]
@@ -162,7 +162,7 @@ public enum FITDetail {
         case .emptyMicrocodeSlot(let offset):
             return [
                 .init(L("Points at", in: language), L("empty slot (FF FF FF FF)", in: language)),
-                .init(L("Component", in: language), hex(offset, digits: 8))
+                .init(L("Component", in: language), offset.hexNumber(digits: 8))
             ]
         case .bytes(let offset, let description):
             // "Points at" only once something has read there — see
@@ -172,7 +172,7 @@ public enum FITDetail {
             if let description {
                 fields.append(.init(L("Points at", in: language), description))
             }
-            fields.append(.init(L("Component", in: language), hex(offset, digits: 8)))
+            fields.append(.init(L("Component", in: language), offset.hexNumber(digits: 8)))
             if let length = row.effectiveSize {
                 fields.append(.init(L("Length", in: language), size(length, in: language)))
             }
@@ -187,10 +187,6 @@ public enum FITDetail {
     /// says so.
     private static func size<T: BinaryInteger>(_ bytes: T, in language: AppLanguage) -> String {
         let value = UInt64(truncatingIfNeeded: bytes)
-        return value == 0 ? L("Empty", in: language) : "\(hex(value)) (\(value))"
-    }
-
-    private static func hex<T: BinaryInteger>(_ value: T, digits: Int = 0) -> String {
-        value.hexNumber(digits: digits)
+        return value == 0 ? L("Empty", in: language) : "\(value.hexNumber) (\(value))"
     }
 }

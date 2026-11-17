@@ -34,14 +34,14 @@ enum UEFIAMDFirmwareDetail {
 
     private static func efs(_ firmware: AMDFirmware, image: UEFIImage, in language: AppLanguage) -> ([UEFIDetailField], [UEFIDetailTable]) {
         let fields = [
-            UEFIDetailField("Signature", hex(AMDFirmware.efsSignature)),
+            UEFIDetailField("Signature", AMDFirmware.efsSignature.hexNumber),
             UEFIDetailField(L("Flash size", in: language), sizeText(firmware.romSize)),
         ]
         var rows: [[UEFIDetailTable.Cell]] = []
         var targets: [UEFIDetailTable.Target?] = []
         for pointer in firmware.pointers {
             let directory = firmware.directories.first { $0.offset == pointer.target }
-            rows.append([.init("+" + hex(pointer.field)), .init(hex(pointer.value)),
+            rows.append([.init("+" + pointer.field.hexNumber), .init(pointer.value.hexNumber),
                          .init(directory.map { AMDFirmware.directoryName($0).text(in: language) } ?? "")])
             targets.append(directory.flatMap { target(for: $0.range, named: AMDFirmware.directoryName($0).text(in: language), in: image) })
         }
@@ -66,18 +66,18 @@ enum UEFIAMDFirmwareDetail {
             fields.append(.init("Checksum", Checksums.text(stored, valid: repair == nil, expected: expected, digits: 8).text(in: language),
                                 isProblem: repair != nil))
         }
-        if let pspID = directory.pspID { fields.append(.init("PSP ID", hex(pspID))) }
+        if let pspID = directory.pspID { fields.append(.init("PSP ID", pspID.hexNumber)) }
 
         if directory.kind == .slotHeader {
             if let slot = directory.slot { fields.append(.init(L("Slot", in: language), slot)) }
-            if let priority = directory.priority { fields.append(.init(L("Priority", in: language), hex(priority))) }
+            if let priority = directory.priority { fields.append(.init(L("Priority", in: language), priority.hexNumber)) }
             guard let target = directory.slotTarget,
                   let level2 = firmware.directories.first(where: { $0.offset == target }) else { return (fields, []) }
             let name = AMDFirmware.directoryName(level2).text(in: language)
             let table = UEFIDetailTable(
                 title: L("Second level", in: language), symbol: "list.bullet.indent",
                 columns: [L("Directory", in: language), L("Location", in: language)],
-                rows: [[.init(name), .init(hex(target))]],
+                rows: [[.init(name), .init(target.hexNumber)]],
                 rowTargets: [self.target(for: level2.range, named: name, in: image)]
             )
             return (fields, [table])
@@ -89,8 +89,8 @@ enum UEFIAMDFirmwareDetail {
             var targets: [UEFIDetailTable.Target?] = []
             for (index, entry) in directory.comboEntries.enumerated() {
                 let chosen = entry.resolvedOffset.flatMap { offset in firmware.directories.first { $0.offset == offset } }
-                rows.append([.init("\(index)"), .init(hex(entry.id)),
-                             .init(entry.resolvedOffset.map(hex) ?? "—"),
+                rows.append([.init("\(index)"), .init(entry.id.hexNumber),
+                             .init(entry.resolvedOffset.map(\.hexNumber) ?? "—"),
                              .init(chosen.map { AMDFirmware.directoryName($0).text(in: language) } ?? "")])
                 targets.append(chosen.flatMap { target(for: $0.range, named: AMDFirmware.directoryName($0).text(in: language), in: image) })
             }
@@ -111,7 +111,7 @@ enum UEFIAMDFirmwareDetail {
                 .init("\(entry.index)"),
                 .init(String(format: "%@ (0x%02X)", entry.typeName, entry.type)),
                 .init(entry.isValue ? "—" : sizeText(entry.range.map { UInt64($0.count) } ?? UInt64(entry.size))),
-                .init(entry.isValue ? "—" : entry.resolvedOffset.map(hex) ?? "—"),
+                .init(entry.isValue ? "—" : entry.resolvedOffset.map(\.hexNumber) ?? "—"),
                 .init(notes(entry, file: image.size, in: language)),
             ])
             targets.append(entryTarget(entry, in: firmware, image: image, in: language))
@@ -164,18 +164,18 @@ enum UEFIAMDFirmwareDetail {
     /// What an entry's flags, instance and destination say, in a few words.
     private static func notes(_ entry: AMDFirmware.Entry, file size: UInt64, in language: AppLanguage) -> String {
         var parts: [String] = []
-        if entry.isValue { parts.append(L("value %1$@", in: language, hex(entry.location))) }
+        if entry.isValue { parts.append(L("value %1$@", in: language, entry.location.hexNumber)) }
         if entry.instance != 0 { parts.append(L("instance %1$@", in: language, "\(entry.instance)")) }
         if entry.subprogram != 0 { parts.append(L("subprogram %1$@", in: language, "\(entry.subprogram)")) }
         if entry.isCompressed {
-            parts.append(L("compressed, inflates to %1$@", in: language, hex(entry.size)))
+            parts.append(L("compressed, inflates to %1$@", in: language, entry.size.hexNumber))
         }
         if entry.isReset { parts.append(L("reset image", in: language)) }
         if entry.isCopy { parts.append(L("copied to memory", in: language)) }
         if entry.isReadOnly { parts.append(L("read-only", in: language)) }
         if entry.isWritable { parts.append(L("writable", in: language)) }
         if let destination = entry.destination, destination != 0xFFFF_FFFF_FFFF_FFFF, destination != 0 {
-            parts.append(L("destination %1$@", in: language, hex(destination)))
+            parts.append(L("destination %1$@", in: language, destination.hexNumber))
         }
         if !entry.isValue, entry.range == nil, let offset = entry.resolvedOffset, entry.size > 0,
            offset + UInt64(entry.size) > size {
@@ -208,7 +208,7 @@ enum UEFIAMDFirmwareDetail {
         let entry = first.entry
         var fields: [UEFIDetailField] = [.init(L("Entry type", in: language), String(format: "%@ (0x%02X)", entry.typeName, entry.type))]
         if entry.instance != 0 { fields.append(.init(L("Instance", in: language), "\(entry.instance)")) }
-        if entry.isBIOS, entry.subtype != 0 { fields.append(.init(L("Region type", in: language), hex(entry.subtype))) }
+        if entry.isBIOS, entry.subtype != 0 { fields.append(.init(L("Region type", in: language), entry.subtype.hexNumber)) }
         if entry.subprogram != 0 { fields.append(.init(L("Subprogram", in: language), "\(entry.subprogram)")) }
         let flags = notes(entry, file: image.size, in: language)
         if !flags.isEmpty { fields.append(.init(L("Entry flags", in: language), flags)) }
@@ -218,7 +218,7 @@ enum UEFIAMDFirmwareDetail {
         // A blob the directories give different room says so.
         let sizes = Set(listings.map(\.entry.size))
         if sizes.count > 1 || (sizes.first.map { UInt64($0) != UInt64(node.range.count) } ?? false), !entry.isCompressed {
-            fields.append(.init(L("Size in the directories", in: language), sizes.sorted().map { hex($0) }.joined(separator: ", ")))
+            fields.append(.init(L("Size in the directories", in: language), sizes.sorted().map { $0.hexNumber }.joined(separator: ", ")))
         }
 
         var rows: [[UEFIDetailTable.Cell]] = []
@@ -237,11 +237,7 @@ enum UEFIAMDFirmwareDetail {
 
     // MARK: - Text
 
-    private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        value.hexNumber
-    }
-
     private static func sizeText(_ value: UInt64) -> String {
-        value == 0 ? "Empty" : "\(hex(value)) (\(value))"
+        value == 0 ? "Empty" : "\(value.hexNumber) (\(value))"
     }
 }

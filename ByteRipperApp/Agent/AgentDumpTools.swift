@@ -150,7 +150,7 @@ final class AgentDumpTools {
         }
         let size = onScreen.pane.fileSize
         guard offset <= size else {
-            throw AgentToolError("Offset \(AgentHostTools.hexText(offset)) is past the end of \(onScreen.id).")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(onScreen.id).")
         }
         let end = min(offset + length, size)
         let controller = try onScreen.onScreen()

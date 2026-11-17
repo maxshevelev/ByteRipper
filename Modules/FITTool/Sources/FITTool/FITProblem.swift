@@ -89,49 +89,45 @@ public struct FITProblem: Equatable, Sendable {
         case .imageHasNoPointer:
             return L("The image is too small to hold a FIT pointer")
         case .pointerLeadsOutsideTheImage(let address):
-            return L("The FIT pointer, %1$@, is outside this image", hex(address))
+            return L("The FIT pointer, %1$@, is outside this image", address.hexNumber)
         case .noTableAtThePointer(let address):
-            return L("No FIT signature at %1$@, where the pointer leads", hex(address))
+            return L("No FIT signature at %1$@, where the pointer leads", address.hexNumber)
         case .tableHasNoEntries:
             return L("The header says the table has no entries")
         case .tableRunsPastTheEnd(let entries):
             return L("The header claims %1$@ entries, which runs past the end of the image", entries)
         case .firstEntryIsNotTheHeader(let type):
-            return L("The first entry is type %1$@, not the header", hex(UInt64(type)))
+            return L("The first entry is type %1$@, not the header", (UInt64(type)).hexNumber)
         case .secondHeader:
             return L("A second header entry, where there may be only one")
         case .typesOutOfOrder(let previous, let type):
             return L("Type %1$@ after type %2$@: entries must not decrease in type",
-                     hex(UInt64(type)), hex(UInt64(previous)))
+                     (UInt64(type)).hexNumber, (UInt64(previous)).hexNumber)
         case .checksumMismatch(let stored, let computed):
             return L("The table checksum is %1$@, and should be %2$@",
-                     hex(UInt64(stored)), hex(UInt64(computed)))
+                     (UInt64(stored)).hexNumber, (UInt64(computed)).hexNumber)
         case .noMicrocodeEntry:
             return L("No microcode entry, and there must be at least one")
         case .addressOutsideTheImage(let address):
-            return L("%1$@ is outside this image", hex(address))
+            return L("%1$@ is outside this image", address.hexNumber)
         case .addressNotAligned(let address):
-            return L("%1$@ is not aligned to 16 bytes", hex(address))
+            return L("%1$@ is not aligned to 16 bytes", address.hexNumber)
         case .notMicrocodeAtTheAddress(let address):
-            return L("No microcode header at %1$@, and it is not an empty slot", hex(address))
+            return L("No microcode header at %1$@, and it is not an empty slot", address.hexNumber)
         case .reservedIsNotZero(let value):
-            return L("The reserved byte is %1$@, and should be zero", hex(UInt64(value)))
+            return L("The reserved byte is %1$@, and should be zero", (UInt64(value)).hexNumber)
         case .topSwapBackupHasNoTable(let backupAt):
-            return L("The Top Swap backup at %1$@ has no FIT where its pointer leads", hex(backupAt))
+            return L("The Top Swap backup at %1$@ has no FIT where its pointer leads", backupAt.hexNumber)
         case .topSwapTableDiffers(let at):
-            return L("The Top Swap backup's FIT at %1$@ is not the same as this one", hex(at))
+            return L("The Top Swap backup's FIT at %1$@ is not the same as this one", at.hexNumber)
         case .topSwapEntryDiffers:
             return L("this entry, or what it points at, is not the same as in the top block")
         case .topSwapBlockDiffers(let backup):
             return L("The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree",
-                     hex(backup.lowerBound))
+                     backup.lowerBound.hexNumber)
         case .sameProcessorsAsRow(let entry, let cpuids):
             return L("Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms",
                      entry + 1, cpuids.map(MicrocodeHeader.cpuid).joined(separator: ", "))
         }
-    }
-
-    private func hex(_ value: UInt64) -> String {
-        value.hexNumber
     }
 }

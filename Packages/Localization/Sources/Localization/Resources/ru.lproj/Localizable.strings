@@ -914,7 +914,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder." = "В этом дампе есть сегменты, взятые из %1$@, и запись туда заменит файлы, с которыми эти сегменты сравниваются. Выберите другую папку.";
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "В этом дампе есть сегменты, взятые из %1$@, и запись туда заменит файлы, с которыми эти сегменты сравниваются. Выберите другое имя.";
 "This file is open read-only." = "Файл открыт только для чтения.";
-"This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "В образе есть резервная копия Top Swap загрузочного блока по 0x%1$@–0x%2$@, и она не совпадает с блоком, где лежит FIT, поэтому правку нельзя внести в обе копии. Ничего не изменено.";
+"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "В образе есть резервная копия Top Swap загрузочного блока по адресу %1$@, и она не совпадает с блоком, где лежит FIT, поэтому правку нельзя внести в обе копии. Ничего не изменено.";
 "This microcode is already in the table, in row #%1$@. Nothing was changed." = "Этот микрокод уже есть в таблице, в строке #%1$@. Ничего не изменено.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Все сегменты сольются в один. Байты не меняются — убираются только разрезы.";
 "Those bytes could not be read." = "Эти байты не удалось прочитать.";

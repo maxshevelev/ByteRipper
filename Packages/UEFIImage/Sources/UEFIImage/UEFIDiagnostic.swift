@@ -191,8 +191,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
     /// a tool-module's diagnostics go is its panel (`Design/TOOL_MODULES_PLAN.md`).
     public var message: String {
         guard let inside else { return kindMessage }
-        return kindMessage + " (at \(hex(inside.offset)) in what the compressed section at "
-            + "\(hex(offset)) decompresses to)"
+        return kindMessage + " (at \(inside.offset.hexNumber) in what the compressed section at "
+            + "\(offset.hexNumber) decompresses to)"
     }
 
     private var kindMessage: String {
@@ -202,13 +202,13 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .zeroSize(let structure):
             return "\(structure.label) has a size of zero"
         case .checksumMismatch(let structure, let stored, let computed):
-            return "\(structure.label) checksum is \(hex(stored)), computed \(hex(computed))"
+            return "\(structure.label) checksum is \(stored.hexNumber), computed \(computed.hexNumber)"
         case .sizeMismatch(let structure, let stored, let computed):
-            return "\(structure.label) size is \(hex(stored)), computed \(hex(computed))"
+            return "\(structure.label) size is \(stored.hexNumber), computed \(computed.hexNumber)"
         case .unknownFileSystem(let guid):
             return "unknown volume file system \(guid)"
         case .unknownType(let structure, let code):
-            return "unknown \(structure.label) type \(hex(UInt64(code)))"
+            return "unknown \(structure.label) type \((UInt64(code)).hexNumber)"
         case .recursionLimit:
             return "nesting is too deep to be an image"
         case .addressesUnknown:
@@ -220,11 +220,11 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                 ? "\(algorithm) data ends before it has decompressed"
                 : "\(algorithm) data does not decompress"
         case .decompressedTooLarge(let algorithm, let declared):
-            return "\(algorithm) data says it decompresses to \(hex(declared)) bytes, "
+            return "\(algorithm) data says it decompresses to \(declared.hexNumber) bytes, "
                 + "more than a parse allocates"
         case .decompressedSizeMismatch(let stored, let computed):
-            return "compressed section says it decompresses to \(hex(stored)) bytes, "
-                + "it came to \(hex(computed))"
+            return "compressed section says it decompresses to \(stored.hexNumber) bytes, "
+                + "it came to \(computed.hexNumber)"
         case .processingRequiredNotSet:
             return "compressed GUID-defined section does not have PROCESSING_REQUIRED set"
         case .protectedRangeOutsideImage(let name):
@@ -237,12 +237,12 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unsupportedHashAlgorithm(let algorithm):
             return "\(TCGHash.name(algorithm)) digests are not computed by this tool"
         case .unknownVendorHashFileSize(let size):
-            return "AMI vendor hash table of \(hex(size)) bytes is of no known version"
+            return "AMI vendor hash table of \(size.hexNumber) bytes is of no known version"
         case .unknownRevision(let structure, let revision):
-            return "\(structure.label) revision \(hex(UInt64(revision))) is later than any this parser reads"
+            return "\(structure.label) revision \((UInt64(revision)).hexNumber) is later than any this parser reads"
         case .unknownFlashDeviceMapEntries(let size, let format):
-            return "Insyde flash device map entries of \(hex(UInt64(size))) bytes in format "
-                + "\(hex(UInt64(format))) are of no known layout"
+            return "Insyde flash device map entries of \((UInt64(size)).hexNumber) bytes in format "
+                + "\((UInt64(format)).hexNumber) are of no known layout"
         case .nonUEFIDataInPadFile:
             return "padding file holds data that is not UEFI"
         case .nonUEFIDataInSections:
@@ -252,7 +252,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unreadableNvarEntry:
             return "NVAR entry cannot be read; the store is kept as padding from here"
         case .fileHeaderMarkedInvalid(let state):
-            return "file state \(hex(UInt64(state))) marks its header invalid; its checksums are not checked"
+            return "file state \((UInt64(state)).hexNumber) marks its header invalid; its checksums are not checked"
         case .unknownDvarEntry:
             return "DVAR entry of an unknown state, flags or type; the store is kept as padding from here"
         case .dvarNamespaceMissing:
@@ -268,10 +268,6 @@ public struct UEFIDiagnostic: Equatable, Sendable {
     func located(in space: ByteSpace) -> UEFIDiagnostic {
         guard let outermost = space.outermostSection else { return self }
         return UEFIDiagnostic(kind, at: outermost, inside: InnerLocation(space: space, offset: offset))
-    }
-
-    private func hex(_ value: UInt64) -> String {
-        value.hexNumber
     }
 }
 

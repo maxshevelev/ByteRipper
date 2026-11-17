@@ -28,6 +28,16 @@ final class HexTextTests: XCTestCase {
         XCTAssertEqual(Int8(-5).hexNumber(digits: 2), "0xFB", "a padded byte keeps its two digits")
         XCTAssertEqual(Int32.min.hexNumber, "0x80000000")
         XCTAssertFalse(Int.min.hexNumber.contains("-"))
+        XCTAssertEqual(Int.min.hexNumber, "0x8000000000000000")
+    }
+
+    /// A type wider than 64 bits keeps all of its digits.
+    func testAWideNegativeValueKeepsItsWidth() {
+        guard #available(macOS 15, *) else { return }
+        #if compiler(>=6.0)
+        XCTAssertEqual(Int128(-1).hexNumber, "0x" + String(repeating: "F", count: 32))
+        XCTAssertEqual(Int128(-2).bareHexNumber.suffix(2), "FE")
+        #endif
     }
 
     /// A range by its first and last byte.
@@ -36,6 +46,9 @@ final class HexTextTests: XCTestCase {
         XCTAssertEqual((UInt64(0x20)..<0x21).hexExtent, "0x20", "one byte")
         XCTAssertEqual((UInt64(0x20)..<0x20).hexExtent, "0x20", "empty: its position")
         XCTAssertEqual((0x1_0000_0000..<UInt64(0x1_0000_1000)).hexExtent, "0x100000000–0x100000FFF")
+        // A signed range wider than the type's maximum does not trap.
+        XCTAssertEqual((Int.min..<Int.max).hexExtent, "0x8000000000000000–0x7FFFFFFFFFFFFFFE")
+        XCTAssertEqual((-5..<Int.max).hexExtent, "0xFFFFFFFFFFFFFFFB–0x7FFFFFFFFFFFFFFE")
     }
 
     /// Padded to a field's width, and never cut short of it.

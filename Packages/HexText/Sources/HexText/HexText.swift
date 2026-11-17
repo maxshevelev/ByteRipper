@@ -21,9 +21,13 @@ extension BinaryInteger {
     /// the prefix itself.
     public var bareHexNumber: String {
         guard Self.isSigned, self < 0 else { return String(self, radix: 16, uppercase: true) }
-        let bits = UInt64(truncatingIfNeeded: self)
-        let width = bitWidth
-        return String(width >= 64 ? bits : bits & (1 << UInt64(width) - 1), radix: 16, uppercase: true)
+        // `words` is the two's complement, least significant first, sign-
+        // extended to whole words: write them all, keep the type's own digits.
+        let all = words.reversed().map { word in
+            let digits = String(word, radix: 16, uppercase: true)
+            return String(repeating: "0", count: UInt.bitWidth / 4 - digits.count) + digits
+        }.joined()
+        return String(all.suffix((bitWidth + 3) / 4))
     }
 
     /// `0x0005` for `digits` 4: padded with zeros to a field's width, never
@@ -46,7 +50,9 @@ extension Range where Bound: BinaryInteger {
     /// by the first byte after it, which belongs to the next stretch. One
     /// byte is that byte's address alone; an empty range is its position.
     public var hexExtent: String {
-        guard upperBound - lowerBound > 1 else { return lowerBound.hexNumber }
+        // Compared, not subtracted: a signed range wider than the type's
+        // maximum would overflow the subtraction.
+        guard lowerBound < upperBound, lowerBound + 1 < upperBound else { return lowerBound.hexNumber }
         return "\(lowerBound.hexNumber)–\((upperBound - 1).hexNumber)"
     }
 }

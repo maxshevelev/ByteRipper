@@ -13,13 +13,23 @@ public enum MEAText {
     // MARK: Hex
 
     /// `0x`-prefixed, no padding — for offsets and small counts.
-    public static func hex(_ v: Int) -> String { v.hexNumber }
+    public static func hex(_ v: Int) -> String { field(v, digits: 0) }
     /// Width-padded to one byte, e.g. an extension tag.
-    public static func hexByte(_ v: Int) -> String { v.hexNumber(digits: 2) }
+    public static func hexByte(_ v: Int) -> String { field(v, digits: 2) }
     /// Width-padded to two bytes, e.g. a BPDT partition type.
-    public static func hex16(_ v: Int) -> String { v.hexNumber(digits: 4) }
+    public static func hex16(_ v: Int) -> String { field(v, digits: 4) }
     /// Width-padded to four bytes, e.g. a region's flags word.
     public static func hex32(_ v: UInt32) -> String { v.hexNumber(digits: 8) }
+
+    /// A field the decoder hands over as an `Int`. Read from unsigned bytes,
+    /// it is negative only in a damaged structure, and then reads as the
+    /// 32-bit word it came from — `0xFFFFFFFF`, as MEAnalyzer's own panel and
+    /// every earlier build wrote it — not as sixteen digits of an `Int`.
+    /// A value past 32 bits is written whole.
+    private static func field(_ v: Int, digits: Int) -> String {
+        if v < 0, let word = Int32(exactly: v) { return word.hexNumber(digits: digits) }
+        return v.hexNumber(digits: digits)
+    }
 
     // MARK: Ranges and sizes
 

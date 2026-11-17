@@ -368,7 +368,7 @@ public enum UEFIDetail {
                         .init(MicrocodeHeader.cpuid(signature.processorSignature)),
                         .init(MicrocodeHeader.processorText(signature.processorSignature)),
                         .init(MicrocodeHeader.platformsText(signature.platformIDs)),
-                        .init(hex(signature.checksum))
+                        .init(signature.checksum.hexNumber)
                     ]
                 }
             ))
@@ -438,7 +438,7 @@ public enum UEFIDetail {
                     title: L("Text in the record", in: language),
                     symbol: "text.alignleft",
                     columns: [L("Offset", in: language), L("Text", in: language)],
-                    rows: texts.map { [.init("+" + hex($0.offset)), .init($0.text)] }
+                    rows: texts.map { [.init("+" + $0.offset.hexNumber), .init($0.text)] }
                 ))
             }
         }
@@ -453,7 +453,7 @@ public enum UEFIDetail {
                 columns: [L("Name", in: language), L("Switch", in: language), L("Blocks", in: language), L("Offset in the region", in: language), L("Size", in: language)],
                 rows: layout.entries.map { entry in
                     [.init(entry.name), .init(entry.key), .init("\(entry.blockCount)"),
-                     .init(hex(entry.range.lowerBound)), .init(hex(UInt64(entry.range.count)))]
+                     .init(entry.range.lowerBound.hexNumber), .init((UInt64(entry.range.count)).hexNumber)]
                 }
             ))
         }
@@ -468,7 +468,7 @@ public enum UEFIDetail {
                     rows: current.map { record in
                         let row = UEFITreeDisplay.gpnvRow(record, reader: reader)
                         let contents = row.hasPrefix(record.name + " = ") ? String(row.dropFirst(record.name.count + 3)) : ""
-                        return [.init(record.name), .init(hex(record.header.lowerBound)), .init(contents)]
+                        return [.init(record.name), .init(record.header.lowerBound.hexNumber), .init(contents)]
                     },
                     rowTargets: current.map { .node($0.id) },
                     linkColumn: 0
@@ -496,7 +496,7 @@ public enum UEFIDetail {
         if !value.isEmpty, value.count <= 8 {
             let number = value.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
             if let meaning = UEFITreeDisplay.dvarMeaning(number, setting: setting, in: language) {
-                fields.append(.init(L("Value in Setup", in: language), "\(meaning) (\(hex(number)))"))
+                fields.append(.init(L("Value in Setup", in: language), "\(meaning) (\(number.hexNumber))"))
             }
         }
         if let help = setting.help { fields.append(.init(L("Setup help", in: language), help)) }
@@ -512,11 +512,11 @@ public enum UEFIDetail {
         let state = 0xFF - raw[0], flags = 0xFF - raw[1], type = 0xFF - raw[2]
         let stateNames: [UInt8: String] = [0x01: "Storing", 0x05: "Stored", 0x15: "Deleting", 0x55: "Deleted"]
         var fields: [UEFIDetailField] = [
-            .init("State", stateNames[state].map { "\(hex(state)) (\($0))" } ?? hex(state)),
+            .init("State", stateNames[state].map { "\(state.hexNumber) (\($0))" } ?? state.hexNumber),
             .init("Entry flags", bits(flags, [(0x02, "NameId"), (0x04, "NamespaceGuid")])),
-            .init("Type", hex(type)),
-            .init("Attributes", hex(0xFF - raw[3])),
-            .init("Namespace ID", hex(0xFF - raw[4])),
+            .init("Type", type.hexNumber),
+            .init("Attributes", (0xFF - raw[3]).hexNumber),
+            .init("Namespace ID", (0xFF - raw[4]).hexNumber),
         ]
         // Past the namespace's GUID, when the entry declares one, the name id
         // and the data size, one or two bytes each by the type.
@@ -524,7 +524,7 @@ public enum UEFIDetail {
         let wideName = type != 0x00, wideSize = type == 0x05
         if let nameId = wideName ? reader.uint16(at: cursor).map({ 0xFFFF - $0 })
                                  : reader.uint8(at: cursor).map({ UInt16(0xFF - $0) }) {
-            fields.append(.init("Name ID", hex(nameId)))
+            fields.append(.init("Name ID", nameId.hexNumber))
         }
         cursor += wideName ? 2 : 1
         if let size = wideSize ? reader.uint16(at: cursor).map({ 0xFFFF - $0 })
@@ -546,8 +546,8 @@ public enum UEFIDetail {
             : [0x7F: "Header valid", 0x3F: "Added", 0x3E: "Added, in deleted transition",
                0x3D: "Deleted", 0x3C: "Deleted"]
         var fields: [UEFIDetailField] = [
-            .init("State", states[variable.state].map { "\(hex(variable.state)) (\($0))" } ?? hex(variable.state)),
-            .init("Reserved", hex(variable.reserved)),
+            .init("State", states[variable.state].map { "\(variable.state.hexNumber) (\($0))" } ?? variable.state.hexNumber),
+            .init("Reserved", variable.reserved.hexNumber),
             .init("Attributes", bits(variable.attributes, nvramAttributeBits)),
         ]
         if let total = variable.totalSize { fields.append(.init("Total size", sizeText(total))) }
@@ -592,7 +592,7 @@ public enum UEFIDetail {
             // The board's identity to a capsule update, and the version it
             // would be compared with.
             case .esrtClass: entry = (L("ESRT firmware class", in: language), table.esrtClass?.description)
-            case .esrtVersion: entry = (L("ESRT version", in: language), table.esrtVersion.map { hex($0) })
+            case .esrtVersion: entry = (L("ESRT version", in: language), table.esrtVersion.map { $0.hexNumber })
             }
             guard let text = entry.text else { continue }
             let source = table.sources[value]
@@ -612,7 +612,7 @@ public enum UEFIDetail {
         for range in ranges {
             let placed = (bios + range.lowerBound)..<(bios + range.upperBound)
             let holder = image.allNodes.first { $0.space == .file && $0.range == placed && $0.kind != .region }
-            rows.append([.init(hex(placed.lowerBound)), .init(sizeText(UInt64(range.count))),
+            rows.append([.init(placed.lowerBound.hexNumber), .init(sizeText(UInt64(range.count))),
                          .init(holder.map { holderText($0, in: language) } ?? "—")])
             // An empty slot — `SPI_EF6018`'s second is a size of zero — and a
             // range past the end have nothing to outline.
@@ -647,8 +647,8 @@ public enum UEFIDetail {
             }
             rows.append([
                 .init(type),
-                .init(hex(entry.address)),
-                .init(placed.map { hex($0.lowerBound) } ?? "—"),
+                .init(entry.address.hexNumber),
+                .init(placed.map { $0.lowerBound.hexNumber } ?? "—"),
                 .init(sizeText(entry.size)),
                 .init(holder.map { holderText($0, in: language) } ?? "—"),
             ])
@@ -749,7 +749,7 @@ public enum UEFIDetail {
             : NvramVariableHistory.change(from: versions[index - 1], to: version, reader: reader)
                 .map { changeText($0, in: language) } ?? "—"
         return [.init(version.entry == focus ? "▸ " + number : number),
-                .init(hex(version.offset)), .init(state),
+                .init(version.offset.hexNumber), .init(state),
                 .init("\(version.value.count)"), .init(change)]
     }
 
@@ -763,7 +763,7 @@ public enum UEFIDetail {
         }
         if !change.changed.isEmpty {
             var runs = change.changed.prefix(4).map { run in
-                run.count == 1 ? "+" + hex(run.lowerBound) : "+" + hex(run.lowerBound) + "–" + hex(run.upperBound - 1)
+                run.count == 1 ? "+" + run.lowerBound.hexNumber : "+" + run.lowerBound.hexNumber + "–" + (run.upperBound - 1).hexNumber
             }
             if change.changed.count > 4 { runs.append("…") }
             parts.append(L("changed bytes: %1$@, at %2$@", in: language, change.changedBytes, runs.joined(separator: ", ")))
@@ -801,9 +801,9 @@ public enum UEFIDetail {
             columns: [L("Range", in: language), L("Kind", in: language), L("Listed at", in: language), L("Hash", in: language)],
             rows: ranges.map { range in
                 [
-                    .init(range.range.map { "\(hex($0.lowerBound))–\(hex($0.upperBound))" } ?? L("Not placed", in: language)),
+                    .init(range.range.map { "\($0.lowerBound.hexNumber)–\($0.upperBound.hexNumber)" } ?? L("Not placed", in: language)),
                     .init(range.kind.name),
-                    .init(hex(range.source.lowerBound)),
+                    .init(range.source.lowerBound.hexNumber),
                     verdictCell(range, in: language)
                 ]
             }
@@ -850,7 +850,7 @@ public enum UEFIDetail {
             let section = image.innermostNode(containing: outermost)
                 .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
                 ?? L("Compressed section", in: language)
-            var text = L("%1$@ at %2$@", in: language, section, hex(outermost))
+            var text = L("%1$@ at %2$@", in: language, section, outermost.hexNumber)
             if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", in: language, text, chain.count) }
             fields.append(.init(L("Decompressed from", in: language), text))
         }
@@ -873,7 +873,7 @@ public enum UEFIDetail {
         // wherever it likes — so the one thing worth showing is skipped there.
         if !node.isCompressed,
            let address = image.address(forOffset: node.range.lowerBound) {
-            fields.append(.init(L("Address", in: language), hex(address)))
+            fields.append(.init(L("Address", in: language), address.hexNumber))
         }
         return fields
     }
@@ -891,7 +891,7 @@ public enum UEFIDetail {
         switch node.kind {
         case .volume:
             if let length = reader.uint64(at: h + 0x20) { fields.append(.init("Length", sizeText(length))) }
-            if let signature = reader.uint32(at: h + 0x28) { fields.append(.init("Signature", hex(signature))) }
+            if let signature = reader.uint32(at: h + 0x28) { fields.append(.init("Signature", signature.hexNumber)) }
             if let attributes = reader.uint32(at: h + 0x2C) {
                 fields.append(.init("Attributes", bits(attributes, [(0x0000_0800, "Erase polarity")])))
             }
@@ -900,7 +900,7 @@ public enum UEFIDetail {
             if let checksum = reader.uint16(at: checksumOffset) {
                 fields.append(checksumRow("Checksum", checksum, digits: 4, repairs: repairs, checksumOffset: checksumOffset, in: language))
             }
-            if let extOffset = reader.uint16(at: h + 0x34) { fields.append(.init("Ext. header", hex(extOffset))) }
+            if let extOffset = reader.uint16(at: h + 0x34) { fields.append(.init("Ext. header", extOffset.hexNumber)) }
             if let revision = reader.uint8(at: h + 0x37) { fields.append(.init("Revision", "\(revision)")) }
 
         case .file:
@@ -933,12 +933,12 @@ public enum UEFIDetail {
             }
             if let headerChecksum = reader.uint8(at: h + 0x10) {
                 fields.append(markedInvalid
-                    ? .init("Header checksum", L("%1$@ (not checked)", in: language, hex(headerChecksum)))
+                    ? .init("Header checksum", L("%1$@ (not checked)", in: language, headerChecksum.hexNumber))
                     : checksumRow("Header checksum", headerChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x10, in: language))
             }
             if let bodyChecksum = reader.uint8(at: h + 0x11) {
                 fields.append(markedInvalid
-                    ? .init("Body checksum", L("%1$@ (not checked)", in: language, hex(bodyChecksum)))
+                    ? .init("Body checksum", L("%1$@ (not checked)", in: language, bodyChecksum.hexNumber))
                     : checksumRow("Body checksum", bodyChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x11, in: language))
             }
 
@@ -960,10 +960,10 @@ public enum UEFIDetail {
             // reading the FIT panel gives the microcode an entry points at
             // (`MicrocodeHeader.fields`), so the two say it in the same words —
             // with the checksum's verdict this panel's own: the repairs.
-            if let headerType = reader.uint32(at: h) { fields.append(.init("Header type", hex(headerType))) }
+            if let headerType = reader.uint32(at: h) { fields.append(.init("Header type", headerType.hexNumber)) }
             if let header = MicrocodeHeader.read(at: h, in: reader) {
                 if let loaderRevision = reader.uint32(at: h + 0x14) {
-                    fields.append(.init("Loader revision", hex(loaderRevision)))
+                    fields.append(.init("Loader revision", loaderRevision.hexNumber))
                 }
                 let repair = repairs.first { $0.offset == h + 0x10 }
                 fields += header.fields(
@@ -978,23 +978,23 @@ public enum UEFIDetail {
             if let patch = AMDMicrocodeHeader.read(at: h, limit: node.range.upperBound, in: reader) {
                 fields.append(.init("Date", patch.date))
                 fields.append(.init("CPUID", String(format: "%08X", patch.cpuID)))
-                fields.append(.init("Processor signature", hex(patch.processorSignature)))
-                fields.append(.init("Revision", hex(patch.updateRevision)))
-                fields.append(.init("Loader ID", hex(patch.loaderID)))
+                fields.append(.init("Processor signature", patch.processorSignature.hexNumber))
+                fields.append(.init("Revision", patch.updateRevision.hexNumber))
+                fields.append(.init("Loader ID", patch.loaderID.hexNumber))
                 if patch.northBridgeVendor != 0 || patch.northBridgeDevice != 0 {
-                    fields.append(.init("North bridge", "\(hex(patch.northBridgeVendor)):\(hex(patch.northBridgeDevice))"))
+                    fields.append(.init("North bridge", "\(patch.northBridgeVendor.hexNumber):\(patch.northBridgeDevice.hexNumber)"))
                 }
                 if patch.southBridgeVendor != 0 || patch.southBridgeDevice != 0 {
-                    fields.append(.init("South bridge", "\(hex(patch.southBridgeVendor)):\(hex(patch.southBridgeDevice))"))
+                    fields.append(.init("South bridge", "\(patch.southBridgeVendor.hexNumber):\(patch.southBridgeDevice.hexNumber)"))
                 }
-                fields.append(.init("BIOS API revision", hex(patch.biosAPIRevision)))
-                fields.append(.init("Load control", hex(patch.loadControl)))
+                fields.append(.init("BIOS API revision", patch.biosAPIRevision.hexNumber))
+                fields.append(.init("Load control", patch.loadControl.hexNumber))
             }
 
         case .capsule:
             // The capsule GUID is the common "GUID" field.
             if let headerSize = reader.uint32(at: h + 0x10) { fields.append(.init("Header size", sizeText(headerSize))) }
-            if let flags = reader.uint32(at: h + 0x14) { fields.append(.init("Flags", hex(flags))) }
+            if let flags = reader.uint32(at: h + 0x14) { fields.append(.init("Flags", flags.hexNumber)) }
             if let imageSize = reader.uint32(at: h + 0x18) { fields.append(.init("Image size", sizeText(imageSize))) }
 
         case .uefiImage:
@@ -1029,45 +1029,45 @@ public enum UEFIDetail {
             }
 
         case .flashDescriptor:
-            if let signature = reader.uint32(at: h + 0x10) { fields.append(.init("Signature", hex(signature))) }
-            if let map = reader.uint32(at: h + 0x14) { fields.append(.init("FLMAP", hex(map))) }
-            if let version = reader.uint32(at: h + 0x20) { fields.append(.init("Version", hex(version))) }
+            if let signature = reader.uint32(at: h + 0x10) { fields.append(.init("Signature", signature.hexNumber)) }
+            if let map = reader.uint32(at: h + 0x14) { fields.append(.init("FLMAP", map.hexNumber)) }
+            if let version = reader.uint32(at: h + 0x20) { fields.append(.init("Version", version.hexNumber)) }
 
         case .region:
             // The descriptor's table keeps base and limit in 4 KiB units; the
             // type is the common "Type" field.
-            fields.append(.init("Base (4 KiB)", hex(node.range.lowerBound >> 12)))
+            fields.append(.init("Base (4 KiB)", (node.range.lowerBound >> 12).hexNumber))
             if node.range.upperBound > 0 {
-                fields.append(.init("Limit (4 KiB)", hex((node.range.upperBound - 1) >> 12)))
+                fields.append(.init("Limit (4 KiB)", ((node.range.upperBound - 1) >> 12).hexNumber))
             }
 
         case .vssStore:
             // A VSS store's header is a signature and size, then the format,
             // state and two reserved words that describe the store (§9).
-            if let format = reader.uint8(at: h + 8) { fields.append(.init("Format", hex(format))) }
-            if let state = reader.uint8(at: h + 9) { fields.append(.init("State", hex(state))) }
-            if let reserved = reader.uint16(at: h + 10) { fields.append(.init("Reserved", hex(reserved))) }
-            if let reserved1 = reader.uint32(at: h + 12) { fields.append(.init("Reserved1", hex(reserved1))) }
+            if let format = reader.uint8(at: h + 8) { fields.append(.init("Format", format.hexNumber)) }
+            if let state = reader.uint8(at: h + 9) { fields.append(.init("State", state.hexNumber)) }
+            if let reserved = reader.uint16(at: h + 10) { fields.append(.init("Reserved", reserved.hexNumber)) }
+            if let reserved1 = reader.uint32(at: h + 12) { fields.append(.init("Reserved1", reserved1.hexNumber)) }
 
         case .vss2Store:
             // A VSS2 store is the same four fields, after its 16-byte store
             // GUID and size (§9).
-            if let format = reader.uint8(at: h + 20) { fields.append(.init("Format", hex(format))) }
-            if let state = reader.uint8(at: h + 21) { fields.append(.init("State", hex(state))) }
-            if let reserved = reader.uint16(at: h + 22) { fields.append(.init("Reserved", hex(reserved))) }
-            if let reserved1 = reader.uint32(at: h + 24) { fields.append(.init("Reserved1", hex(reserved1))) }
+            if let format = reader.uint8(at: h + 20) { fields.append(.init("Format", format.hexNumber)) }
+            if let state = reader.uint8(at: h + 21) { fields.append(.init("State", state.hexNumber)) }
+            if let reserved = reader.uint16(at: h + 22) { fields.append(.init("Reserved", reserved.hexNumber)) }
+            if let reserved1 = reader.uint32(at: h + 24) { fields.append(.init("Reserved1", reserved1.hexNumber)) }
 
         case .ftwStore:
             // An FTW working block checks its own header CRC32, which lives
             // next to the state byte (§9).
-            if let state = reader.uint8(at: h + 20) { fields.append(.init("State", hex(state))) }
-            if let crc = reader.uint32(at: h + 16) { fields.append(.init("Header CRC32", hex(crc))) }
+            if let state = reader.uint8(at: h + 20) { fields.append(.init("State", state.hexNumber)) }
+            if let crc = reader.uint32(at: h + 16) { fields.append(.init("Header CRC32", crc.hexNumber)) }
 
         case .sysFStore:
             // A SysF store's header holds two unknown fields after the
             // signature; the CRC32 over the whole store is its last four bytes.
-            if let unknown = reader.uint8(at: h + 4) { fields.append(.init("Unknown", hex(unknown))) }
-            if let unknown1 = reader.uint32(at: h + 5) { fields.append(.init("Unknown1", hex(unknown1))) }
+            if let unknown = reader.uint8(at: h + 4) { fields.append(.init("Unknown", unknown.hexNumber)) }
+            if let unknown1 = reader.uint32(at: h + 5) { fields.append(.init("Unknown1", unknown1.hexNumber)) }
             // The store's CRC32 is its final four bytes, over everything before
             // them — which is where the reference parser reads it.
             if node.range.upperBound >= h + 4,
@@ -1083,29 +1083,29 @@ public enum UEFIDetail {
         case .flashDeviceMapStore:
             // `INSYDE_FLASH_DEVICE_MAP_HEADER` (BOOT_GUARD_PROTECTED_RANGES.md §5.3).
             if let size = reader.uint32(at: h + 4) { fields.append(.init("Size", sizeText(size))) }
-            if let dataOffset = reader.uint32(at: h + 8) { fields.append(.init("Data offset", hex(dataOffset))) }
+            if let dataOffset = reader.uint32(at: h + 8) { fields.append(.init("Data offset", dataOffset.hexNumber)) }
             if let entrySize = reader.uint32(at: h + 12) { fields.append(.init("Entry size", sizeText(entrySize))) }
-            if let format = reader.uint8(at: h + 16) { fields.append(.init("Entry format", hex(format))) }
-            if let revision = reader.uint8(at: h + 17) { fields.append(.init("Revision", hex(revision))) }
+            if let format = reader.uint8(at: h + 16) { fields.append(.init("Entry format", format.hexNumber)) }
+            if let revision = reader.uint8(at: h + 17) { fields.append(.init("Revision", revision.hexNumber)) }
             if let extensions = reader.uint8(at: h + 18) { fields.append(.init("Extensions", "\(extensions)")) }
             if let checksum = reader.uint8(at: h + 19), let header = reader.bytes(at: h, count: 0x1C) {
                 let expected = 0 &- (Checksums.sum8(header) &- checksum)
-                fields.append(.init("Checksum", expected == checksum ? "\(hex(checksum)), valid" : "\(hex(checksum)), should be \(hex(expected))"))
+                fields.append(.init("Checksum", expected == checksum ? "\(checksum.hexNumber), valid" : "\(checksum.hexNumber), should be \(expected.hexNumber)"))
             }
-            if let base = reader.uint64(at: h + 20) { fields.append(.init("Flash device base address", hex(base))) }
+            if let base = reader.uint64(at: h + 20) { fields.append(.init("Flash device base address", base.hexNumber)) }
 
         case .flashDeviceMapEntry:
             // The region type GUID is the common "GUID" field.
             if let regionID = reader.bytes(at: h + 16, count: 16) {
                 fields.append(.init("Region ID", regionID.map { String(format: "%02X", $0) }.joined()))
             }
-            if let offset = reader.uint64(at: h + 32) { fields.append(.init("Region offset", hex(offset))) }
-            if let size = reader.uint64(at: h + 40) { fields.append(.init("Region size", hex(size))) }
+            if let offset = reader.uint64(at: h + 32) { fields.append(.init("Region offset", offset.hexNumber)) }
+            if let size = reader.uint64(at: h + 40) { fields.append(.init("Region size", size.hexNumber)) }
             if let attributes = reader.uint32(at: h + 48) {
                 var words: [String] = []
                 if attributes & 0x1 != 0 { words.append("modifiable") }
                 if attributes & 0x2 != 0 { words.append("ignored") }
-                fields.append(.init("Attributes", words.isEmpty ? hex(attributes) : "\(hex(attributes)) (\(words.joined(separator: ", ")))"))
+                fields.append(.init("Attributes", words.isEmpty ? attributes.hexNumber : "\(attributes.hexNumber) (\(words.joined(separator: ", ")))"))
             }
             if let hash = reader.bytes(at: h + 52, count: 32) {
                 fields.append(.init("Hash", hash.map { String(format: "%02X", $0) }.joined()))
@@ -1115,22 +1115,22 @@ public enum UEFIDetail {
             // A Phoenix flash map names its regions in an entry count and a
             // reserved dword before the entries themselves (§9).
             if let entries = reader.uint16(at: h + 10) { fields.append(.init("Entries", "\(entries)")) }
-            if let reserved = reader.uint32(at: h + 12) { fields.append(.init("Reserved", hex(reserved))) }
+            if let reserved = reader.uint32(at: h + 12) { fields.append(.init("Reserved", reserved.hexNumber)) }
 
         case .flashMapEntry:
             // The region GUID is the common "GUID" field; the header adds the
             // data and entry types and the region's physical layout.
-            if let dataType = reader.uint16(at: h + 16) { fields.append(.init("Data type", hex(dataType))) }
-            if let entryType = reader.uint16(at: h + 18) { fields.append(.init("Entry type", hex(entryType))) }
+            if let dataType = reader.uint16(at: h + 16) { fields.append(.init("Data type", dataType.hexNumber)) }
+            if let entryType = reader.uint16(at: h + 18) { fields.append(.init("Entry type", entryType.hexNumber)) }
             if let size = reader.uint32(at: h + 28) { fields.append(.init("Size", sizeText(size))) }
-            if let offset = reader.uint32(at: h + 32) { fields.append(.init("Offset", hex(offset))) }
-            if let address = reader.uint64(at: h + 20) { fields.append(.init("Physical address", hex(address))) }
+            if let offset = reader.uint32(at: h + 32) { fields.append(.init("Offset", offset.hexNumber)) }
+            if let address = reader.uint64(at: h + 20) { fields.append(.init("Physical address", address.hexNumber)) }
 
         case .evsaStore:
             // An EVSA store is itself an entry, type 0xEC: attributes, a
             // reserved word, and a checksum that covers its 20-byte header.
-            if let attributes = reader.uint32(at: h + 8) { fields.append(.init("Attributes", hex(attributes))) }
-            if let reserved = reader.uint32(at: h + 16) { fields.append(.init("Reserved", hex(reserved))) }
+            if let attributes = reader.uint32(at: h + 8) { fields.append(.init("Attributes", attributes.hexNumber)) }
+            if let reserved = reader.uint32(at: h + 16) { fields.append(.init("Reserved", reserved.hexNumber)) }
             if let checksum = evsaChecksum(storedAt: h + 1, covering: node.header.upperBound, reader: reader) {
                 fields.append(.init(
                     "Checksum",
@@ -1149,13 +1149,13 @@ public enum UEFIDetail {
             // common "GUID" field; the name a name entry carries is its own.
             switch node.subtype {
             case UEFITypes.Sub.guidEvsaEntry:
-                if let guidId = reader.uint16(at: h + 4) { fields.append(.init("GuidId", hex(guidId))) }
+                if let guidId = reader.uint16(at: h + 4) { fields.append(.init("GuidId", guidId.hexNumber)) }
             case UEFITypes.Sub.nameEvsaEntry:
-                if let varId = reader.uint16(at: h + 4) { fields.append(.init("VarId", hex(varId))) }
+                if let varId = reader.uint16(at: h + 4) { fields.append(.init("VarId", varId.hexNumber)) }
             default:
                 // A data variable, valid or not.
-                if let varId = reader.uint16(at: h + 6) { fields.append(.init("VarId", hex(varId))) }
-                if let guidId = reader.uint16(at: h + 4) { fields.append(.init("GuidId", hex(guidId))) }
+                if let varId = reader.uint16(at: h + 6) { fields.append(.init("VarId", varId.hexNumber)) }
+                if let guidId = reader.uint16(at: h + 4) { fields.append(.init("GuidId", guidId.hexNumber)) }
                 if let attributes = reader.uint32(at: h + 8) {
                     fields.append(.init("Attributes", bits(attributes, evsaAttributeBits)))
                 }
@@ -1172,23 +1172,23 @@ public enum UEFIDetail {
             // header adds after that differs (§9).
             switch node.subtype {
             case UEFITypes.Sub.pubkeySlicData:
-                if let keyType = reader.uint8(at: h + 8) { fields.append(.init("Key type", hex(keyType))) }
-                if let version = reader.uint8(at: h + 9) { fields.append(.init("Version", hex(version))) }
-                if let algorithm = reader.uint32(at: h + 12) { fields.append(.init("Algorithm", hex(algorithm))) }
-                if let bitLength = reader.uint32(at: h + 20) { fields.append(.init("Bit length", hex(bitLength))) }
-                if let exponent = reader.uint32(at: h + 24) { fields.append(.init("Exponent", hex(exponent))) }
+                if let keyType = reader.uint8(at: h + 8) { fields.append(.init("Key type", keyType.hexNumber)) }
+                if let version = reader.uint8(at: h + 9) { fields.append(.init("Version", version.hexNumber)) }
+                if let algorithm = reader.uint32(at: h + 12) { fields.append(.init("Algorithm", algorithm.hexNumber)) }
+                if let bitLength = reader.uint32(at: h + 20) { fields.append(.init("Bit length", bitLength.hexNumber)) }
+                if let exponent = reader.uint32(at: h + 24) { fields.append(.init("Exponent", exponent.hexNumber)) }
             case UEFITypes.Sub.markerSlicData:
-                if let version = reader.uint32(at: h + 8) { fields.append(.init("Version", hex(version))) }
+                if let version = reader.uint32(at: h + 8) { fields.append(.init("Version", version.hexNumber)) }
                 if let oemID = reader.bytes(at: h + 12, count: 6) { fields.append(.init("OEM ID", asciiText(oemID))) }
                 if let oemTableID = reader.bytes(at: h + 18, count: 8) { fields.append(.init("OEM table ID", asciiText(oemTableID))) }
                 // The parser only accepts a marker whose windows flag is the
                 // known value, so the reference's word for it is the value, and
                 // anything else is shown as the raw number.
                 if let windowsFlag = reader.uint64(at: h + 26) {
-                    let value = windowsFlag == 0x2053_574F_444E_4957 ? "WINDOWS" : hex(windowsFlag)
+                    let value = windowsFlag == 0x2053_574F_444E_4957 ? "WINDOWS" : windowsFlag.hexNumber
                     fields.append(.init("Windows flag", value))
                 }
-                if let slicVersion = reader.uint32(at: h + 34) { fields.append(.init("SLIC version", hex(slicVersion))) }
+                if let slicVersion = reader.uint32(at: h + 34) { fields.append(.init("SLIC version", slicVersion.hexNumber)) }
             default: break
             }
 
@@ -1200,7 +1200,7 @@ public enum UEFIDetail {
 
         // Every DVAR field is stored as its complement; these are the values.
         case .dvarStore:
-            if let flags = reader.uint8(at: h + 8) { fields.append(.init("Store flags", hex(0xFF - flags))) }
+            if let flags = reader.uint8(at: h + 8) { fields.append(.init("Store flags", (0xFF - flags).hexNumber)) }
 
         case .dvarEntry:
             fields += dvarFields(node, reader: reader)
@@ -1237,7 +1237,7 @@ public enum UEFIDetail {
             guard let block = HPSignatureBlock.read(at: node.range.lowerBound, limit: reader.count, in: reader)
             else { break }
             fields.append(.init("Version", "\(block.version)"))
-            fields.append(.init(L("Signature", in: language), "\(block.signatureName) (\(hex(block.signatureLength)))"))
+            fields.append(.init(L("Signature", in: language), "\(block.signatureName) (\(block.signatureLength.hexNumber))"))
             fields.append(.init(L("BIOS version", in: language), block.biosVersion))
             fields.append(.init(L("Date", in: language), block.date))
             if let identifier = block.identifier { fields.append(.init("ID", identifier)) }
@@ -1255,18 +1255,18 @@ public enum UEFIDetail {
             case .table(let rows):
                 fields.append(.init("Entries", "\(rows)"))
             case .acm(let subtype, let headerVersion, let chipsetID, let date, let svn):
-                fields.append(.init("Module subtype", FITComponentHeader.acmSubtypeName(subtype) ?? hex(subtype)))
-                fields.append(.init("Header version", hex(headerVersion)))
-                fields.append(.init("Chipset ID", hex(chipsetID)))
+                fields.append(.init("Module subtype", FITComponentHeader.acmSubtypeName(subtype) ?? subtype.hexNumber))
+                fields.append(.init("Header version", headerVersion.hexNumber))
+                fields.append(.init("Chipset ID", chipsetID.hexNumber))
                 fields.append(.init(L("Date", in: language), date))
                 fields.append(.init("ACM SVN", "\(svn)"))
             case .keyManifest(let version, let kmVersion, let svn, let id):
-                fields.append(.init("Version", hex(version)))
-                fields.append(.init("KM version", hex(kmVersion)))
+                fields.append(.init("Version", version.hexNumber))
+                fields.append(.init("KM version", kmVersion.hexNumber))
                 fields.append(.init("KM SVN", "\(svn)"))
-                fields.append(.init("KM ID", hex(id)))
+                fields.append(.init("KM ID", id.hexNumber))
             case .bootPolicy(let version, let revision, let svn, let acmSVN):
-                fields.append(.init("Version", hex(version)))
+                fields.append(.init("Version", version.hexNumber))
                 fields.append(.init("BPM revision", "\(revision)"))
                 fields.append(.init("BP SVN", "\(svn)"))
                 fields.append(.init("ACM SVN", "\(acmSVN)"))
@@ -1390,7 +1390,7 @@ public enum UEFIDetail {
         }
         fields.append(.init(L("Written", in: language), sizeText(found.written)))
         if let original = found.copyOf {
-            fields.append(.init(L("Copy of", in: language), hex(original)))
+            fields.append(.init(L("Copy of", in: language), original.hexNumber))
         }
         return fields
     }
@@ -1399,7 +1399,7 @@ public enum UEFIDetail {
     /// starts. The firmware's own words, so they read as written.
     private static func iteFields(_ node: UEFINode, reader: ImageReader) -> [UEFIDetailField] {
         ITEFirmware.all(in: node.range, reader: reader).map {
-            .init("ITE identification", "\($0.identification) · \(hex($0.start))")
+            .init("ITE identification", "\($0.identification) · \($0.start.hexNumber)")
         }
     }
 
@@ -1464,7 +1464,7 @@ public enum UEFIDetail {
                             mismatch ? L("%1$@ — the dump is %2$@", in: language, sizes, capacityText(imageSize, in: language)) : sizes,
                             isProblem: mismatch))
         if component.chipSizes.count == 2, let first = component.chipSizes[0] {
-            fields.append(.init(L("Second chip starts at", in: language), hex(first)))
+            fields.append(.init(L("Second chip starts at", in: language), first.hexNumber))
         }
         fields.append(.init(L("Read ID and status clock", in: language), clockText(component.readIDClock, in: language)))
         fields.append(.init(L("Write and erase clock", in: language), clockText(component.writeEraseClock, in: language)))
@@ -1501,7 +1501,7 @@ public enum UEFIDetail {
 
     /// A protected range as where it runs and what it refuses.
     private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange, in language: AppLanguage) -> String {
-        let span = "\(hex(range.start)) – \(hex(range.end))"
+        let span = "\(range.start.hexNumber) – \(range.end.hexNumber)"
         switch (range.readProtected, range.writeProtected) {
         case (true, true): return L("%1$@: reads and writes refused", in: language, span)
         case (false, true): return L("%1$@: writes refused", in: language, span)
@@ -1540,7 +1540,7 @@ public enum UEFIDetail {
                 title: L("Region table", in: language),
                 symbol: "square.split.2x2",
                 columns: [L("Region", in: language), L("Base", in: language), L("Limit", in: language)],
-                rows: regions.map { [.init($0.type.label), .init(hex($0.base)), .init(hex($0.limit))] }
+                rows: regions.map { [.init($0.type.label), .init($0.base.hexNumber), .init($0.limit.hexNumber)] }
             ))
         }
         if !descriptor.masters.isEmpty {
@@ -1648,9 +1648,9 @@ public enum UEFIDetail {
             let end = min(start + 16, descriptor.oemSection.count)
             let address = base + UInt64(start)
             let bytes = Array(descriptor.oemSection[start..<end])
-            rows.append(([.init(hex(address)), .init(hexBytes(bytes))],
+            rows.append(([.init(address.hexNumber), .init(hexBytes(bytes))],
                          .range(address..<address + UInt64(bytes.count),
-                                name: hex(address))))
+                                name: address.hexNumber)))
         }
         return UEFIDetailTable(
             title: L("OEM section", in: language),
@@ -1686,14 +1686,14 @@ public enum UEFIDetail {
                                  in language: AppLanguage) -> UEFIDetailTable {
         let rows = pmc.fields.map { reading -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
             let range = reading.field.bits
-            let shown = reading.field.options?[Int(reading.value)] ?? hex(reading.value)
+            let shown = reading.field.options?[Int(reading.value)] ?? reading.value.hexNumber
             let address = pmc.base + UInt64(reading.field.word) * 4
             return ([.init(reading.field.label ?? strapFieldName(reading.field.name)),
                      .init(range.lowerBound == range.upperBound
                            ? "\(range.lowerBound)"
                            : "\(range.lowerBound)–\(range.upperBound)"),
                      .init(shown, isStrong: reading.isSet),
-                     .init(reading.field.defaultValue.map(hex) ?? "")],
+                     .init(reading.field.defaultValue.map(\.hexNumber) ?? "")],
                     .range(address..<address + 4, name: reading.field.name))
         }
         return UEFIDetailTable(
@@ -1719,7 +1719,7 @@ public enum UEFIDetail {
                       L("Length", in: language)],
             rows: mip.blocks.map { block in
                 [.init(mipBlockName(block.type, in: language)),
-                 .init(hex(UInt64(block.offset))),
+                 .init((UInt64(block.offset)).hexNumber),
                  .init("\(block.length)")]
             }
         )
@@ -1744,8 +1744,8 @@ public enum UEFIDetail {
                      .init(range.lowerBound == range.upperBound
                            ? "\(range.lowerBound)"
                            : "\(range.lowerBound)–\(range.upperBound)"),
-                     .init(hex(reading.value)),
-                     .init(hex(address))],
+                     .init(reading.value.hexNumber),
+                     .init(address.hexNumber)],
                     .range(address..<address + 4, name: reading.field.name))
         }
         return UEFIDetailTable(
@@ -1764,7 +1764,7 @@ public enum UEFIDetail {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
                 let name = "PCHSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
-                return ([.init(name), .init(hex(address)),
+                return ([.init(name), .init(address.hexNumber),
                          .init(String(format: "0x%08X", straps.words[index])),
                          .init(strapMeaning(index, of: straps, in: language))],
                         .range(address..<address + 4, name: name))
@@ -1798,8 +1798,8 @@ public enum UEFIDetail {
                                .init(range.lowerBound == range.upperBound
                                      ? "\(range.lowerBound)"
                                      : "\(range.lowerBound)–\(range.upperBound)"),
-                               .init(hex(reading.value), isStrong: reading.isSet),
-                               .init(reading.field.defaultValue.map(hex) ?? "")])
+                               .init(reading.value.hexNumber, isStrong: reading.isSet),
+                               .init(reading.field.defaultValue.map(\.hexNumber) ?? "")])
         }
         if let bit = straps.meDisable, bit.word < straps.words.count {
             rows.append(Row(
@@ -1814,7 +1814,7 @@ public enum UEFIDetail {
         for word in 0..<straps.words.count where !covered.contains(word) {
             rows.append(Row(word: word, bit: -1, isSet: false,
                             cells: [.init("PCHSTRP\(word)"), .init(""),
-                                    .init(hex(straps.words[word])), .init("")]))
+                                    .init(straps.words[word].hexNumber), .init("")]))
         }
         rows.sort { ($0.word, $0.bit) < ($1.word, $1.bit) }
 
@@ -1829,7 +1829,7 @@ public enum UEFIDetail {
             sections.append(.init(title: name, subtitle: groups[word],
                                   rows: start..<end,
                                   target: .range(address..<address + 4, name: name),
-                                  address: hex(address),
+                                  address: address.hexNumber,
                                   note: set == 0 ? nil
                                       : L("Non-default: %1$@", in: language, String(set))))
             start = end
@@ -1864,7 +1864,7 @@ public enum UEFIDetail {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
                 let name = "CPUSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
-                return ([.init(name), .init(hex(address)),
+                return ([.init(name), .init(address.hexNumber),
                          .init(String(format: "0x%08X", straps.words[index])),
                          .init(L("Unknown", in: language))],
                         .range(address..<address + 4, name: name))
@@ -1889,7 +1889,7 @@ public enum UEFIDetail {
             let range = reading.field.bits
             // The tool's own word for the value where it states one — "Yes",
             // "All Cores Active" — and the number otherwise.
-            let shown = reading.field.options?[Int(reading.value)] ?? hex(reading.value)
+            let shown = reading.field.options?[Int(reading.value)] ?? reading.value.hexNumber
             return Row(word: reading.field.word, bit: range.lowerBound, isSet: reading.isSet,
                        cells: [.init(reading.field.label ?? strapFieldName(reading.field.name)),
                                .init(range.lowerBound == range.upperBound
@@ -1899,7 +1899,7 @@ public enum UEFIDetail {
                                // The message states no default: the dash
                                // says the column has nothing to compare
                                // against, rather than leaving it blank.
-                               .init(reading.field.defaultValue.map(hex) ?? "—")])
+                               .init(reading.field.defaultValue.map(\.hexNumber) ?? "—")])
         }.sorted { ($0.word, $0.bit) < ($1.word, $1.bit) }
 
         var sections: [UEFIDetailTable.Section] = []
@@ -1913,7 +1913,7 @@ public enum UEFIDetail {
             sections.append(.init(title: name, subtitle: groups[word],
                                   rows: start..<end,
                                   target: .range(address..<address + 4, name: name),
-                                  address: hex(address),
+                                  address: address.hexNumber,
                                   note: set == 0 ? nil
                                       : L("Non-default: %1$@", in: language, String(set))))
             start = end
@@ -1948,7 +1948,7 @@ public enum UEFIDetail {
                       inWord + field.count <= 32 else { continue }
                 let mask: UInt32 = field.count >= 32 ? .max : (1 << UInt32(field.count)) - 1
                 let value = reading.words[word] >> UInt32(inWord) & mask
-                let shown = field.options?[Int(value)] ?? hex(value)
+                let shown = field.options?[Int(value)] ?? value.hexNumber
                 let bits = field.count == 1
                     ? "\(inWord)"
                     : "\(inWord)–\(inWord + field.count - 1)"
@@ -1964,7 +1964,7 @@ public enum UEFIDetail {
                                   rows: start..<end,
                                   target: .range(reading.base..<(reading.base + length),
                                                  name: reading.register.name),
-                                  address: hex(reading.base)))
+                                  address: reading.base.hexNumber))
         }
         return UEFIDetailTable(
             title: L("Descriptor registers", in: language),
@@ -2013,7 +2013,7 @@ public enum UEFIDetail {
         fields.append(.init("Attributes", bits(attributes, nvarAttributeBits)))
         // `next` is relative to the entry; the row says where it lands.
         if let next = reader.uint24(at: h + 6), next != 0xFF_FFFF {
-            fields.append(.init("Next entry", hex(h + UInt64(next))))
+            fields.append(.init("Next entry", (h + UInt64(next)).hexNumber))
         }
         // An entry that names its GUID by index carries the index right
         // after the header — on a valid entry that is not a later link.
@@ -2030,7 +2030,7 @@ public enum UEFIDetail {
         fields.append(.init("Extended attributes", bits(extended, nvarExtendedAttributeBits)))
         if extended & 0x20 != 0, tail.count >= 1 + 8 + 2,
            let timestamp = reader.uint64(at: tail.lowerBound + 1) {
-            fields.append(.init("Timestamp", hex(timestamp)))
+            fields.append(.init("Timestamp", timestamp.hexNumber))
             if attributes & 0x08 == 0, tail.count >= 1 + 8 + 32 + 2,
                let hash = reader.bytes(at: tail.lowerBound + 9, count: 32) {
                 fields.append(.init("Hash", hash.map { String(format: "%02X", $0) }.joined()))
@@ -2150,7 +2150,7 @@ public enum UEFIDetail {
     /// with the local `size` variables the header cases bind.
     private static func sizeText<T: BinaryInteger>(_ bytes: T) -> String {
         let value = UInt64(truncatingIfNeeded: bytes)
-        return value == 0 ? "Empty" : "\(hex(bytes)) (\(value))"
+        return value == 0 ? "Empty" : "\(bytes.hexNumber) (\(value))"
     }
 
     private static func kindLabel(_ kind: UEFINodeKind, in language: AppLanguage) -> String {
@@ -2227,20 +2227,20 @@ public enum UEFIDetail {
         case .volume: return "Revision \(subtype)"
         case .lenvBlock: return subtype == 1 ? L("In use", context: "LENV block", in: language) : L("Not in use", in: language)
         case .amdDirectory:
-            return AMDFirmware.DirectoryKind(rawValue: subtype).map { AMDFirmware.kindName($0).text(in: language) } ?? hex(subtype)
+            return AMDFirmware.DirectoryKind(rawValue: subtype).map { AMDFirmware.kindName($0).text(in: language) } ?? subtype.hexNumber
         case .region:
             // The region label has no number in it, so the code goes with it.
-            return FlashRegionType(rawValue: Int(subtype)).map { "\($0.label) · \(hex(subtype))" } ?? hex(subtype)
+            return FlashRegionType(rawValue: Int(subtype)).map { "\($0.label) · \(subtype.hexNumber)" } ?? subtype.hexNumber
         case .intelImage, .uefiImage:
             // Image and Intel / Image and UEFI are the type/subtype pairs
             // UEFITool names these roots; the word comes from the same table as
             // the columns.
-            return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
+            return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? subtype.hexNumber
         // An NVRAM entry and a SLIC blob carry a derived subtype; name it from
         // the table, keeping the number where the table has no word.
         case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData, .nvarEntry, .dvarEntry, .startupApData:
-            return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
-        default: return hex(subtype)
+            return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? subtype.hexNumber
+        default: return subtype.hexNumber
         }
     }
 
@@ -2257,18 +2257,14 @@ public enum UEFIDetail {
     /// `0x0 · 0x2000 (8192) bytes`, or `Empty`.
     private static func rangeText(_ range: Range<UInt64>) -> String {
         guard !range.isEmpty else { return sizeText(0) }
-        return "\(hex(range.lowerBound)) · \(sizeText(range.count)) bytes"
+        return "\(range.lowerBound.hexNumber) · \(sizeText(range.count)) bytes"
     }
 
     /// The hex value, with the well-known bits named when they are set.
     private static func bits<T: FixedWidthInteger>(_ value: T, _ names: [(T, String)]) -> String {
         let set = names.filter { value & $0.0 != 0 }.map(\.1)
-        var text = hex(value)
+        var text = value.hexNumber
         if !set.isEmpty { text += " (" + set.joined(separator: ", ") + ")" }
         return text
-    }
-
-    private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        value.hexNumber
     }
 }

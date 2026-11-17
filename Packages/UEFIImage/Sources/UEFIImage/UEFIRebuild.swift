@@ -225,7 +225,7 @@ public enum UEFIRebuild {
             case .ibb:
                 throw Refusal(
                     L("The change writes at 0x%1$@ inside “%2$@”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting. Nothing was changed.",
-                      hex(max(hit.lowerBound, range.range.lowerBound)), range.name)
+                      (max(hit.lowerBound, range.range.lowerBound)).bareHexNumber, range.name)
                 )
             case .vendorHash:
                 // A list names several ranges one way — every entry of an
@@ -402,7 +402,7 @@ public enum UEFIRebuild {
                 guard newSpace.count == original.count else {
                     throw Refusal(
                         L("“%1$@” would inflate to 0x%2$@ bytes, and the BIOS directory gives 0x%3$@. The directory is not rewritten, so the image has to keep its size.",
-                          section.name, hex(UInt64(newSpace.count)), hex(UInt64(original.count)))
+                          section.name, (UInt64(newSpace.count)).bareHexNumber, (UInt64(original.count)).bareHexNumber)
                     )
                 }
                 let caution = Refusal.Caution.pspBIOSImage(name: section.name)
@@ -580,7 +580,7 @@ public enum UEFIRebuild {
             if child.flattened.contains(where: isVolumeTop) {
                 throw Refusal(
                     L("“%1$@” holds the Volume Top File, which has to end at the top of the address space, so it keeps its size of 0x%2$@ bytes and this one is 0x%3$@.",
-                      child.name, hex(oldLength), hex(newLength))
+                      child.name, oldLength.bareHexNumber, newLength.bareHexNumber)
                 )
             }
             let next = siblings.first {
@@ -598,12 +598,12 @@ public enum UEFIRebuild {
                     guard let next else {
                         throw Refusal(
                             L("“%1$@” is 0x%2$@ bytes longer than before, and only 0x%3$@ empty bytes follow it before %4$@.",
-                              child.name, hex(needed), hex(room), endName)
+                              child.name, needed.bareHexNumber, room.bareHexNumber, endName)
                         )
                     }
                     throw Refusal(
                         L("“%1$@” is 0x%2$@ bytes longer than before, and only 0x%3$@ empty bytes follow it before “%4$@”, which stays where it is.",
-                          child.name, hex(needed), hex(room), next.name)
+                          child.name, needed.bareHexNumber, room.bareHexNumber, next.name)
                     )
                 }
                 result.replaceSubrange(Int(old.lowerBound)..<Int(old.upperBound + needed), with: new)
@@ -613,9 +613,9 @@ public enum UEFIRebuild {
             }
             var warning: LocalizedText = newLength > oldLength
                 ? L("“%1$@” is now 0x%2$@ bytes, 0x%3$@ bytes longer, taken from the empty space after it; what follows stays where it was.",
-                    child.name, hex(newLength), hex(newLength - oldLength))
+                    child.name, newLength.bareHexNumber, (newLength - oldLength).bareHexNumber)
                 : L("“%1$@” is now 0x%2$@ bytes, 0x%3$@ bytes shorter, given back to the empty space after it; what follows stays where it was.",
-                    child.name, hex(newLength), hex(oldLength - newLength))
+                    child.name, newLength.bareHexNumber, (oldLength - newLength).bareHexNumber)
             if child.kind == .volume {
                 warning = .joined([warning, L("The flash map the firmware carries (PCDs, vendor tables, an Insyde FDM) still gives its old size.")],
                                   separator: " ")
@@ -653,13 +653,13 @@ public enum UEFIRebuild {
             else {
                 throw Refusal(
                     L("“%1$@” is 0x%2$@ bytes, and its header says 0x%3$@: a volume is whole blocks of its block map, and this one cannot be made to say the new length.",
-                      name, hex(length), hex(declared))
+                      name, length.bareHexNumber, declared.bareHexNumber)
                 )
             }
             var bytes = volume
             Bytes.put(length, count: 8, at: 0x20, in: &bytes)
             Bytes.put32(UInt32(length / blockLength), at: Int(FV.headerSize), in: &bytes)
-            warnings.append(L("“%1$@” said it was 0x%2$@ bytes: its header now gives 0x%3$@.", name, hex(declared), hex(length)))
+            warnings.append(L("“%1$@” said it was 0x%2$@ bytes: its header now gives 0x%3$@.", name, declared.bareHexNumber, length.bareHexNumber))
             return bytes
         }
 
@@ -790,7 +790,7 @@ public enum UEFIRebuild {
                 }
                 throw Refusal(
                     L("“%1$@” has 0x%2$@ bytes free where it can take room, and the change needs 0x%3$@.",
-                      volume.name, hex(absorbEnd - absorbStart), hex(UInt64(newAbsorbStart - Int64(absorbStart))))
+                      volume.name, (absorbEnd - absorbStart).bareHexNumber, (UInt64(newAbsorbStart - Int64(absorbStart))).bareHexNumber)
                 )
             }
             if let pad = padBeforeTop {
@@ -840,14 +840,14 @@ public enum UEFIRebuild {
             guard let blockLength = Bytes.oneBlockLength(bytes, at: start, end: end) else {
                 throw Refusal(
                     L("“%1$@” has no room for 0x%2$@ more bytes, and its block map is not one a new size can be written into.",
-                      volume.name, hex(needed))
+                      volume.name, needed.bareHexNumber)
                 )
             }
             let length = UInt64(volume.range.count)
             guard length % blockLength == 0 else {
                 throw Refusal(
                     L("“%1$@” has no room for 0x%2$@ more bytes, and its size is not a whole number of its blocks.",
-                      volume.name, hex(needed))
+                      volume.name, needed.bareHexNumber)
                 )
             }
             let extra = (needed + blockLength - 1) / blockLength * blockLength
@@ -878,7 +878,7 @@ public enum UEFIRebuild {
             }
             // A volume growing into the empty space after it is said by
             // `settled`, with what that means for the flash map.
-            if saysSo { warnings.append(L("“%1$@” grew by 0x%2$@ bytes to make room.", volume.name, hex(extra))) }
+            if saysSo { warnings.append(L("“%1$@” grew by 0x%2$@ bytes to make room.", volume.name, extra.bareHexNumber)) }
             return try rebuildVolume(bigger, replacing: child, with: new, bytes: grownBytes, space: space,
                                      growth: .none)
         }
@@ -1120,12 +1120,4 @@ public enum UEFIRebuild {
             return ~crc
         }
     }
-
-    static func hex(_ value: UInt64) -> String {
-        value.bareHexNumber
-    }
-}
-
-private func hex(_ value: UInt64) -> String {
-    UEFIRebuild.hex(value)
 }

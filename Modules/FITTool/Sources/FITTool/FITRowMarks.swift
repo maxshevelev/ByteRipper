@@ -48,7 +48,7 @@ public enum FITRowMarks {
         if case .microcode(let header) = row.model.target, !header.checksumIsCorrect {
             if let computed = header.computedChecksum {
                 errors.append(L("Invalid microcode image checksum: %1$@, should be %2$@", in: language,
-                                hex(header.checksum), hex(computed)))
+                                header.checksum.hexNumber(digits: 8), computed.hexNumber(digits: 8)))
             } else {
                 cautions.append(L("The microcode image cannot be read whole, so its checksum is not checked", in: language))
             }
@@ -87,9 +87,5 @@ public enum FITRowMarks {
 
     private static func revision(_ value: UInt32) -> String {
         value.bareHexNumber
-    }
-
-    private static func hex(_ value: UInt32) -> String {
-        value.hexNumber(digits: 8)
     }
 }

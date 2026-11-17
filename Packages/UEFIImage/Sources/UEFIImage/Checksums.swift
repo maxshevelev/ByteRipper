@@ -113,18 +113,15 @@ public enum Checksums {
         expected: UInt64? = nil,
         digits: Int = 2
     ) -> LocalizedText {
-        let padded = hex(UInt64(truncatingIfNeeded: value), digits: digits)
+        let padded = (UInt64(truncatingIfNeeded: value)).hexNumber(digits: digits)
         if valid { return L("%1$@ (Valid)", padded) }
         if let expected {
-            return L("%1$@ (Invalid), should be %2$@", padded, hex(expected, digits: digits))
+            return L("%1$@ (Invalid), should be %2$@", padded, expected.hexNumber(digits: digits))
         }
         return L("%1$@ (Invalid)", padded)
     }
 
     /// A hex value padded to a field's width — `0x0005` for digits 4.
-    private static func hex(_ value: UInt64, digits: Int) -> String {
-        value.hexNumber(digits: digits)
-    }
 }
 
 /// Rounds `value` up to the next multiple of `alignment`, or nil when that

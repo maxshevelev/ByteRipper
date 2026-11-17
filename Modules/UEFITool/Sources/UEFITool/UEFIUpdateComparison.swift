@@ -76,7 +76,7 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
                 }
             case .sizeMismatch(let update, let region):
                 return L("The update file carries a BIOS region of %1$@ bytes, and the BIOS region of this dump is %2$@ bytes. It is not an update for this board.",
-                         UEFIUpdateComparison.hex(update), UEFIUpdateComparison.hex(region))
+                         update.hexNumber, region.hexNumber)
             }
         }
     }
@@ -174,10 +174,6 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
             }
         }
         return (count, runs)
-    }
-
-    static func hex(_ value: UInt64) -> String {
-        value.hexNumber
     }
 }
 
