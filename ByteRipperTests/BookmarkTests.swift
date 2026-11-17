@@ -817,7 +817,6 @@ final class BookmarkTests: XCTestCase {
         XCTAssertEqual(controller.editedRow, 0x10, "its own row is always available to it")
     }
 
-
     /// The pane view anchors the popover on the mark itself, and the mark's rect
     /// is the same one the right-click focus ring uses (§20.4).
     func testThePaneViewAnchorsThePopoverOnTheMark() throws {

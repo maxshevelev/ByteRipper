@@ -748,7 +748,6 @@ final class GoToBookmarksTests: XCTestCase {
                        "with nothing clicked and nothing selected there is nothing to delete")
     }
 
-
     // MARK: - Recently typed offsets
 
     func testAJumpFromTheFieldIsRecordedCanonically() {
