@@ -70,7 +70,6 @@ public struct OffsetExpression: Equatable, Sendable {
         return text
     }
 
-
     public static func parse(_ text: String) throws -> OffsetExpression {
         var terms: [Term] = []
         var subtracting = false
