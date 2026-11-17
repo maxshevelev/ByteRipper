@@ -149,7 +149,7 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
         // has to read as an address first and behave as a field second. A cut
         // opened from the Segments form's `+` starts empty — just the "0x" the
         // user types over — because the offset is the thing to be filled in.
-        let offsetText = prefillOffset.map { String(format: "0x%X", $0) } ?? "0x"
+        let offsetText = prefillOffset.map(OffsetExpression.hex) ?? "0x"
         let offset = AddressField(text: offsetText)
         offset.delegate = self
         offset.translatesAutoresizingMaskIntoConstraints = false

@@ -77,11 +77,7 @@ enum AddressHistoryStore {
 /// (§10), and one that opens with an address is ready for `+ 0x40`.
 // help: editing.address-arithmetic
 @MainActor
-final class AddressField: NSTextField {
-    /// Called on every edit — typing, deleting, an entry picked from the list —
-    /// so a form can re-validate as the text changes.
-    var onTextChange: (() -> Void)?
-
+final class AddressField: CaretAtEndTextField {
     private let resultLabel = ResultLabel(labelWithString: "")
     private(set) var historyButton: NSButton!
 
@@ -126,16 +122,22 @@ final class AddressField: NSTextField {
 
     // MARK: What the field holds
 
-    /// What the text comes to, or why it comes to nothing.
+    /// What the text comes to, or why it comes to nothing. Parsed once per
+    /// text: the result, the form's check and its message line all ask.
     var evaluation: Result<OffsetExpression, OffsetExpression.ParseError> {
         let text = stringValue
+        if let parsed, parsed.text == text { return parsed.result }
+        let result: Result<OffsetExpression, OffsetExpression.ParseError>
         do {
-            let expression = try OffsetExpression.parse(text)
-            return Result.success(expression)
+            result = .success(try OffsetExpression.parse(text))
         } catch {
-            return Result.failure(error as? OffsetExpression.ParseError ?? .invalidInput)
+            result = .failure(error as? OffsetExpression.ParseError ?? .invalidInput)
         }
+        parsed = (text, result)
+        return result
     }
+
+    private var parsed: (text: String, result: Result<OffsetExpression, OffsetExpression.ParseError>)?
 
     /// The number a form acts on: the lone number typed, or what the sum comes
     /// to. Nil while the text names none.
@@ -194,9 +196,8 @@ final class AddressField: NSTextField {
     }
 
     override func textDidChange(_ notification: Notification) {
-        super.textDidChange(notification)
         refreshResult()
-        onTextChange?()
+        super.textDidChange(notification)
     }
 
     private func refreshResult() {
@@ -252,25 +253,13 @@ final class AddressField: NSTextField {
         guard cell.trailingInset != inset else { return }
         cell.trailingInset = inset
         needsDisplay = true
-        // The field editor took its frame when editing began. AppKit fits it
-        // again when the field is resized, and only then — so the field is
-        // resized, by a point and back.
-        if currentEditor() != nil {
-            let size = frame.size
-            setFrameSize(NSSize(width: size.width + 1, height: size.height))
-            setFrameSize(size)
+        // The field editor's clip took its frame — the cell's drawing rect —
+        // when editing began, and AppKit fits it again only on a resize. It is
+        // given the narrowed rect here, and the caret kept in sight.
+        if let editor = currentEditor() as? NSTextView, let clip = editor.superview {
+            clip.frame = cell.drawingRect(forBounds: bounds)
+            editor.scrollRangeToVisible(editor.selectedRange())
         }
-    }
-
-    // MARK: Focus
-
-    override func becomeFirstResponder() -> Bool {
-        let focused = super.becomeFirstResponder()
-        if focused, let editor = currentEditor() as? NSTextView {
-            let length = (stringValue as NSString).length
-            editor.selectedRange = NSRange(location: length, length: 0)
-        }
-        return focused
     }
 
     // MARK: The list
@@ -325,12 +314,16 @@ final class AddressField: NSTextField {
     }
 
     /// Fills the field with an entry of the list, as if it had been typed: the
-    /// form re-validates, and nothing is acted on.
+    /// form re-validates, nothing is acted on, and **⌘Z** takes it back.
     func pick(_ entry: String) {
         if let editor = currentEditor() as? NSTextView {
-            editor.string = entry
+            // Through the text view's own edit, so the undo stack holds the
+            // replacement and the change is announced as a typed one is.
+            let whole = NSRange(location: 0, length: (editor.string as NSString).length)
+            guard editor.shouldChangeText(in: whole, replacementString: entry) else { return }
+            editor.replaceCharacters(in: whole, with: entry)
+            editor.didChangeText()
             editor.selectedRange = NSRange(location: (entry as NSString).length, length: 0)
-            textDidChange(Notification(name: NSText.didChangeNotification, object: editor))
         } else {
             stringValue = entry
             onTextChange?()
@@ -340,20 +333,29 @@ final class AddressField: NSTextField {
         }
     }
 
-    /// **↓** in the field opens the list. The field editor asks the field about
-    /// every command key before acting on it; AppKit's own answer — which hands
-    /// the key to the field's delegate — is private, so it is reached through
-    /// the runtime rather than through `super`.
+    /// **↓** in the field opens the list — unless the form's delegate takes
+    /// it first. The field editor asks the field about every command key before
+    /// acting on it. AppKit's own answer, which hands the key to the delegate,
+    /// is not public, so it is reached through the runtime rather than through
+    /// `super`; should it ever be gone, the delegate is asked directly, so
+    /// Return and Esc still reach the form.
     @objc(textView:doCommandBySelector:)
     func textView(_ textView: NSTextView, doCommandBy command: Selector) -> Bool {
+        typealias Answer = @convention(c) (AnyObject, Selector, NSTextView, Selector) -> Bool
+        let selector = #selector(NSTextViewDelegate.textView(_:doCommandBy:))
+        let handled: Bool
+        if let method = class_getInstanceMethod(NSTextField.self, selector) {
+            handled = unsafeBitCast(method_getImplementation(method), to: Answer.self)(self, selector, textView, command)
+        } else {
+            handled = (delegate as? NSControlTextEditingDelegate)?
+                .control?(self, textView: textView, doCommandBy: command) ?? false
+        }
+        if handled { return true }
         if command == #selector(NSResponder.moveDown(_:)) {
             showHistory()
             return true
         }
-        typealias Answer = @convention(c) (AnyObject, Selector, NSTextView, Selector) -> Bool
-        let selector = #selector(NSTextViewDelegate.textView(_:doCommandBy:))
-        guard let method = class_getInstanceMethod(NSTextField.self, selector) else { return false }
-        return unsafeBitCast(method_getImplementation(method), to: Answer.self)(self, selector, textView, command)
+        return false
     }
 }
 

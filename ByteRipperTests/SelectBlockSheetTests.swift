@@ -225,6 +225,56 @@ final class SelectBlockSheetTests: XCTestCase {
         XCTAssertTrue(sheet.noteLabel.isHidden, "an error and a result are never shown together")
     }
 
+    /// The message line follows the radio buttons: switched to Length, it
+    /// stops reading back the End field's sum and reads back Length's.
+    func testTheLineFollowsTheFieldSwitchedTo() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        sheet.startField.stringValue = "0x10"
+        sheet.lengthField.stringValue = "0x8 + 8"
+        window.makeFirstResponder(sheet.endField)
+        type("0x10 + 0x20", into: sheet.endField)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)")
+
+        sheet.lengthRadio.performClick(nil)
+        XCTAssertFalse(sheet.noteLabel.isHidden)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x8 + 0x8 = 0x10 (16)")
+
+        sheet.lengthField.stringValue = "0x40"
+        sheet.endRadio.performClick(nil)
+        XCTAssertEqual(sheet.noteLabel.stringValue, "0x10 + 0x20 = 0x30 (48)")
+    }
+
+    /// Only the field being typed in is waited for: a sum left unfinished in
+    /// Start does not hide what is wrong with End.
+    func testAnUnfinishedSumElsewhereDoesNotHideAnError() {
+        let (sheet, _) = makeSheet()
+        let window = hostingWindow(for: sheet)
+        defer { window.orderOut(nil) }
+        window.makeFirstResponder(sheet.startField)
+        type("0x10 +", into: sheet.startField)
+        XCTAssertTrue(sheet.errorLabel.isHidden, "Start is still being typed")
+
+        window.makeFirstResponder(sheet.endField)
+        type("0x5 - 0x10", into: sheet.endField)
+        XCTAssertFalse(sheet.errorLabel.isHidden)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "Invalid start offset.",
+                       "the unfinished Start is now named, the first thing wrong")
+        window.makeFirstResponder(sheet.startField)
+        type("0x10 + 1", into: sheet.startField)
+        window.makeFirstResponder(sheet.endField)
+        type("0x5 - 0x10", into: sheet.endField)
+        XCTAssertEqual(sheet.errorLabel.stringValue, "The result is negative.")
+    }
+
+    /// An address past 4 GB comes into the field whole, not cut to 32 bits.
+    func testAPresetStartPastFourGigabytesIsWhole() {
+        let (sheet, _) = makeSheet(fileSize: 0x2_0000_0000, presetStart: 0x1_2345_6780)
+        XCTAssertEqual(sheet.startField.stringValue, "0x123456780")
+        XCTAssertEqual(sheet.startField.value, 0x1_2345_6780)
+    }
+
     // MARK: - Validation
 
     func testValidationRejectsStartBeyondFile() {

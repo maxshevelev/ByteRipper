@@ -109,6 +109,39 @@ final class AddressFieldTests: XCTestCase {
         XCTAssertEqual(changes, 1, "a picked entry re-validates the form, as typing does")
     }
 
+    /// An entry picked while the field is being edited is an edit of its own:
+    /// it is announced as typing is, and **⌘Z** brings back what was typed.
+    func testAPickInTheEditorIsUndoable() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 80),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
+        let field = AddressField(text: "0x")
+        field.frame = NSRect(x: 20, y: 20, width: 300, height: 22)
+        try XCTUnwrap(window.contentView).addSubview(field)
+        window.makeFirstResponder(field)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        let undo = try XCTUnwrap(editor.undoManager)
+        undo.groupsByEvent = false
+        defer { undo.groupsByEvent = true }
+        var changes = 0
+        field.onTextChange = { changes += 1 }
+
+        undo.beginUndoGrouping()
+        editor.insertText("1F", replacementRange: editor.selectedRange())
+        undo.endUndoGrouping()
+        undo.beginUndoGrouping()
+        field.pick("0x1FE000 + 40")
+        undo.endUndoGrouping()
+        XCTAssertEqual(field.stringValue, "0x1FE000 + 40")
+        XCTAssertEqual(field.value, 0x1FE028)
+        XCTAssertEqual(changes, 2, "the pick is announced as the typing was")
+
+        undo.undo()
+        XCTAssertEqual(field.stringValue, "0x1F", "what was typed before the pick")
+        undo.redo()
+        XCTAssertEqual(field.stringValue, "0x1FE000 + 40")
+    }
+
     func testAnEmptyListSaysSo() {
         let items = AddressField(text: "0x").historyMenu().items
         XCTAssertEqual(items.count, 1)

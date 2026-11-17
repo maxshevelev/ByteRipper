@@ -6,30 +6,9 @@ import Localization
 // MARK: - Shared sheet chrome
 
 /// The Fill sheet's field — a byte sequence, not an address (those are
-/// `AddressField`). An `NSTextField` that doesn't select its whole text when
-/// it gains focus: the caret lands after the existing text, so the pattern
-/// offered can be added to as well as replaced. AppKit's default is select-all
-/// on focus. Also fires `onTextChange` on every edit so the sheet can
-/// re-validate live.
-private final class HexInputField: NSTextField {
-    /// Called on every edit (typing, deleting, replacing) — the sheet uses it
-    /// to re-validate the input and update the error label as the user types.
-    var onTextChange: (() -> Void)?
-
-    override func becomeFirstResponder() -> Bool {
-        let focused = super.becomeFirstResponder()
-        if focused, let editor = currentEditor() as? NSTextView {
-            let length = (stringValue as NSString).length
-            editor.selectedRange = NSRange(location: length, length: 0)
-        }
-        return focused
-    }
-
-    override func textDidChange(_ notification: Notification) {
-        super.textDidChange(notification)
-        onTextChange?()
-    }
-}
+/// `AddressField`). The caret lands after the pattern offered, so it can be
+/// added to as well as replaced.
+private final class HexInputField: CaretAtEndTextField {}
 
 /// Base class for the input dialogs (Go To Position, Select Block).
 /// Builds a titled sheet with a field stack, an inline error label, and a
@@ -398,7 +377,7 @@ final class SelectBlockSheetController: SheetViewController {
         view.frame.size.width = 472
 
         startField = addAddressRow(label: L("Start:"),
-                                   initial: presetStart.map { String(format: "0x%X", $0) } ?? "0x")
+                                   initial: presetStart.map(OffsetExpression.hex) ?? "0x")
 
         let end = addRadioFieldRow(title: L("End"), action: #selector(modeRadioChanged(_:)))
         endRadio = end.radio
@@ -450,6 +429,10 @@ final class SelectBlockSheetController: SheetViewController {
         lengthRadio.state = useLength ? .on : .off
         endField.isEnabled = !useLength
         lengthField.isEnabled = useLength
+        // The message line is about the field now in use: its sum, or what
+        // is wrong with it — not the one just switched off.
+        lastEditedAddressField = secondField
+        updateLiveError()
     }
 
     /// The End or Length field, whichever the radios make the active one.
@@ -464,8 +447,11 @@ final class SelectBlockSheetController: SheetViewController {
         return AddressField.message(for: error) ?? invalid
     }
 
+    /// Only the field being typed in waits: an unfinished sum left behind in
+    /// another field is a mistake the line can name.
     override var isStillTyping: Bool {
-        [startField!, secondField].contains { $0.evaluation == .failure(.incomplete) }
+        guard let field = lastEditedAddressField, field.isEnabled else { return false }
+        return field.evaluation == .failure(.incomplete)
     }
 
     /// The sum being typed, read back in hex with its result (issue #9).

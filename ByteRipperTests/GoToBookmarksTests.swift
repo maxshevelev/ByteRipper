@@ -13,17 +13,19 @@ final class GoToBookmarksTests: XCTestCase {
     /// touch the real app's history (the same isolation §11's tests use).
     private var isolatedSuiteName = ""
     private var isolatedDefaults: UserDefaults!
+    private var previousDefaults: UserDefaults!
 
     override func setUp() {
         super.setUp()
         (isolatedSuiteName, isolatedDefaults) = isolatedDefaults(for: self)
+        previousDefaults = AddressHistoryStore.defaults
         AddressHistoryStore.defaults = isolatedDefaults
     }
 
     override func tearDown() {
         removeTempFiles()
         discardIsolatedDefaults(isolatedSuiteName, isolatedDefaults)
-        AddressHistoryStore.defaults = .standard
+        AddressHistoryStore.defaults = previousDefaults
         isolatedDefaults = nil
         for window in windows { window.orderOut(nil) }
         windows = []
