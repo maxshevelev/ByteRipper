@@ -148,6 +148,16 @@ Two habits came out of this, and both are worth keeping:
   colloquialisms or Americanisms, and a translation that is a text of its own
   rather than a calque of the English (`LOCALIZATION.md`, "The tone, and why a
   translation is not a copy").
+- **What a page says**: what the reader can do and what they will see —
+  not how the code decides it. A page is a guide to the app's features, not
+  a commentary on its implementation: no step-by-step account of an
+  algorithm, no inventory of edge cases (which inputs count as what, which
+  form reports what in which state, what happens on an app switch). Where
+  the app refuses something, one sentence on the outcome the reader meets is
+  enough. The test for every sentence: does the reader need it to use the
+  feature? Exact rules belong in code comments and tests. A review that
+  calls a page imprecise about such a detail is a reason to cut the detail,
+  not to spell out more of it.
 - **A `?`**: `HelpButton.standard(for:)` in a form or a dialog,
   `HelpButton.inline(for:)` in a panel's chrome.
 

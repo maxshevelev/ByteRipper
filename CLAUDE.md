@@ -98,6 +98,10 @@ Help:
   row in focus (`ToolDetailScroll.setTerm`).
 - Write for a repair bench, in plain language, and say what is uncertain. A
   field nobody has documented is called unknown in the panel and in the help.
+- **A page describes what the reader can do, not how the code does it**: no
+  step-by-step algorithm, no inventory of edge cases. Every sentence must be
+  something the reader needs to use the feature; exact rules go in code
+  comments and tests (`Design/HELP.md`, "Adding to the book").
 - **Strictly technical tone, in every language**: no colloquialisms, no
   Americanisms. A Russian or German page is not a calque of the English — it is
   its own text, in good Russian or German, with the same meaning and facts
