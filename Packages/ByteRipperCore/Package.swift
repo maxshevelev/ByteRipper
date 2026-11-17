@@ -24,7 +24,10 @@ let package = Package(
         // with the code panel's search, which may not link this package.
         // Re-exported for the same reason as BytePattern: to everyone here
         // the index and the direction are the search engine's own.
-        .package(path: "../Find")
+        .package(path: "../Find"),
+        // How a number is written in hex: the sum's terms and its result in
+        // an address field, in the one form the whole app writes.
+        .package(path: "../HexText")
     ],
     targets: [
         .target(
@@ -32,7 +35,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Localization", package: "Localization"),
                 .product(name: "BytePattern", package: "BytePattern"),
-                .product(name: "Find", package: "Find")
+                .product(name: "Find", package: "Find"),
+                .product(name: "HexText", package: "HexText")
             ]
         ),
         .testTarget(
@@ -41,6 +45,7 @@ let package = Package(
                 "ByteRipperCore",
                 .product(name: "Localization", package: "Localization"),
                 .product(name: "Find", package: "Find"),
+                .product(name: "HexText", package: "HexText")
             ],
             resources: [.copy("Fixtures")]
         )

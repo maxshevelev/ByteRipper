@@ -2,6 +2,7 @@ import AppPalette
 import ByteRipperCore
 import Cocoa
 import HelpUI
+import HexText
 import Localization
 
 // MARK: - The history
@@ -154,7 +155,7 @@ final class AddressField: CaretAtEndTextField {
     /// understood, then the result in both bases. Nil for anything but a sum.
     var breakdown: String? {
         guard let sum = try? evaluation.get(), sum.isSum else { return nil }
-        return "\(sum.hexText) = \(sum.hexValue) (\(sum.value))"
+        return "\(sum.hexText) = \(sum.value.hexNumber) (\(sum.value))"
     }
 
     /// The sentence for a sum that comes to no address, for a form that says
@@ -172,7 +173,6 @@ final class AddressField: CaretAtEndTextField {
         case .invalidInput: return nil
         }
     }
-
 
     /// Puts what the field holds into the list of recent entries — called by the
     /// form once it has acted on it. A sum is always worth keeping; a lone
@@ -192,7 +192,7 @@ final class AddressField: CaretAtEndTextField {
         guard let expression = try? evaluation.get() else { return "" }
         let typed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard expression.isSum || !typed.hasPrefix("0x") else { return "" }
-        return "= " + expression.hexValue
+        return "= " + expression.value.hexNumber
     }
 
     override var stringValue: String {
@@ -307,7 +307,7 @@ final class AddressField: CaretAtEndTextField {
                 title.append(NSAttributedString(string: " = ", attributes: [
                     .font: regular, .foregroundColor: NSColor.secondaryLabelColor,
                 ]))
-                title.append(NSAttributedString(string: sum.hexValue, attributes: [.font: strong]))
+                title.append(NSAttributedString(string: sum.value.hexNumber, attributes: [.font: strong]))
             }
             item.attributedTitle = title
             menu.addItem(item)

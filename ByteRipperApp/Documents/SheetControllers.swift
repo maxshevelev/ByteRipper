@@ -1,6 +1,7 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HexText
 import Localization
 
 // MARK: - Shared sheet chrome
@@ -376,7 +377,7 @@ final class SelectBlockSheetController: SheetViewController {
         buttonRow.insertArrangedSubview(toEndButton, at: 1)
 
         startField = addAddressRow(label: L("Start:"),
-                                   initial: presetStart.map(OffsetExpression.hex) ?? "0x")
+                                   initial: presetStart.map(\.hexNumber) ?? "0x")
 
         let end = addRadioFieldRow(title: L("End"), action: #selector(modeRadioChanged(_:)))
         endRadio = end.radio

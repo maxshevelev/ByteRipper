@@ -1,3 +1,4 @@
+import HexText
 import XCTest
 @testable import ByteRipperCore
 
@@ -93,7 +94,7 @@ final class OffsetExpressionTests: XCTestCase {
     func testHexText() throws {
         let sum = try OffsetExpression.parse("0x1fe000+40")
         XCTAssertEqual(sum.hexText, "0x1FE000 + 0x28")
-        XCTAssertEqual(sum.hexValue, "0x1FE028")
+        XCTAssertEqual(sum.value.hexNumber, "0x1FE028")
         XCTAssertTrue(sum.isSum)
         XCTAssertEqual(sum.terms, [.init(isSubtracted: false, value: 0x1FE000),
                                    .init(isSubtracted: false, value: 40)])
@@ -103,6 +104,6 @@ final class OffsetExpressionTests: XCTestCase {
         let number = try OffsetExpression.parse("4096")
         XCTAssertFalse(number.isSum)
         XCTAssertEqual(number.hexText, "0x1000")
-        XCTAssertEqual(number.hexValue, "0x1000")
+        XCTAssertEqual(number.value.hexNumber, "0x1000")
     }
 }

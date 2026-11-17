@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 
 /// A sum typed where an offset or a length is asked for: `0x1FE000 + 4096`,
 /// `196608 - 0x200` (issue #9).
@@ -61,21 +62,14 @@ public struct OffsetExpression: Equatable, Sendable {
     /// `0x1FE000 + 40`. Shown beside the result, it is how a `40` that was
     /// meant as `0x40` is seen before the result is used.
     public var hexText: String {
-        var text = Self.hex(terms[0].value)
+        var text = terms[0].value.hexNumber
         for term in terms.dropFirst() {
             text += term.isSubtracted ? " - " : " + "
-            text += Self.hex(term.value)
+            text += term.value.hexNumber
         }
         return text
     }
 
-    /// The result in the form the fields write an address in: `0x1FE028`.
-    public var hexValue: String { Self.hex(value) }
-
-    /// `0x` and uppercase digits — the form every address field is filled in.
-    public static func hex(_ value: UInt64) -> String {
-        "0x" + String(value, radix: 16, uppercase: true)
-    }
 
     public static func parse(_ text: String) throws -> OffsetExpression {
         var terms: [Term] = []
