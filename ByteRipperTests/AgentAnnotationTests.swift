@@ -146,6 +146,10 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertTrue(past.answer.stringValue?.hasSuffix(" (d1), which is 0x100 bytes long.") == true, "\(past.answer)")
         let empty = try await client.call("annotate", ["offset": 0, "title": "  "])
         XCTAssertTrue(empty.isError)
+        // A length that wraps past 2^64 is refused, never added up.
+        let wrapping = try await client.call("annotate", ["offset": "0x10", "length": "0xFFFFFFFFFFFFFFFF", "title": "All"])
+        XCTAssertTrue(wrapping.isError)
+        XCTAssertTrue(wrapping.answer.stringValue?.contains("runs past any file") == true, "\(wrapping.answer)")
         let zero = try await client.call("annotate", ["offset": 0, "length": 0, "title": "Nothing"])
         XCTAssertTrue(zero.isError)
         let root = try await client.call("annotate", ["offset": 0, "node": "root", "title": "Root"])

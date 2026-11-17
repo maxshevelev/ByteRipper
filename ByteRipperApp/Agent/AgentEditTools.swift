@@ -137,8 +137,13 @@ final class AgentEditTools {
         let length = try arguments.offset("length")
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
         guard offset < source.pane.fileSize, length <= source.pane.fileSize - offset else {
-            throw AgentToolError("The range \((offset..<(offset &+ length)).halfOpenHexText) "
-                + "runs past the end of \(source.named), which is \(source.pane.fileSize.hexNumber) bytes long.")
+            // A length that wraps past 2^64 is no range at all: name the
+            // arguments themselves, never build a Range that would trap.
+            let (end, wraps) = offset.addingReportingOverflow(length)
+            let asked = wraps ? "`length` \(length.hexNumber) from `offset` \(offset.hexNumber)"
+                : "The range \((offset..<end).halfOpenHexText)"
+            throw AgentToolError(asked
+                + " runs past the end of \(source.named), which is \(source.pane.fileSize.hexNumber) bytes long.")
         }
         guard length <= UInt64(Int.max) else { throw AgentToolError("The range is too long.") }
         try checkEditable(destination)
