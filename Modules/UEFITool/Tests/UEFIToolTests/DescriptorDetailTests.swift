@@ -322,7 +322,7 @@ final class DescriptorDetailTests: XCTestCase {
         let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words, strapCount: 70))
 
         let gpr0 = try XCTUnwrap(shown.fields.first { $0.label == "GPR0" })
-        XCTAssertEqual(gpr0.value, "0x1000 – 0x29BFFF: writes refused")
+        XCTAssertEqual(gpr0.value, "0x1000–0x29BFFF: writes refused")
         XCTAssertEqual(gpr0.tone, .caution)
         XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
 
@@ -402,7 +402,7 @@ final class DescriptorDetailTests: XCTestCase {
         let shown = detail(TestUEFI.flashDescriptor(
             version1: false, straps: words, strapCount: 115))
 
-        XCTAssertEqual(field(shown, "GPR0"), "0x1000 – 0x1FFFF: reads and writes refused")
+        XCTAssertEqual(field(shown, "GPR0"), "0x1000–0x1FFFF: reads and writes refused")
         XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
     }
 
