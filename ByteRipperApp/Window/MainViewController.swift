@@ -5076,7 +5076,7 @@ final class MainViewController: NSViewController {
         guard let target = (sender as? NSMenuItem)?.representedObject as? OffsetContextTarget else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(String(format: "%llX", target.offset), forType: .string)
+        pasteboard.setString(String(target.offset, radix: 16, uppercase: true), forType: .string)
     }
 
     /// Header context menu > New File: a brand-new untitled document lands in
@@ -5254,9 +5254,9 @@ final class MainViewController: NSViewController {
         guard range.upperBound <= destination.fileSize else {
             presentAlert(title: name,
                          message: L("The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied.",
-                                    String(format: "0x%llX", range.upperBound),
+                                    range.upperBound.hexNumber,
                                     destination.status.fileName,
-                                    String(format: "0x%llX", destination.fileSize)))
+                                    destination.fileSize.hexNumber))
             return
         }
         do {
@@ -5457,7 +5457,7 @@ final class MainViewController: NSViewController {
         let response = confirmAlert(
             title: L("Paste Insert?"),
             message: L("Insert %1$@ byte(s) at offset %2$@. Existing bytes from this offset on will shift.",
-                       bytes.count, String(format: "0x%llX", offset)),
+                       bytes.count, offset.hexNumber),
             confirmTitle: L("Insert"),
             destructive: true,
             suppressible: true
@@ -5513,7 +5513,7 @@ final class MainViewController: NSViewController {
         let response = confirmAlert(
             title: L("Delete %1$@ byte(s)?", count),
             message: L("Bytes from offset %1$@ will be removed. Subsequent offsets will shift — the file structure may be affected.",
-                       String(format: "0x%llX", start)),
+                       start.hexNumber),
             confirmTitle: L("Delete"),
             destructive: true,
             suppressible: true
@@ -5552,7 +5552,7 @@ final class MainViewController: NSViewController {
             let response = self.confirmAlert(
                 title: L("Insert?"),
                 message: L("Inserting at offset %1$@ shifts every byte from here on — the file structure may be affected.",
-                           String(format: "0x%llX", offset)),
+                           offset.hexNumber),
                 // Typing, not pasting: English says "Insert" for both, and a
                 // language that does not has somewhere to say so.
                 confirmTitle: L("Insert", context: "typing"),
@@ -6637,8 +6637,8 @@ final class MainViewController: NSViewController {
                 presentAlert(
                     title: L("Offset beyond end of file"),
                     message: L("Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end.",
-                               String(format: "0x%llX", offset), panelPane.status.fileName,
-                               String(format: "0x%llX", panelPane.fileSize))
+                               offset.hexNumber, panelPane.status.fileName,
+                               String(panelPane.fileSize))
                 )
             }
             panelPane.moveCaret(to: target)
@@ -6652,7 +6652,7 @@ final class MainViewController: NSViewController {
             presentAlert(
                 title: L("Offset beyond end of file"),
                 message: L("Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end.",
-                           String(format: "0x%llX", offset), String(format: "0x%llX", largerSize))
+                           offset.hexNumber, String(largerSize))
             )
         }
         let target = min(offset, largerSize)

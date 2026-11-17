@@ -826,6 +826,21 @@ final class GoToBookmarksTests: XCTestCase {
         XCTAssertEqual(controller.windowModel.pane1.hexSelection().start, 0x100)
     }
 
+    /// The alert quotes an offset past 4 GB whole, not cut to 32 bits, and
+    /// the file's size as the count of bytes it says it is.
+    func testThePastTheEndAlertQuotesALargeOffsetWhole() throws {
+        let (controller, forms) = try makeController(bytes: [UInt8](repeating: 0x11, count: 0x100))
+        controller.goToPosition()
+        let form = try XCTUnwrap(forms().first)
+
+        form.offsetCombo.stringValue = "0x123456780"
+        form.goToTypedOffset()
+
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertTrue(message.contains("0x123456780"), message)
+        XCTAssertTrue(message.contains("(256 bytes)"), message)
+    }
+
     /// A bookmark is an absolute offset (§8), so going to one moves BOTH panes
     /// of a comparison — the same rule a typed offset follows (§10.1).
     func testAJumpFromTheListMovesBothPanesOfAComparison() throws {

@@ -240,7 +240,7 @@ final class AgentHostTools {
         }
     }
 
-    nonisolated static func hexText(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    nonisolated static func hexText(_ value: UInt64) -> String { value.hexNumber }
 
     nonisolated static func hex(_ value: UInt64) -> JSONValue { .string(hexText(value)) }
 

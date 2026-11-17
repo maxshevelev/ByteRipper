@@ -56,7 +56,7 @@ final class StatusLabel: NSTextField {
     /// The hex half of the exact form — the address a size is written as, the
     /// way the bar writes every other number.
     static func hexSizeText(_ bytes: UInt64) -> String {
-        String(format: "0x%llX", bytes)
+        bytes.hexNumber
     }
 
     /// The exact size, in the form the Details view writes one: the hex address
