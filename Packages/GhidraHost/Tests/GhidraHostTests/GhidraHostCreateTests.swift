@@ -1271,6 +1271,15 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         try await define("typedef struct _TV_GONE { int A; } TV_GONE;")
         _ = try await host.publish(module, by: "agent")
         XCTAssertEqual(try versions().count, 4)
+        // Issue 0d3b3e59: a `.conflict` name is that copy, never its base.
+        do {
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
+                "delete": true, "shared": true, "name": "TV_GONE.conflict", "reason": "a test name"] as [String: Any]))
+            XCTFail("a copy the archive does not hold is not its base")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 404, "\(error)")
+        }
+        XCTAssertEqual(try versions().count, 4, "nothing withdrawn")
         _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
             "delete": true, "shared": true, "name": "TV_GONE", "reason": "a test name"] as [String: Any]))
         let fifth = try versions()

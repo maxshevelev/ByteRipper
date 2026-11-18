@@ -8650,9 +8650,19 @@ public class Owner {
         return near;
     }
 
+    /**
+     * The type of that name. Ghidra's lookup ignores a `.conflict` suffix and
+     * answers the base type first, so a copy asked for by its own name came
+     * back as its base (issue 0d3b3e59): the exact name wins, and a
+     * `.conflict` name nobody holds is nothing.
+     */
     private static DataType find(ghidra.program.model.data.DataTypeManager manager, String name) {
         java.util.List<DataType> found = new java.util.ArrayList<>();
         manager.findDataTypes(name, found);
+        for (DataType type : found) {
+            if (type.getName().equals(name)) return type;
+        }
+        if (name.matches(".*\\.conflict\\d*")) return null;
         return found.isEmpty() ? null : found.get(0);
     }
 
