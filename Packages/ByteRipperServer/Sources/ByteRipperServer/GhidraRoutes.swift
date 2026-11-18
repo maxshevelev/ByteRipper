@@ -227,6 +227,17 @@ enum GhidraRoutes {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
+        // A module's name set again: an administrator's, for a module created
+        // under a wrong one.
+        router.add("POST", "\(prefix)/modules/:module/name", maxBodyBytes: 4096, access: .rights([.admin])) { request in
+            struct Naming: Decodable { let name: String }
+            let module = try digest(request.parameters["module"])
+            let naming = try request.json(Naming.self)
+            let was = try await answer { try await host.renameModule(module, to: naming.name) }
+            let body = try JSONSerialization.data(withJSONObject: ["module": module.hex, "name": naming.name
+                .trimmingCharacters(in: .whitespacesAndNewlines), "was": was], options: [.sortedKeys])
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: body)
+        }
         router.add("POST", "\(prefix)/modules/:module/publish", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
             // A shared type or a registry entry is replaced by an agreed

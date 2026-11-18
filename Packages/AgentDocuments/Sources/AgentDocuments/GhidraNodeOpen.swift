@@ -2,6 +2,7 @@ import AgentKit
 import CodeAnalysis
 import Foundation
 import GhidraHost
+import UEFIImage
 import UEFITool
 
 /// `ghidra_create` by a node of an open dump, or by `module` for one with a
@@ -93,13 +94,35 @@ public enum GhidraNodeOpen {
             throw AgentToolError("Node \(text) is not a PE32 or TE image: `uefi_find` with name \"PE32 image\" "
                 + "or \"TE image\" lists those.")
         }
-        let label = UEFIAgentQueries.label(of: found.node, in: found.tree)
-        let file = label.components(separatedBy: " in ").last ?? label
-        let name = String(file.unicodeScalars.map {
+        var above: [UEFINode] = []
+        var path = found.node.id.path
+        while path.count > 1 {
+            path.removeLast()
+            guard let node = found.tree.node(NodeID(path)) else { break }
+            above.append(node)
+        }
+        return (image, moduleName(of: found.node, above: above, tree: found.tree), document)
+    }
+
+    /// The name a module gets: its FFS file's, read through every section the
+    /// image sits in — a compressed one included, whose name is the kind of
+    /// section and not the module's (FatPei came out as `LZMA-section`). The
+    /// node's label when no file holds it. `above` is nearest first.
+    @MainActor
+    static func moduleName(of node: UEFINode, above: [UEFINode], tree: LazyUEFITree? = nil) -> String {
+        let file = above.first { $0.kind == .file }
+        let named = file.flatMap { file in
+            UEFITreeDisplay.ownName(of: file) ?? (file.name.isEmpty ? nil : file.name)
+        }
+        let label = named ?? {
+            let text = UEFIAgentQueries.label(of: node, in: tree)
+            return text.components(separatedBy: " in ").last ?? text
+        }()
+        let name = String(label.unicodeScalars.map {
             CharacterSet.alphanumerics.contains($0) && $0.isASCII || "._-".unicodeScalars.contains($0)
                 ? Character($0) : "-"
         })
-        return (image, name.isEmpty ? "module" : name, document)
+        return name.isEmpty ? "module" : name
     }
 }
 

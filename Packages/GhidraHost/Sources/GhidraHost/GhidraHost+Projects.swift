@@ -141,3 +141,32 @@ extension GhidraHost {
         return ProjectsPacked(modules: rows, packed: packed, notPacked: rows.count - packed, applied: apply)
     }
 }
+
+extension GhidraHost {
+    /// A module's name set again by an administrator: the name its project
+    /// keeps and every later publish carries — the code panel's title and
+    /// `ghidra_modules`' row. What is stored already keeps the old one until
+    /// the next publish. Refused while the module is in work, since the
+    /// holder's publish would carry the name it opened with in mind. Answers
+    /// the name it had.
+    public func renameModule(_ module: SHA256Digest, to name: String) throws -> String {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 64,
+              name.unicodeScalars.allSatisfy({ $0.isASCII && (CharacterSet.alphanumerics.contains($0)
+                                                              || "._-".unicodeScalars.contains($0)) }) else {
+            throw GhidraHostError(.refused, "a module's name is 1 to 64 letters, digits, `.`, `_` or `-`, "
+                                  + "as a file of the firmware names it", status: 400)
+        }
+        if let held = workLease(module) {
+            throw GhidraHostError(.refused, "\(module.hex) is in work by \(held.holder): rename it once it is given back",
+                                  status: 409)
+        }
+        let project = project(module)
+        guard project.exists else { throw GhidraHostError(.refused, "no project of \(module.hex)", status: 404) }
+        var state = try project.state()
+        let was = state.module.name
+        state.module.name = name
+        try project.write(state)
+        return was
+    }
+}

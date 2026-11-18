@@ -133,6 +133,45 @@ final class GhidraHostUnitTests: XCTestCase {
         let original = try JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         XCTAssertEqual(Set(again.keys), Set(original.keys))
     }
+
+    /// A module created under a wrong name — the section it sat in, not its
+    /// file — is named again by an administrator; not while it is in work.
+    func testAnAdministratorNamesAModuleAgain() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostRenameTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let module = SHA256Digest(data: Data("FatPei".utf8))
+        let projects = directory.appendingPathComponent("projects")
+        let folder = projects.appendingPathComponent(module.hex)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data().write(to: folder.appendingPathComponent("module.gpr"))
+        try Data("""
+            {"schema": 1, "project": "p", "module": {"sha256": "\(module.hex)", "size": 1, "name": "LZMA-section",
+             "kind": "PE32"}, "program": "module.efi", "made_with": {"ghidra": "12.2", "passes": []},
+             "created_at": "2026-11-18T00:00:00+00:00", "reviewed": true}
+            """.utf8).write(to: folder.appendingPathComponent("state.json"))
+        let host = GhidraHost(configuration: .init(projectsRoot: projects, holder: "GhidraHostRenameTests"),
+                              writer: try ContentStore(root: directory.appendingPathComponent("store")))
+        func refused(_ status: Int, _ name: String) async {
+            do {
+                _ = try await host.renameModule(module, to: name)
+                XCTFail("\(name) taken")
+            } catch let error as GhidraHostError {
+                XCTAssertEqual(error.status, status, error.message)
+            } catch {
+                XCTFail("\(error)")
+            }
+        }
+        await refused(400, "Fat Pei/1")
+        await refused(400, " ")
+        let was = try await host.renameModule(module, to: " FatPei ")
+        XCTAssertEqual(was, "LZMA-section")
+        XCTAssertEqual(try GhidraProject(root: projects, module: module).state().module.name, "FatPei")
+        let listed = await host.summaries()
+        XCTAssertEqual(listed.first?.name, "FatPei")
+        try await host.take(module)
+        await refused(409, "FatPeim")
+    }
 }
 
 /// Against a real Ghidra and a copy of a kept project: skipped on a machine

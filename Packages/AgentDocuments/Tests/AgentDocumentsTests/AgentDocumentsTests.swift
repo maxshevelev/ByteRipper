@@ -3,6 +3,7 @@ import CodeAnalysis
 import Foundation
 import GhidraHost
 import ToolModuleKit
+import UEFIImage
 import XCTest
 @testable import AgentDocuments
 
@@ -69,6 +70,22 @@ final class AgentDocumentsTests: XCTestCase {
         }
         let answer = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments([:])))
         XCTAssertEqual(answer, .json(["name": "a.bin", "wrapped": "a.bin (d1)", "document": "d1"]))
+    }
+
+    /// A module is named after its FFS file, even when the image sits in a
+    /// compressed section: FatPei came out as `LZMA-section`.
+    @MainActor
+    func testAModuleIsNamedAfterItsFileThroughACompressedSection() {
+        let image = UEFINode(kind: .section, subtype: 0x10, name: "PE32 image", header: 0..<4, body: 4..<64)
+        let lzma = UEFINode(kind: .section, subtype: 0x02, name: "LZMA section", header: 0..<24, body: 24..<200)
+        let ui = UEFINode(kind: .section, subtype: 0x15, name: "FatPei", header: 0..<4, body: 4..<20)
+        var file = UEFINode(kind: .file, name: "961578FE-B6B7-44C3-AF35-6BC705CD2B1F", header: 0..<24, body: 24..<300)
+        file.children = [lzma, ui]
+        XCTAssertEqual(GhidraNodeOpen.moduleName(of: image, above: [lzma, file]), "FatPei")
+        var bare = file
+        bare.children = [lzma]
+        XCTAssertEqual(GhidraNodeOpen.moduleName(of: image, above: [lzma, bare]),
+                       "961578FE-B6B7-44C3-AF35-6BC705CD2B1F", "no UI section: the file's own name")
     }
 
     /// One `ghidra_create` in the list, and it is the one by a node.

@@ -40,6 +40,7 @@ let package = Package(
         .testTarget(name: "AgentDocumentsTests", dependencies: [
             "AgentDocuments",
             .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "GhidraHost", package: "GhidraHost")
