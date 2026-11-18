@@ -356,6 +356,29 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex().holders(of: body.key), [body.key])
     }
 
+    /// A tail jump to another entry is a callee: the code the registry keeps
+    /// names its target, and an owner lists it beside the calls. An entry whose
+    /// callees were recorded by an owner that left tail jumps out still takes
+    /// the same body (issue cbffc53d, TisPei InternalMathDivRemU64x64).
+    func testATailJumpIsACalleeOfTheEntry() throws {
+        let body = LibraryBody(size: 0x31, full: "e785b0688524a34a", specific: "84b055009bb8dc5e")
+        let other = LibraryBody(size: 0x10, full: "a7b040d654854ba7", specific: "7d733922da1f73f7")
+        XCTAssertEqual(try offerBody(other, "InternalMathDivRemU64x32").added.count, 1)
+        // Recorded as calling nothing: the owner then left the JMP out.
+        XCTAssertEqual(try offerBody(body, "InternalMathDivRemU64x64", callees: []).added.count, 1)
+        let code = Data(#"{"base":"0x9DFC200","instructions":[{"address":"0x9DFC216","references":[{"entry":"\#(other.key)","to":"0x9DFE5A8","type":"UNCONDITIONAL_JUMP"}]}]}"#.utf8)
+        var lesson = LibraryProposal(body: body, name: "", kind: "edk2", address: "0x9DFC200",
+                                     entry: Data("{}".utf8), basedOn: body.key, teachesBytesOnly: true)
+        lesson.code = code
+        try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [lesson])
+        let again = try offerBody(body, "InternalMathDivRemU64x64", callees: [
+            LibraryCallee(name: "InternalMathDivRemU64x32", body: other.key, entry: other.key)
+        ])
+        XCTAssertEqual(again.nameConflicts?.map(\.heldBy) ?? [], [], "no other body under its own name")
+        XCTAssertEqual(again.added.map(\.id), [])
+        XCTAssertEqual(again.unchanged.map(\.id), [body.key])
+    }
+
     /// The approved rule at the door: a new body with a data reference needs a
     /// citation, and a new body's callees must all be in the registry already.
     func testABodyThatDependsOnAModuleIsNotTaken() throws {

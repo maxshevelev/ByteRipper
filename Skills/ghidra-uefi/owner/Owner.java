@@ -3356,6 +3356,18 @@ public class Owner {
         JsonArray callees = new JsonArray();
         java.util.Set<Function> called = new java.util.LinkedHashSet<>(
             function.getCalledFunctions(ghidra.util.task.TaskMonitor.DUMMY));
+        // A tail jump to another function is a callee too: the registry's
+        // code names its target as it names a call's (issue cbffc53d), while
+        // Ghidra lists only calls.
+        for (Instruction instruction : program.getListing().getInstructions(function.getBody(), true)) {
+            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
+                if (!reference.getReferenceType().isJump()) continue;
+                Address to = reference.getToAddress();
+                if (function.getBody().contains(to)) continue;
+                Function target = program.getFunctionManager().getFunctionAt(to);
+                if (target != null && !target.equals(function)) called.add(target);
+            }
+        }
         for (Address to : code) {
             Function target = program.getFunctionManager().getFunctionAt(to);
             if (target != null) {

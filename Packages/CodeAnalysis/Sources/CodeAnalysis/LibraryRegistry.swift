@@ -264,9 +264,12 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
         // Never itself: a recursive call stays inside its body's code, and an
         // entry recorded before that was said may list it.
         let own: Set<String> = [id, key]
-        if let callees = variant.callees { return callees.filter { !own.contains($0) } }
-        guard let code = variant.code, let data = try? object(code) else { return nil }
-        return LibraryCode.callees(code: data).subtracting(own).sorted()
+        let coded = variant.code.flatMap { try? object($0) }.map { LibraryCode.callees(code: $0) }
+        // A tail jump is a callee too: the code names its target, while an
+        // owner from before that listed only calls (issue cbffc53d), so what
+        // the variant records is read together with what its code names.
+        guard let named = variant.callees.map({ Set($0).union(coded ?? []) }) ?? coded else { return nil }
+        return named.subtracting(own).sorted()
     }
 
     /// The entry a body belongs to.
