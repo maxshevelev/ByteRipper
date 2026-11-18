@@ -95,6 +95,19 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(replaced.stats.functions, 2)
     }
 
+    /// A module named again (FatPei, created as `LZMA-section`) carries its
+    /// name in a publish whose artifact is the same as before.
+    func testTheSameAnalysisPutUnderANewNameTakesTheName() throws {
+        var identity = module()
+        let data = artifact()
+        _ = try store.putAnalysis(module: identity, recipe: recipe(), artifact: data)
+        identity.name = "FatPei"
+        let renamed = try store.putAnalysis(module: identity, recipe: recipe(), artifact: data)
+        XCTAssertEqual(renamed.module.name, "FatPei")
+        XCTAssertEqual(try store.analysis(module: identity.sha256, recipe: "code-v2-ghidra-12.1.2")?.module.name,
+                       "FatPei")
+    }
+
     func testRebindingTheSameAnalysisUpdatesOnlyWhatIsNamed() throws {
         let identity = module()
         let data = artifact()

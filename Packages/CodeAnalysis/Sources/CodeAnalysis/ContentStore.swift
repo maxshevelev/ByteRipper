@@ -264,6 +264,13 @@ public struct ContentStore: Sendable {
                     // same artifact — a comment is in the review document, not
                     // in the artifact — and still has to name its document.
                     var updated = existing
+                    // A module named again carries its name in a publish of
+                    // the same artifact; the name is all of the identity that
+                    // may change.
+                    if module.name != existing.module.name, !module.name.isEmpty {
+                        updated.module.name = module.name
+                        rebound = true
+                    }
                     if let reading, reading != existing.reading,
                        ReadingOrder(incoming: reading, stored: existing.reading) == .newer {
                         updated.reading = reading
