@@ -2510,12 +2510,66 @@ public class Owner {
         for (String name : new java.util.ArrayList<>(Harvest.reviewTypes(program).keySet())) {
             DataType type = find(program.getDataTypeManager(), name);
             if (type == null || type.getDataTypeManager() != program.getDataTypeManager()) continue;
+            for (DataType nested : programTypesWithin(type)) {
+                if (nameFunctionPointerMembers(nested, false, null, left)) changed = true;
+            }
             if (!nameFunctionPointerMembers(type, false, null, left)) continue;
             changed = true;
             Harvest.recordType(program, type.getName(), ExportCode.typeC(type));
         }
         removeUnusedParserTypes(left);
         return changed;
+    }
+
+    /**
+     * The structures and typedefs `type` is built of, at any depth — through
+     * fields, pointers and arrays — that this program made rather than took
+     * from an archive. One text defines a structure and the structures it
+     * holds together, and only the type it ends with is the one the call
+     * answers: the others' function members were left `_func_N` (issue
+     * 7f2d75ae). A type from EDK2 or the shared archive is not this review's
+     * to rename.
+     */
+    private static java.util.List<DataType> programTypesWithin(DataType type) {
+        java.util.List<DataType> found = new java.util.ArrayList<>();
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        ghidra.program.model.data.DataTypeManager manager = type.getDataTypeManager();
+        if (manager == null) return found;
+        seen.add(manager.getID(type));
+        java.util.ArrayDeque<DataType> next = new java.util.ArrayDeque<>();
+        next.add(type);
+        while (!next.isEmpty()) {
+            DataType at = next.poll();
+            DataType base = at instanceof ghidra.program.model.data.TypeDef def ? def.getDataType() : at;
+            if (!(base instanceof ghidra.program.model.data.Composite composite)) continue;
+            // A typedef's structure is named through the typedef, as a review
+            // names it (`HASH_INTERFACE_HashInit`): only its fields go on.
+            java.util.List<DataType> parts = new java.util.ArrayList<>();
+            for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+                parts.add(component.getDataType());
+            }
+            for (DataType part : parts) {
+                while (part instanceof ghidra.program.model.data.Pointer
+                       || part instanceof ghidra.program.model.data.Array) {
+                    part = part instanceof ghidra.program.model.data.Pointer pointer
+                        ? pointer.getDataType() : ((ghidra.program.model.data.Array) part).getDataType();
+                }
+                if (!(part instanceof ghidra.program.model.data.TypeDef)
+                    && !(part instanceof ghidra.program.model.data.Composite)) continue;
+                if (part.getDataTypeManager() != manager || !madeHere(part)) continue;
+                if (!seen.add(manager.getID(part))) continue;
+                found.add(part);
+                next.add(part);
+            }
+        }
+        return found;
+    }
+
+    /** A type this program made: no archive it was taken from. */
+    private static boolean madeHere(DataType type) {
+        ghidra.program.model.data.SourceArchive archive = type.getSourceArchive();
+        return archive == null || archive.getSourceArchiveID() == null
+            || archive.getArchiveType() == ghidra.program.model.data.ArchiveType.PROGRAM;
     }
 
     /**
@@ -7926,6 +7980,9 @@ public class Owner {
         // redefinition for a check reads as a new revision.
         java.util.List<String> memberTypesReplaced = new java.util.ArrayList<>();
         java.util.List<DataType> parserLeft = new java.util.ArrayList<>();
+        for (DataType nested : programTypesWithin(resolved)) {
+            nameFunctionPointerMembers(nested, c != null, memberTypesReplaced, parserLeft);
+        }
         nameFunctionPointerMembers(resolved, c != null, memberTypesReplaced, parserLeft);
         removeUnusedParserTypes(parserLeft);
         // Its function types are EFIAPI before its C is recorded, not after.

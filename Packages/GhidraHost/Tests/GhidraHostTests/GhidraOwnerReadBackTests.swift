@@ -423,6 +423,34 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 7f2d75ae: one text defining a structure and the structure it
+    /// holds an array of names the inline function members of both — not only
+    /// of the type the text ends with. A member left `_func_N` reached the
+    /// shared archive, where another module's `_func_1` has another signature.
+    func testOneTextNamesTheFunctionMembersOfEveryStructureItDefines() async throws {
+        try await open(try image())
+        _ = try await post("/v1/type", ["c": """
+            #pragma pack(1)
+            typedef struct {
+              EFI_GUID HashGuid;
+              EFI_STATUS (*HashInit)(UINTN *HashHandle);
+              EFI_STATUS (*HashUpdate)(UINTN HashHandle, void *DataToHash, UINTN DataToHashLen);
+            } PROBE_HASH_INTERFACE;
+            typedef struct {
+              EFI_GUID Identifier;
+              UINTN HashInterfaceCount;
+              PROBE_HASH_INTERFACE HashInterface[5];
+              UINT32 SupportedHashMask;
+            } PROBE_HASH_INTERFACE_HOB;
+            #pragma pack()
+            """])
+        let inner = try await read("/v1/type?name=PROBE_HASH_INTERFACE")
+        let c = (inner["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertFalse(c.contains("_func_"), "\(inner)")
+        XCTAssertTrue(c.contains("PROBE_HASH_INTERFACE_HashInit * HashInit"), "\(inner)")
+        _ = try await release()
+    }
+
     /// Issue ce3740de: the owner's lease lapsed after an hour with no write
     /// and the host kept its token. A publish takes it again for its type
     /// step, as a write does, instead of failing with "take the write lease first".
