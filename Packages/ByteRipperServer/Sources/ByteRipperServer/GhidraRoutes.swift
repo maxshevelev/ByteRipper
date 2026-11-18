@@ -72,6 +72,9 @@ enum GhidraRoutes {
             let ticket = try await answer { try await book.force(module: module, remark: remark, status: value,
                                                                   close: close, note: note, by: by) }
             return try TicketBook.encoder.encode(TicketBook.Listed(ticket))
+        }, removeStray: { module in
+            let ticket = try await answer { try await host.removeStrayTicket(module) }
+            return try TicketBook.encoder.encode(TicketBook.Listed(ticket))
         }, proposals: host.typeProposals.map { proposals in
             { (try? TicketBook.encoder.encode(await proposals.list().map(TypeProposalBook.Listed.init))) ?? Data("[]".utf8) }
         }, decide: host.typeProposals.map { _ in

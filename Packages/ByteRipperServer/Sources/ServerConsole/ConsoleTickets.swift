@@ -11,6 +11,9 @@ public struct ConsoleTickets: Sendable {
     public let force: @Sendable (_ module: String, _ remark: String?, _ status: String?, _ close: Bool?,
                                  _ note: String?, _ by: String) async throws -> Data
 
+    /// A ticket for a module the server does not hold, taken off the board.
+    public let removeStray: (@Sendable (_ module: String) async throws -> Data)?
+
     /// Agents' proposals to replace shared types, newest first.
     public let proposals: (@Sendable () async -> Data)?
     /// A proposal agreed or rejected by `by`, whatever its votes.
@@ -19,10 +22,12 @@ public struct ConsoleTickets: Sendable {
     public init(list: @escaping @Sendable () async -> Data,
                 force: @escaping @Sendable (_ module: String, _ remark: String?, _ status: String?, _ close: Bool?,
                                             _ note: String?, _ by: String) async throws -> Data,
+                removeStray: (@Sendable (_ module: String) async throws -> Data)? = nil,
                 proposals: (@Sendable () async -> Data)? = nil,
                 decide: (@Sendable (_ id: String, _ agree: Bool, _ note: String?, _ by: String) async throws -> Data)? = nil) {
         self.list = list
         self.force = force
+        self.removeStray = removeStray
         self.proposals = proposals
         self.decide = decide
     }

@@ -498,6 +498,22 @@ final class ServerTests: XCTestCase {
         // lists the ticket and overrules it.
         let remote = GhidraRemote(base: base, token: app)
         let board = String(repeating: "ab", count: 32)
+        // A module the server holds no project or revision of takes no ticket:
+        // a mistyped SHA-256 made a closed ticket with no name and no reviewer.
+        do {
+            _ = try await remote.tickets(.init(action: .reviewer, agent: "Reviewer · bench-mac", module: board))
+            XCTFail("a ticket for no module")
+        } catch {
+            XCTAssertTrue("\(error)".contains("no module this server holds"), "\(error)")
+        }
+        let boardProject = configuration.projects.appendingPathComponent(board)
+        try FileManager.default.createDirectory(at: boardProject, withIntermediateDirectories: true)
+        try Data().write(to: boardProject.appendingPathComponent("module.gpr"))
+        try Data("""
+            {"schema": 1, "project": "p", "module": {"sha256": "\(board)", "size": 1, "name": "Board", "kind": "PE32"},
+             "program": "module.efi", "made_with": {"ghidra": "12.2", "passes": []},
+             "created_at": "2026-11-18T00:00:00+00:00", "reviewed": true}
+            """.utf8).write(to: boardProject.appendingPathComponent("state.json"))
         func ticket(_ data: Data) throws -> [String: Any] { try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any]) }
         _ = try await remote.tickets(.init(action: .reviewer, agent: "Reviewer · bench-mac", module: board))
         let raised = try ticket(try await remote.tickets(.init(
@@ -530,6 +546,16 @@ final class ServerTests: XCTestCase {
                                                   body: Data(#"{"close":false,"note":"look again"}"#.utf8))
         XCTAssertEqual(forced, 200)
         XCTAssertEqual(try ticket(forcedBody)["state"] as? String, "settled")
+        // Only a ticket for no module comes off the board, and only by an administrator.
+        let (heldStays, _) = try await call("DELETE", "admin/api/tickets/\(board)", admin)
+        XCTAssertEqual(heldStays, 409, "a held module's ticket stays")
+        try FileManager.default.removeItem(at: boardProject)
+        let (strayRefused, _) = try await call("DELETE", "admin/api/tickets/\(board)", app)
+        XCTAssertEqual(strayRefused, 403)
+        let (stray, _) = try await call("DELETE", "admin/api/tickets/\(board)", admin)
+        XCTAssertEqual(stray, 200, "the ticket of a module no longer held comes off")
+        let (_, afterStray) = try await call("GET", "admin/api/tickets", admin)
+        XCTAssertFalse(String(decoding: afterStray, as: UTF8.self).contains(board))
         let (consoleRefused, _) = try await call("GET", "admin/api/tickets", app)
         XCTAssertEqual(consoleRefused, 403)
         let (ticketsPage, _) = try await call("GET", "admin/tickets", admin)

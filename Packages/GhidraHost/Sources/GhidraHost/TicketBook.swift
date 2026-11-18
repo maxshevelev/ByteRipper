@@ -353,6 +353,16 @@ public actor TicketBook {
         return ticket
     }
 
+    /// A ticket taken off the board: only one the caller found to be for no
+    /// module, as a mistyped SHA-256 made before the tools refused one.
+    public func remove(module: String) throws -> Ticket {
+        let key = try Self.module(module)
+        guard let ticket = tickets[key] else { throw notFound("no ticket for module \(key)") }
+        tickets[key] = nil
+        try save()
+        return ticket
+    }
+
     // MARK: -
 
     private static func lastActivity(_ ticket: Ticket) -> Date {

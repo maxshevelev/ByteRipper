@@ -144,6 +144,13 @@ public struct Console: Sendable {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
+        // A ticket made for no module — a mistyped SHA-256 — taken off the board.
+        add("DELETE", "/admin/api/tickets/:module") { request in
+            guard let remove = tickets?.removeStray else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            let data = try await remove(request.parameters["module"] ?? "")
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+
         // Agents' proposals to replace shared types, and an administrator's
         // decision on one, whatever its votes.
         add("GET", "/admin/api/type-proposals") { _ in
