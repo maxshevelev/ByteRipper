@@ -451,6 +451,31 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 4a95c0c1: a text of two structures named only the last one's
+    /// members, and the parser, numbering its `_func_N` from one again,
+    /// rewrote the program's `_func_1` that a third structure used.
+    func testATextOfTwoStructuresNamesBothAndLeavesAnotherTypesFuncAlone() async throws {
+        try await open(try image())
+        // A pointer to a function pointer is not named: the third structure
+        // keeps the parser's `_func_1`.
+        _ = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_THIRD { EFI_STATUS (**Decode)(UINTN Format, UINTN Image); } PROBE_THIRD;
+            """])
+        let before = try await read("/v1/type?name=_func_1")
+        let held = (before["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(held.contains("Image"), "\(before)")
+        _ = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_CONSOLE { EFI_STATUS (*SetMode)(void *This, UINT32 Mode); } PROBE_CONSOLE;
+            typedef struct _PROBE_DECODER { EFI_STATUS (*DecodeImage)(UINTN Size); } PROBE_DECODER;
+            """])
+        let first = try await read("/v1/type?name=PROBE_CONSOLE")
+        let firstC = (first["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(firstC.contains("PROBE_CONSOLE_SetMode"), "\(first)")
+        let after = try await read("/v1/type?name=_func_1")
+        XCTAssertEqual((after["program"] as? [String: Any])?["c"] as? String, held, "\(after)")
+        _ = try await release()
+    }
+
     /// Issue ce3740de: the owner's lease lapsed after an hour with no write
     /// and the host kept its token. A publish takes it again for its type
     /// step, as a write does, instead of failing with "take the write lease first".

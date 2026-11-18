@@ -7890,6 +7890,7 @@ public class Owner {
         JsonArray cUnplaced = null;
         boolean tookShared = false;
         boolean unchanged = false;
+        java.util.Map<String, DataType> parserFunctionsBefore = null;
         if (c != null) {
             // Read before the parser touches the manager: CParser adds a type
             // as it parses it, so by the time it returns, the old fields'
@@ -7899,6 +7900,11 @@ public class Owner {
             java.util.Map<String, java.util.Map<String, String>> kept = keptComments(previous);
             java.util.Map<String, String> keptDescriptions = keptDescriptions(previous);
             java.util.Map<DataType, DataType> referenced = onlyReferenced(previous, c);
+            // The parser numbers its function types from `_func_1` in every
+            // parse and writes them into the program as it goes: the
+            // program's own `_func_N`, which another structure uses, would
+            // take this text's prototype (issue 4a95c0c1).
+            parserFunctionsBefore = parserFunctions();
             // The fields may name what only an archive holds — `CHAR8`, a PI
             // structure, another review's type — as a signature may.
             importTypes(c);
@@ -7918,7 +7924,7 @@ public class Owner {
             // old comments are put back by name, so a correction is one call,
             // not two. A field the new C dropped keeps nothing. Comments of a
             // type the C only mentions are left where they are.
-            java.util.Set<String> declared = new java.util.HashSet<>();
+            java.util.Set<String> declared = new java.util.HashSet<>(declaredNames(c));
             declared.add(parsed.getName());
             if (parsed instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
                 declared.add(def.getBaseDataType().getName());
@@ -7980,15 +7986,53 @@ public class Owner {
         // redefinition for a check reads as a new revision.
         java.util.List<String> memberTypesReplaced = new java.util.ArrayList<>();
         java.util.List<DataType> parserLeft = new java.util.ArrayList<>();
+        // Every structure the text defines, not only the one it ends with
+        // (issue 4a95c0c1): each is named, and recorded as the review's.
+        java.util.List<DataType> alsoDefined = new java.util.ArrayList<>();
+        if (c != null) {
+            java.util.List<DataType> found = new java.util.ArrayList<>();
+            java.util.Set<String> underTypedef = new java.util.HashSet<>();
+            for (String name : declaredNames(c)) {
+                DataType other = find(program.getDataTypeManager(), name);
+                if (other == null || other.getDataTypeManager() != program.getDataTypeManager() || !madeHere(other)) continue;
+                if (found.stream().anyMatch(t -> t.getName().equals(other.getName()))) continue;
+                found.add(other);
+            }
+            found.add(resolved);
+            for (DataType type : found) {
+                if (type instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
+                    underTypedef.add(def.getBaseDataType().getName());
+                }
+            }
+            // A typedef's structure is named and recorded through the typedef.
+            for (DataType type : found) {
+                if (type == resolved || type.getName().equals(resolved.getName())
+                    || underTypedef.contains(type.getName())) continue;
+                alsoDefined.add(type);
+            }
+        }
+        for (DataType type : alsoDefined) {
+            for (DataType nested : programTypesWithin(type)) {
+                nameFunctionPointerMembers(nested, true, memberTypesReplaced, parserLeft);
+            }
+            nameFunctionPointerMembers(type, true, memberTypesReplaced, parserLeft);
+        }
         for (DataType nested : programTypesWithin(resolved)) {
             nameFunctionPointerMembers(nested, c != null, memberTypesReplaced, parserLeft);
         }
         nameFunctionPointerMembers(resolved, c != null, memberTypesReplaced, parserLeft);
+        restoreParserFunctions(parserFunctionsBefore);
         removeUnusedParserTypes(parserLeft);
         // Its function types are EFIAPI before its C is recorded, not after.
         efiApiFunctionTypes(program);
         Harvest.recordType(program, resolved.getName(), ExportCode.typeC(resolved));
+        JsonArray others = new JsonArray();
+        for (DataType type : alsoDefined) {
+            Harvest.recordType(program, type.getName(), ExportCode.typeC(type));
+            others.add(type.getName());
+        }
         answer.addProperty("name", resolved.getName());
+        if (others.size() > 0) answer.add("also_defined", others);
         answer.addProperty("path", resolved.getPathName());
         answer.addProperty("size", resolved.getLength());
         answer.addProperty("c", ExportCode.typeC(resolved));
@@ -8251,6 +8295,50 @@ public class Owner {
      * parser replaces a type it defines as it goes, so a lookup afterwards
      * finds the new one.
      */
+    /** The program's `_func_N` function types, each as a copy of what it is now. */
+    private java.util.Map<String, DataType> parserFunctions() {
+        java.util.Map<String, DataType> found = new java.util.HashMap<>();
+        java.util.Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
+        while (all.hasNext()) {
+            DataType type = all.next();
+            if (type instanceof ghidra.program.model.data.FunctionDefinition
+                && type.getName().matches("_func_\\d+")) {
+                found.put(type.getPathName(), type.copy(null));
+            }
+        }
+        return found;
+    }
+
+    /**
+     * A `_func_N` the program held before the parse takes back its own
+     * prototype: the members of this text have their named types by now, and
+     * whatever else used it reads as it did.
+     */
+    private void restoreParserFunctions(java.util.Map<String, DataType> before) {
+        if (before == null) return;
+        for (java.util.Map.Entry<String, DataType> entry : before.entrySet()) {
+            DataType live = program.getDataTypeManager().getDataType(entry.getKey());
+            if (!(live instanceof ghidra.program.model.data.FunctionDefinition now) || live.isDeleted()) continue;
+            if (entry.getValue() instanceof ghidra.program.model.data.FunctionDefinition was
+                && !sameSignature(now, was)) {
+                live.replaceWith(was);
+            }
+        }
+    }
+
+    /** The structures, unions, enums and typedefs a C gives a body or a name to. */
+    private static java.util.List<String> declaredNames(String c) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        String text = c.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\\n]*", " ");
+        java.util.regex.Matcher tags = java.util.regex.Pattern
+            .compile("\\b(?:struct|union|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\{").matcher(text);
+        while (tags.find()) if (!names.contains(tags.group(1))) names.add(tags.group(1));
+        java.util.regex.Matcher typedefs = java.util.regex.Pattern
+            .compile("\\}\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*[;,]").matcher(text);
+        while (typedefs.find()) if (!names.contains(typedefs.group(1))) names.add(typedefs.group(1));
+        return names;
+    }
+
     private java.util.TreeMap<String, DataType> namedTypes(String c) {
         java.util.TreeMap<String, DataType> found = new java.util.TreeMap<>();
         java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(c);
