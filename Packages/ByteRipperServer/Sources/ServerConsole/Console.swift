@@ -118,6 +118,15 @@ public struct Console: Sendable {
             let data = try await issues.resolve(request.parameters["id"] ?? "", by, note)
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
+        add("POST", "/admin/api/issues/:id/status", maxBodyBytes: 16 << 10) { request in
+            guard let issues else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            struct Moving: Decodable { let status: String; let note: String?; let build: String? }
+            let moving = try request.json(Moving.self)
+            let by = request.principal?.name ?? "an administrator"
+            let data = try await issues.setStatus(request.parameters["id"] ?? "", moving.status, by,
+                                                  moving.note, moving.build)
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
 
         // The review board, and an administrator's say over any status.
         let tickets = self.tickets

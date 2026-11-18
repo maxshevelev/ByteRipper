@@ -457,8 +457,29 @@ final class ServerTests: XCTestCase {
         let (_, adminsOwn) = try await call("GET", "ghidra/v1/issues/mine", admin)
         XCTAssertEqual((try JSONSerialization.jsonObject(with: adminsOwn) as? [Any])?.count, 0, "only the reporter's")
 
+        // Answered, it waits on its reporter: still open until confirmed.
+        let (_, waiting) = try await call("GET", "admin/api/issues", admin)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: waiting) as? [[String: Any]])?.first?["status"] as? String,
+                       "awaiting_confirmation")
+        let (strangers, _) = try await call("POST", "ghidra/v1/issues/\(id)/confirm", admin,
+                                            body: Data(#"{"works":true}"#.utf8))
+        XCTAssertEqual(strangers, 403, "only the reporter confirms")
+        let confirmed = try await GhidraRemote(base: base, token: app).confirmIssue(id, works: true, note: nil)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: confirmed) as? [String: Any])?["status"] as? String, "resolved")
         let (_, open) = try await call("GET", "admin/api/issues", admin)
         XCTAssertEqual((try JSONSerialization.jsonObject(with: open) as? [Any])?.count, 0)
+        // An administrator's step, with its build; an unknown status is refused.
+        let (moved, movedBody) = try await call("POST", "admin/api/issues/\(id)/status", admin,
+                                                body: Data(#"{"status":"deployed","build":"v0.10-706"}"#.utf8))
+        XCTAssertEqual(moved, 200)
+        let step = ((try JSONSerialization.jsonObject(with: movedBody) as? [String: Any])?["history"] as? [[String: Any]])?.last
+        XCTAssertEqual(step?["build"] as? String, "v0.10-706")
+        XCTAssertEqual(step?["by"] as? String, "admin")
+        let (unknownStatus, _) = try await call("POST", "admin/api/issues/\(id)/status", admin,
+                                          body: Data(#"{"status":"done"}"#.utf8))
+        XCTAssertEqual(unknownStatus, 400)
+        _ = try await call("POST", "admin/api/issues/\(id)/status", admin,
+                           body: Data(#"{"status":"resolved","note":"fixed in 476"}"#.utf8))
         let (_, all) = try await call("GET", "admin/api/issues?all=1", admin)
         let first = (try JSONSerialization.jsonObject(with: all) as? [[String: Any]])?.first
         XCTAssertEqual((first?["resolved"] as? [String: Any])?["note"] as? String, "fixed in 476")

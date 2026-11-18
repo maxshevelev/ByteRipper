@@ -44,6 +44,8 @@ public protocol GhidraBackend: Sendable {
     func reportIssue(_ report: IssueBook.Report) async throws -> Data
     /// This reporter's reports, with the answers of the resolved ones.
     func myIssues(limit: Int) async throws -> Data
+    /// The reporter's answer to a fix of its report: it works, or not and why.
+    func confirmIssue(_ id: String, works: Bool, note: String?) async throws -> Data
     /// A call on the review board (`TicketBook`).
     func tickets(_ request: TicketBook.Request) async throws -> Data
     /// A call on the shared types' proposals (`TypeProposalBook`).
@@ -78,6 +80,9 @@ public extension GhidraBackendWithoutServer {
     }
     func myIssues(limit: Int) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no reports: there is no analysis server to read them from.")
+    }
+    func confirmIssue(_ id: String, works: Bool, note: String?) async throws -> Data {
+        throw GhidraHostError(.install, "this backend keeps no reports: there is no analysis server to confirm one on.")
     }
     func tickets(_ request: TicketBook.Request) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no review board: there is no analysis server to keep it.")
@@ -249,6 +254,10 @@ extension GhidraHost: GhidraBackend {
         try await myIssues(by: configuration.holder, limit: limit)
     }
 
+    public func confirmIssue(_ id: String, works: Bool, note: String?) async throws -> Data {
+        try await confirmIssue(id, works: works, note: note, by: configuration.holder)
+    }
+
     /// Called by this host's own holder — the server's local MCP.
     public func tickets(_ request: TicketBook.Request) async throws -> Data {
         try await ticketCall(request, holder: configuration.holder)
@@ -263,6 +272,13 @@ extension GhidraHost: GhidraBackend {
             throw GhidraHostError(.install, "this host keeps no reports: there is no analysis server to read them from.")
         }
         return try IssueBook.encoder.encode(await issues.mine(reporter, limit: limit))
+    }
+
+    public nonisolated func confirmIssue(_ id: String, works: Bool, note: String?, by reporter: String) async throws -> Data {
+        guard let issues else {
+            throw GhidraHostError(.install, "this host keeps no reports: there is no analysis server to confirm one on.")
+        }
+        return try IssueBook.encoder.encode(try await issues.confirm(id, by: reporter, works: works, note: note))
     }
 }
 
@@ -348,6 +364,11 @@ public struct GhidraRemote: GhidraBackend {
 
     public func myIssues(limit: Int) async throws -> Data {
         try await call("GET", "issues/mine", query: ["limit": String(limit)], timeout: 20)
+    }
+
+    public func confirmIssue(_ id: String, works: Bool, note: String?) async throws -> Data {
+        try await call("POST", "issues/\(id)/confirm",
+                       body: try JSONEncoder().encode(IssueBook.Confirmation(works: works, note: note)), timeout: 20)
     }
 
     public func tickets(_ request: TicketBook.Request) async throws -> Data {

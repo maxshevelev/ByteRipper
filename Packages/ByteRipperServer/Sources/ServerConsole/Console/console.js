@@ -340,8 +340,9 @@
     countTimer: null,
     // Which request logs the operator has opened, by token: the page is drawn
     // again on every poll, and a log that shut itself would be unreadable.
-    // Which reports the operator has opened, and whether resolved ones show.
-    resolvedIssues: false,
+    // Which reports the Issues page shows: open, waiting on us or on the
+    // reporter, closed, or all.
+    issueFilter: "open",
     // The record shown in the detail sheet: its key, and how to draw it from
     // the rows the page last read.
     detail: null,
@@ -509,7 +510,7 @@
     const docs = status.status === "fulfilled" && status.value && status.value.documents;
     show("documents", docs ? docs.open : null, false, docs && docs.missing ? docs.missing : 0);
     show("issues", issues.status === "fulfilled" && Array.isArray(issues.value)
-      ? issues.value.filter((issue) => !issue.resolved).length : null, true);
+      ? issues.value.filter(issueWaitsOnUs).length : null, true);
     const board = tickets.status === "fulfilled" && Array.isArray(tickets.value) ? tickets.value : null;
     const waiting = board ? board.filter((ticket) => ticket.state === "open").length : 0;
     const settled = board ? board.filter((ticket) => ticket.state === "settled").length : 0;
@@ -1523,19 +1524,56 @@
 
   // ---------- Issues ----------
 
+  // Where a report stands, in the order a fix goes through them (`IssueBook.Status`):
+  // its label, the pill's tone, and who the report waits on.
+  const ISSUE_STATUSES = [
+    ["new", "New", "danger", "maintainers"],
+    ["investigating", "Investigating", "warn", "maintainers"],
+    ["waiting_for_data", "Waiting for data", "info", "reporter"],
+    ["fixing", "Fixing", "warn", "maintainers"],
+    ["testing", "Testing", "warn", "maintainers"],
+    ["awaiting_go", "Awaiting GO", "accent", "maintainers"],
+    ["awaiting_window", "Awaiting window", "accent", "maintainers"],
+    ["deployed", "Deployed", "accent", "maintainers"],
+    ["awaiting_confirmation", "Awaiting reporter's confirmation", "info", "reporter"],
+    ["resolved", "Resolved", "ok", null],
+    ["no_change", "No change", "plain", null],
+  ];
+  const ISSUE_STATUS = Object.fromEntries(ISSUE_STATUSES.map(([id, label, tone, waits]) => [id, { label, tone, waits }]));
+  // A report from before statuses has none: answered then, it was resolved.
+  const issueStatus = (issue) => issue.status || (issue.resolved ? "resolved" : "new");
+  const issueClosed = (issue) => !ISSUE_STATUS[issueStatus(issue)].waits;
+  // What the sidebar counts: the reports waiting on the maintainers.
+  const issueWaitsOnUs = (issue) => ISSUE_STATUS[issueStatus(issue)].waits === "maintainers";
+  const ISSUE_FILTERS = [["open", "Open"], ["ours", "Waiting on us"], ["reporter", "Waiting on reporter"], ["closed", "Closed"], ["all", "All"]];
+
+  function issuePill(issue) {
+    const status = ISSUE_STATUS[issueStatus(issue)];
+    const last = (issue.history || []).at(-1);
+    return h("span", { class: `pill ${status.tone}`, title: last ? `${last.by}, ${when(last.at)}` : "", text: status.label });
+  }
+
   function mountIssues(actions) {
-    const toggle = h("label", { class: "check" },
-      h("input", { type: "checkbox", checked: state.resolvedIssues, onchange: (e) => { state.resolvedIssues = e.target.checked; refresh(); } }),
-      "Show resolved");
-    append(actions, toggle);
+    const seg = h("div", { class: "seg" }, ISSUE_FILTERS.map(([id, label]) =>
+      h("button", { type: "button", "data-state": id, class: state.issueFilter === id ? "on" : "",
+        onclick: () => { state.issueFilter = id; refresh(); } }, label)));
+    append(actions, seg);
     const open = card("Reports", "newest first");
     const root = h("div", { class: "stack" }, open.root);
 
     function update(issues) {
-      const shown = issues.filter((issue) => state.resolvedIssues || !issue.resolved);
+      [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.state === state.issueFilter));
+      const keep = {
+        open: (issue) => !issueClosed(issue),
+        ours: issueWaitsOnUs,
+        reporter: (issue) => ISSUE_STATUS[issueStatus(issue)].waits === "reporter",
+        closed: issueClosed,
+        all: () => true,
+      }[state.issueFilter] || (() => true);
+      const shown = issues.filter(keep);
       for (const issue of issues) updateDetail(`issue:${issue.id}`, `Report on ${issue.tool}`, () => issueDetail(issue));
       fill(open.body, shown.length ? issueList(shown)
-        : empty("check", "No open report", "An agent reports a problem with a tool through ghidra_report_issue; it is listed here."));
+        : empty("check", "No report here", "An agent reports a problem with a tool through ghidra_report_issue; it is listed here."));
     }
     return { root, update };
   }
@@ -1543,44 +1581,72 @@
   function issueList(issues) {
     return h("div", { class: "table-wrap" }, h("table", {},
       h("thead", {}, h("tr", {},
-        h("th", { text: "Reported" }), h("th", { text: "By" }), h("th", { text: "Tool" }), h("th", { text: "Expected" }), h("th", {}))),
+        h("th", { text: "Reported" }), h("th", { text: "By" }), h("th", { text: "Tool" }), h("th", { text: "Expected" }),
+        h("th", { text: "Status" }), h("th", {}))),
       h("tbody", {}, issues.map((issue) => {
-        return detailRow(`issue:${issue.id}`, `Report on ${issue.tool}`, () => issueDetail(issue), { class: issue.resolved ? "dim" : "" },
+        return detailRow(`issue:${issue.id}`, `Report on ${issue.tool}`, () => issueDetail(issue), { class: issueClosed(issue) ? "dim" : "" },
           h("td", { class: "muted", title: when(issue.at), text: ago(issue.at) }),
           h("td", { text: issue.reporter }),
           h("td", {}, h("code", { text: issue.tool })),
           h("td", { text: issue.expected.length > 140 ? issue.expected.slice(0, 140) + "…" : issue.expected }),
-          h("td", { class: "actions" },
-            issue.resolved ? h("span", { class: "pill", title: `${issue.resolved.by}, ${when(issue.resolved.at)}`, text: "Resolved" })
-              : iconButton("check", "Mark resolved", () => resolveIssue(issue))));
+          h("td", {}, issuePill(issue)),
+          h("td", { class: "actions" }, iconButton("sliders", "Change status", () => moveIssue(issue))));
       }))));
   }
 
   function issueDetail(issue) {
     const part = (label, text) => text ? h("div", { class: "issue-part" }, h("h4", { text: label }), h("pre", { class: "code", text })) : null;
+    const history = issue.history || [];
     return h("div", { class: "stack" },
       h("div", { class: "sheet-status" },
-        h("span", { class: `pill ${issue.resolved ? "ok" : "danger"}`, text: issue.resolved ? "resolved" : "open" }),
-        h("span", { class: "muted", text: `Reported by ${issue.reporter}, ${when(issue.at)}` }),
+        issuePill(issue),
+        h("span", { class: "muted", text: `${issue.id} · reported by ${issue.reporter}, ${when(issue.at)}` }),
         h("span", { class: "grow" }),
-        decisionButton(issue.resolved ? "Resolved" : "Mark resolved", "check", "", !!issue.resolved, !!issue.resolved,
-          () => resolveIssue(issue))),
+        decisionButton("Change status", "sliders", "", false, false, () => moveIssue(issue))),
       issue.module ? h("div", { class: "muted", text: `Module ${issue.module}` }) : null,
       part("Arguments", issue.arguments), part("Answer", issue.answer), part("Expected", issue.expected),
       part("Note", issue.note),
-      issue.resolved ? part(`Resolved by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null);
+      issue.resolved ? part(`Answered by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null,
+      history.length ? h("div", { class: "issue-part" }, h("h4", { text: "History" }),
+        h("div", { class: "table-wrap" }, h("table", {}, h("tbody", {}, history.map((step) => h("tr", {},
+          h("td", { class: "muted", title: when(step.at), text: ago(step.at) }),
+          h("td", {}, h("span", { class: `pill ${ISSUE_STATUS[step.status] ? ISSUE_STATUS[step.status].tone : "plain"}`,
+            text: ISSUE_STATUS[step.status] ? ISSUE_STATUS[step.status].label : step.status })),
+          h("td", { text: step.by }),
+          h("td", { text: [step.build ? `build ${step.build}` : null, step.note].filter(Boolean).join(" — ") }))))))) : null);
   }
 
-  async function resolveIssue(issue) {
-    const note = h("input", { class: "field", placeholder: "The answer the reporter reads: what was fixed and in which build, or why nothing changes", autocomplete: "off" });
-    const done = await dialog({
-      icon: "check", tone: "ok", title: `Resolve the report on ${issue.tool}?`,
-      text: "It leaves the open list; the reporter reads the answer with ghidra_issues. An answer is required.",
-      body: note,
-      actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: "Resolve", kind: "primary", value: true, focus: true }],
+  // An administrator's step: the status, a note — required where the reporter
+  // reads it — and, for an install, the build.
+  async function moveIssue(issue) {
+    const current = issueStatus(issue);
+    const select = h("select", { class: "field" }, ISSUE_STATUSES.map(([id, label]) =>
+      h("option", { value: id, selected: id === current }, label)));
+    const note = h("textarea", { class: "field", rows: 3, autocomplete: "off",
+      placeholder: "What was done, what the reporter should do, or why nothing changes" });
+    const build = h("input", { class: "field", placeholder: "Build, e.g. v0.10-705-g6533b52c", autocomplete: "off" });
+    const hint = h("div", { class: "muted" });
+    const sync = () => {
+      const id = select.value;
+      build.hidden = id !== "deployed";
+      hint.textContent = id === "awaiting_confirmation" ? "The reporter reads the note and confirms the fix with ghidra_issue_confirm."
+        : id === "waiting_for_data" ? "The reporter reads the note: say what is needed."
+        : id === "no_change" ? "The reporter reads the note: say why, and what to do instead."
+        : id === "resolved" ? "Closes the report without the reporter's confirmation."
+        : "";
+    };
+    select.addEventListener("change", sync);
+    sync();
+    const moved = await dialog({
+      icon: "sliders", title: `Status of the report on ${issue.tool}`,
+      text: `${issue.id}, reported by ${issue.reporter}.`,
+      body: h("div", { class: "stack" }, select, note, build, hint),
+      actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: "Save", kind: "primary", value: true, focus: true }],
     });
-    if (!done) return;
-    await act(() => call("POST", `/admin/api/issues/${issue.id}/resolve`, { note: note.value.trim() || null }), "Report resolved");
+    if (!moved) return;
+    await act(() => call("POST", `/admin/api/issues/${issue.id}/status`, {
+      status: select.value, note: note.value.trim() || null, build: build.hidden ? null : (build.value.trim() || null),
+    }), "Status saved");
   }
 
   // ---------- Tickets ----------

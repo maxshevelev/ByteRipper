@@ -21,6 +21,7 @@ public enum GhidraTools {
         tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
         tools.append(reportIssueTool(backend))
         tools.append(issuesTool(backend))
+        tools.append(confirmIssueTool(backend))
         tools += ticketTools(backend)
         tools += typeProposalTools(backend)
         // Compact by default, `verbose` for the owner's answer as it is.
@@ -42,7 +43,7 @@ public enum GhidraTools {
                 call was about one, and a `note` for what you tried around it. Report once per problem, \
                 not per call, and go on with the review: a report does not wait for a fix. Leave out serial \
                 numbers, keys and personal paths. Answers the kept report, with its `id`; \
-                `ghidra_issues` reads the answer once it is resolved.
+                `ghidra_issues` reads where it stands and the answer.
                 """,
             inputSchema: AgentSchema.object([
                 "tool": AgentSchema.string("The tool that showed the problem, e.g. \"ghidra_rename_variable\"."),
@@ -72,12 +73,17 @@ public enum GhidraTools {
             title: "Read your reports and their answers",
             description: """
                 The reports this connection's token sent with `ghidra_report_issue` — on the app, every \
-                session of this Mac shares one — newest first, open and resolved. A resolved one carries \
-                `resolved`: who resolved it, when, and in `note` the maintainers' answer: what was fixed and \
-                in which build, or why nothing changes and what to do instead. Read it before reporting a \
-                problem again: a problem already reported, or already answered, is not reported twice. Do \
-                what the answer says — call again on the fixed build, read the field the answer names, \
-                start the session again when the role changed — and tell the person.
+                session of this Mac shares one — newest first, open and closed. Each has its `status` and \
+                its `history`, every step with who took it, when, a note and, for an install, the build: \
+                `new`, `investigating`, `waiting_for_data` (the maintainers need more from you: the note \
+                says what — send it with a new `ghidra_report_issue` naming this id), `fixing`, `testing`, \
+                `awaiting_go`, `awaiting_window`, `deployed`, `awaiting_confirmation`, `resolved`, \
+                `no_change`. An answered one carries `resolved`: who answered, when, and in `note` what was \
+                fixed and in which build, or why nothing changes and what to do instead. Read it before \
+                reporting a problem again: a problem already reported, or already answered, is not \
+                reported twice. At `awaiting_confirmation`, do what the answer says — call again on the \
+                fixed build, read the field the answer names — and say with `ghidra_issue_confirm` whether \
+                it works; tell the person.
                 """,
             inputSchema: AgentSchema.object([
                 "limit": AgentSchema.integer("How many reports, newest first. Default 50, at most 200.")
@@ -86,6 +92,37 @@ public enum GhidraTools {
         ) { call in
             let limit = call.arguments["limit"] == nil ? 50 : Int(clamping: try call.arguments.integer("limit"))
             return try await answer { try await backend.myIssues(limit: min(max(limit, 1), 200)) }
+        }
+    }
+
+    /// The reporter's answer to a fix: it works, or it does not and why.
+    static func confirmIssueTool(_ backend: GhidraBackend) -> AgentTool {
+        AgentTool(
+            name: "ghidra_issue_confirm",
+            title: "Confirm a fix of your report",
+            description: """
+                Says whether the fix of one of your reports works, once `ghidra_issues` lists it as \
+                `awaiting_confirmation`. Try first what failed — the same call on the same module, on the \
+                build the answer names — then `works: true` resolves the report; `works: false` sends it \
+                back to the maintainers, with a `note` saying what still goes wrong: the call, its arguments \
+                and what came back. Only the token that reported it confirms it. Answers the report with its \
+                new `status`.
+                """,
+            inputSchema: AgentSchema.object([
+                "id": AgentSchema.string("The report's id, as `ghidra_issues` lists it."),
+                "works": AgentSchema.boolean("Whether what failed now works."),
+                "note": AgentSchema.string("What was tried; required when it does not work.")
+            ], required: ["id", "works"]),
+            annotations: .init(readOnly: false, destructive: false, idempotent: false)
+        ) { call in
+            let arguments = call.arguments
+            let id = try arguments.string("id")
+            guard arguments["works"] != nil else {
+                throw AgentToolError("say `works`: true when what failed now works, false when it does not")
+            }
+            let works = try arguments.bool("works", default: false)
+            let note = try arguments.optionalString("note")
+            return try await answer { try await backend.confirmIssue(id, works: works, note: note) }
         }
     }
 
@@ -114,8 +151,8 @@ public enum GhidraTools {
         project go — its owner stopped and its folder moved to the Trash — for a program that cannot \
         be put right, and touches nothing of the store. A tool that answers wrong, refuses what it \
         should take, or fails is reported with `ghidra_report_issue`, once per problem: the server keeps \
-        it for the people who maintain the tools, and `ghidra_issues` reads their answer once it is \
-        resolved. What a verifying agent finds wrong in a module's review goes on the review board: one \
+        it for the people who maintain the tools, `ghidra_issues` reads where it stands and their \
+        answer, and `ghidra_issue_confirm` says whether the fix works. What a verifying agent finds wrong in a module's review goes on the review board: one \
         ticket per module, read with `ghidra_tickets`, a remark written with `ghidra_ticket_remark`, \
         answered or verified with `ghidra_ticket_reply`, and the module's review closed with \
         `ghidra_ticket_close` by an agent other than its reviewer.

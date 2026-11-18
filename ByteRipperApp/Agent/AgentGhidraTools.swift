@@ -127,6 +127,10 @@ struct CurrentGhidraBackend: GhidraBackend {
         try await resolve().myIssues(limit: limit)
     }
 
+    func confirmIssue(_ id: String, works: Bool, note: String?) async throws -> Data {
+        try await resolve().confirmIssue(id, works: works, note: note)
+    }
+
     func tickets(_ request: TicketBook.Request) async throws -> Data {
         try await resolve().tickets(request)
     }

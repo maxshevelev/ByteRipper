@@ -47,7 +47,8 @@ to the Verifier and in anything written into a review.
   tool, the arguments as sent, what came back, what was expected. The server
   keeps it for the people who maintain the tools. Read `ghidra_issues` first:
   a problem this Mac already reported, or one already answered, is not sent
-  again, and a resolved report's `resolved.note` says what to do instead. Say
+  again, and an answered report's `resolved.note` says what to do instead.
+  The Verifier confirms the fixes with `ghidra_issue_confirm`. Say
   it in your report to the Verifier too, and go on with the review; a report
   does not wait for a fix.
 - Reach dumps and analyses only through the `byteripper` tools, for reading as

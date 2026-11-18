@@ -46,6 +46,13 @@ enum GhidraRoutes {
         }, resolve: { id, by, note in
             let resolved = try await answer { try await book.resolve(id, by: by, note: note) }
             return try IssueBook.encoder.encode(resolved)
+        }, setStatus: { id, status, by, note, build in
+            guard let known = IssueBook.Status(rawValue: status) else {
+                throw HTTPError(.badRequest, "status is one of "
+                    + IssueBook.Status.allCases.map(\.rawValue).joined(separator: ", "))
+            }
+            let moved = try await answer { try await book.setStatus(id, known, by: by, note: note, build: build) }
+            return try IssueBook.encoder.encode(moved)
         })
     }
 
@@ -93,6 +100,15 @@ enum GhidraRoutes {
         router.add("GET", "\(prefix)/issues/mine", access: .rights([.ghidraUse])) { request in
             let limit = Int(request.query["limit"] ?? "") ?? 50
             let data = try await answer { try await host.myIssues(by: holder(request), limit: min(max(limit, 1), 200)) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+        // The reporter's answer to a fix: only the token that reported it.
+        router.add("POST", "\(prefix)/issues/:id/confirm", maxBodyBytes: 32 << 10, access: .rights([.ghidraUse])) { request in
+            let confirmation = try request.json(IssueBook.Confirmation.self)
+            let data = try await answer {
+                try await host.confirmIssue(request.parameters["id"] ?? "", works: confirmation.works,
+                                            note: confirmation.note, by: holder(request))
+            }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
         // The review board: every call one route, the caller's holder the

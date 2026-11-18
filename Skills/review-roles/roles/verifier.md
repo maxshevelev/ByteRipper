@@ -225,19 +225,27 @@ did not write:
 
 ## The answers to reports
 
-The maintainers answer a report by resolving it: `resolved.note` in
-`ghidra_issues` says what was fixed and in which build, or why nothing changes
-and what to do instead. Read `ghidra_issues` at every watchdog tick, and at
-the start of a session when no review is assigned. For each report resolved
+Each report in `ghidra_issues` has a `status` and a `history` of the steps the
+maintainers took. When they have fixed it and checked the fix on the server,
+it is `awaiting_confirmation`, and `resolved.note` says what was fixed and in
+which build. A report the maintainers will not change is `no_change`, with
+why and what to do instead. One waiting on you is `waiting_for_data`: the note
+says what they need. Read `ghidra_issues` at every watchdog tick, and at the
+start of a session when no review is assigned. For each report that changed
 since you last looked:
 
-- do what the answer says: call again on the fixed build and compare, read the
-  field it names, or ask the person to start the sessions again when it says
-  the role changed — a reconnect does not reload a role;
+- at `awaiting_confirmation`: do what the answer says — call again on the
+  fixed build and compare, read the field it names, or ask the person to start
+  the sessions again when it says the role changed (a reconnect does not
+  reload a role) — then say with `ghidra_issue_confirm` whether it works:
+  `works: true` resolves it; `works: false` sends it back, with a `note`
+  saying what still differs. This Mac's sessions share one token, so you
+  confirm the Reviewer's reports too;
+- at `waiting_for_data`: send what the note asks for with
+  `ghidra_report_issue`, naming the report's `id`;
+- at `no_change`: do what the note says instead;
 - tell the Reviewer when the answer changes how it works, and the person in a
-  line: the report, the answer, and whether the call now answers as expected;
-- if the answer does not settle it, report again once, naming the earlier
-  report's `id` and what still differs.
+  line: the report, the answer, and whether the call now answers as expected.
 
 Keep the ids you have read in the log, so an answer is acted on once.
 
