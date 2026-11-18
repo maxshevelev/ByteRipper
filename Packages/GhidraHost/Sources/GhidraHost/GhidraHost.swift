@@ -1423,6 +1423,8 @@ public actor GhidraHost {
         var id = "code-v\(exporter)-ghidra-\(safeRecipe(ghidra ?? "unknown"))"
         // A patched language prints other C from the same Ghidra.
         if let patch = artifact["language_patch"] as? String { id += "-lang-\(safeRecipe(patch))" }
+        // So does a patched decompiler (stack-params-1).
+        if let patch = artifact["decompiler_patch"] as? String { id += "-decomp-\(safeRecipe(patch))" }
         if let types {
             if let dash = types.range(of: "-r", options: .backwards),
                let revision = Int(types[dash.upperBound...]) {
@@ -1439,9 +1441,13 @@ public actor GhidraHost {
     /// language: the module's C would go back to what the patch corrected. nil
     /// when it may.
     static func languagePatchRefusal(publishing recipe: String, over last: String?) -> String? {
-        guard let last, last.contains("-lang-"), !recipe.contains("-lang-") else { return nil }
-        return "this module was published as \(last), from a Ghidra with a patched language, and this Ghidra has none: "
-            + "name the patched copy in `ghidraHome` (Scripts/make-patched-ghidra.sh)"
+        guard let last else { return nil }
+        for (mark, what) in [("-lang-", "language"), ("-decomp-", "decompiler")]
+        where last.contains(mark) && !recipe.contains(mark) {
+            return "this module was published as \(last), from a Ghidra with a patched \(what), and this Ghidra has none: "
+                + "name the patched copy in `ghidraHome` (Scripts/make-patched-ghidra.sh)"
+        }
+        return nil
     }
 
     /// `cas._safe_recipe`: runs of anything but letters, digits, `.`, `_`

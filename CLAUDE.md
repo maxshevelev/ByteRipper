@@ -14,7 +14,7 @@ Stack:
   (`Packages/FirmwareCompression`): the
   reference C sources, vendored unmodified as a C target, with their origin and
   version written down beside them.
-  One more exception, for this patch only: `Skills/ghidra-uefi/language-patch/descriptor-tables-1.patch`, a patch to Ghidra's x86 language, kept in the repo and applied by `Scripts/make-patched-ghidra.sh`.
+  One more exception, for these patches only: `Skills/ghidra-uefi/language-patch/descriptor-tables-1.patch`, a patch to Ghidra's x86 language, and `Skills/ghidra-uefi/language-patch/stack-params-1.patch`, a patch to Ghidra's decompiler and its `ParamEntry` for 32-bit x86 stack parameters, kept in the repo and applied by `Scripts/make-patched-ghidra.sh`.
 - Swift Concurrency.
 - UI on MainActor.
 - Long-running operations in background.

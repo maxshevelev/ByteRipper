@@ -95,6 +95,8 @@ public class ExportCode extends GhidraScript {
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         String languagePatch = languagePatch();
         if (languagePatch != null) json.append("  \"language_patch\": ").append(quote(languagePatch)).append(",\n");
+        String decompilerPatch = patchMarker("byteripper-decompiler-patch");
+        if (decompilerPatch != null) json.append("  \"decompiler_patch\": ").append(quote(decompilerPatch)).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
         json.append("    \"language\": ").append(quote(currentProgram.getLanguageID().toString())).append(",\n");
@@ -572,9 +574,17 @@ public class ExportCode extends GhidraScript {
      * Scripts/make-patched-ghidra.sh leaves in it; null on a stock install.
      */
     private static String languagePatch() {
+        return patchMarker("byteripper-language-patch");
+    }
+
+    /**
+     * The first line of a marker Scripts/make-patched-ghidra.sh leaves in the
+     * install — the language patch, or the decompiler's (stack-params-1);
+     * null on a stock install.
+     */
+    private static String patchMarker(String name) {
         try {
-            java.io.File marker = new java.io.File(Application.getInstallationDirectory().getFile(false),
-                                                   "byteripper-language-patch");
+            java.io.File marker = new java.io.File(Application.getInstallationDirectory().getFile(false), name);
             return marker.isFile() ? java.nio.file.Files.readAllLines(marker.toPath()).get(0).trim() : null;
         } catch (Exception unreadable) {
             return null;

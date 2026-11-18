@@ -241,6 +241,36 @@ final class GhidraOwnerReadBackTests: XCTestCase {
     /// Explicit storage no convention gives leaves no convention in the C; the
     /// storage stays, no warning takes its place, and a storage the convention
     /// does give keeps it. A rename after it reaches the C and its callers.
+    /// stack-params-1: on 32-bit x86 an 8-byte parameter takes the next 4-byte
+    /// stack slot, as cdecl and stdcall put it — stock Ghidra wastes a slot to
+    /// align it to 8 and moves it and every later parameter by 4 (issue
+    /// 24ca998e: FatPei's `Open` printed `0x2000000000` for `1, 0x20`). The
+    /// owner packs a signature's own parameters itself (`aligned`); with the
+    /// patch the convention already puts them there, so nothing is moved and
+    /// the storage stays the convention's. The decompiler's half — a call
+    /// through a function pointer — is checked on FatPei by hand.
+    func testAnEightByteParameterTakesTheNextStackSlot() async throws {
+        let image = try image()
+        let install = try GhidraInstall.find()
+        // GHIDRA_STOCK_DECOMPILER=check runs it on a stock decompiler, to see it fail there.
+        guard install.decompilerPatch != nil || ProcessInfo.processInfo.environment["GHIDRA_STOCK_DECOMPILER"] == "check" else {
+            throw XCTSkip("\(install.home.path) has no decompiler patch (Scripts/make-patched-ghidra.sh)")
+        }
+        try await open(image)
+        let hello = try await read("/v1/hello")
+        XCTAssertEqual(hello["decompiler_patch"] as? String, install.decompilerPatch)
+        let first = try await entries().first
+        let entry = try XCTUnwrap(first)
+        let answer = try await post("/v1/set/signature", ["address": entry,
+                                             "signature": "UINT32 __cdecl Probe(UINT32 First, UINT64 Second, UINT32 Third)",
+                                             "by": "agent", "reason": "test"])
+        XCTAssertNil(answer["aligned"], "the convention left a hole the owner had to close: \(answer["aligned"] ?? "")")
+        XCTAssertEqual(answer["calling_convention"] as? String, "__cdecl")
+        let read = try await read("/v1/function/\(entry)")
+        XCTAssertEqual((read["parameters"] as? [[String: Any]])?.map { $0["storage"] as? String },
+                       ["Stack[0x4]:4", "Stack[0x8]:8", "Stack[0x10]:4"])
+    }
+
     func testExplicitStorageReadsBackInTheC() async throws {
         try await open(try image())
         var entry = "", caller = ""
@@ -1397,9 +1427,14 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let expected = ["Stack[0x4]:4", "Stack[0x8]:4", "Stack[0xc]:4", "Stack[0x10]:8", "Stack[0x18]:4"]
         let now = try await places()
         XCTAssertEqual(now, expected, "\(answer)")
-        let moved = try XCTUnwrap(answer["aligned"] as? [[String: Any]], "\(answer)")
-        XCTAssertEqual(moved.compactMap { $0["name"] as? String }, ["Address", "Buffer"])
-        XCTAssertEqual(moved.first?["convention"] as? String, "Stack[0x14]:8", "\(answer)")
+        if try GhidraInstall.find().decompilerPatch == nil {
+            let moved = try XCTUnwrap(answer["aligned"] as? [[String: Any]], "\(answer)")
+            XCTAssertEqual(moved.compactMap { $0["name"] as? String }, ["Address", "Buffer"])
+            XCTAssertEqual(moved.first?["convention"] as? String, "Stack[0x14]:8", "\(answer)")
+        } else {
+            // stack-params-1: the convention puts them there, nothing is moved.
+            XCTAssertNil(answer["aligned"], "\(answer)")
+        }
         // Set again, with nothing to move or something else: no storage of the last call stays.
         let narrow = try await post("/v1/set/signature", ["address": entry, "signature": "EFI_STATUS PciRead(UINT32 One, UINT32 Two)"])
         XCTAssertNil(narrow["aligned"], "\(narrow)")

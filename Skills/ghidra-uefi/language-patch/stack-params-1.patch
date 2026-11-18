@@ -1,0 +1,73 @@
+--- a/Ghidra/Features/Decompiler/src/decompile/cpp/fspec.cc
++++ b/Ghidra/Features/Decompiler/src/decompile/cpp/fspec.cc
+@@ -464,6 +464,8 @@
+     }
+   }
+   else {
++    if ((flags & slot_aligned) != 0 && typeAlign > alignment)
++      typeAlign = alignment;	// stack-params-1: an 8-byte value takes the next 4-byte slot (cdecl, stdcall)
+     if (typeAlign > alignment) {
+       int4 tmp = (slotnum * alignment) % typeAlign;
+       if (tmp != 0)
+@@ -554,6 +556,16 @@
+ //    if ((addressbase % alignment) != 0)
+ //      throw LowlevelError("Stack <pentry> address must match alignment");
+     numslots = size / alignment;
++  }
++  // stack-params-1: on 32-bit x86 the stack holds parameters in 4-byte slots
++  // and aligns none of them further, whatever the data type's own alignment.
++  // Only x86 has an ESP register; ARM32 and the others keep stock behavior.
++  if (alignment == 4 && spaceid->getType() == IPTR_SPACEBASE) {
++    try {
++      spaceid->getTrans()->getRegister("ESP");
++      flags |= slot_aligned;
++    } catch(LowlevelError &err) {
++    }
+   }
+   if (spaceid->isReverseJustified()) {
+     if (spaceid->isBigEndian())
+--- a/Ghidra/Features/Decompiler/src/decompile/cpp/fspec.hh
++++ b/Ghidra/Features/Decompiler/src/decompile/cpp/fspec.hh
+@@ -95,7 +95,8 @@
+     extracheck_low = 0x100,	///< Perform extra checks during parameter recovery on least sig portion of the double
+     is_grouped = 0x200,		///< This entry is grouped with other entries
+     overlapping = 0x400,	///< Overlaps an earlier entry (and doesn't consume additional resource slots)
+-    first_storage = 0x800	///< Entry is first in its storage class
++    first_storage = 0x800,	///< Entry is first in its storage class
++    slot_aligned = 0x1000	///< (ByteRipper stack-params-1) A parameter is aligned to the slot, never more: 32-bit x86 stack
+   };
+   enum {
+     no_containment,		///< Range neither contains nor is contained by a ParamEntry
+--- a/Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/lang/ParamEntry.java
++++ b/Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/lang/ParamEntry.java
+@@ -42,6 +42,7 @@
+ 	//private static final int EXTRACHECK_LOW = 256;
+ 	private static final int IS_GROUPED = 512;			// The entry is grouped with other entries
+ 	private static final int OVERLAPPING = 0x100;		// This overlaps an earlier entry
++	private static final int SLOT_ALIGNED = 0x2000;		// (ByteRipper stack-params-1) aligned to the slot, never more: 32-bit x86 stack
+ 
+ 	private int flags;
+ 	private StorageClass type;		// Restriction on DataType this entry must match
+@@ -377,6 +378,9 @@
+ 			}
+ 		}
+ 		else {
++			if ((flags & SLOT_ALIGNED) != 0 && typeAlign > alignment) {
++				typeAlign = alignment;	// stack-params-1: an 8-byte value takes the next 4-byte slot (cdecl, stdcall)
++			}
+ 			if (typeAlign > alignment) {
+ 				int tmp = (slotnum * alignment) % typeAlign;
+ 				if (tmp != 0) {
+@@ -619,6 +623,12 @@
+ //			if ((addressbase % alignment) != 0)
+ //				throw new XmlParseException("Stack <pentry> address must match alignment");
+ 			numslots = size / alignment;
++		}
++		// stack-params-1: on 32-bit x86 the stack holds parameters in 4-byte slots
++		// and aligns none of them further, whatever the data type's own alignment.
++		// Only x86 has an ESP register; ARM32 and the others keep stock behavior.
++		if (alignment == 4 && spaceid.isStackSpace() && cspec.getLanguage().getRegister("ESP") != null) {
++			flags |= SLOT_ALIGNED;
+ 		}
+ 		if (spaceid.isStackSpace() && (!cspec.isStackRightJustified()) && isbigendian) {
+ 			flags |= FORCE_LEFT_JUSTIFY;

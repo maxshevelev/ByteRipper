@@ -34,6 +34,10 @@ final class GhidraHostUnitTests: XCTestCase {
         let patched = GhidraHost.recipe(for: ["script_version": 10, "ghidra": "12.2", "language_patch": "descriptor-tables-1"],
                                         types: "edk2-stable202608-r2", passes: [])
         XCTAssertEqual(patched.id, "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1")
+        let decompiler = GhidraHost.recipe(for: ["script_version": 10, "ghidra": "12.2", "language_patch": "descriptor-tables-1",
+                                                 "decompiler_patch": "stack-params-1"],
+                                           types: "edk2-stable202608-r2", passes: [])
+        XCTAssertEqual(decompiler.id, "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1-decomp-stack-params-1")
         XCTAssertEqual(AnalysisRecipe.identifier(exporter: 10, ghidra: "12.2", languagePatch: "descriptor-tables-1"),
                        "code-v10-ghidra-12.2-lang-descriptor-tables-1")
     }
@@ -47,6 +51,11 @@ final class GhidraHostUnitTests: XCTestCase {
         XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: patched, over: patched))
         XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: stock, over: stock))
         XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: stock, over: nil))
+        // The decompiler's patch is held to the same rule.
+        let both = patched + "-decomp-stack-params-1"
+        XCTAssertNotNil(GhidraHost.languagePatchRefusal(publishing: patched, over: both))
+        XCTAssertNotNil(GhidraHost.languagePatchRefusal(publishing: stock, over: both))
+        XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: both, over: patched))
     }
 
     func testTheRecipeIsTheOnePythonNames() {

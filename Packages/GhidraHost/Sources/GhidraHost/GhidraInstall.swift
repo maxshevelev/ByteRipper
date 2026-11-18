@@ -51,8 +51,16 @@ public struct GhidraInstall: Equatable, Sendable {
     /// The x86 language patch this install was compiled with, as
     /// `Scripts/make-patched-ghidra.sh` marks it — what the owner's `hello`
     /// says; nil for a stock Ghidra.
-    public var languagePatch: String? {
-        let marker = home.appendingPathComponent("byteripper-language-patch")
+    public var languagePatch: String? { patch("byteripper-language-patch") }
+
+    /// The decompiler patch this install was built with (`stack-params-1`:
+    /// 32-bit x86 stack parameters in 4-byte slots); nil for a stock Ghidra.
+    /// Not part of a project's environment: it changes the C printed, not the
+    /// program kept.
+    public var decompilerPatch: String? { patch("byteripper-decompiler-patch") }
+
+    private func patch(_ name: String) -> String? {
+        let marker = home.appendingPathComponent(name)
         guard let text = try? String(contentsOf: marker, encoding: .utf8) else { return nil }
         let line = text.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }
         return line?.isEmpty == false ? line : nil

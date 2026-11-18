@@ -76,6 +76,13 @@ if [ -f "$dir/var/log/server.log" ]; then
         else
             no "the server's Ghidra was changed after its language patch: its compiled language no longer matches the marker"
         fi
+        if [ ! -f "$server_home/byteripper-decompiler-patch" ]; then
+            no "the server's Ghidra has no decompiler patch: make a copy with scripts/make-patched-ghidra.sh and name it in ghidraHome"
+        elif (cd "$server_home" && sed -n '2,$p' byteripper-decompiler-patch | shasum -a 256 -c --status); then
+            ok "decompiler patch: $(head -1 "$server_home/byteripper-decompiler-patch")"
+        else
+            no "the server's Ghidra was changed after its decompiler patch: its decompiler no longer matches the marker"
+        fi
     fi
 fi
 source "$dir/scripts/common.sh"

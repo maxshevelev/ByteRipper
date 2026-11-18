@@ -412,8 +412,17 @@ public class Owner {
      * folder's name and the jar do not tell: the patched copy shares both.
      */
     private static String languagePatch() {
+        return patchMarker("byteripper-language-patch");
+    }
+
+    /** The decompiler patch (stack-params-1), from its own marker; null on a stock install. */
+    private static String decompilerPatch() {
+        return patchMarker("byteripper-decompiler-patch");
+    }
+
+    private static String patchMarker(String name) {
         try {
-            File marker = new File(Application.getInstallationDirectory().getFile(false), "byteripper-language-patch");
+            File marker = new File(Application.getInstallationDirectory().getFile(false), name);
             return marker.isFile() ? Files.readAllLines(marker.toPath()).get(0).trim() : null;
         } catch (Exception unreadable) {
             return null;
@@ -427,6 +436,8 @@ public class Owner {
         answer.addProperty("ghidra", Application.getApplicationVersion());
         String languagePatch = languagePatch();
         if (languagePatch != null) answer.addProperty("language_patch", languagePatch);
+        String decompilerPatch = decompilerPatch();
+        if (decompilerPatch != null) answer.addProperty("decompiler_patch", decompilerPatch);
         answer.addProperty("functions", program.getFunctionManager().getFunctionCount());
         answer.addProperty("changed", program.isChanged());
         answer.addProperty("modification", modification());
