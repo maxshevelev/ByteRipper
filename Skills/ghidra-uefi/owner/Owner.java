@@ -7910,7 +7910,7 @@ public class Owner {
             importTypes(c);
             DataType parsed;
             try {
-                parsed = new CParser(program.getDataTypeManager(), true, null).parse(tagAnonymous(c));
+                parsed = new CParser(program.getDataTypeManager(), true, null).parse(tagAnonymous(edk2C(c)));
             } catch (Exception error) {
                 throw new Failure(400, "the C does not parse: " + error.getMessage());
             }
@@ -7944,7 +7944,7 @@ public class Owner {
             DataType commented = resolved instanceof ghidra.program.model.data.TypeDef def
                 && def.getBaseDataType() != null ? def.getBaseDataType() : resolved;
             JsonArray unplaced = new JsonArray();
-            for (java.util.Map.Entry<String, String> member : memberComments(c).entrySet()) {
+            for (java.util.Map.Entry<String, String> member : memberComments(edk2C(c)).entrySet()) {
                 if (member.getKey().startsWith("\u0000") || !comment(commented, member.getKey(), member.getValue())) {
                     unplaced.add(member.getValue());
                 } else {
@@ -8702,6 +8702,30 @@ public class Owner {
                    .replaceAll("\\bCONST\\b", "const")
                    .replaceAll("\\b(IN|OUT|OPTIONAL|EFIAPI)\\b", " ")
                    .replaceAll("\\s+", " ").trim();
+    }
+
+    /**
+     * A type's C in EDK2's spelling, as the parser reads it: the macros of
+     * `edk2` in the code, a comment left as it was written, and the lines
+     * where they were — a prototype in a member reads as a signature does
+     * (issue bab008b6).
+     */
+    static String edk2C(String c) {
+        StringBuilder out = new StringBuilder();
+        java.util.regex.Matcher comments = java.util.regex.Pattern
+            .compile("(?s)/\\*.*?\\*/|//[^\\n]*|\"(?:\\\\.|[^\"\\\\])*\"").matcher(c);
+        int at = 0;
+        while (comments.find()) {
+            out.append(edk2Code(c.substring(at, comments.start()))).append(comments.group());
+            at = comments.end();
+        }
+        return out.append(edk2Code(c.substring(at))).toString();
+    }
+
+    private static String edk2Code(String code) {
+        return code.replaceAll("\\bVOID\\b", "void")
+                   .replaceAll("\\bCONST\\b", "const")
+                   .replaceAll("\\b(IN|OUT|OPTIONAL|EFIAPI)\\b", " ");
     }
 
     private DataType type(String text) throws Failure {

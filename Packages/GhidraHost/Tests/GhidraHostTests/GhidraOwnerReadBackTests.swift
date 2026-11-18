@@ -451,6 +451,29 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue bab008b6: an EDK2 prototype in a member — `VOID`, `IN`, `OUT`,
+    /// `OPTIONAL`, `EFIAPI` — parses as the signatures do; a comment keeps
+    /// the words as they were written.
+    func testAMemberPrototypeTakesEDK2Spelling() async throws {
+        try await open(try image())
+        _ = try await post("/v1/type", ["c": """
+            #pragma pack(1)
+            typedef struct _PROBE_BLOCK_WRITE_PPI {
+              EFI_STATUS (EFIAPI *WriteBlocks)(IN EFI_PEI_SERVICES **PeiServices, IN VOID *This,
+                                              IN UINTN DeviceIndex, IN OUT VOID *Buffer OPTIONAL);
+              CONST VOID *Context; // IN VOID stays as written here
+            } PROBE_BLOCK_WRITE_PPI;
+            #pragma pack()
+            """])
+        let ppi = try await read("/v1/type?name=PROBE_BLOCK_WRITE_PPI")
+        let c = (ppi["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("PROBE_BLOCK_WRITE_PPI_WriteBlocks * WriteBlocks"), "\(ppi)")
+        let member = try await read("/v1/type?name=PROBE_BLOCK_WRITE_PPI_WriteBlocks")
+        let prototype = (member["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(prototype.contains("void * Buffer"), "\(member)")
+        _ = try await release()
+    }
+
     /// Issue 4a95c0c1: a text of two structures named only the last one's
     /// members, and the parser, numbering its `_func_N` from one again,
     /// rewrote the program's `_func_1` that a third structure used.
