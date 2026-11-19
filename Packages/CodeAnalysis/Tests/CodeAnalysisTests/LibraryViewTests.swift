@@ -452,6 +452,7 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertNotNil(try store.libraryIndex().entries[body.key])
         XCTAssertThrowsError(try store.changeLibrary(.init(action: .takeOut, id: body.key), by: "agent"))
 
+        let judged = try XCTUnwrap(store.libraryIndex().entries[body.key]).source
         try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "the GUID is the module's"), by: "agent")
         let index = try store.libraryIndex()
         XCTAssertNil(index.entries[body.key])
@@ -465,6 +466,11 @@ final class LibraryViewTests: XCTestCase {
 
         let offered = try offerBody(body, "CopyMem")
         XCTAssertEqual(offered.notLibrary?.map(\.why), ["taken_out"])
+        // The reason was written about the module the entry was reviewed in,
+        // and its addresses are that module's: the refusal says which.
+        XCTAssertEqual(offered.notLibrary?.first?.reasonOf, judged)
+        let said = try XCTUnwrap(LibraryRefusal.rows(of: offered).first?.why)
+        XCTAssertTrue(said.contains(judged.module.hex) && said.contains(judged.address), said)
         XCTAssertEqual(offered.added.count, 0)
         let read = store.throughRegistry(try moduleArtifact()).functions[0]
         XCTAssertNotEqual(read.reviewLevel, .library)

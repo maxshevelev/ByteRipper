@@ -173,7 +173,8 @@ extension LibraryProposal {
     func refusal(in index: LibraryIndex, admitted: Set<String> = [],
                  admittedKinds: [String: String] = [:]) -> LibraryWriteResult.NotLibrary? {
         if let out = index.takenOut?[body.key] {
-            return .init(address: address, name: name, body: body.key, why: "taken_out", reason: out.reason)
+            return .init(address: address, name: name, body: body.key, why: "taken_out", reason: out.reason,
+                         reasonOf: out.source)
         }
         if index.declaredLibraries[kind] == nil {
             return .init(address: address, name: name, body: body.key, why: "library")

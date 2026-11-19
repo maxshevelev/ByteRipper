@@ -48,7 +48,12 @@ public enum LibraryRefusal {
             case "library":
                 why = "the registry refused it, it declares no such library"
             case "taken_out":
-                why = "taken out of the registry" + (row.reason.map { ": \($0)" } ?? "")
+                // The reason was written about the review the entry held,
+                // and an address in it is that module's, not this one's.
+                let of = row.reasonOf.map {
+                    " (written of module \($0.module.hex), function at \($0.address); its addresses are that module's)"
+                } ?? ""
+                why = "taken out of the registry" + (row.reason.map { ": \($0)\(of)" } ?? "")
             default:
                 why = "the registry refused it: \(row.why)"
             }

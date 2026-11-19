@@ -508,16 +508,21 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         /// function the registry does not hold. `taken_out`: taken out before.
         public var why: String
         public var reason: String?
+        /// With `taken_out`: the review the reason was written about — the
+        /// module and the function whose addresses it names, which need not
+        /// be the module now offering the body.
+        public var reasonOf: LibrarySource?
         public var data: [String]?
         public var callees: [String]?
 
         public init(address: String, name: String, body: String, why: String, reason: String? = nil,
-                    data: [String]? = nil, callees: [String]? = nil) {
+                    reasonOf: LibrarySource? = nil, data: [String]? = nil, callees: [String]? = nil) {
             self.address = address
             self.name = name
             self.body = body
             self.why = why
             self.reason = reason
+            self.reasonOf = reasonOf
             self.data = data
             self.callees = callees
         }
