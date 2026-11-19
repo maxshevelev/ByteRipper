@@ -146,8 +146,10 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertTrue(past.answer.stringValue?.hasSuffix(" (d1), which is 0x100 bytes long.") == true, "\(past.answer)")
         let empty = try await client.call("annotate", ["offset": 0, "title": "  "])
         XCTAssertTrue(empty.isError)
-        let huge = try await client.call("annotate", ["offset": "0x10", "length": "0xFFFFFFFFFFFFFFFF", "title": "All"])
-        XCTAssertTrue(huge.isError, "refused, not an overflow: \(huge.answer)")
+        // A length that wraps past 2^64 is refused, never added up.
+        let wrapping = try await client.call("annotate", ["offset": "0x10", "length": "0xFFFFFFFFFFFFFFFF", "title": "All"])
+        XCTAssertTrue(wrapping.isError)
+        XCTAssertTrue(wrapping.answer.stringValue?.contains("runs past any file") == true, "\(wrapping.answer)")
         let zero = try await client.call("annotate", ["offset": 0, "length": 0, "title": "Nothing"])
         XCTAssertTrue(zero.isError)
         let root = try await client.call("annotate", ["offset": 0, "node": "root", "title": "Root"])
@@ -238,9 +240,10 @@ final class AgentAnnotationTests: XCTestCase {
         // A card: the title, the file and the place, the note,
         // and the annotations it is about as links.
         // A file that is all padding has no node worth naming: the place is
-        // said by its addresses.
-        XCTAssertEqual(list.shownTexts(of: "a1"), ["Table", "● \(name)", "0x100–0x140"])
-        XCTAssertEqual(list.shownTexts(of: "a2"), ["Pointer", "● \(name)", "0x20–0x24",
+        // said by its addresses — first and last byte, as the status bar and
+        // the segment list write a range.
+        XCTAssertEqual(list.shownTexts(of: "a1"), ["Table", "● \(name)", "0x100–0x13F"])
+        XCTAssertEqual(list.shownTexts(of: "a2"), ["Pointer", "● \(name)", "0x20–0x23",
                                                    "→ a1 Table"])
         let pointer = try XCTUnwrap(list.collection.visibleItems().compactMap { $0.view as? AnnotationCardView }
             .first { $0.texts.first == "Pointer" })

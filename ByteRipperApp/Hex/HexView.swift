@@ -1,6 +1,7 @@
 import AppPalette
 import ByteRipperCore
 import Cocoa
+import HexText
 import Localization
 
 /// What changed in the pane's content, so the hex view can invalidate only the
@@ -674,7 +675,7 @@ final class HexView: NSView {
 
     private func makeLayout() -> HexLayout {
         let fileSize = dataSource?.fileSize ?? 0
-        let digits = max(8, fileSize > 0 ? String(fileSize, radix: 16).count : 8)
+        let digits = max(8, fileSize.hexDigitCount)
         return HexLayout(charWidth: charWidth, rowHeight: rowHeight,
                          offsetColumnChars: digits, wordSize: WordSize.current.rawValue)
     }
@@ -869,7 +870,7 @@ final class HexView: NSView {
         guard let dataSource else { return "" }
         let selection = dataSource.hexSelection()
         let size = dataSource.fileSize
-        let start = String(selection.start, radix: 16).uppercased()
+        let start = selection.start.bareHexNumber
         // The bookmark mark is purely visual otherwise, so the row the caret is
         // on says whether it is marked, and what the mark is called — the only
         // way a bookmark reaches a screen reader while moving through the dump
@@ -880,7 +881,8 @@ final class HexView: NSView {
         if selection.isEmpty {
             return L("Offset 0x%1$@.", start) + mark + " " + sizeText
         }
-        let end = String(selection.end, radix: 16).uppercased()
+        // "through" names the last selected byte, not the one after it.
+        let end = (selection.start..<selection.end).lastByte.bareHexNumber
         return L("Offset 0x%1$@, %2$@ bytes selected through 0x%3$@.",
                  start, selection.count, end) + mark + " " + sizeText
     }
@@ -1126,7 +1128,7 @@ final class HexView: NSView {
 
         // Offset column, on top of the tint.
         if drawsOffset {
-            let offsetText = String(rowStart, radix: 16, uppercase: true).leftPadded(to: layout.offsetColumnChars, with: "0")
+            let offsetText = rowStart.bareHexNumber(digits: layout.offsetColumnChars)
             let offsetFrame = layout.offsetColumnFrame(row: row)
             if isBookmarked {
                 // A bookmarked row's address stands on a purple right-pointing
@@ -1423,16 +1425,30 @@ final class HexView: NSView {
     /// One continuous fill per match, exactly like the selection's: a match
     /// spans its bytes through the word and group gaps, and a match crossing a
     /// row boundary is drawn as its part of each row.
+    ///
+    /// Matches that overlap are one fill: they paint the same grey, and a run
+    /// of 0xFF under a 32-byte `FF…` pattern would otherwise be dozens of
+    /// identical rectangles per row (#33). Matches that only touch stay
+    /// apart, as the gap between their bytes shows where one ends.
     private func drawMatchFills(row: Int, rowStart: UInt64, rowEnd: UInt64,
                                 matches: [Range<UInt64>], layout: HexLayout,
                                 drawsHex: Bool, drawsAscii: Bool) {
         guard !matches.isEmpty else { return }
         let rowFrame = layout.rowFrame(row: row)
         HexTheme.matchFill.setFill()
-        for match in matches {
+        var spans: [Range<UInt64>] = []
+        for match in matches.sorted(by: { $0.lowerBound < $1.lowerBound }) {
             let start = max(match.lowerBound, rowStart)
             let end = min(match.upperBound, rowEnd)
             guard start < end else { continue }
+            if let last = spans.last, start < last.upperBound {
+                spans[spans.count - 1] = last.lowerBound..<max(last.upperBound, end)
+            } else {
+                spans.append(start..<end)
+            }
+        }
+        for span in spans {
+            let start = span.lowerBound, end = span.upperBound
             let firstColumn = Int(start - rowStart)
             let lastColumn = Int(end - rowStart) - 1
             if drawsHex {
@@ -3854,33 +3870,16 @@ enum HexTheme {
     }
 }
 
-extension String {
-    /// Left-pads with `pad` until the string is at least `length` characters.
-    func leftPadded(to length: Int, with pad: String) -> String {
-        guard count < length else { return self }
-        return String(repeating: pad, count: length - count) + self
-    }
-}
-
 extension UInt64 {
     /// The app's address for this offset: upper-case hex, at least eight digits
     /// (§10) — the shape the Offset column, the bookmark list, and the context-
     /// menu titles all share. `hexAddress` adds the `0x` prefix the offset input
     /// fields carry on their own.
     var bareAddress: String {
-        String(self, radix: 16, uppercase: true).leftPadded(to: 8, with: "0")
+        bareHexNumber(digits: 8)
     }
 
     var hexAddress: String {
         "0x" + bareAddress
     }
-}
-
-extension Range where Bound == UInt64 {
-    /// The range's last byte — the inclusive end of the half-open range, so a
-    /// piece read as "first…last" names the bytes it holds, not the first byte
-    /// past them. The one place the half-open-to-inclusive conversion lives, so
-    /// every site that shows a piece's address range (the status bar, the strip
-    /// tooltip, the cut-edit header) reads the same first-to-last bytes (§21.3).
-    var lastByte: UInt64 { upperBound - 1 }
 }

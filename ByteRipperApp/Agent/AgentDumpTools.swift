@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import HexText
 import UEFITool
 
 /// Work across many dumps (`Design/AGENT_PLAN.md`, "Background documents and
@@ -64,11 +65,11 @@ final class AgentDumpTools {
         let url = try Self.fileURL(try arguments.string("path"))
         try await Self.probe(url)
         if let place = desk.onScreenPlace(of: url) {
-            return .json(["document": .string(place.id), "on_screen": true, "size": AgentHostTools.hex(place.pane.fileSize)])
+            return .json(["document": .string(place.id), "on_screen": true, "size": .string(place.pane.fileSize.hexNumber)])
         }
         let entry = try openBackground(url)
         return .json(["document": .string(desk.id(of: entry)), "on_screen": false,
-                      "size": AgentHostTools.hex(entry.pane.fileSize)])
+                      "size": .string(entry.pane.fileSize.hexNumber)])
     }
 
     private func openBackground(_ url: URL) throws -> AgentBackgroundDocuments.Entry {
@@ -130,6 +131,7 @@ final class AgentDumpTools {
         let place = try resolve(arguments.string("document"))
         let offset = try arguments.optionalOffset("offset") ?? 0
         let length = try arguments.optionalOffset("length") ?? 0
+        let asked = try AgentArguments.range(at: offset, length: length)
         let onScreen: AgentDesk.Place
         var replaced: String?
         if place.isOnScreen {
@@ -150,10 +152,9 @@ final class AgentDumpTools {
         }
         let size = onScreen.pane.fileSize
         guard offset <= size else {
-            throw AgentToolError("Offset \(AgentHostTools.hexText(offset)) is past the end of \(onScreen.id).")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(onScreen.id).")
         }
-        // Bounded before it is added: a length past the end means to the end.
-        let end = offset + min(length, size - offset)
+        let end = min(asked.upperBound, size)
         let controller = try onScreen.onScreen()
         desk.bringForward(onScreen)
         controller.recordJump(in: onScreen.pane)

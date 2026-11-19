@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import HexText
 
 /// The tools the app answers itself, as opposed to the ones a tool-module
 /// contributes: what is open, where the reader is, the bytes, and moving the
@@ -58,7 +59,7 @@ final class AgentHostTools {
                 "id": .string(place.id),
                 "label": .string(place.label),
                 "name": .string(pane.status.fileName),
-                "size": Self.hex(pane.fileSize),
+                "size": .string(pane.fileSize.hexNumber),
                 "slot": .string(place.slot)
             ]
             if let controller = place.controller {
@@ -109,7 +110,7 @@ final class AgentHostTools {
         var answer: [String: JSONValue] = [
             "document": .string(place.id),
             "name": .string(pane.status.fileName),
-            "caret": Self.hex(pane.caretOffset)
+            "caret": .string(pane.caretOffset.hexNumber)
         ]
         let selection = pane.hexSelection()
         answer["selection"] = selection.isEmpty ? .null : Self.range(selection.start..<selection.end)
@@ -165,8 +166,8 @@ final class AgentHostTools {
         }
         let size = place.pane.fileSize
         guard offset < size else {
-            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
-                + "which is \(Self.hexText(size)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(place.named), "
+                + "which is \(size.hexNumber) bytes long.")
         }
         let end = min(offset + asked, size)
         guard let storage = place.pane.byteStorage else { throw AgentDeskError.nothingOpen }
@@ -174,8 +175,8 @@ final class AgentHostTools {
 
         var answer = AgentBytes.shown(bytes, at: offset, format: format, bigEndian: bigEndian)
         answer["document"] = .string(place.id)
-        answer["offset"] = Self.hex(offset)
-        answer["length"] = Self.hex(end - offset)
+        answer["offset"] = .string(offset.hexNumber)
+        answer["length"] = .string((end - offset).hexNumber)
         if end - offset < asked { answer["cut_at_end_of_file"] = true }
         return .object(answer)
     }
@@ -208,15 +209,15 @@ final class AgentHostTools {
         let place = try desk.place(named: arguments.optionalString("document"))
         let offset = try arguments.offset("offset")
         let length = try arguments.optionalOffset("length") ?? 0
+        let asked = try AgentArguments.range(at: offset, length: length)
         let select = try arguments.bool("select", default: length > 0)
         let controller = try place.onScreen()
         let size = place.pane.fileSize
         guard offset < size || (offset == size && length == 0) else {
-            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
-                + "which is \(Self.hexText(size)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of \(place.named), "
+                + "which is \(size.hexNumber) bytes long.")
         }
-        // Bounded before it is added: a length past the end means to the end.
-        let end = offset + min(length, size - offset)
+        let end = min(asked.upperBound, size)
         desk.bringForward(place)
         // The place the reader is leaving goes into the history first, so
         // their Back undoes what the agent did.
@@ -241,13 +242,9 @@ final class AgentHostTools {
         }
     }
 
-    nonisolated static func hexText(_ value: UInt64) -> String { String(format: "0x%llX", value) }
-
-    nonisolated static func hex(_ value: UInt64) -> JSONValue { .string(hexText(value)) }
-
     /// A half-open range, as the app keeps every range: `end` is the first
     /// byte after it.
     nonisolated static func range(_ range: Range<UInt64>) -> JSONValue {
-        ["start": hex(range.lowerBound), "end": hex(range.upperBound), "length": hex(range.upperBound - range.lowerBound)]
+        ["start": .string(range.lowerBound.hexNumber), "end": .string(range.upperBound.hexNumber), "length": .string((range.upperBound - range.lowerBound).hexNumber)]
     }
 }

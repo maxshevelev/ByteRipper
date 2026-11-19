@@ -1,6 +1,7 @@
 import Cocoa
 import ByteRipperCore
 import HelpUI
+import HexText
 import Localization
 
 /// The Search All results panel (§11): a header ("Search results (NNN)" + a ×)
@@ -453,7 +454,7 @@ final class SearchResultsViewController: NSViewController {
     /// scroller rather than clipping.
     private func sizeColumnsToContent() {
         let bytes = Int(Self.excerptPadding) * 2 + max(1, matchLength)
-        let offsetDigits = max(8, String(fileSize, radix: 16).count)
+        let offsetDigits = max(8, fileSize.hexDigitCount)
         let templates: [NSUserInterfaceItemIdentifier: String] = [
             ColumnID.offset: String(repeating: "0", count: offsetDigits),
             ColumnID.hex: [String](repeating: "FF", count: bytes).joined(separator: " "),
@@ -566,8 +567,8 @@ final class SearchResultsViewController: NSViewController {
     /// The match's start as padded uppercase hex — the same shape as the dump's
     /// offset column, which shows the row address in ink blue (§6).
     private func offsetText(_ offset: UInt64) -> NSAttributedString {
-        let digits = max(8, String(fileSize, radix: 16).count)
-        let text = String(offset, radix: 16, uppercase: true).leftPadded(to: digits, with: "0")
+        let digits = max(8, fileSize.hexDigitCount)
+        let text = offset.bareHexNumber(digits: digits)
         return NSAttributedString(string: text, attributes: [
             .font: regularFont, .foregroundColor: HexTheme.inkBlue,
         ])

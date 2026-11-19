@@ -191,4 +191,88 @@ final class ToolDetailScrollTests: XCTestCase {
         XCTAssertTrue(scroll.content.arrangedSubviews.isEmpty,
                       "the placeholder replaces the rows")
     }
+
+    // MARK: - showRows: the one way a panel's detail is filled
+
+    private func field(_ label: String, _ value: String) -> ToolFieldList.Field {
+        .init(label: label, value: ToolValueTone.standard.attributedValue(value))
+    }
+
+    func testShowRowsPutsTheTitleAboveTheFields() throws {
+        let scroll = self.scroll()
+        let list = scroll.showRows(subject: "row", title: "Startup ACM",
+                                   fields: [field("Kind", "2"), field("Size", "0x1000")])
+        scroll.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(scroll.hasRows)
+        XCTAssertEqual(scroll.content.arrangedSubviews.count, 2)
+        let title = try XCTUnwrap(scroll.content.arrangedSubviews.first as? NSTextField)
+        XCTAssertEqual(title.stringValue, "Startup ACM")
+        XCTAssertEqual(title.font, ToolPanelFont.title())
+        XCTAssertTrue(scroll.content.arrangedSubviews.last === list)
+        XCTAssertEqual(list.rows.map(\.label), ["Kind", "Size"])
+    }
+
+    func testShowRowsWithNoTitleIsTheFieldsAlone() {
+        let scroll = self.scroll()
+        let list = scroll.showRows(subject: "row", title: "", fields: [field("Kind", "2")])
+
+        XCTAssertEqual(scroll.content.arrangedSubviews.count, 1,
+                       "an empty title is no heading, not an empty line")
+        XCTAssertTrue(scroll.content.arrangedSubviews.first === list)
+    }
+
+    func testShowRowsSizesTheNameColumnToTheLongestName() {
+        let scroll = self.scroll(height: 200)
+        scroll.frame.size.width = 600
+        let long = "Firmware Volume Header Checksum"
+        let list = scroll.showRows(subject: "row", title: "",
+                                   fields: [field("Kind", "2"), field(long, "0x1A2B")])
+        scroll.layoutSubtreeIfNeeded()
+
+        let column = ToolFieldList.nameWidth(for: ["Kind", long])
+        XCTAssertGreaterThan(column, ToolPanelFont.detailLabelWidth,
+                             "the premise: the long name is wider than the default column")
+        XCTAssertEqual(list.rows.map(\.nameColumnWidth), [column, column],
+                       "one column, as wide as the longest name")
+    }
+
+    func testShowRowsListIsAsWideAsTheContent() {
+        let scroll = self.scroll()
+        let list = scroll.showRows(subject: "row", title: "T", fields: [field("Kind", "2")])
+        scroll.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(list.frame.width, scroll.content.frame.width, accuracy: 0.5,
+                       "a long value wraps inside the list instead of running off the side")
+    }
+
+    func testShowRowsReplacesWhatWasThere() {
+        let scroll = self.scroll()
+        scroll.showRows(subject: "a", title: "A", fields: [field("Kind", "2")])
+        scroll.showRows(subject: "b", title: "B", fields: [field("Size", "3")])
+
+        XCTAssertEqual(scroll.content.arrangedSubviews.count, 2)
+        XCTAssertEqual((scroll.content.arrangedSubviews.first as? NSTextField)?.stringValue, "B")
+    }
+
+    // MARK: - A verdict and its evidence
+
+    func testAVerdictCarriesItsEvidenceInBracketsInTheOrdinaryDrawing() {
+        let drawn = ToolValueTone.bad.attributedValue("Not configured", evidence: "EOP not set")
+
+        XCTAssertEqual(drawn.string, "Not configured (EOP not set)")
+        let verdictColor = drawn.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        let evidenceAt = ("Not configured (" as NSString).length
+        let evidenceColor = drawn.attribute(.foregroundColor, at: evidenceAt,
+                                            effectiveRange: nil) as? NSColor
+        XCTAssertEqual(verdictColor, ToolValueTone.bad.color)
+        XCTAssertEqual(evidenceColor, ToolValueTone.standard.color)
+    }
+
+    func testAVerdictWithNoEvidenceIsTheVerdictAlone() {
+        // Compared as text: a passed check's tick is an attachment, and two
+        // attachments of the same image are not equal to each other.
+        XCTAssertEqual(ToolValueTone.good.attributedValue("Yes", evidence: "").string,
+                       ToolValueTone.good.attributedValue("Yes").string)
+    }
 }

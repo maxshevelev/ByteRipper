@@ -430,20 +430,14 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             return
         }
         let record = rows[row]
-        details.prepareForRows(subject: "\(row)")
-        let title = NSTextField(labelWithString: record.tool)
-        title.font = ToolPanelFont.title()
-        title.translatesAutoresizingMaskIntoConstraints = false
-        details.content.addArrangedSubview(title)
-        let list = ToolFieldList(fields: Self.detailFields(of: record).map { field in
+        let list = details.showRows(subject: "\(row)", title: record.tool,
+                                    fields: Self.detailFields(of: record).map { field in
             let value = NSAttributedString(string: field.value, attributes: [
                 .font: ToolPanelFont.body(),
                 .foregroundColor: field.isProblem ? SemanticColors.bad : NSColor.labelColor
             ])
             return .init(label: field.label, value: value)
         })
-        details.content.addArrangedSubview(list)
-        list.widthAnchor.constraint(equalTo: details.content.widthAnchor).isActive = true
 
         let heading = NSTextField(labelWithString: L("Arguments"))
         heading.font = ToolPanelFont.title()

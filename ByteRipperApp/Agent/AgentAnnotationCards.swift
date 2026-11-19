@@ -1,6 +1,7 @@
 import Cocoa
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -469,10 +470,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         // A place in decoded bytes is told in their addresses, after the
         // badges of the codecs they came through.
         let shown = annotation.decoded?.range ?? annotation.range
-        var address = shown.map { range in
-            range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
-                : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
-        }
+        var address = shown.map(\.hexExtent)
         // A place in code is told as code: the Code badge with its icon, then
         // the module, the function and the instruction — a link that opens
         // the code panel there.

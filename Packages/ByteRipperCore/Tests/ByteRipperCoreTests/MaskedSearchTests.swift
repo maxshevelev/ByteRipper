@@ -144,7 +144,7 @@ extension MaskedSearchTests {
                 return true
             }
         }
-        XCTAssertEqual(count, 2 << 20)
+        XCTAssertEqual(count, (4 << 20) - 1, "matches overlap by default, as in the find bar: one per byte but the last")
         XCTAssertLessThan(took, .seconds(5))
     }
 }

@@ -163,7 +163,7 @@ final class AgentFirmwareToolsTests: XCTestCase {
         XCTAssertEqual(changed["size"], 2)
         XCTAssertEqual(changed["against_size"], 3)
         // Byte 1 differs, and byte 2 only the longer value has: one run.
-        XCTAssertEqual(changed["runs"], ["0x1–0x3"])
+        XCTAssertEqual(changed["runs"], ["[0x1, 0x3)"])
         XCTAssertEqual(changed["differing_bytes"], 2)
     }
 

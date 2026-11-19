@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import UEFIImage
 
 /// A match of the search through what the tree holds (`UEFIContentSearch`), as
@@ -42,20 +43,20 @@ public enum UEFIAgentContentSearch {
         if let node = match.node.flatMap(tree.node) {
             members["node"] = UEFIAgentQueries.summary(of: node, in: tree)
         }
-        if let offset = match.nodeOffset { members["node_offset"] = .string(UEFIAgentQueries.hex(offset)) }
-        if let offset = match.bodyOffset { members["body_offset"] = .string(UEFIAgentQueries.hex(offset)) }
+        if let offset = match.nodeOffset { members["node_offset"] = .string(offset.hexNumber) }
+        if let offset = match.bodyOffset { members["body_offset"] = .string(offset.hexNumber) }
         if let volume = match.volume.flatMap(tree.node) {
             members["volume"] = ["id": .string(volume.id.description),
                                  "label": .string(UEFIAgentQueries.label(of: volume, in: tree))]
         }
-        if let offset = match.volumeOffset { members["volume_offset"] = .string(UEFIAgentQueries.hex(offset)) }
+        if let offset = match.volumeOffset { members["volume_offset"] = .string(offset.hexNumber) }
         if let range = match.fileRange {
-            members["start"] = .string(UEFIAgentQueries.hex(range.lowerBound))
-            members["end"] = .string(UEFIAgentQueries.hex(range.upperBound))
+            members["start"] = .string(range.lowerBound.hexNumber)
+            members["end"] = .string(range.upperBound.hexNumber)
         } else {
             members["in_compressed"] = true
-            members["buffer_start"] = .string(UEFIAgentQueries.hex(match.range.lowerBound))
-            members["buffer_end"] = .string(UEFIAgentQueries.hex(match.range.upperBound))
+            members["buffer_start"] = .string(match.range.lowerBound.hexNumber)
+            members["buffer_end"] = .string(match.range.upperBound.hexNumber)
         }
         if let section = match.section { members["section"] = .string(section.description) }
         if let key = match.decodedXORKey { members["decoded"] = .string(String(format: "XOR %02X", key)) }

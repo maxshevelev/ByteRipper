@@ -1,34 +1,10 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HexText
 import Localization
 
 // MARK: - Shared sheet chrome
-
-/// An `NSTextField` that doesn't select its whole text when it gains focus:
-/// the caret lands after the existing text (the "0x" prefix), so the user can
-/// type hex digits immediately and deletes the prefix only for a decimal value
-/// (§10). AppKit's default is select-all on focus, which would replace "0x".
-/// Also fires `onTextChange` on every edit so the sheet can re-validate live.
-private final class HexInputField: NSTextField {
-    /// Called on every edit (typing, deleting, replacing) — the sheet uses it
-    /// to re-validate the input and update the error label as the user types.
-    var onTextChange: (() -> Void)?
-
-    override func becomeFirstResponder() -> Bool {
-        let focused = super.becomeFirstResponder()
-        if focused, let editor = currentEditor() as? NSTextView {
-            let length = (stringValue as NSString).length
-            editor.selectedRange = NSRange(location: length, length: 0)
-        }
-        return focused
-    }
-
-    override func textDidChange(_ notification: Notification) {
-        super.textDidChange(notification)
-        onTextChange?()
-    }
-}
 
 /// Base class for the input dialogs (Go To Position, Select Block).
 /// Builds a titled sheet with a field stack, an inline error label, and a
@@ -38,6 +14,10 @@ class SheetViewController: NSViewController {
     let messageText: String?
     private(set) var contentStack: NSStackView!
     private(set) var errorLabel: NSTextField!
+    /// What the sheet has to say when nothing is wrong — a sum read back under
+    /// the field it was typed in (issue #9). On the error's own line: there is
+    /// one or the other, never both.
+    private(set) var noteLabel: NSTextField!
     private(set) var buttonRow: NSStackView!
     private(set) var submitButton: NSButton!
     /// The Esc button, so a subclass that wants it to say something else
@@ -101,7 +81,15 @@ class SheetViewController: NSViewController {
         let errorIndent = NSView()
         errorIndent.translatesAutoresizingMaskIntoConstraints = false
         errorIndent.widthAnchor.constraint(equalToConstant: Self.fieldLabelWidth).isActive = true
-        let errorRow = NSStackView(views: [errorIndent, errorLabel])
+        noteLabel = NSTextField(labelWithString: "")
+        noteLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        noteLabel.textColor = .secondaryLabelColor
+        noteLabel.lineBreakMode = .byTruncatingMiddle
+        // A long sum is cut in the middle rather than widening the sheet.
+        noteLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        noteLabel.isSelectable = true
+        noteLabel.isHidden = true
+        let errorRow = NSStackView(views: [errorIndent, errorLabel, noteLabel])
         errorRow.orientation = .horizontal
         errorRow.alignment = .centerY
         errorRow.spacing = Self.fieldRowSpacing
@@ -155,6 +143,15 @@ class SheetViewController: NSViewController {
         view = contentView
     }
 
+    /// The starting frame is made as wide as the rows the subclass added in its
+    /// own `loadView`: it is only where layout starts from, but rows wider than
+    /// it — the address rows, a longer translation — are laid out clipped until
+    /// a window resizes it.
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.frame.size.width = max(view.frame.width, view.fittingSize.width)
+    }
+
     override func viewDidAppear() {
         super.viewDidAppear()
         if let field = firstField() {
@@ -167,7 +164,7 @@ class SheetViewController: NSViewController {
             presentationInProgress = true
             view.window?.makeFirstResponder(field)
             presentationInProgress = false
-            // The caret lands after the "0x" prefix via `HexInputField`, which
+            // The caret lands after the "0x" prefix via `AddressField`, which
             // never selects the field's whole text on focus.
         }
     }
@@ -208,21 +205,38 @@ class SheetViewController: NSViewController {
     func showError(_ message: String) {
         errorLabel.stringValue = message
         errorLabel.isHidden = false
+        noteLabel.isHidden = true
     }
 
-    /// Re-runs `validate()` on every keystroke (fired from `HexInputField`'s
+    fileprivate func showNote(_ note: String?) {
+        noteLabel.stringValue = note ?? ""
+        noteLabel.isHidden = note == nil
+    }
+
+    /// Re-runs `validate()` on every keystroke (fired from the field's
     /// `textDidChange`) and updates the error label, so a stale error clears
     /// the moment the input becomes valid instead of lingering until the user
     /// submits or leaves the field (§10). Both hex (with "0x") and decimal
     /// inputs validate the same way `submitPressed` does. `fileprivate` so the
     /// subclasses' field builders can wire `onTextChange` to it.
     fileprivate func updateLiveError() {
-        if let error = validate() {
+        if let error = liveProblem() {
             showError(error)
         } else {
             errorLabel.isHidden = true
+            showNote(liveNote())
         }
     }
+
+    /// What is wrong while the user types (default: `validate()`). A sheet
+    /// whose field can hold something unfinished rather than wrong — a sum
+    /// ending at its operator — excuses that field here, and only that one:
+    /// OK still refuses it, through `validate()`.
+    func liveProblem() -> String? { validate() }
+
+    /// What to show on the message's line while the input is valid (default:
+    /// nothing).
+    func liveNote() -> String? { nil }
 
     /// The width every row's label column gets, and the gap to the field beside
     /// it. Shared with the error message, which is indented by exactly this much
@@ -232,33 +246,67 @@ class SheetViewController: NSViewController {
 
     /// Builds a label + text field row inside `contentStack` and returns the field.
     func addFieldRow(label text: String, initial: String) -> NSTextField {
+        // A byte sequence, not an address (those are `AddressField`): the
+        // caret lands after the pattern offered, so it can be added to.
+        let field = CaretAtEndTextField(string: initial)
+        field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        field.onTextChange = { [weak self] in self?.updateLiveError() }
+        addRow(leading: fieldLabel(text), field: field, width: 240, name: text)
+        return field
+    }
+
+    /// The same row for an address or a length: the app's one field for those
+    /// (`AddressField`), which takes a sum as well as a number and shows what
+    /// it comes to. Wider than a plain field — it holds the sum, the result and
+    /// the list of recent entries side by side.
+    func addAddressRow(label text: String, initial: String) -> AddressField {
+        addAddressRow(leading: fieldLabel(text), initial: initial, name: text)
+    }
+
+    /// An address row behind any leading view — a label, or the radio button
+    /// that names the field instead of one.
+    func addAddressRow(leading: NSView, initial: String, name: String) -> AddressField {
+        let field = AddressField(text: initial)
+        field.onTextChange = { [weak self, weak field] in
+            self?.lastEditedAddressField = field
+            self?.updateLiveError()
+        }
+        addRow(leading: leading, field: field, width: 300, name: name)
+        return field
+    }
+
+    /// The address field typed in last — the one whose sum the sheet reads back.
+    fileprivate(set) weak var lastEditedAddressField: AddressField?
+
+    /// A row's label: right-aligned in the label column.
+    private func fieldLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 12)
         label.textColor = .secondaryLabelColor
         label.alignment = .right
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.widthAnchor.constraint(equalToConstant: Self.fieldLabelWidth).isActive = true
+        return label
+    }
 
-        let field = HexInputField(string: initial)
-        field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+    private func addRow(leading: NSView, field: NSTextField, width: CGFloat, name: String) {
+        leading.translatesAutoresizingMaskIntoConstraints = false
+        leading.widthAnchor.constraint(equalToConstant: Self.fieldLabelWidth).isActive = true
+
         field.target = self
         field.action = #selector(submitPressed)
         // §10: submit only on OK / Return — losing focus (e.g. clicking another
         // field) must NOT activate the selection. The flag lives on the cell.
         field.cell?.sendsActionOnEndEditing = false
-        field.onTextChange = { [weak self] in self?.updateLiveError() }
         field.translatesAutoresizingMaskIntoConstraints = false
-        field.widthAnchor.constraint(equalToConstant: 240).isActive = true
-        field.setAccessibilityLabel(text)  // §15: VoiceOver names the field.
+        field.widthAnchor.constraint(equalToConstant: width).isActive = true
+        field.setAccessibilityLabel(name)  // §15: VoiceOver names the field.
 
         let row = NSStackView()
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = Self.fieldRowSpacing
-        row.addArrangedSubview(label)
+        row.addArrangedSubview(leading)
         row.addArrangedSubview(field)
         contentStack.addArrangedSubview(row)
-        return field
     }
 }
 
@@ -287,9 +335,9 @@ final class SelectBlockSheetController: SheetViewController {
     private let onSelect: (SelectionModel) -> Void
 
     /// `private(set)` so tests can read the widgets and set their values.
-    private(set) var startField: NSTextField!
-    private(set) var endField: NSTextField!
-    private(set) var lengthField: NSTextField!
+    private(set) var startField: AddressField!
+    private(set) var endField: AddressField!
+    private(set) var lengthField: AddressField!
     private(set) var endRadio: NSButton!
     private(set) var lengthRadio: NSButton!
     /// The bottom-left shortcuts: select from the Start field's position to the
@@ -328,8 +376,8 @@ final class SelectBlockSheetController: SheetViewController {
         buttonRow.insertArrangedSubview(toBeginningButton, at: 0)
         buttonRow.insertArrangedSubview(toEndButton, at: 1)
 
-        startField = addFieldRow(label: L("Start:"),
-                                 initial: presetStart.map { String(format: "0x%X", $0) } ?? "0x")
+        startField = addAddressRow(label: L("Start:"),
+                                   initial: presetStart.map(\.hexNumber) ?? "0x")
 
         let end = addRadioFieldRow(title: L("End"), action: #selector(modeRadioChanged(_:)))
         endRadio = end.radio
@@ -362,34 +410,14 @@ final class SelectBlockSheetController: SheetViewController {
         presetStart != nil ? lengthField : startField
     }
 
-    /// Builds a radio button + text field row (the End / Length pair). The radio
-    /// carries the field's name, replacing the label column of `addFieldRow`; a
-    /// fixed width keeps the fields column-aligned with Start's.
-    private func addRadioFieldRow(title: String, action: Selector) -> (radio: NSButton, field: NSTextField) {
+    /// Builds a radio button + address field row (the End / Length pair). The
+    /// radio carries the field's name, replacing the label column of
+    /// `addAddressRow(label:)`; the same fixed width keeps the fields
+    /// column-aligned with Start's.
+    private func addRadioFieldRow(title: String, action: Selector) -> (radio: NSButton, field: AddressField) {
         let radio = NSButton(radioButtonWithTitle: title, target: self, action: action)
         radio.font = .systemFont(ofSize: 12)
-        radio.translatesAutoresizingMaskIntoConstraints = false
-        radio.widthAnchor.constraint(equalToConstant: SheetViewController.fieldLabelWidth).isActive = true
-
-        let field = HexInputField(string: "0x")
-        field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        field.target = self
-        field.action = #selector(submitPressed)
-        // §10: submit only on OK / Return — losing focus must not activate.
-        field.cell?.sendsActionOnEndEditing = false
-        field.onTextChange = { [weak self] in self?.updateLiveError() }
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.widthAnchor.constraint(equalToConstant: 240).isActive = true
-        field.setAccessibilityLabel(title)  // §15: VoiceOver names the field.
-
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = SheetViewController.fieldRowSpacing
-        row.addArrangedSubview(radio)
-        row.addArrangedSubview(field)
-        contentStack.addArrangedSubview(row)
-        return (radio, field)
+        return (radio, addAddressRow(leading: radio, initial: "0x", name: title))
     }
 
     /// The shared radio action keeps the two options mutually exclusive: clicking
@@ -401,47 +429,125 @@ final class SelectBlockSheetController: SheetViewController {
         lengthRadio.state = useLength ? .on : .off
         endField.isEnabled = !useLength
         lengthField.isEnabled = useLength
+        // A sum read back from the field just switched off goes, and the one
+        // in the field switched on takes its place; Start's stays. The fields
+        // are checked again when an error is already shown or the field
+        // switched to holds something typed — but the switch does not raise
+        // an error over a field nobody has typed in yet.
+        if lastEditedAddressField === (useLength ? endField : lengthField) {
+            lastEditedAddressField = secondField
+        }
+        let untouched = ["", "0x"].contains(secondField.stringValue.trimmingCharacters(in: .whitespaces).lowercased())
+        if (errorLabel.isHidden || errorLabel.stringValue.isEmpty) && untouched {
+            showNote(liveNote())
+        } else {
+            updateLiveError()
+        }
     }
 
-    override func validate() -> String? {
-        guard let start = parse(startField.stringValue) else {
-            return L("Invalid start offset.")
+    /// The End or Length field, whichever the radios make the active one.
+    private var secondField: AddressField {
+        endRadio.state == .on ? endField : lengthField
+    }
+
+    /// What a field holds, as the checks need it: the number it names, the
+    /// sentence for why it names none — or, for the field being typed in, a sum
+    /// still waiting for its last term.
+    private enum Reading {
+        case number(UInt64)
+        case wrong(String)
+        case waiting
+    }
+
+    private func read(_ field: AddressField, invalid: String, waiting: AddressField?) -> Reading {
+        switch field.evaluation {
+        case .success(let expression):
+            return .number(expression.value)
+        case .failure(.incomplete) where field === waiting:
+            return .waiting
+        case .failure:
+            return .wrong(field.problemMessage ?? invalid)
         }
-        guard start <= fileSize else {
-            return L("Start is beyond the end of the file.")
+    }
+
+    /// Only the field being typed in waits: an unfinished sum left behind in
+    /// another field, or any other mistake in one, is named as usual.
+    override func liveProblem() -> String? {
+        let typing = lastEditedAddressField.flatMap { $0.isEnabled ? $0 : nil }
+        return problem(waitingFor: typing)
+    }
+
+    /// The sum being typed, read back in hex with its result (issue #9).
+    override func liveNote() -> String? {
+        guard let field = lastEditedAddressField, field.isEnabled else { return nil }
+        return field.breakdown
+    }
+
+    override func validate() -> String? { problem(waitingFor: nil) }
+
+    /// The first thing wrong, or nil. With no field `waiting`, nil means every
+    /// field in use names a number — there is no path that lets a field with
+    /// none through.
+    private func problem(waitingFor waiting: AddressField?) -> String? {
+        let start: UInt64?
+        switch startReading(waitingFor: waiting) {
+        case .wrong(let message): return message
+        case .waiting: start = nil
+        case .number(let value): start = value
         }
         if endRadio.state == .on {
-            guard let end = parse(endField.stringValue) else {
-                return L("Invalid end offset.")
+            switch read(endField, invalid: L("Invalid end offset."), waiting: waiting) {
+            case .wrong(let message):
+                return message
+            case .waiting:
+                break
+            case .number(let end):
+                if let start, start > end {
+                    return L("Start must not exceed end.")
+                }
+                // End is the address of the block's LAST byte, so it must point
+                // at a real byte — the maximum is fileSize - 1 (the selection's
+                // half-open upper bound is end + 1).
+                if end >= fileSize {
+                    return L("End is beyond the end of the file.")
+                }
             }
-            if start > end {
-                return L("Start must not exceed end.")
-            }
-            // End is the address of the block's LAST byte, so it must point at
-            // a real byte — the maximum is fileSize - 1 (the selection's
-            // half-open upper bound is end + 1).
-            if end >= fileSize {
-                return L("End is beyond the end of the file.")
-            }
-        } else {
-            guard parse(lengthField.stringValue) != nil else {
-                return L("Invalid length.")
-            }
+        } else if case .wrong(let message) = read(lengthField, invalid: L("Invalid length."), waiting: waiting) {
+            return message
         }
         return nil
     }
 
+    /// The Start field read, with the file's end checked as well.
+    private func startReading(waitingFor waiting: AddressField?) -> Reading {
+        let reading = read(startField, invalid: L("Invalid start offset."), waiting: waiting)
+        if case .number(let start) = reading, start > fileSize {
+            return .wrong(L("Start is beyond the end of the file."))
+        }
+        return reading
+    }
+
     override func handleSubmit() {
-        guard let start = parse(startField.stringValue), start <= fileSize else { return }
+        guard let start = startField.value, start <= fileSize else { return }
         if endRadio.state == .on {
-            guard let end = parse(endField.stringValue), end < fileSize else { return }
+            guard let end = endField.value, end < fileSize else { return }
+            keepSums(in: [startField, endField])
             // End is the last byte INCLUDED; the internal half-open range ends
             // just past it.
             onSelect(SelectionModel(start: start, end: end + 1, fileSize: fileSize))
         } else {
-            guard let length = parse(lengthField.stringValue) else { return }
+            guard let length = lengthField.value else { return }
+            keepSums(in: [startField, lengthField])
             onSelect(SelectionModel(start: start, length: length, fileSize: fileSize))
         }
+    }
+
+    /// A sum the selection was made from goes into the fields' list, so it can
+    /// be picked again and corrected. A plain number does not: the list would
+    /// fill with every length ever typed.
+    private func keepSums(in fields: [AddressField]) {
+        // The start last, so it is the entry the list opens on.
+        for field in fields.reversed() { field.recordInHistory() }
     }
 
     // MARK: - To Beginning / To End
@@ -450,12 +556,7 @@ final class SelectBlockSheetController: SheetViewController {
     /// position. The two boundary buttons ignore the End/Length option, so they
     /// validate only what they actually use.
     private func startError() -> String? {
-        guard let start = parse(startField.stringValue) else {
-            return L("Invalid start offset.")
-        }
-        guard start <= fileSize else {
-            return L("Start is beyond the end of the file.")
-        }
+        if case .wrong(let message) = startReading(waitingFor: nil) { return message }
         return nil
     }
 
@@ -485,18 +586,16 @@ final class SelectBlockSheetController: SheetViewController {
     /// Start field itself, so a test drives it without presenting the sheet —
     /// the button action only adds the dismiss.
     func submitToBeginning() {
-        guard let start = parse(startField.stringValue), start <= fileSize else { return }
+        guard let start = startField.value, start <= fileSize else { return }
+        startField.recordInHistory()
         onSelect(SelectionModel(start: 0, end: start, fileSize: fileSize))
     }
 
     /// The selection "To End" produces: `[start, fileSize)`.
     func submitToEnd() {
-        guard let start = parse(startField.stringValue), start <= fileSize else { return }
+        guard let start = startField.value, start <= fileSize else { return }
+        startField.recordInHistory()
         onSelect(SelectionModel(start: start, end: fileSize, fileSize: fileSize))
-    }
-
-    private func parse(_ text: String) -> UInt64? {
-        try? OffsetParser.parse(text)
     }
 }
 

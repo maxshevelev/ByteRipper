@@ -811,7 +811,8 @@ otherwise be typing again.
   canonical address, not the keystrokes that produced it — `0x7af00`, `0x07AF00`
   and `503552` are one address, and a history listing them three times would be a
   log of typing rather than a list of places. A jump from the bookmark list is
-  not recorded: it is already in the list below.
+  not recorded: it is already in the list below. A **sum** is the exception, and
+  is kept as it was typed (§10.7).
 - A jump dismisses the form, and the row it lands on is revealed centred — the
   form is centred over the window it is about to scroll, so the destination has
   to be where the user is looking.
@@ -1095,6 +1096,41 @@ browser's history does.
 - View ▸ Back (Cmd+[) and View ▸ Forward (Cmd+]), and a ‹ › pair in the
   toolbar between the Tools pull-down and Go To, set apart by spaces. Each is
   disabled when there is nowhere to go.
+
+10.7 The address field, and sums in it (issue #9)
+
+Every place an address or a length is typed is one control, `AddressField`: Go
+To (§10.1), the three fields of Select Block (§10.2), a bookmark's address
+(§20.3) and a cut's (§21.3). Fill Selection's field is not one of them — it
+takes a byte sequence, not a number.
+
+- The field takes a number as §10.1 reads one, and a **sum**: terms joined by
+  `+` and `-`, taken left to right, each term read by the same rule as a lone
+  number, so the bases mix (`0x1FE000 + 4096`). No brackets, no multiplication,
+  no sign before the first term. The sum may dip below zero on the way; only
+  its result has to be an offset.
+- **What was typed is never rewritten.** The sum stays in the field, to be read
+  again and corrected. Its result is drawn in the field, at the right edge, in
+  heavier type (`= 0x1FF000`) — and the result is what the form acts on, in one
+  step: Return, the button, a popover closed by a click outside.
+- A lone number typed without `0x` gets the same result beside it (`4096` shows
+  `= 0x1000`): which base a number was read in is the mistake this makes
+  visible. A number already written with `0x` needs nothing beside it.
+- A form that has a message line (Go To, Select Block) reads the sum back on
+  it, every term in hex and the result in both bases:
+  `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`. The popovers have no such line and
+  show the result in the field only.
+- A sum that ends at its operator (`0x1FE000 +`) is **unfinished, not wrong**:
+  no message, no red — but the button stays off and Return refuses it. A result
+  below zero or past 64 bits is an error with its own sentence.
+- **One list of recent entries for all these fields**, the last ten, persisted:
+  under the arrow at the field's right edge and under ↓. Go To records every
+  address it goes to (§10.1); the other forms record only sums — a list that
+  kept every length typed would push the addresses out. A row shows a sum with
+  its result. Picking a row fills the field and does nothing else.
+- A bookmark or a cut keeps its address, not the sum it was typed as: bytes
+  inserted before a cut move the cut, and a stored sum would then name
+  somewhere else.
 
 =====================================================================
 11. SEARCH
@@ -2551,7 +2587,7 @@ its map, so the whole of it is legible at a glance without opening anything.
   colour of a block is the colour of the piece it stands for, and the two agree
   because they are the same source.
 - **Hovering the strip names the piece under the pointer**: `S1 —
-  0x400000…0xC00000, 8 MB · W25Q…bin` — the label, the range, the size, and the
+  0x400000–0xBFFFFF, 8 MB · W25Q…bin` — the label, the range, the size, and the
   piece's name. The name is read from the store at hover time, so a rename shows
   without a repaint. Hovering a boundary near a cut names the cut instead. The
   words are shown in the same callout a bookmark's mark uses (§19.4.3), at once
@@ -2602,7 +2638,7 @@ parse found is legible at a glance beside the bytes it found it in.
   dump are one statement about the file and must not be told apart by their
   looks. The viewport band runs edge to edge and is painted over the gutter, as
   it is over the strip (§19.5).
-- **Hovering a bracket names its zone**: `BIOS region — 0x100…0x2FF, 512 B` — the
+- **Hovering a bracket names its zone**: `BIOS region — 0x100–0x2FF, 512 B` — the
   name, the range and the size, the shape the strip's own hover text takes, in
   the same callout, following the pointer (§19.4.3). A
   zone with no name is named by its range alone. The bracket under the pointer

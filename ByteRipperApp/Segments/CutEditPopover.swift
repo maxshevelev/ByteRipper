@@ -1,6 +1,7 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HexText
 import Localization
 
 /// The popover that makes a cut (§21.3): a field for **where** the cut goes
@@ -24,7 +25,7 @@ import Localization
 final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     /// Internal so tests can type into them; a popover cannot be driven by a
     /// synthesized key event without a real key window.
-    private(set) var offsetField: NSTextField!
+    private(set) var offsetField: AddressField!
     private(set) var descriptionField: NSTextField!
 
     /// The offset the field starts at — the caret's for a cut opened from the
@@ -62,6 +63,10 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     /// What a refused Return sounds like. A closure so a test can hear it: a
     /// beep leaves no trace of its own.
     var beep: () -> Void = { NSSound.beep() }
+    /// Whether the app is the active one — asked when the popover is told to
+    /// close. A closure so a test can say, the test host's own state being
+    /// whatever the run left it.
+    var isAppActive: () -> Bool = { NSApp.isActive }
 
     /// The popover this controller is shown in, so committing or cancelling can
     /// close it. Weak: the popover owns the controller.
@@ -149,9 +154,8 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
         // has to read as an address first and behave as a field second. A cut
         // opened from the Segments form's `+` starts empty — just the "0x" the
         // user types over — because the offset is the thing to be filled in.
-        let offsetText = prefillOffset.map { String(format: "0x%X", $0) } ?? "0x"
-        let offset = OffsetField(string: offsetText)
-        offset.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        let offsetText = prefillOffset.map(\.hexNumber) ?? "0x"
+        let offset = AddressField(text: offsetText)
         offset.delegate = self
         offset.translatesAutoresizingMaskIntoConstraints = false
         offset.setAccessibilityLabel(L("Cut offset"))
@@ -259,17 +263,35 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     /// the text does not parse as an offset (§10), or `validate` says it is not
     /// a legal cut here.
     var editedOffset: UInt64? {
-        guard let offset = try? OffsetParser.parse(offsetField.stringValue) else { return nil }
-        guard validate(offset) else { return nil }
+        guard let offset = offsetField.value, validate(offset) else { return nil }
         return offset
     }
 
     /// Validation as the address is typed, as everywhere else an offset is typed
     /// (§10.1) — but shown in the field itself rather than in a message: a panel
     /// this small has no room for a sentence, and red digits in a field of digits
-    /// say the same thing. Return refuses while they are red.
-    private func updateOffsetValidation() {
-        offsetField.textColor = editedOffset == nil ? SemanticColors.bad : .labelColor
+    /// say the same thing. Return refuses while they are red. A sum that ends at
+    /// its operator is not red while it is typed — it is not wrong yet (issue
+    /// #9). Acted on — Return, a click outside — it is: `acting` turns it red.
+    private func updateOffsetValidation(acting: Bool = false) {
+        let waiting = !acting && offsetField.evaluation == .failure(.incomplete)
+        offsetField.textColor = editedOffset == nil && !waiting ? SemanticColors.bad : .labelColor
+    }
+
+    /// A click outside does not settle an unfinished sum: closing would drop
+    /// it without a word — no cut is made, the sum typed lost — from a field that never turned red.
+    /// The popover stays, and the field turns red; Return, Esc and a finished
+    /// sum close it as before.
+    ///
+    /// Switching to another app asks the same question, with no click behind
+    /// it: the popover stays then too — behind the other app, the sum kept —
+    /// but without a beep or a red field for a key that was not about it.
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        guard !settled, offsetField.evaluation == .failure(.incomplete) else { return true }
+        guard isAppActive() else { return false }
+        updateOffsetValidation(acting: true)
+        beep()
+        return false
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -287,10 +309,12 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     func commit() {
         guard !settled else { return }
         guard let target = editedOffset else {
+            updateOffsetValidation(acting: true)
             beep()
             return
         }
         settled = true
+        offsetField.recordInHistory()
         onCommit(target, descriptionField.stringValue)
         popover?.performClose(nil)
     }
@@ -321,21 +345,6 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
     }
 }
 
-/// The offset field: it does not select its whole text when it gains focus —
-/// the caret lands after the existing text (the "0x" prefix), the way every
-/// other offset field in the app does (§10), so a field that opens as "0x" is
-/// ready to have hex digits typed after the prefix rather than to replace it.
-private final class OffsetField: NSTextField {
-    override func becomeFirstResponder() -> Bool {
-        let focused = super.becomeFirstResponder()
-        if focused, let editor = currentEditor() as? NSTextView {
-            let length = (stringValue as NSString).length
-            editor.selectedRange = NSRange(location: length, length: 0)
-        }
-        return focused
-    }
-}
-
 extension CutEditPopoverController: NSPopoverDelegate {
     /// A popover dismissed by anything but the two keys — a click outside it,
     /// the window losing focus — keeps what was typed when the offset is legal:
@@ -346,6 +355,7 @@ extension CutEditPopoverController: NSPopoverDelegate {
         guard !settled else { return }
         settled = true
         if let target = editedOffset {
+            offsetField.recordInHistory()
             onCommit(target, descriptionField.stringValue)
         } else {
             // A red field is not a cut the user asked for: it closes without

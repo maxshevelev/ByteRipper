@@ -2,6 +2,7 @@ import Cocoa
 import AgentKit
 import CodeAnalysis
 import ByteRipperCore
+import HexText
 import LenovoDMI
 import Localization
 import UEFIContentSource
@@ -319,8 +320,8 @@ final class AgentAnnotationTools {
         }
         let answer = try await annotate(AgentArguments([
             "title": .string(title), "note": .string(note), "document": .string(place.id),
-            "offset": .string(AgentHostTools.hexText(range.lowerBound)),
-            "length": .string(AgentHostTools.hexText(UInt64(range.count)))
+            "offset": .string(range.lowerBound.hexNumber),
+            "length": .string(range.count.hexNumber)
         ]), author: .person)
         guard case .json(let json) = answer, let id = json["id"]?.stringValue else { return "" }
         return id
@@ -432,14 +433,11 @@ final class AgentAnnotationTools {
         let offset = try arguments.optionalOffset("offset")
         let length = try arguments.optionalOffset("length") ?? 1
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
-        if let offset, offset.addingReportingOverflow(length).overflow {
-            throw AgentToolError("`offset` plus `length` is past any file: \(AgentHostTools.hexText(offset)) + "
-                + "\(AgentHostTools.hexText(length)).")
-        }
+        let asked = try offset.map { try AgentArguments.range(at: $0, length: length) }
         var node = try arguments.optionalString("node")
         // Without `node`, `offset` is in the document; with it, in the node.
-        var range = node == nil ? offset.map { $0..<($0 + length) } : nil
-        let within = node == nil ? nil : offset.map { $0..<($0 + length) }
+        var range = node == nil ? asked : nil
+        let within = node == nil ? nil : asked
         if arguments.has("length"), offset == nil {
             throw AgentToolError("Give `offset` with `length`.")
         }
@@ -483,8 +481,8 @@ final class AgentAnnotationTools {
             var pane = place.pane
             size = pane.fileSize
             if let range, range.upperBound > pane.fileSize {
-                throw AgentToolError("The range \(AgentHostTools.hexText(range.lowerBound))–\(AgentHostTools.hexText(range.upperBound)) "
-                    + "runs past the end of \(place.named), which is \(AgentHostTools.hexText(pane.fileSize)) bytes long.")
+                throw AgentToolError("The range \(range.halfOpenHexText) "
+                    + "runs past the end of \(place.named), which is \(pane.fileSize.hexNumber) bytes long.")
             }
             if pane.origin != nil {
                 var answer: [String: JSONValue] = ["document": .string(place.id)]
@@ -530,8 +528,8 @@ final class AgentAnnotationTools {
             size = pane.fileSize
         }
         if let range, let size, range.upperBound > size {
-            throw AgentToolError("The range \(AgentHostTools.hexText(range.lowerBound))–\(AgentHostTools.hexText(range.upperBound)) "
-                + "runs past the end of the file, which is \(AgentHostTools.hexText(size)) bytes long.")
+            throw AgentToolError("The range \(range.halfOpenHexText) "
+                + "runs past the end of the file, which is \(size.hexNumber) bytes long.")
         }
         guard range != nil || node != nil || decoded != nil || file.url != nil else {
             throw AgentToolError("Give the place: `offset`, or `node`.")
@@ -608,8 +606,8 @@ final class AgentAnnotationTools {
         var range = found.range
         if let within {
             guard within.upperBound <= UInt64(found.range.count) else {
-                throw AgentToolError("\(AgentHostTools.hexText(within.lowerBound))–\(AgentHostTools.hexText(within.upperBound)) "
-                    + "runs past the end of node \(id), which is \(AgentHostTools.hexText(UInt64(found.range.count))) bytes long.")
+                throw AgentToolError("The range \(within.halfOpenHexText) "
+                    + "runs past the end of node \(id), which is \(found.range.count.hexNumber) bytes long.")
             }
             range = (found.range.lowerBound + within.lowerBound)..<(found.range.lowerBound + within.upperBound)
         }

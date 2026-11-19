@@ -76,6 +76,7 @@ extension HelpTopicID {
     public static let toolFIT = HelpTopicID("tool-fit")
     public static let lenovoDMI = HelpTopicID("lenovo-dmi")
     public static let databases = HelpTopicID("databases")
+    public static let cpuidLookup = HelpTopicID("cpuid-lookup")
     public static let provenance = HelpTopicID("provenance")
 
     // On the bench

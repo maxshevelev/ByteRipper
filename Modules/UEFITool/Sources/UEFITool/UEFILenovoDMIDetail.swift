@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import LenovoDMI
 import Localization
 import ToolModuleKit
@@ -98,7 +99,7 @@ public enum UEFILenovoDMIDetail {
         guard node.kind == .lenvBlock, node.space == .file, let stored = reader.bytes(node.range) else { return nil }
         let block = LENVBlock(offset: node.range.lowerBound, stored: stored)
         guard block.hasSignature, !block.isBlank else { return nil }
-        let key = hex(UInt64(block.xorKey), 2)
+        let key = block.xorKey.hexNumber(digits: 2)
         switch block.encoding {
         case .encoded: return .encoded(L("Encoded with the XOR key %1$@", in: language, key), decoded: false)
         case .plain: return .encoded(L("Decoded: the key %1$@ encodes it again on the way back", in: language, key), decoded: true)
@@ -185,9 +186,9 @@ public enum UEFILenovoDMIDetail {
             fields.append(.init(L("State", in: language), L("Erased: nothing has been written since", in: language)))
         }
         let misplaced = log.writeOffsetProblem == .outOfRange || log.writeOffsetProblem == .misaligned
-        fields.append(.init(L("Write offset", in: language), hex(UInt64(log.writeOffset), 8), isProblem: misplaced))
+        fields.append(.init(L("Write offset", in: language), log.writeOffset.hexNumber(digits: 8), isProblem: misplaced))
         fields.append(.init(L("Entries", in: language), L("%1$@ of %2$@", in: language, log.entries.count, log.capacity)))
-        fields.append(.init(L("XOR key", in: language), log.key.map { hex(UInt64($0), 2) } ?? "—"))
+        fields.append(.init(L("XOR key", in: language), log.key.map { ($0).hexNumber(digits: 2) } ?? "—"))
         fields.append(.init(L("Unknown", in: language), LenovoDMIValue.hex(log.unknownHeader)))
         return fields
     }
@@ -242,7 +243,7 @@ public enum UEFILenovoDMIDetail {
                 : L("Set", context: "log operation", in: language)
         case .protect?: return L("Protect", context: "log operation", in: language)
         case .unprotect?: return L("Unprotect", context: "log operation", in: language)
-        case nil: return L("Unknown operation %1$@", in: language, hex(UInt64(entry.operation), 2))
+        case nil: return L("Unknown operation %1$@", in: language, entry.operation.hexNumber(digits: 2))
         }
     }
 
@@ -266,10 +267,10 @@ public enum UEFILenovoDMIDetail {
         }
         fields.append(.init(L("Entries", in: language), L("%1$@ of %2$@ declared", in: language, block.entries.count, block.declaredEntries),
                             isProblem: !block.entriesFit))
-        fields.append(.init(L("XOR key", in: language), hex(UInt64(block.xorKey), 2)))
+        fields.append(.init(L("XOR key", in: language), block.xorKey.hexNumber(digits: 2)))
         fields.append(.init(L("Stored", in: language), encodingText(block.encoding, in: language)))
         fields.append(.init(L("Checksum", in: language), checksumText(block, in: language), isProblem: !block.isBlank && !block.checksumIsValid))
-        fields.append(.init(L("Access flag", in: language), hex(UInt64(block.accessFlag), 2)))
+        fields.append(.init(L("Access flag", in: language), block.accessFlag.hexNumber(digits: 2)))
         fields.append(.init(L("Write-protected", in: language), block.accessFlag & 1 != 0 ? L("Yes", in: language) : L("No", in: language)))
         return fields
     }
@@ -304,13 +305,13 @@ public enum UEFILenovoDMIDetail {
     }
 
     private static func checksumText(_ block: LENVBlock, in language: AppLanguage) -> String {
-        let stored = hex(UInt64(block.checksum), 4)
+        let stored = block.checksum.hexNumber(digits: 4)
         if block.checksumIsOfEncodedBody {
             return L("%1$@ (Valid for the body encoded again)", in: language, stored)
         }
         return block.checksumIsValid
             ? L("%1$@ (Valid)", in: language, stored)
-            : L("%1$@ (Invalid), should be %2$@", in: language, stored, hex(UInt64(block.expectedChecksum), 4))
+            : L("%1$@ (Invalid), should be %2$@", in: language, stored, block.expectedChecksum.hexNumber(digits: 4))
     }
 
     // MARK: - An entry
@@ -344,8 +345,8 @@ public enum UEFILenovoDMIDetail {
             .init(L("Entry type", in: language), entry.key.typeText),
             .init(L("Size", in: language), L("%1$@ bytes", in: language, entry.data.count)),
             .init(L("Write-protected", in: language), entry.isWriteProtected ? L("Yes", in: language) : L("No", in: language)),
-            .init(L("Entry flags", in: language), hex(UInt64(entry.flags), 2)),
-            .init(L("Unknown", in: language), hex(UInt64(entry.unknown1), 2) + " " + hex(UInt64(entry.unknown2), 4))
+            .init(L("Entry flags", in: language), entry.flags.hexNumber(digits: 2)),
+            .init(L("Unknown", in: language), entry.unknown1.hexNumber(digits: 2) + " " + entry.unknown2.hexNumber(digits: 4))
         ]
         return fields
     }
@@ -374,10 +375,5 @@ public enum UEFILenovoDMIDetail {
 
     private static func namespaceText(_ key: LenovoDMIKey) -> String {
         key.isSMBIOS ? "SMBIOS" : key.namespaceText
-    }
-
-    private static func hex(_ value: UInt64, _ digits: Int) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
     }
 }

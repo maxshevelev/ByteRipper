@@ -165,4 +165,14 @@ final class AgentArgumentsTests: XCTestCase {
         let fine = await refusal(comments, ["kind": "eol", "items": [["address": "0x10", "text": "", "keep": true]]])
         XCTAssertNil(fine)
     }
+
+    /// A length that wraps past 2^64 is refused, never added up.
+    func testARangeThatWrapsIsRefused() throws {
+        XCTAssertEqual(try AgentArguments.range(at: 0x10, length: 0x20), 0x10..<0x30)
+        XCTAssertEqual(try AgentArguments.range(at: 0, length: .max), 0..<UInt64.max)
+        XCTAssertThrowsError(try AgentArguments.range(at: 0x10, length: .max)) { error in
+            XCTAssertEqual((error as? AgentToolError)?.message,
+                           "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past any file.")
+        }
+    }
 }

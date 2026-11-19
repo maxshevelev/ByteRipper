@@ -1,4 +1,6 @@
 import Foundation
+import HexText
+import IntelCPUID
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -360,7 +362,7 @@ public enum FITPresenter {
             FITDisplayRow(
                 index: row.entry.index,
                 typeText: typeText(of: row.entry),
-                addressText: row.entry.isHeader ? "_FIT_" : hex(row.entry.address, digits: 8),
+                addressText: row.entry.isHeader ? "_FIT_" : row.entry.address.hexNumber(digits: 8),
                 sizeText: sizeText(of: row, in: language),
                 versionText: row.entry.versionText,
                 targetText: targetText(of: row, in: language),
@@ -389,7 +391,7 @@ public enum FITPresenter {
     private static func heading(of backup: FITBackupReading, in language: AppLanguage) -> String {
         // One whole heading per state: the tail is a clause, not a word, and
         // languages put it in their own order.
-        let place = hex(backup.block.backup.lowerBound)
+        let place = backup.block.backup.lowerBound.hexNumber
         switch backup.status {
         case .identical:
             return L("Top Swap backup at %1$@ · read-only · same as above", in: language, place)
@@ -424,14 +426,14 @@ public enum FITPresenter {
             return report.candidates.isEmpty
                 ? L("No FIT table in this file.", in: language)
                 : L("No FIT table where the pointer leads. A signature sits at %1$@.", in: language,
-                    report.candidates.map { hex($0) }.joined(separator: ", "))
+                    report.candidates.map { $0.hexNumber }.joined(separator: ", "))
         }
         // The count includes the header row: the panel shows the header as a
         // row of the table, so the number the summary says is the number of
         // rows a reader counts, header included.
         let count = table.rows.count
         var parts = [
-            L("FIT at %1$@", in: language, hex(table.range.lowerBound)),
+            L("FIT at %1$@", in: language, table.range.lowerBound.hexNumber),
             count == 1 ? L("1 entry", in: language) : L("%1$@ entries", in: language, count)
         ]
         if report.addressDiffIsAssumed {
@@ -449,7 +451,7 @@ public enum FITPresenter {
         if !table.checksumIsChecked {
             parts.append(L("checksum unused", in: language))
         } else if table.checksumIsCorrect {
-            parts.append(L("checksum %1$@", in: language, hex(UInt64(table.storedChecksum), digits: 2)))
+            parts.append(L("checksum %1$@", in: language, table.storedChecksum.hexNumber(digits: 2)))
             // A wrong checksum is not restated here: it is a problem, and the
             // list below already says so in red, where it is meant to be read.
         }
@@ -472,7 +474,7 @@ public enum FITPresenter {
             return L("%1$@ rows", in: language, row.entry.size)
         }
         guard let size = row.effectiveSize else { return "0" }
-        return hex(size)
+        return size.hexNumber
     }
 
     /// The CPUID as a bench writes it: five hex digits, no leading zero, no
@@ -514,7 +516,7 @@ public enum FITPresenter {
             // "Rows" and not "entries": the field counts the header along with
             // them, where the summary above counts what there is to look at.
             return (row.entry.size == 1 ? L("1 row", in: language) : L("%1$@ rows", in: language, row.entry.size))
-                + " · \(hex(row.entry.sizeInBytes))"
+                + " · \(row.entry.sizeInBytes.hexNumber)"
         case .indexIORegisters:
             return L("Index/IO registers, not an address", in: language)
         case .outsideTheImage:
@@ -526,11 +528,11 @@ public enum FITPresenter {
             // and that is where the panel says them (`processorGroups`).
             // Two digits at least for the platforms, as the catalogue's file
             // names write it.
-            let platform = String(header.platformIDs, radix: 16, uppercase: true)
+            let platform = header.platformIDs.bareHexNumber(digits: 2)
             parts = [
-                L("r.%1$@", in: language, String(header.updateRevision, radix: 16, uppercase: true)),
+                L("r.%1$@", in: language, header.updateRevision.bareHexNumber),
                 header.date,
-                L("platform %1$@", in: language, platform.count < 2 ? "0" + platform : platform)
+                L("platform %1$@", in: language, platform)
             ]
             return parts.joined(separator: " · ")
         case .emptyMicrocodeSlot:
@@ -543,11 +545,11 @@ public enum FITPresenter {
             // row goes up as "0x2848" and becomes "0x2848 (MyDriver)" when the
             // branch has been read. Leading with the name instead would move
             // the address sideways under the reader's eye.
-            guard let description else { return hex(offset) }
-            return "\(hex(offset)) (\(description))"
+            guard let description else { return offset.hexNumber }
+            return "\(offset.hexNumber) (\(description))"
         }
         if let offset = row.target.offset {
-            parts.append(hex(offset))
+            parts.append(offset.hexNumber)
         }
         return parts.joined(separator: " · ")
     }
@@ -623,10 +625,5 @@ public enum FITPresenter {
             }
         }
         return zones
-    }
-
-    private static func hex(_ value: UInt64, digits: Int = 0) -> String {
-        let text = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, digits - text.count)) + text
     }
 }

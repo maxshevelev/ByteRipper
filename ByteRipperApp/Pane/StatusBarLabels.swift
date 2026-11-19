@@ -1,4 +1,5 @@
 import Cocoa
+import HexText
 import Localization
 
 /// The pane status bar's main readout — the one field the whole line is drawn
@@ -53,18 +54,11 @@ final class StatusLabel: NSTextField {
         let digits: String
     }
 
-    /// The hex half of the exact form — the address a size is written as, the
-    /// way the bar writes every other number.
-    static func hexSizeText(_ bytes: UInt64) -> String {
-        String(format: "0x%llX", bytes)
-    }
-
     /// The exact size, in the form the Details view writes one: the hex address
     /// and the decimal count in brackets beside it — "0x200000 (2097152
-    /// bytes)". 64-bit formats on purpose: `%d` would truncate a file over
-    /// 2 GB to its low half.
+    /// bytes)". Both from HexText, whole past 4 GB.
     static func exactSizeText(_ bytes: UInt64) -> String {
-        L("%1$@ (%2$@ bytes)", hexSizeText(bytes), String(bytes))
+        L("%1$@ (%2$@ bytes)", bytes.hexNumber, bytes.decimalNumber)
     }
 
     /// What a right-click on one half of the exact form puts on the clipboard:
@@ -77,7 +71,7 @@ final class StatusLabel: NSTextField {
     /// and every offset field in the app takes it on the way in — so a copied
     /// `0x200000` would be pasted as `0x0x200000` or rejected outright.
     static func copyText(_ bytes: UInt64, as form: SizeForm) -> String {
-        form == .hex ? String(format: "%llX", bytes) : String(bytes)
+        form == .hex ? bytes.bareHexNumber : bytes.decimalNumber
     }
 
     /// The room the bar gives the readout, asked for rather than handed over.
@@ -244,7 +238,7 @@ final class StatusLabel: NSTextField {
         geometry = Geometry(
             abbreviated: start..<(size.upperBound + Self.hitSlack),
             exact: start..<(size.lowerBound + width(Self.exactSizeText(self.size)) + Self.hitSlack),
-            exactHexEnd: size.lowerBound + width(Self.hexSizeText(self.size)),
+            exactHexEnd: size.lowerBound + width(self.size.hexNumber),
             address: address)
     }
 

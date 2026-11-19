@@ -1,4 +1,6 @@
 import Foundation
+import HexText
+import IntelCPUID
 import UEFIImage
 
 /// The four kinds of microcode the collection holds, one directory each.
@@ -62,8 +64,7 @@ public struct MicrocodeCatalogueEntry: Equatable, Sendable, Identifiable {
     /// `plat2`.
     public var platformText: String {
         guard let platformID else { return "" }
-        let text = String(platformID, radix: 16, uppercase: true)
-        return text.count < 2 ? "0" + text : text
+        return platformID.bareHexNumber(digits: 2)
     }
 
     public var fileName: String { String(path.split(separator: "/").last ?? "") }
@@ -163,10 +164,10 @@ public enum MicrocodeCatalogue {
             // Leading zeros dropped, so a search for what is on screen matches:
             // AMD writes `00800F11` where Intel writes `906EB`.
             cpuidText: processor.flatMap { UInt32($0, radix: 16) }
-                .map { String($0, radix: 16, uppercase: true) } ?? identifier,
+                .map { $0.bareHexNumber } ?? identifier,
             platformID: hex(after: "plat"),
             revisionText: UInt32(revision, radix: 16)
-                .map { String($0, radix: 16, uppercase: true) } ?? revision,
+                .map { $0.bareHexNumber } ?? revision,
             date: date ?? "",
             isProduction: !fields.contains("PRE"),
             size: size
@@ -185,7 +186,8 @@ public enum MicrocodeCatalogue {
         vendor: MicrocodeVendor? = nil,
         search: String = "",
         cpuidsInTheImage: Set<UInt32>? = nil,
-        processors: [ProcessorFamily] = ProcessorNames.shipped
+        processors: [ProcessorFamily] = ProcessorNames.current,
+        signatures: MicrocodeSignatures = .current
     ) -> [MicrocodeCatalogueEntry] {
         let needle = search.trimmingCharacters(in: .whitespaces).uppercased()
         let named = families(named: needle, in: processors)
@@ -201,10 +203,17 @@ public enum MicrocodeCatalogue {
             // the CPUIDs it is sold with. Not the revision or the file name:
             // they are the catalogue's, and matching them is a guess about
             // which the user meant.
-            if entry.cpuidText.hasPrefix(needle) { return true }
+            //
+            // An update with an extended signature table serves each CPUID it
+            // lists, so a search finds it by any of them, not only by the one
+            // its file is named after.
+            let extended = signatures.extendedCPUIDs(of: entry)
+            if entry.cpuidText.hasPrefix(needle) || extended.contains(where: { $0.hasPrefix(needle) }) {
+                return true
+            }
             guard entry.vendor == .intel, !named.isEmpty, let cpuid = entry.cpuid else { return false }
-            let text = MicrocodeHeader.cpuid(cpuid)
-            return named.contains { $0.matches(text) }
+            let served = [MicrocodeHeader.cpuid(cpuid)] + extended
+            return named.contains { family in served.contains { family.matches($0) } }
         }
     }
 

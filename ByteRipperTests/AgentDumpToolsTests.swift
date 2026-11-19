@@ -359,6 +359,18 @@ final class AgentDumpToolsTests: XCTestCase {
 
     // MARK: - show
 
+    /// A length that wraps past 2^64 is refused before any tab is opened.
+    func testShowRefusesALengthThatWraps() async throws {
+        _ = try openWindow()
+        let url = try write([UInt8](repeating: 7, count: 0x100), "wraps.bin")
+        let openedFile = try await client.answer("open_dump", ["path": .string(url.path)])
+        let id = try XCTUnwrap(openedFile["document"]?.stringValue)
+        let refused = try await client.call("show", ["document": .string(id), "offset": "0x10",
+                                                     "length": "0xFFFFFFFFFFFFFFFF"])
+        XCTAssertTrue(refused.isError)
+        XCTAssertEqual(refused.answer, "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past any file.")
+    }
+
     func testShowPutsABackgroundDumpOnScreenUnderANewId() async throws {
         let controller = try openWindow()
         let url = try write([UInt8](repeating: 7, count: 0x100), "later.bin")
@@ -372,11 +384,6 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(selection.start..<selection.end, 0x10..<0x14)
         XCTAssertTrue(service.desk.background.entries.isEmpty, "the background copy gave way to the tab")
 
-        // A length past any file means to the end, not an overflow.
-        let shownId = try XCTUnwrap(shown["document"]?.stringValue)
-        let toEnd = try await client.answer("show", ["document": .string(shownId), "offset": "0xF0",
-                                                     "length": "0xFFFFFFFFFFFFFFFF"])
-        XCTAssertEqual(toEnd["shown"]?["end"], "0x100")
     }
 
     // MARK: - Annotations
@@ -392,7 +399,7 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(listed?.first?["note"], "A stray byte.")
 
         let cards = NotesWindowController.instance.cards
-        XCTAssertTrue(cards.shownTexts(of: "a1").contains("0x8000–0x8008"), "\(cards.shownTexts(of: "a1"))")
+        XCTAssertTrue(cards.shownTexts(of: "a1").contains("0x8000–0x8007"), "\(cards.shownTexts(of: "a1"))")
 
         service.annotationTools.show("a1")
         let selection = controller.windowModel.pane1.hexSelection()

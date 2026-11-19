@@ -48,10 +48,10 @@ final class UEFITopSwapTests: XCTestCase {
             UEFIDetail.build(for: node(image, path), image: image, reader: reader, in: .english)
                 .fields.first { $0.label == "Top Swap" }?.value
         }
-        XCTAssertEqual(topSwap([0, 0], in: image), "Copy of 0x10000–0x20000; the copies match")
-        XCTAssertEqual(topSwap([0, 1], in: image), "Copied at 0x0–0x10000; the copies match")
+        XCTAssertEqual(topSwap([0, 0], in: image), "Copy of 0x10000–0x1FFFF; the copies match")
+        XCTAssertEqual(topSwap([0, 1], in: image), "Copied at 0x0–0xFFFF; the copies match")
         XCTAssertNil(topSwap([0, 0, 0], in: image))
-        XCTAssertEqual(topSwap([0, 0], in: self.image(match: false)), "Copy of 0x10000–0x20000; the copies differ")
+        XCTAssertEqual(topSwap([0, 0], in: self.image(match: false)), "Copy of 0x10000–0x1FFFF; the copies differ")
     }
 
     func testTheCopysHelpIsTheTopSwapPage() {

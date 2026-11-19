@@ -1,6 +1,8 @@
 import AppKit
 import FITTool
 import HelpBook
+import HexText
+import IntelCPUID
 import Localization
 import ToolModuleKit
 import UEFIContentSource
@@ -130,6 +132,9 @@ struct FITParkedState: PersistableToolSessionState {
     /// Listening for a newer listing. Cancelled in `stop()`.
     private var catalogueWatch: Task<Void, Never>?
 
+    /// Listening for newer processor tables. Removed in `stop()`.
+    private var tablesWatch: NSObjectProtocol?
+
     /// Which reading is the current one. A file edited twice in quick
     /// succession starts two, and the one that finishes second is not
     /// necessarily the one that read the newer bytes.
@@ -165,6 +170,7 @@ struct FITParkedState: PersistableToolSessionState {
         // session, not fetched again for every sheet.
         loadCatalogue()
         watchTheCatalogue()
+        loadTheTables()
         // The pane kept the table this panel last read, and no edit has
         // dropped it: it is what a reading would find, so it is shown as it
         // stands, with no "Reading…" and no busy bar in between.
@@ -240,6 +246,31 @@ struct FITParkedState: PersistableToolSessionState {
         generation += 1
         catalogueWatch?.cancel()
         catalogueWatch = nil
+        if let tablesWatch { NotificationCenter.default.removeObserver(tablesWatch) }
+        tablesWatch = nil
+    }
+
+    /// The processor tables are the repository's, read when the panel opens
+    /// (at most once a day) and kept from the last good read: a table already
+    /// on screen names its processors again when newer ones land — a row's
+    /// code names, its `ⓘ`, the form's Extended CPUIDs.
+    private func loadTheTables() {
+        if tablesWatch == nil {
+            tablesWatch = NotificationCenter.default.addObserver(
+                forName: ProcessorTables.didChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.tablesChanged() }
+            }
+        }
+        Task { await ProcessorTables.refresh() }
+    }
+
+    private func tablesChanged() {
+        if !isParsing, let lastReport {
+            show(FITPresenter.display(lastReport, focus: focus, in: Localization.appLanguage)
+                .ratingLatest(against: catalogue))
+        }
+        form?.tablesChanged()
     }
 
     public var parkedState: (any ToolSessionState)? {
@@ -950,19 +981,19 @@ struct FITParkedState: PersistableToolSessionState {
     private static func topSwapNote(_ backup: Range<UInt64>?) -> String {
         guard let backup else { return "" }
         return " " + L("The Top Swap backup at 0x%1$@ got the same change.",
-                       String(backup.lowerBound, radix: 16, uppercase: true))
+                       backup.lowerBound.bareHexNumber)
     }
 
     /// What the panel says afterwards, with what the protected ranges said.
     private static func note(for outcome: FITEditOutcome, describedAs description: String) -> String {
-        let at = "0x" + String(outcome.range.lowerBound, radix: 16, uppercase: true)
+        let at = outcome.range.lowerBound.hexNumber
         let caveat = topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)
         guard let replaced = outcome.replaced else {
             return L("Added %1$@ at %2$@.", description, at) + caveat
         }
         // Whole sentences per case: the count decides the noun's form, and
         // English's "s" is not a form any other language can be built from.
-        let was = String(replaced.updateRevision, radix: 16, uppercase: true)
+        let was = replaced.updateRevision.bareHexNumber
         let note: String
         switch outcome.moved {
         case 0:
@@ -1023,7 +1054,7 @@ struct FITParkedState: PersistableToolSessionState {
         }
         if let erased = outcome.erased {
             parts.append(L("0x%1$@ bytes erased at the end of the run",
-                           String(erased.count, radix: 16, uppercase: true)))
+                           erased.count.bareHexNumber))
         }
         return parts.joined(separator: "; ") + "."
             + topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)

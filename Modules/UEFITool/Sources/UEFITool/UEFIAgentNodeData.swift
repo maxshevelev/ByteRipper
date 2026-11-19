@@ -1,6 +1,7 @@
 import AgentKit
 import BytePattern
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -96,8 +97,8 @@ public enum UEFIAgentNodeData {
         guard let outer, let range = outer.fileRange else { return nil }
         var members: [String: JSONValue] = [
             "section": .string(outer.id.description),
-            "start": .string(UEFIAgentQueries.hex(range.lowerBound)),
-            "end": .string(UEFIAgentQueries.hex(range.upperBound))
+            "start": .string(range.lowerBound.hexNumber),
+            "end": .string(range.upperBound.hexNumber)
         ]
         if let algorithm = outer.compression?.algorithm { members["algorithm"] = .string(algorithm) }
         if depth > 1 { members["nested"] = .count(depth - 1) }
@@ -161,9 +162,9 @@ public enum UEFIAgentNodeData {
         @MainActor func stamped(_ answer: inout [String: JSONValue]) {
             answer["node"] = .string(found.node.id.description)
             answer["part"] = .string(part.rawValue)
-            answer["size"] = .string(UEFIAgentQueries.hex(size))
+            answer["size"] = .string(size.hexNumber)
             answer["in_compressed"] = .bool(found.isCompressed)
-            if let fileRange = found.fileRange { answer["file_start"] = .string(UEFIAgentQueries.hex(fileRange.lowerBound)) }
+            if let fileRange = found.fileRange { answer["file_start"] = .string(fileRange.lowerBound.hexNumber) }
             if let source = source(of: found.node, in: found.tree, including: part == .decompressed) {
                 answer["source"] = source
             }
@@ -172,8 +173,8 @@ public enum UEFIAgentNodeData {
             var rows: [JSONValue] = []
             for range in ranges {
                 guard range.offset < size else {
-                    throw AgentToolError("Range \(UEFIAgentQueries.hex(range.offset))+\(UEFIAgentQueries.hex(range.length)) "
-                        + "starts past the end of the \(part.rawValue), which is \(UEFIAgentQueries.hex(size)) bytes long.")
+                    throw AgentToolError("Range \(range.offset.hexNumber)+\(range.length.hexNumber) "
+                        + "starts past the end of the \(part.rawValue), which is \(size.hexNumber) bytes long.")
                 }
                 let length = min(range.length, size - range.offset)
                 let start = found.range.lowerBound + range.offset
@@ -181,8 +182,8 @@ public enum UEFIAgentNodeData {
                     throw AgentToolError("Those bytes of node \(found.node.id) could not be read.")
                 }
                 var row = AgentBytes.shown(read, at: range.offset, format: format, bigEndian: bigEndian)
-                row["offset"] = .string(UEFIAgentQueries.hex(range.offset))
-                row["length"] = .string(UEFIAgentQueries.hex(length))
+                row["offset"] = .string(range.offset.hexNumber)
+                row["length"] = .string(length.hexNumber)
                 if length < range.length { row["cut_at_end_of_part"] = true }
                 rows.append(.object(row))
             }
@@ -191,8 +192,8 @@ public enum UEFIAgentNodeData {
             return .json(.object(answer))
         }
         guard offset < size else {
-            throw AgentToolError("Offset \(UEFIAgentQueries.hex(offset)) is past the end of the \(part.rawValue), "
-                + "which is \(UEFIAgentQueries.hex(size)) bytes long.")
+            throw AgentToolError("Offset \(offset.hexNumber) is past the end of the \(part.rawValue), "
+                + "which is \(size.hexNumber) bytes long.")
         }
         let length = min(asked, size - offset)
         let start = found.range.lowerBound + offset
@@ -201,8 +202,8 @@ public enum UEFIAgentNodeData {
         }
         var answer = AgentBytes.shown(read, at: offset, format: format, bigEndian: bigEndian)
         stamped(&answer)
-        answer["offset"] = .string(UEFIAgentQueries.hex(offset))
-        answer["length"] = .string(UEFIAgentQueries.hex(length))
+        answer["offset"] = .string(offset.hexNumber)
+        answer["length"] = .string(length.hexNumber)
         if length < asked { answer["cut_at_end_of_part"] = true }
         return .json(.object(answer))
     }
@@ -273,7 +274,7 @@ public enum UEFIAgentNodeData {
         let size = UInt64(found.range.count)
         guard offset <= size, length <= size - offset else {
             throw AgentToolError("`pattern_range` \(text) does not fit the \(part.rawValue), "
-                + "which is \(UEFIAgentQueries.hex(size)) bytes long.")
+                + "which is \(size.hexNumber) bytes long.")
         }
         let start = found.range.lowerBound + offset
         guard let read = found.reader.bytes(start..<(start + length)), read.count == Int(length) else {
@@ -283,7 +284,7 @@ public enum UEFIAgentNodeData {
         for item in try arguments.strings("any") {
             let (from, count) = try parsed(range: item, argument: "any")
             guard from <= length, count <= length - from else {
-                throw AgentToolError("Argument `any`: \(item) is outside the pattern, which is \(UEFIAgentQueries.hex(length)) bytes long.")
+                throw AgentToolError("Argument `any`: \(item) is outside the pattern, which is \(length.hexNumber) bytes long.")
             }
             for index in from..<(from + count) { wild[Int(index)] = true }
         }

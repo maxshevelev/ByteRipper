@@ -293,6 +293,26 @@ final class AgentEditToolsTests: XCTestCase {
         XCTAssertEqual(a.undoLabel, "Agent: Take B's header")
     }
 
+    /// A range past the end is refused, and a length so large that offset and
+    /// length wrap past 2^64 is refused the same way — never a crash while the
+    /// refusal is written.
+    func testACopyPastTheEndIsRefusedEvenWhenItWraps() async throws {
+        let (a, b) = try openPair([1, 2, 3, 4], [9, 9, 9, 9])
+        service.editsAllowed = true
+        let past = try await client.call("copy_to_other_pane",
+                                         ["document": .string(try id(of: a)), "offset": 2, "length": 4])
+        XCTAssertTrue(past.isError)
+        XCTAssertTrue(past.answer.stringValue?.hasPrefix("The range [0x2, 0x6) runs past the end of") == true,
+                      "\(past.answer)")
+        let wrapping = try await client.call("copy_to_other_pane",
+                                             ["document": .string(try id(of: a)), "offset": "0x10",
+                                              "length": "0xFFFFFFFFFFFFFFFF"])
+        XCTAssertTrue(wrapping.isError)
+        XCTAssertTrue(wrapping.answer.stringValue?.hasPrefix(
+            "`length` 0xFFFFFFFFFFFFFFFF from `offset` 0x10 runs past any file.") == true, "\(wrapping.answer)")
+        XCTAssertEqual(try bytes(b, 0..<4), [9, 9, 9, 9], "nothing written")
+    }
+
     /// The answer says where in the firmware the copied range lies, as
     /// `diff` and `find_bytes` do.
     func testACopyNamesThePartOfTheFirmwareItCovers() async throws {

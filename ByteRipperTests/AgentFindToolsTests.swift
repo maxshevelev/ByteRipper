@@ -103,15 +103,16 @@ final class AgentFindToolsTests: XCTestCase {
     }
 
     /// A pattern that occurs everywhere: an exact total, and pages under the
-    /// bound that add up to it — overlapping matches only when asked.
+    /// bound that add up to it — matches overlapping, as the find bar counts
+    /// them, unless asked otherwise.
     func testManyMatchesComeInPagesWithAnExactTotal() async throws {
         try open([UInt8](repeating: 0xFF, count: 0x2000))
         let plain = try await client.answer("find_bytes", ["hex": "FF FF", "limit": 1000])
-        XCTAssertEqual(plain["total"], 0x1000)
+        XCTAssertEqual(plain["total"], 0x1FFF, "one match per byte but the last, as in the find bar")
         XCTAssertEqual(plain["truncated"], "size")
         XCTAssertLessThanOrEqual(plain.encoded().count, service.server.limits.maxAnswerBytes)
-        let overlapping = try await client.answer("find_bytes", ["hex": "FF FF", "overlapping": true, "limit": 1])
-        XCTAssertEqual(overlapping["total"], 0x1FFF)
+        let apart = try await client.answer("find_bytes", ["hex": "FF FF", "overlapping": false, "limit": 1])
+        XCTAssertEqual(apart["total"], 0x1000)
 
         var seen = 0
         var after: JSONValue?
@@ -122,7 +123,7 @@ final class AgentFindToolsTests: XCTestCase {
             seen += page["matches"]?.arrayValue?.count ?? 0
             after = page["next"] == .null ? nil : page["next"]
         } while after != nil
-        XCTAssertEqual(seen, 0x1000)
+        XCTAssertEqual(seen, 0x1FFF)
     }
 
     func testAPatternThatCannotBeSearchedIsRefused() async throws {
@@ -136,7 +137,7 @@ final class AgentFindToolsTests: XCTestCase {
         let long = try await client.call("find_bytes", ["text": "longer than the file"])
         XCTAssertEqual(long.answer, "The pattern is longer than the range searched.")
         let past = try await client.call("find_bytes", ["hex": "01", "end": "0x10"])
-        XCTAssertTrue(past.answer.stringValue?.hasPrefix("The range 0x0–0x10 is not inside front.bin (d1)") == true, "\(past.answer)")
+        XCTAssertTrue(past.answer.stringValue?.hasPrefix("The range [0x0, 0x10) is not inside front.bin (d1)") == true, "\(past.answer)")
     }
 
     // MARK: - Inside a compressed section

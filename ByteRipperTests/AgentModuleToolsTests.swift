@@ -1,4 +1,5 @@
 import AgentKit
+import HexText
 import Localization
 import UEFIImage
 import UEFIToolUI
@@ -262,8 +263,12 @@ final class AgentModuleToolsTests: XCTestCase {
 
         let found = try await client.answer("uefi_find", ["type": "Padding"])
         let padding = try XCTUnwrap(found["matches"]?.arrayValue?.first, "\(found)")
+        // The label is the person's: first to last byte, where `end` is the
+        // agent's, the first byte after.
+        let start = try XCTUnwrap(padding["start"]?.stringValue.flatMap { UInt64($0.dropFirst(2), radix: 16) })
+        let end = try XCTUnwrap(padding["end"]?.stringValue.flatMap { UInt64($0.dropFirst(2), radix: 16) })
         XCTAssertEqual(padding["label"], .string("\(padding["name"]?.stringValue ?? ""), "
-                       + "\(padding["start"]?.stringValue ?? "")–\(padding["end"]?.stringValue ?? "")"),
+                       + "\((start..<end).hexExtent)"),
                        "a name that is only a kind gets its addresses")
     }
 

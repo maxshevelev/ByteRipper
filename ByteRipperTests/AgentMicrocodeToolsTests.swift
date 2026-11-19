@@ -32,10 +32,12 @@ final class AgentMicrocodeToolsTests: XCTestCase {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         savedSource = FITToolSession.microcodeSource
         FITToolSession.microcodeSource = CatalogueStub()
+        FixtureProcessorTables.use()
     }
 
     override func tearDown() {
         FITToolSession.microcodeSource = savedSource
+        FixtureProcessorTables.restore()
         service.stop()
         controller?.windowModel.pane1.close()
         window?.orderOut(nil)

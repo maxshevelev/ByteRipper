@@ -154,6 +154,7 @@
 "Adding a microcode" = "Microcode wird hinzugefügt";
 "Additional files ignored" = "Weitere Dateien übergangen";
 "Address" = "Adresse im Speicher";
+"Addresses and sums entered before" = "Zuvor eingegebene Adressen und Summen";
 "All 256 byte values decoded with the current table. Row headers are the byte value in hex." = "Alle 256 Byte-Werte, decodiert mit der aktuellen Tabelle. Die Zeilenköpfe sind der Byte-Wert in Hex.";
 "All unsaved changes will be discarded." = "Alle ungesicherten Änderungen gehen verloren.";
 "Already a favourite, as “%1$@”." = "Bereits als Favorit vorhanden, unter „%1$@“.";
@@ -172,9 +173,9 @@
 "Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne ungesicherte Änderungen, Segmente, Teile und Werkzeugzustand geöffnet:";
 "Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
 "Close Project" = "Projekt schließen";
-"Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
+"Copied at %1$@; %2$@" = "Kopie im Bereich %1$@; %2$@";
 "Copy of" = "Kopie des Abbilds bei";
-"Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
+"Copy of %1$@; %2$@" = "Kopie des Blocks %1$@; %2$@";
 "Could not add the microcode" = "Microcode konnte nicht hinzugefügt werden";
 "Could not remove the microcode" = "Microcode konnte nicht entfernt werden";
 "Could not replace the microcode" = "Microcode konnte nicht ersetzt werden";
@@ -245,6 +246,7 @@
 "Minor version" = "Nebenversion";
 "No decompiled C for this function." = "Für diese Funktion gibt es keinen dekompilierten C-Text.";
 "No longer found, not opened:" = "Nicht mehr gefunden, nicht geöffnet:";
+"Nothing entered yet" = "Noch nichts eingegeben";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Entpackte Variable öffnen";
 "Open Recent Project" = "Benutzte Projekte";
@@ -276,6 +278,9 @@
 "The project could not be written." = "Das Projekt konnte nicht geschrieben werden.";
 "The project was saved by a newer version of ByteRipper. Open it in that version." = "Das Projekt wurde mit einer neueren Version von ByteRipper gespeichert. Öffnen Sie es mit dieser Version.";
 "The project was saved by an early version of ByteRipper that this one cannot read." = "Das Projekt wurde mit einer frühen Version von ByteRipper gespeichert, die diese Version nicht lesen kann.";
+"The result does not fit in 64 bits." = "Das Ergebnis passt nicht in 64 Bit.";
+"The result is negative." = "Das Ergebnis ist negativ.";
+"The sum is not finished." = "Die Summe ist unvollständig.";
 "The workspace was saved by a newer version of ByteRipper." = "Der Arbeitsbereich wurde mit einer neueren Version von ByteRipper gespeichert.";
 "It is left as it is, for that version to reopen. Until you quit, this version does not keep the workspace: quitting asks about unsaved changes." = "Er bleibt unverändert, damit jene Version ihn wieder öffnet. Bis zum Beenden speichert diese Version den Arbeitsbereich nicht: Beim Beenden fragt sie nach ungesicherten Änderungen.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Nie gesicherte Dokumente kehren ungesichert zurück, und beim Beenden fragt das Programm nicht nach ihnen; nach Änderungen an Dateien auf dem Datenträger fragt es wie bisher.";
@@ -709,7 +714,9 @@
 "Nothing was changed in %1$@." = "In %1$@ wurde nichts geändert.";
 "Nothing was written inside a Boot Guard or vendor protected range." = "In einen von Boot Guard oder vom Hersteller geschützten Bereich wurde nichts geschrieben.";
 "OEM Configuration" = "OEM-Konfiguration";
-"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Offset 0x%1$@, %2$@ Byte ausgewählt bis 0x%3$@.";
+"Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@; die Größe beträgt %3$@. Ans Ende bewegt.";
+"Offset %1$@ is beyond the end of the file(s), whose size is %2$@. Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en), deren Größe %2$@ beträgt. Ans Ende bewegt.";
+"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Offset 0x%1$@, %2$@ Byte ausgewählt bis einschließlich 0x%3$@.";
 "Offset 0x%1$@." = "Offset 0x%1$@.";
 "OK" = "OK";
 "One panel was opened out of it and will lose its way back. Its bytes stay as they are; only the way back goes." = "Ein Bereich wurde daraus geöffnet und verliert den Weg zurück. Seine Bytes bleiben unverändert; verloren geht allein die Verbindung zur Herkunft.";
@@ -721,8 +728,6 @@
 "OROM Images" = "OROM-Images";
 "Offset %1$@" = "Offset %1$@";
 "Offset" = "Offset";
-"Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end." = "Offset %1$@ liegt hinter dem Ende von %2$@ (%3$@ Bytes). Ans Ende bewegt.";
-"Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end." = "Offset %1$@ liegt hinter dem Ende der Datei(en) (%2$@ Bytes). Ans Ende bewegt.";
 "Offset beyond end of file" = "Offset hinter dem Dateiende";
 "Offset:" = "Offset:";
 "Offsets" = "Offsets";
@@ -966,7 +971,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Die Auswertung von Intel-ME/CSME-Firmware durch das Werkzeug ME Analyzer und die Datenbanken, gegen die ein Dump geprüft wird (MEA.dat, Huffman.dat), jeweils in der vom Projekt veröffentlichten Fassung.";
 "The newest revision the catalogue lists for this processor and platform" = "Die neueste Revision, die der Katalog für diesen Prozessor und diese Plattform führt";
 "the selection" = "die Auswahl";
-"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Die Auswahl reicht bis %1$@, „%2$@“ endet aber bei %3$@. Es wurde nichts kopiert.";
+"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Die Auswahl reicht bis einschließlich %1$@ und damit über das Ende von „%2$@“ hinaus; die Größe beträgt %3$@. Es wurde nichts kopiert.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "Die Top-Swap-Sicherung bei %1$@ hat dort, wohin ihr Zeiger führt, keine FIT";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Die Top-Swap-Sicherung bei %1$@ enthält dieselbe FIT, aber andere Bytes des Blocks weichen ab; Microcode-Änderungen werden daher abgelehnt, bis die Kopien übereinstimmen";
 "The Top Swap backup at 0x%1$@ got the same change." = "Die Top-Swap-Sicherung bei 0x%1$@ hat dieselbe Änderung erhalten.";
@@ -1020,7 +1025,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Ordner.";
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Namen.";
 "This file is open read-only." = "Diese Datei ist schreibgeschützt geöffnet.";
-"This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks bei 0x%1$@–0x%2$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
+"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks im Bereich %1$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
 "This microcode is already in the table, in row #%1$@. Nothing was changed." = "Dieser Microcode steht bereits in der Tabelle, in Zeile #%1$@. Es wurde nichts geändert.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Alle Teile werden zu einem Segment. Die Bytes bleiben unverändert — nur die Schnitte verschwinden.";
 "Those bytes could not be read." = "Diese Bytes ließen sich nicht lesen.";
@@ -1126,6 +1131,8 @@
 "pre-release" = "Vorabversion";
 "r.%1$@" = "r.%1$@";
 "No processor names known for CPUID %1$@" = "Für CPUID %1$@ sind keine Prozessormodelle bekannt";
+"Same microcode as %1$@" = "Gleicher Microcode wie %1$@";
+"Extended CPUIDs" = "Erweiterte CPUIDs";
 "No processor models known for this CPUID" = "Für diese CPUID sind keine Prozessormodelle bekannt";
 "platform %1$@" = "Plattform %1$@";
 "series, models not listed" = "Serie, Modelle nicht aufgeführt";
@@ -1392,7 +1399,7 @@
 "%1$@ bytes differ" = "%1$@ Bytes abweichend";
 "%1$@ bytes written in %2$@ parts." = "%1$@ Bytes in %2$@ Bereichen geschrieben.";
 "%1$@ of %2$@ parts identical. To write: %3$@ parts, %4$@ bytes. Kept as they are: %5$@." = "%1$@ von %2$@ Bereichen identisch. Zu schreiben: %3$@ Bereiche, %4$@ Bytes. Unverändert bleiben: %5$@.";
-"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@–%5$@." = "%1$@: Update für AMI BIOS Guard, Plattform %2$@, %3$@ Blöcke. BIOS-Region dieses Dumps: %4$@–%5$@.";
+"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@." = "%1$@: Update für AMI BIOS Guard, Plattform %2$@, %3$@ Blöcke. BIOS-Region dieses Dumps: %4$@.";
 "Block %1$@ of the update file does not read as a block." = "Block %1$@ der Update-Datei lässt sich nicht als Block lesen.";
 "Board data; %1$@ bytes differ" = "Platinendaten; %1$@ Bytes abweichend";
 "Board data; empty in the update" = "Platinendaten; im Update leer";
@@ -2006,3 +2013,36 @@
 "In the Description" = "In der Beschreibung";
 "Search Scope" = "Suchbereich";
 "Where the search looks: the functions' C, the module description, or both" = "Wo gesucht wird: im C-Code der Funktionen, in der Modulbeschreibung oder in beiden";
+
+/* Intel CPUID Lookup window */
+"Intel CPUID Lookup" = "Intel-CPUID-Suche";
+"CPUID, model or S-SPEC — 306A9, i7-2600K, SR00C" = "CPUID, Modell oder S-SPEC – 306A9, i7-2600K, SR00C";
+"Search by CPUID, model, S-SPEC, code name or stepping" = "Suche nach CPUID, Modell, S-SPEC, Codename oder Stepping";
+"%1$@ processors under %2$@ CPUIDs. Type to search." = "%1$@ Prozessoren unter %2$@ CPUIDs. Suchbegriff eingeben.";
+"Found: %1$@" = "Gefunden: %1$@";
+"Nothing found. Check the spelling, or try part of the number." = "Nichts gefunden. Prüfen Sie die Schreibweise oder geben Sie einen Teil der Nummer ein.";
+"No models are listed for this CPUID. What is known about it is above." = "Für diese CPUID sind keine Modelle aufgeführt. Was über sie bekannt ist, steht oben.";
+"The table has no entry for this CPUID." = "Die Tabelle hat keinen Eintrag für diese CPUID.";
+"The table has not been read yet. It is read from the repository when the network is available." = "Die Tabelle wurde noch nicht gelesen. Sie wird aus dem Repository geladen, sobald ein Netzwerk verfügbar ist.";
+"Updated %1$@. Data and sources:" = "Aktualisiert am %1$@. Daten und Quellen:";
+"Data and sources:" = "Daten und Quellen:";
+"Open the repository the table is read from" = "Das Repository öffnen, aus dem die Tabelle gelesen wird";
+"Code name" = "Codename";
+"Stepping" = "Stepping";
+"series" = "Serie";
+"Look Up CPUID %1$@" = "CPUID %1$@ suchen";
+"Copy S-SPEC" = "S-SPEC kopieren";
+"Copy Model" = "Modell kopieren";
+"Copy Row" = "Zeile kopieren";
+"X stands for any digit" = "X steht für eine beliebige Ziffer";
+"not in the table" = "nicht in der Tabelle";
+"Cores" = "Kerne";
+"Models" = "Modelle";
+"Shared microcode" = "Gemeinsamer Microcode";
+"update %1$@ of %2$@ also serves %3$@" = "Update %1$@ vom %2$@ bedient auch %3$@";
+"Notes (in English)" = "Anmerkungen (auf Englisch)";
+"Sources (%1$@)" = "Quellen (%1$@)";
+"model" = "Modell";
+"code name" = "Codename";
+"?? stands for a whole byte — half a byte cannot be masked." = "?? steht für ein ganzes Byte — ein halbes Byte lässt sich nicht maskieren.";
+"A pattern of ?? alone matches everywhere — give at least one byte." = "Ein Muster nur aus ?? passt überall — geben Sie mindestens ein Byte an.";

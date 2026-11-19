@@ -1,5 +1,6 @@
 import Cocoa
 import AgentKit
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -78,7 +79,7 @@ final class AgentEditTools {
             }
             let actual = try place.pane.byteStorage?.read(at: offset, length: expected.count) ?? []
             guard actual == expected else {
-                throw AgentToolError("Nothing written: the bytes at \(AgentHostTools.hexText(offset)) are "
+                throw AgentToolError("Nothing written: the bytes at \(offset.hexNumber) are "
                     + "\(Self.hexText(actual)), not \(Self.hexText(expected)).")
             }
         }
@@ -135,22 +136,23 @@ final class AgentEditTools {
         let offset = try arguments.offset("offset")
         let length = try arguments.offset("length")
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
-        guard offset < source.pane.fileSize, length <= source.pane.fileSize - offset else {
-            throw AgentToolError("The range \(AgentHostTools.hexText(offset))+\(AgentHostTools.hexText(length)) "
-                + "runs past the end of \(source.named), which is \(AgentHostTools.hexText(source.pane.fileSize)) bytes long.")
+        let asked = try AgentArguments.range(at: offset, length: length)
+        guard asked.upperBound <= source.pane.fileSize else {
+            throw AgentToolError("The range \(asked.halfOpenHexText) "
+                + "runs past the end of \(source.named), which is \(source.pane.fileSize.hexNumber) bytes long.")
         }
         guard length <= UInt64(Int.max) else { throw AgentToolError("The range is too long.") }
         try checkEditable(destination)
-        let range = offset..<(offset + length)
+        let range = asked
         guard range.upperBound <= destination.pane.fileSize else {
-            throw AgentToolError("The range ends at \(AgentHostTools.hexText(range.upperBound)), past the end of "
-                + "\(destination.named), which is \(AgentHostTools.hexText(destination.pane.fileSize)) bytes long. "
+            throw AgentToolError("The range ends at \(range.upperBound.hexNumber), past the end of "
+                + "\(destination.named), which is \(destination.pane.fileSize.hexNumber) bytes long. "
                 + "Nothing was copied; a copy overwrites, it does not grow the file.")
         }
         let bytes = try source.pane.byteStorage?.read(at: offset, length: Int(length)) ?? []
         let there = try destination.pane.byteStorage?.read(at: offset, length: Int(length)) ?? []
         guard bytes.count == Int(length), there.count == Int(length) else {
-            throw AgentToolError("Could not read \(AgentHostTools.hexText(length)) bytes at \(AgentHostTools.hexText(offset)).")
+            throw AgentToolError("Could not read \(length.hexNumber) bytes at \(offset.hexNumber).")
         }
         let changed = zip(bytes, there).reduce(0) { $0 + ($1.0 == $1.1 ? 0 : 1) }
         let label = (try arguments.optionalString("label") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -159,9 +161,9 @@ final class AgentEditTools {
         var answer: [String: JSONValue] = [
             "from": .string(source.id),
             "to": .string(destination.id),
-            "start": AgentHostTools.hex(range.lowerBound),
-            "end": AgentHostTools.hex(range.upperBound),
-            "length": AgentHostTools.hex(length),
+            "start": .string(range.lowerBound.hexNumber),
+            "end": .string(range.upperBound.hexNumber),
+            "length": .string(length.hexNumber),
             "changed": .int(Int64(changed))
         ]
         let host = PaneToolHost(pane: source.pane, owner: controller, tools: nil)
@@ -253,8 +255,8 @@ final class AgentEditTools {
         case .refused(let refusal):
             throw AgentToolError("\(refusal.title.text(in: .english)). \(refusal.message.text(in: .english)) Nothing was written.")
         case .sourceChanged:
-            throw AgentToolError("The bytes \(place.named) was opened from (\(AgentHostTools.hexText(sourceBefore.lowerBound))–"
-                + "\(AgentHostTools.hexText(sourceBefore.upperBound)) in \(parentName)) have changed there since. "
+            throw AgentToolError("The bytes \(place.named) was opened from (\(sourceBefore.halfOpenHexText) "
+                + "in \(parentName)) have changed there since. "
                 + "Updating would overwrite those changes. Nothing was written. Ask the person; call again with "
                 + "`overwrite_changed_source: true` only if they agree.")
         case .parentChanged:
@@ -304,8 +306,8 @@ final class AgentEditTools {
         }
         let size = place.pane.fileSize
         if let past = checked.writes.first(where: { $0.range.upperBound > size }) {
-            throw AgentToolError("A write at \(AgentHostTools.hexText(past.offset)) runs past the end of \(place.named), "
-                + "which is \(AgentHostTools.hexText(size)) bytes long. Writes overwrite; they do not grow the file.")
+            throw AgentToolError("A write at \(past.offset.hexNumber) runs past the end of \(place.named), "
+                + "which is \(size.hexNumber) bytes long. Writes overwrite; they do not grow the file.")
         }
         let before = try checked.writes.map { write in
             try place.pane.byteStorage?.read(at: write.offset, length: min(write.bytes.count, Self.beforeLimit)) ?? []
@@ -324,8 +326,8 @@ final class AgentEditTools {
             "document": .string(place.id),
             "written": .array(zip(checked.writes, before).map { write, before in
                 var members: [String: JSONValue] = [
-                    "start": AgentHostTools.hex(write.offset),
-                    "end": AgentHostTools.hex(write.range.upperBound),
+                    "start": .string(write.offset.hexNumber),
+                    "end": .string(write.range.upperBound.hexNumber),
                     "before": .string(Self.hexText(before))
                 ]
                 if before.count < write.bytes.count { members["before_cut"] = true }

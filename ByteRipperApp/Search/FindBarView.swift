@@ -119,6 +119,10 @@ final class FindBarView: NSView {
         PatternQueryControls.supportsCaseFolding(encoding)
     }
 
+    /// The room above and below the search field, which the field's focus
+    /// ring needs (§11).
+    static let verticalInset: CGFloat = 8
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setUp()
@@ -160,7 +164,7 @@ final class FindBarView: NSView {
         stack.spacing = 8
         // Vertical padding around the controls keeps the strip from looking
         // cramped; the bar's height comes from the controls plus this inset (§11).
-        stack.edgeInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        stack.edgeInsets = NSEdgeInsets(top: Self.verticalInset, left: 10, bottom: Self.verticalInset, right: 10)
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.addArrangedSubview(findLabel)
         // The query controls: the field, the encoding, and next to it Smart
@@ -197,6 +201,16 @@ final class FindBarView: NSView {
             // intrinsic width. The stack's .fill distribution hands all extra
             // horizontal space to the view with the lowest hugging priority.
             patternField.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
+
+            // The bar's height, from the tallest control: the stack's own
+            // vertical insets are not honoured with centred alignment
+            // (measured: a 24-point field in a 32-point bar), and the search
+            // field's bezel and focus ring reach past its frame, so they were
+            // cut off at the bar's top. Pinned from the field, the room above
+            // and below it is what the insets meant it to be.
+            patternField.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: Self.verticalInset),
+            patternField.bottomAnchor.constraint(lessThanOrEqualTo: separator.topAnchor,
+                                                 constant: -Self.verticalInset),
         ])
 
         // Height of the nav block tracks the Aa case toggle — the bar's other

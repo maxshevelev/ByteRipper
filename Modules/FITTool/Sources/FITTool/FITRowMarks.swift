@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 import ToolModuleKit
 import UEFIImage
@@ -47,7 +48,7 @@ public enum FITRowMarks {
         if case .microcode(let header) = row.model.target, !header.checksumIsCorrect {
             if let computed = header.computedChecksum {
                 errors.append(L("Invalid microcode image checksum: %1$@, should be %2$@", in: language,
-                                hex(header.checksum), hex(computed)))
+                                header.checksum.hexNumber(digits: 8), computed.hexNumber(digits: 8)))
             } else {
                 cautions.append(L("The microcode image cannot be read whole, so its checksum is not checked", in: language))
             }
@@ -74,22 +75,13 @@ public enum FITRowMarks {
         case .latest:
             return (.newest, L("Newest revision the catalogue lists for this processor and platform", in: language))
         case .outdated(let newest):
-            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", in: language, revision(newest)))
+            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", in: language, newest.bareHexNumber))
         case .undecided(let newest):
             return (.newerMaybe,
                     L("Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry", in: language,
-                      revision(newest)))
+                      newest.bareHexNumber))
         case .notRated:
             return nil
         }
-    }
-
-    private static func revision(_ value: UInt32) -> String {
-        String(value, radix: 16, uppercase: true)
-    }
-
-    private static func hex(_ value: UInt32) -> String {
-        let digits = String(value, radix: 16, uppercase: true)
-        return "0x" + String(repeating: "0", count: max(0, 8 - digits.count)) + digits
     }
 }

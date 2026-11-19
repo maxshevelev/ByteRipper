@@ -559,6 +559,33 @@ final class UEFIToolFlowTests: XCTestCase {
 
     /// ⌘C on text selected in the details copies that text — in the pane and
     /// in the large view — not the dump's bytes.
+    /// The detail's name column is sized the way the FIT's and ME's are
+    /// (`ToolDetailScroll.showRows`): one column for every row, as wide as
+    /// the longest name, never narrower than the shared default and never
+    /// wider than half the list. It used to keep the default, so a long name
+    /// wrapped here that the other panels showed whole.
+    func testTheDetailsNameColumnFitsItsNames() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+        window?.layoutIfNeeded()
+
+        let list = try XCTUnwrap(descendants(of: pane.detail, ToolFieldList.self).first)
+        let rows = descendants(of: list, ToolFieldRow.self)
+        XCTAssertFalse(rows.isEmpty, "the node has named rows")
+        let widths = Set(rows.map { $0.nameColumnWidth.rounded() })
+        XCTAssertEqual(widths.count, 1, "one column for every row: \(widths)")
+
+        let half = (list.frame.width - ToolFieldRow.columnSpacing) / 2
+        let expected = min(ToolFieldList.nameWidth(for: rows.map(\.label)), half)
+        XCTAssertEqual(try XCTUnwrap(rows.first).nameColumnWidth, expected, accuracy: 1,
+                       "as wide as the longest name, up to half the list")
+    }
+
     func testCommandCCopiesTheTextSelectedInTheDetails() throws {
         _ = try open(UEFITestImage.make())
         let tree = try expandRow(0)

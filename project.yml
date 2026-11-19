@@ -46,6 +46,10 @@ packages:
   # its own manifest for why it is not a file inside ToolModuleKit.
   AppPalette:
     path: Packages/AppPalette
+  # How an offset or a size is written in hex, shared by the app and the
+  # tool-modules — see its own manifest.
+  HexText:
+    path: Packages/HexText
   # The shared parser. The tool-modules depend on it transitively, but the app's
   # flow tests build a UEFI image by hand and so import it directly.
   UEFIImage:
@@ -78,6 +82,12 @@ packages:
   # release; only the app links it directly.
   FreshData:
     path: Packages/FreshData
+  # Which Intel processors stand behind a CPUID, read from
+  # github.com/maxshevelev/IntelCPUID: the one store and repository the FIT
+  # panel and the Intel CPUID Lookup window both read. The app links it
+  # directly, so the test bundle shares the app's copy of the store.
+  IntelCPUID:
+    path: Packages/IntelCPUID
   # The session written down and brought back at launch: the value, the rule
   # for a file that changed on disk, and the folder (`Design/WORKSPACE_PLAN.md`).
   # Only the app links it.
@@ -181,6 +191,8 @@ targets:
       - package: ToolModuleKit
       # The app's colour palette: what a colour in this app is allowed to mean.
       - package: AppPalette
+      # How an offset or a size is written in hex.
+      - package: HexText
       # The shared, per-pane lazy UEFI tree (`PaneUEFIState`) and its
       # `ByteSource` adapter over the document's live storage
       # (`PaneToolHost`'s `UEFITreeProviding` conformance) — both live in the
@@ -200,6 +212,9 @@ targets:
       # the tool-modules' live sources hold theirs: fetched once, re-checked
       # once a day, and silent when it cannot be made.
       - package: FreshData
+      # The processor tables, for the Intel CPUID Lookup window — the same
+      # store the FIT panel reads.
+      - package: IntelCPUID
       # The workspace the app writes down and restores at launch.
       - package: Workspace
       # The language the app speaks, and every word it says in it.
@@ -441,6 +456,7 @@ targets:
       - package: ALSplitView
       - package: ToolModuleKit
       - package: AppPalette
+      - package: HexText
       - package: UEFIImage
       - package: HelpBook
       - package: HelpUI
@@ -451,6 +467,7 @@ targets:
         product: FITTool
       - package: FITTool
         product: FITToolUI
+      - package: IntelCPUID
       - package: UEFITool
         product: UEFIToolUI
       - package: MEFirmware

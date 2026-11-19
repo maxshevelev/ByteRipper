@@ -39,6 +39,9 @@ let package = Package(
         // a control says what it does.
         .package(path: "../../Packages/HelpUI"),
 
+        // How an offset or a size is written in hex: one copy for the app and
+        // every tool-module, with no format string to read 32 bits of 64.
+        .package(path: "../../Packages/HexText"),
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
@@ -46,21 +49,23 @@ let package = Package(
         .package(path: "../../Packages/FreshData"),
         // What the module answers an agent with (`FITAgentQueries`,
         // Design/AGENT_PLAN.md).
-        .package(path: "../../Packages/AgentKit")
+        .package(path: "../../Packages/AgentKit"),
+        // The processor tables — which models stand behind a CPUID — and the
+        // one repository and store they are read through, shared with the
+        // app's Intel CPUID Lookup window.
+        .package(path: "../../Packages/IntelCPUID")
     ],
     targets: [
         .target(name: "FITTool", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
-            .product(name: "AgentKit", package: "AgentKit")
-        ], resources: [
-            // CPUID to the processors sold with it, so a microcode update can
-            // name what it is for. Generated, not edited by hand:
-            // `Skills/update-cpuid-brand-names/scripts/import.py` says where it comes from.
-            .copy("Resources/IntelCPUIDBrandNames.json")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "IntelCPUID", package: "IntelCPUID")
         ]),
         .target(name: "FITToolUI", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "HelpUI", package: "HelpUI"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
@@ -71,8 +76,12 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "IntelCPUID", package: "IntelCPUID")
         ]),
-        .testTarget(name: "FITToolTests", dependencies: ["FITTool"])
+        .testTarget(name: "FITToolTests", dependencies: [
+            "FITTool",
+            .product(name: "IntelCPUID", package: "IntelCPUID")
+        ])
     ]
 )

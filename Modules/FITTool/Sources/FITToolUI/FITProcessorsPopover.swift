@@ -50,8 +50,14 @@ import ToolModuleKit
     override func loadView() {
         let stack = ToolPanelPopover.stack()
         stack.addArrangedSubview(ToolPanelPopover.title(L("CPUID %1$@", group.cpuid)))
-        // What the table says of a single group, under the CPUID.
-        let notes = group.notes.count == 1 ? group.notes[0] : ""
+        // What the table says of a single group, under the CPUID, then the
+        // CPUIDs its microcode also serves (the update's extended signature
+        // table).
+        // help: fit.processors
+        let shared = group.sharesMicrocodeWith.isEmpty ? ""
+            : L("Same microcode as %1$@", group.sharesMicrocodeWith.joined(separator: ", "))
+        let notes = [group.notes.count == 1 ? group.notes[0] : "", shared]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
         if !notes.isEmpty {
             let note = ToolPanelPopover.prose(notes)
             note.textColor = .secondaryLabelColor

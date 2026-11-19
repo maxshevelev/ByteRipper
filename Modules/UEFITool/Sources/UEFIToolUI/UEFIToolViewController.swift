@@ -5,6 +5,7 @@ import CodeAnalysis
 import HelpBook
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import MEPresentation
 import ToolModuleKit
@@ -1293,33 +1294,20 @@ import UEFITool
                 : node.title)
             return
         }
-        detail.prepareForRows(subject: subject)
-
-        if !node.title.isEmpty {
-            // help: panel.uefi.copy-name
-            // Selectable, as the fields under it are: the name is what gets
-            // copied out of here most.
-            let title = NSTextField(labelWithString: node.title)
-            title.isSelectable = true
-            title.font = ToolPanelFont.title()
-            title.translatesAutoresizingMaskIntoConstraints = false
-            detail.content.addArrangedSubview(title)
-        }
-
-        // A view per field, its text selectable across the rows: a bench
-        // copies an offset or a GUID out of here, and a value it cannot select
-        // is one it has to retype. A value that carries a status is drawn the
-        // way the ME panel draws its own — bold, and in the tone's colour — so
-        // a checksum that does not check out reads here the way a "Configured"
-        // reads there.
-        let fields = ToolFieldList(fields: node.fields.map {
+        // help: panel.uefi.copy-name
+        // The title is selectable, as the fields under it are: the name is what
+        // gets copied out of here most.
+        // The rows the FIT and ME panels are filled with (`showRows`), their
+        // text selectable across them: a bench copies an offset or a GUID out
+        // of here, and a value it cannot select is one it has to retype. A
+        // value that carries a status is drawn by its tone, as the ME panel
+        // draws its own, so a checksum that does not check out reads here the
+        // way a "Configured" reads there.
+        detail.showRows(subject: subject, title: node.title, fields: node.fields.map {
             .init(label: $0.label, value: $0.tone.attributedValue($0.value))
         })
-        detail.content.addArrangedSubview(fields)
-        // As wide as the list, so a value too long for the column — a GUID, a
-        // hash — wraps inside it instead of running off the side.
-        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
 
+        // What is this panel's own, under the rows.
         for table in node.tables { addTable(table) }
         if let picture = node.picture { addPicture(picture) }
         if let sound = node.sound { addSound(sound) }
@@ -1845,7 +1833,6 @@ import UEFITool
             showContentResults(false)
             return
         }
-        let hex = { (value: UInt64) in String(format: "0x%llX", value) }
         let label = { [catalogue, image] (id: NodeID?) -> String in
             id.flatMap { UEFITreeDisplay.nameAfterParent(of: $0, in: tree, catalogue: catalogue, image: image, in: Localization.appLanguage) } ?? "—"
         }
@@ -1863,9 +1850,9 @@ import UEFITool
         contentResults.show(matches.map { match in
             let address: String
             if let range = match.fileRange {
-                address = match.decodedXORKey == nil ? hex(range.lowerBound) : L("%1$@, decoded", hex(range.lowerBound))
+                address = match.decodedXORKey == nil ? range.lowerBound.hexNumber : L("%1$@, decoded", range.lowerBound.hexNumber)
             } else {
-                address = L("%1$@ in %2$@", hex(match.range.lowerBound), name(match.section) ?? "—")
+                address = L("%1$@ in %2$@", match.range.lowerBound.hexNumber, name(match.section) ?? "—")
             }
             return UEFIContentResultsView.Row(
                 node: label(match.node),

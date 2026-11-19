@@ -19,9 +19,9 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: macos-14
+    runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Regenerate the table
         run: python3 Skills/update-jedec-ids/scripts/gen_jedec.py

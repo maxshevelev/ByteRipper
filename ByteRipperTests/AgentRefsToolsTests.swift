@@ -89,7 +89,7 @@ final class AgentRefsToolsTests: XCTestCase {
         for address: UInt64 in [0x3000, 0x1000000, 0x1_2000_0000] {
             let made = AgentRefsTools.forms(address: address, relativeToRegion: false, bios: 0x800000..<0x1000000,
                                             names: ["bus", "file", "region"])
-            XCTAssertEqual(made.forms.map(\.name), ["file"], AgentHostTools.hexText(address))
+            XCTAssertEqual(made.forms.map(\.name), ["file"], address.hexNumber)
         }
     }
 

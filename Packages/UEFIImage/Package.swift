@@ -32,6 +32,8 @@ let package = Package(
         .library(name: "UEFIImage", targets: ["UEFIImage"])
     ],
     dependencies: [
+        // How an offset or a size is written in hex, shared across the app.
+        .package(path: "../HexText"),
         .package(path: "../FirmwareCompression"),
         // The envelope of the compiled strap tables (`Design/MAP_DATA.md`),
         // shared with the ME configuration maps so the two cannot drift.
@@ -45,6 +47,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "UEFIImage", dependencies: [
+            .product(name: "HexText", package: "HexText"),
             .product(name: "FirmwareCompression", package: "FirmwareCompression"),
             .product(name: "MapData", package: "MapData"),
             .product(name: "Localization", package: "Localization"),

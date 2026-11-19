@@ -6,8 +6,9 @@
 > here is a change to an interface an agent may have been told about — say
 > why in the commit.
 
-Draft until stage 12 marks it version 1. The tool list grows by stage; what
-is listed here is what the code answers today.
+Version 1 (stage 12 of the plan, issue #23 closed). A tool added later is
+listed here when it lands; a change to an existing tool's arguments or answer
+says why in the commit, as above.
 
 ## Transport
 
@@ -37,6 +38,11 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 - **Addresses and sizes are hex strings**, `"0x7F3000"`, in every answer.
   Every address argument takes a hex string or a decimal integer.
 - **Ranges are half-open**: `{start, end, length}`, `end` the first byte after.
+  A range written as one string — a `runs[]` entry, a range named in a
+  refusal — is half-open too, and is written as an interval, `[0x1, 0x3)`.
+  A `label` is the exception: it is for the person, and writes a range first
+  to last byte, `0x668000–0x669FFF`, as the app does; never pass its end back
+  as an `end`.
 - **Documents** are named by ids `d1`, `d2`… minted when an agent first sees
   a document and good while it stays open. A tool that takes `document`
   defaults to the focused one.
@@ -126,7 +132,7 @@ answer names — in `uefi_tree`, `uefi_node`, `uefi_find`, `uefi_at`,
 `find_bytes` — has a `label`: its name as the panel's Name column shows it,
 and, where that name is only a kind (`Unused`, `Unknown`, `Padding`,
 `Empty padding`, `Free space`, `Non-UEFI data`, `Raw`, or its own Type or
-Subtype), its file addresses — `Unused, 0x668000–0x66A000` — or, inside a
+Subtype), its file addresses — `Unused, 0x668000–0x669FFF` — or, inside a
 compressed section, the nearest named node: `Raw in SmbiosDxe`.
 
 On a document that is a file on disk, each such node also has a `link`: the
@@ -175,7 +181,7 @@ container opened:
 | Tool | Arguments | Answer |
 |---|---|---|
 | `variables` | `name` (part, any case), `guid`, `store` (node id), `deleted`; `limit` (80, ≤ 300) | `variables[]` — `name`, `guid`, `size`, `value` (read as its type, or hex up to 32 bytes), `store`, `entry`, `start`/`end` or `in_compressed`, `copies` when over 1, `deleted`; `stores[]` the page's rows are in (`id`, `type`, `name` when it differs, `variables`, `start`/`end`); `total`; `note` when the image has no store. Paged (`next`, `after`). A row too large alone comes without `value`. |
-| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200); `after` | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. Paged as one sequence — `changed`, `only_in_document`, `only_in_against` — `counts` and `same` of the whole. A changed variable too large alone comes without its values. |
+| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200); `after` | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, each written `[0x1, 0x3)` (until 2026-11 a one-byte run was `0x1` and a longer one `0x1–0x3`), sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. Paged as one sequence — `changed`, `only_in_document`, `only_in_against` — `counts` and `same` of the whole. A changed variable too large alone comes without its values. |
 
 A variable is the copy that stands for it: the current one, or for a deleted
 variable the copy it was deleted as. The stores read are VSS, VSS2, NVAR, Dell
@@ -277,7 +283,7 @@ refused.
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping`; `offset`, `end` (not with `node`); `node` (an id, or `root`); `context` (≤ 64); `limit` (100, ≤ 1000); `after` | Without `node`, the document as stored: `document`, `range`, `total`, `matches[]` (`start`, `end`, `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`, what the tree holds at and under it — every compressed section decompressed (nested too), a BIOS Guard update assembled, an encoded LENV block decoded; compressed streams and encoded blocks as stored and an ME region not searched: `node` (summary, or `root`), `total`, `searched`, `buffers`, `unread[]`, `matches[]` in tree order (`encoding`, `node`, `node_offset` (from its first byte, part `all`), `body_offset` (from its body, part `body`, when the match lies there), `volume`, `volume_offset`, `start`/`end` — or `in_compressed`, `section`, `buffer_start`/`buffer_end` — `decoded`, `preview`). The UEFI panel's Contents search; the same search again is answered from the last. Reads only. |
+| `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping` (default true, as the find bar counts); `offset`, `end` (not with `node`); `node` (an id, or `root`); `context` (≤ 64); `limit` (100, ≤ 1000); `after` | Without `node`, the document as stored: `document`, `range`, `total`, `matches[]` (`start`, `end`, `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`, what the tree holds at and under it — every compressed section decompressed (nested too), a BIOS Guard update assembled, an encoded LENV block decoded; compressed streams and encoded blocks as stored and an ME region not searched: `node` (summary, or `root`), `total`, `searched`, `buffers`, `unread[]`, `matches[]` in tree order (`encoding`, `node`, `node_offset` (from its first byte, part `all`), `body_offset` (from its body, part `body`, when the match lies there), `volume`, `volume_offset`, `start`/`end` — or `in_compressed`, `section`, `buffer_start`/`buffer_end` — `decoded`, `preview`). The UEFI panel's Contents search; the same search again is answered from the last. Reads only. |
 | `refs` | `guid`, or `address` (with `relative_to` `file`·`region`, `forms` of `bus`·`file`·`region`, default all); `scope` `all`·`raw`·`compressed`; `limit` (50, ≤ 200, on files); `after` | `document`, `scope`, `guid` or `forms` (each form's bytes; `bus64` too), `skipped_forms`, `total` (hits), `files` (groups), `refs[]`: `file` (or `node` for a hit in no FFS file), `name`, `guid`, `type`, `in_compressed`, `hits[]` (`form`, `section`, `section_offset`, `file_start` or `node_start` + `in_compressed`, `node` when deeper), `hits_total` past 20. Bus form: the BIOS region's end at 0x100000000. A hit inside a longer form's hit is left out; a form under 0x100 is skipped. |
 | `region_scan` | `node` (default: the BIOS region); `kinds` (Type or Subtype, default `Padding`, `Raw`); `min_size` (0x100); `limit` (50, ≤ 200); `after` | `total`, `under`, `nodes[]`: as `uefi_tree` (`node` for `id`), `size`, `inner` (a child covering it whole), `class` (`empty` ≥ 99 % 0x00/0xFF, `text` ≥ 50 % of the rest in strings, `code` by x86-64 markers or `MZ`, else `data`), `fill`, `first_nonfill`, `last_nonfill`, `strings[]` (≤ 5: `at`, `text` ≤ 64, `encoding`), `redacted` — no strings for an area named MSDM, Password or Key. A node its children divide gives way to them. |
 | `uefi_dmi` | — | `areas[]`: the DMI areas the DMI button of the UEFI Structure panel goes to — Lenovo DMI store, GPNV store, Acer DMI — each as `uefi_tree`, with `size`, `path` and the panel's `title`, `fields`, `tables`; `total`; `note`. Every container in the file opened, no compressed section. The `note` says that the parser finds an area only by its checks for the layouts it knows, so an area not found is not an area absent. |

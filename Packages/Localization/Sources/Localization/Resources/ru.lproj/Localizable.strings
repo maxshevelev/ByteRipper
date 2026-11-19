@@ -154,6 +154,7 @@
 "Adding a microcode" = "Добавление микрокода";
 "Additional files ignored" = "Лишние файлы пропущены";
 "Address" = "Адрес в памяти";
+"Addresses and sums entered before" = "Ранее введённые адреса и выражения";
 "All 256 byte values decoded with the current table. Row headers are the byte value in hex." = "Все 256 значений байта в текущей таблице. Заголовки строк — значение байта в hex.";
 "All unsaved changes will be discarded." = "Все несохранённые изменения будут потеряны.";
 "Already a favourite, as “%1$@”." = "Уже в избранном под именем «%1$@».";
@@ -172,9 +173,9 @@
 "Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Изменились на диске после прошлой сессии. Открыты без несохранённых правок, сегментов, частей и состояния инструментов:";
 "Click to change the background" = "Кликните, чтобы сменить фон";
 "Close Project" = "Закрыть проект";
-"Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
+"Copied at %1$@; %2$@" = "Копия расположена в диапазоне %1$@; %2$@";
 "Copy of" = "Копия образа по адресу";
-"Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
+"Copy of %1$@; %2$@" = "Копия блока %1$@; %2$@";
 "Could not add the microcode" = "Не удалось добавить микрокод";
 "Could not remove the microcode" = "Не удалось удалить микрокод";
 "Could not replace the microcode" = "Не удалось заменить микрокод";
@@ -245,6 +246,7 @@
 "Minor version" = "Младшая версия";
 "No decompiled C for this function." = "Для этой функции нет декомпилированного C.";
 "No longer found, not opened:" = "Больше не найдены и не открыты:";
+"Nothing entered yet" = "Пока ничего не введено";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Открыть распакованную переменную";
 "Open Recent Project" = "Недавние проекты";
@@ -276,6 +278,9 @@
 "The project could not be written." = "Не удалось записать проект.";
 "The project was saved by a newer version of ByteRipper. Open it in that version." = "Проект сохранён более новой версией ByteRipper. Откройте его в этой версии.";
 "The project was saved by an early version of ByteRipper that this one cannot read." = "Проект сохранён одной из первых версий ByteRipper, и эта версия не может его прочитать.";
+"The result does not fit in 64 bits." = "Результат не помещается в 64 бита.";
+"The result is negative." = "Результат отрицательный.";
+"The sum is not finished." = "Выражение не дописано.";
 "The workspace was saved by a newer version of ByteRipper." = "Рабочая сессия сохранена более новой версией ByteRipper.";
 "It is left as it is, for that version to reopen. Until you quit, this version does not keep the workspace: quitting asks about unsaved changes." = "Она оставлена без изменений, чтобы её открыла та версия. До выхода из программы эта версия рабочую сессию не сохраняет: при выходе она спросит о несохранённых изменениях.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Вкладки и открытые в них файлы возвращаются такими, какими были при выходе: адрес на экране, курсор и выделение, закладки, сегменты и панели инструментов. Ни разу не сохранённые документы возвращаются несохранёнными, и при выходе программа о них не спрашивает; о правках в файлах на диске она спрашивает, как и прежде.";
@@ -709,7 +714,9 @@
 "Nothing was changed in %1$@." = "В %1$@ ничего не изменено.";
 "Nothing was written inside a Boot Guard or vendor protected range." = "Внутрь диапазона, защищённого Boot Guard или вендором, ничего не записано.";
 "OEM Configuration" = "OEM-конфигурация";
-"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Адрес 0x%1$@, выделено %2$@ байт по адрес 0x%3$@.";
+"Offset %1$@ is beyond the end of %2$@, whose size is %3$@. Moved to the end." = "Адрес %1$@ за концом %2$@, размер которого %3$@. Переход в конец.";
+"Offset %1$@ is beyond the end of the file(s), whose size is %2$@. Moved to the end." = "Адрес %1$@ за концом файла(ов), размер которых %2$@. Переход в конец.";
+"Offset 0x%1$@, %2$@ bytes selected through 0x%3$@." = "Адрес 0x%1$@, выделено %2$@ байт, до адреса 0x%3$@ включительно.";
 "Offset 0x%1$@." = "Адрес 0x%1$@.";
 "OK" = "OK";
 "One panel was opened out of it and will lose its way back. Its bytes stay as they are; only the way back goes." = "Из неё открыта одна панель, и она потеряет обратный путь: байты в ней остаются прежними, утрачивается только связь с источником.";
@@ -721,8 +728,6 @@
 "OROM Images" = "Образы OROM";
 "Offset %1$@" = "Адрес %1$@";
 "Offset" = "Адрес";
-"Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end." = "Адрес %1$@ за концом %2$@ (%3$@ байт). Переход в конец.";
-"Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end." = "Адрес %1$@ за концом файла(ов) (%2$@ байт). Переход в конец.";
 "Offset beyond end of file" = "Адрес за концом файла";
 "Offset:" = "Адрес:";
 "Offsets" = "Адреса";
@@ -966,7 +971,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Разбор прошивок Intel ME/CSME инструментом ME Analyzer и базы данных, по которым сверяется дамп (MEA.dat, Huffman.dat), загружаемые по мере их публикации проектом.";
 "The newest revision the catalogue lists for this processor and platform" = "Самая свежая ревизия, которую каталог указывает для этого процессора и платформы";
 "the selection" = "выделение";
-"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Выделение доходит до адреса %1$@, а «%2$@» кончается на %3$@. Ничего не скопировано.";
+"The selection runs through %1$@, past the end of “%2$@”, whose size is %3$@. Nothing was copied." = "Выделение доходит до адреса %1$@ включительно, а это за концом «%2$@», размер которого %3$@. Ничего не скопировано.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "В резервной копии Top Swap по %1$@ нет FIT там, куда ведёт её указатель";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Резервная копия Top Swap по %1$@ содержит ту же FIT, но прочие байты блока отличаются, поэтому правка микрокода запрещена, пока копии не совпадут";
 "The Top Swap backup at 0x%1$@ got the same change." = "В резервную копию Top Swap по 0x%1$@ внесено то же изменение.";
@@ -1020,7 +1025,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder." = "В этом дампе есть сегменты, взятые из %1$@, и запись туда заменит файлы, с которыми эти сегменты сравниваются. Выберите другую папку.";
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "В этом дампе есть сегменты, взятые из %1$@, и запись туда заменит файлы, с которыми эти сегменты сравниваются. Выберите другое имя.";
 "This file is open read-only." = "Файл открыт только для чтения.";
-"This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "В образе есть резервная копия Top Swap загрузочного блока по 0x%1$@–0x%2$@, и она не совпадает с блоком, где лежит FIT, поэтому правку нельзя внести в обе копии. Ничего не изменено.";
+"This image keeps a Top Swap backup of the boot block at %1$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "В образе есть резервная копия Top Swap загрузочного блока в диапазоне %1$@, и она не совпадает с блоком, где лежит FIT, поэтому правку нельзя внести в обе копии. Ничего не изменено.";
 "This microcode is already in the table, in row #%1$@. Nothing was changed." = "Этот микрокод уже есть в таблице, в строке #%1$@. Ничего не изменено.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Все сегменты сольются в один. Байты не меняются — убираются только разрезы.";
 "Those bytes could not be read." = "Эти байты не удалось прочитать.";
@@ -1126,6 +1131,8 @@
 "pre-release" = "предрелиз";
 "r.%1$@" = "r.%1$@";
 "No processor names known for CPUID %1$@" = "Модели процессоров для CPUID %1$@ неизвестны";
+"Same microcode as %1$@" = "Тот же микрокод, что у %1$@";
+"Extended CPUIDs" = "Расширенные CPUID";
 "No processor models known for this CPUID" = "Модели процессоров с этим CPUID неизвестны";
 "platform %1$@" = "платформа %1$@";
 "series, models not listed" = "серия, модели не перечислены";
@@ -1392,7 +1399,7 @@
 "%1$@ bytes differ" = "Отличается байт: %1$@";
 "%1$@ bytes written in %2$@ parts." = "Записано байт: %1$@, областей: %2$@.";
 "%1$@ of %2$@ parts identical. To write: %3$@ parts, %4$@ bytes. Kept as they are: %5$@." = "Совпадает областей: %1$@ из %2$@. К записи: областей — %3$@, байт — %4$@. Остаются без изменений: %5$@.";
-"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@–%5$@." = "%1$@: обновление AMI BIOS Guard для %2$@, блоков: %3$@. BIOS-регион этого дампа: %4$@–%5$@.";
+"%1$@: AMI BIOS Guard update for %2$@, %3$@ blocks. BIOS region of this dump: %4$@." = "%1$@: обновление AMI BIOS Guard для %2$@, блоков: %3$@. BIOS-регион этого дампа: %4$@.";
 "Block %1$@ of the update file does not read as a block." = "Блок %1$@ файла обновления не читается как блок.";
 "Board data; %1$@ bytes differ" = "Данные платы; отличается байт: %1$@";
 "Board data; empty in the update" = "Данные платы; в обновлении пусто";
@@ -2006,3 +2013,36 @@
 "In the Description" = "В описании";
 "Search Scope" = "Область поиска";
 "Where the search looks: the functions' C, the module description, or both" = "Где выполняется поиск: в коде C функций, в описании модуля или в обоих";
+
+/* Intel CPUID Lookup window */
+"Intel CPUID Lookup" = "Справочник Intel CPUID";
+"CPUID, model or S-SPEC — 306A9, i7-2600K, SR00C" = "CPUID, модель или S-SPEC — 306A9, i7-2600K, SR00C";
+"Search by CPUID, model, S-SPEC, code name or stepping" = "Поиск по CPUID, модели, S-SPEC, кодовому имени или степпингу";
+"%1$@ processors under %2$@ CPUIDs. Type to search." = "Процессоров: %1$@, CPUID: %2$@. Введите запрос.";
+"Found: %1$@" = "Найдено: %1$@";
+"Nothing found. Check the spelling, or try part of the number." = "Ничего не найдено. Проверьте написание или введите часть номера.";
+"No models are listed for this CPUID. What is known about it is above." = "Для этого CPUID модели не перечислены. Всё, что о нём известно, показано выше.";
+"The table has no entry for this CPUID." = "В таблице нет записи для этого CPUID.";
+"The table has not been read yet. It is read from the repository when the network is available." = "Таблица ещё не загружена. Она загружается из репозитория, когда доступна сеть.";
+"Updated %1$@. Data and sources:" = "Обновлено %1$@. Данные и источники:";
+"Data and sources:" = "Данные и источники:";
+"Open the repository the table is read from" = "Открыть репозиторий, из которого загружается таблица";
+"Code name" = "Кодовое имя";
+"Stepping" = "Степпинг";
+"series" = "серия";
+"Look Up CPUID %1$@" = "Найти CPUID %1$@";
+"Copy S-SPEC" = "Скопировать S-SPEC";
+"Copy Model" = "Скопировать модель";
+"Copy Row" = "Скопировать строку";
+"X stands for any digit" = "X — любая цифра";
+"not in the table" = "нет в таблице";
+"Cores" = "Ядра";
+"Models" = "Моделей";
+"Shared microcode" = "Общий микрокод";
+"update %1$@ of %2$@ also serves %3$@" = "обновление %1$@ от %2$@ подходит также для %3$@";
+"Notes (in English)" = "Примечания (на английском)";
+"Sources (%1$@)" = "Источники (%1$@)";
+"model" = "модель";
+"code name" = "кодовое имя";
+"?? stands for a whole byte — half a byte cannot be masked." = "?? обозначает целый байт — замаскировать половину байта нельзя.";
+"A pattern of ?? alone matches everywhere — give at least one byte." = "Шаблон из одних ?? совпадает везде — укажите хотя бы один байт.";

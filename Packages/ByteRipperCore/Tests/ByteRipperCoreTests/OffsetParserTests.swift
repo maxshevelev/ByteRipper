@@ -62,10 +62,4 @@ final class OffsetParserTests: XCTestCase {
             }
         }
     }
-
-    func testHexStringFormatting() {
-        XCTAssertEqual(OffsetParser.hexString(0), "0")
-        XCTAssertEqual(OffsetParser.hexString(255), "ff")
-        XCTAssertEqual(OffsetParser.hexString(0xDEAD), "dead")
-    }
 }

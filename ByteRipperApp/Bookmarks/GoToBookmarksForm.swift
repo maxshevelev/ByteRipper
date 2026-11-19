@@ -5,44 +5,6 @@ import HelpBook
 import HelpUI
 import Localization
 
-// MARK: - Recently typed offsets (§10.1)
-
-/// Remembers the offsets Go To was sent to, so the field can offer them again in
-/// its dropdown. Persisted in `UserDefaults` — the same shape as
-/// `FindHistoryStore`, down to the swappable defaults domain, because it answers
-/// the same question for the same reason: on a bench the interesting addresses
-/// of a dump get typed over and over.
-///
-/// An entry is the offset's canonical address (`0x` + at least eight upper-case
-/// hex digits, §10), not the keystrokes that produced it: `0x7af00`, `0x07AF00`
-/// and `503552` are one address, and a history that listed them three times
-/// would be a log of typing rather than a list of places.
-enum GoToHistoryStore {
-    static let userDefaultsKey = "GoToHistory"
-    static let limit = 10
-
-    /// The defaults domain the history lives in. Swappable so tests run against
-    /// an isolated store instead of the user's own (§11 does the same).
-    static var defaults: UserDefaults = AppDefaults.store
-
-    /// The recorded addresses, most recent first.
-    static var recent: [String] {
-        defaults.stringArray(forKey: userDefaultsKey) ?? []
-    }
-
-    /// The address Go To was last sent to.
-    static var mostRecent: String? { recent.first }
-
-    /// Records a jump: moves its address to the front, dropping any older entry
-    /// for the same address, and caps the list at `limit`.
-    static func record(_ offset: UInt64) {
-        let label = offset.hexAddress
-        var entries = recent.filter { $0 != label }
-        entries.insert(label, at: 0)
-        defaults.set(Array(entries.prefix(limit)), forKey: userDefaultsKey)
-    }
-}
-
 // MARK: - The form
 
 /// Go To and the bookmark list in one window (§10.1, §20.5): a place to type an
@@ -93,11 +55,15 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
 
     /// The widgets. Internal so tests can type into the field, select rows and
     /// read the empty state; a modal window has no one to click it under XCTest.
-    private(set) var offsetCombo: NSComboBox!
+    private(set) var offsetCombo: AddressField!
     private(set) var goButton: NSButton!
     private(set) var cancelButton: NSButton!
     private(set) var bookmarkTable: NSTableView!
     private(set) var errorLabel: NSTextField!
+    /// A sum read back under the field — every term in hex, then what it comes
+    /// to in both bases (issue #9). It shares the message's line: a sum that
+    /// evaluates has no error, and one that does not has nothing to read back.
+    private(set) var breakdownLabel: NSTextField!
     private(set) var emptyLabel: NSTextField!
     /// The "Bookmarks" title over the list. Held so the layout can pull it down
     /// onto the list it names.
@@ -166,7 +132,18 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         let errorRow = NSView()
         errorRow.translatesAutoresizingMaskIntoConstraints = false
         errorRow.addSubview(errorLabel)
+        breakdownLabel = NSTextField(labelWithString: "")
+        breakdownLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        breakdownLabel.textColor = .secondaryLabelColor
+        breakdownLabel.lineBreakMode = .byTruncatingMiddle
+        // A long sum is cut in the middle rather than widening the form.
+        breakdownLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        breakdownLabel.isSelectable = true
+        breakdownLabel.translatesAutoresizingMaskIntoConstraints = false
+        errorRow.addSubview(breakdownLabel)
         NSLayoutConstraint.activate([
+            breakdownLabel.centerYAnchor.constraint(equalTo: errorRow.centerYAnchor),
+            breakdownLabel.trailingAnchor.constraint(lessThanOrEqualTo: errorRow.trailingAnchor),
             errorLabel.topAnchor.constraint(equalTo: errorRow.topAnchor),
             errorLabel.bottomAnchor.constraint(equalTo: errorRow.bottomAnchor),
             errorLabel.trailingAnchor.constraint(lessThanOrEqualTo: errorRow.trailingAnchor),
@@ -234,6 +211,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
             // Activated here, where the message and the field finally share an
             // ancestor: the message starts exactly where the field does.
             errorLabel.leadingAnchor.constraint(equalTo: offsetCombo.leadingAnchor),
+            breakdownLabel.leadingAnchor.constraint(equalTo: offsetCombo.leadingAnchor),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
@@ -247,7 +225,6 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         view = contentView
 
         reloadBookmarks()   // also sizes the list to its rows
-        refreshHistoryItems()
         // The form opens with "0x" in the field: nothing to go to yet, so the
         // button is off — but no error, because nothing has been typed wrong.
         updateValidation(showsError: false)
@@ -267,19 +244,15 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         label.translatesAutoresizingMaskIntoConstraints = false
         offsetLabel = label
 
-        let combo = OffsetComboBox()
-        combo.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         // Pre-filled with "0x" and the caret behind it (§10): hex is the
         // language of a dump, so the prefix is typed for the user. The last
         // address is deliberately NOT pre-filled — the caret sits at the end of
         // the text, so a pre-filled address would turn ⌘L, type, Return into
         // digits appended to the previous jump.
-        combo.stringValue = "0x"
-        combo.completes = false
-        combo.numberOfVisibleItems = GoToHistoryStore.limit
+        let combo = AddressField(text: "0x")
         combo.target = self
         combo.action = #selector(goToTypedOffset)
-        // Return in the field is what submits; picking a recent address only
+        // Return in the field is what submits; picking a recent entry only
         // fills the field, and losing focus submits nothing (§10).
         combo.cell?.sendsActionOnEndEditing = false
         combo.delegate = self
@@ -522,11 +495,6 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
                                      height: fitting.height))
     }
 
-    private func refreshHistoryItems() {
-        offsetCombo.removeAllItems()
-        offsetCombo.addItems(withObjectValues: GoToHistoryStore.recent)
-    }
-
     // MARK: - Going
 
     /// Return in the field, and the Go To button: the typed address. Return on
@@ -534,13 +502,15 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     /// the error already says why, so the key needs no new words, only an answer
     /// that it did nothing (§10.1).
     @objc func goToTypedOffset() {
-        guard let offset = try? OffsetParser.parse(offsetCombo.stringValue) else {
-            showValidationError()
+        guard let offset = offsetCombo.value else {
+            updateValidation(acting: true)
             beep()
             return
         }
         errorLabel.stringValue = ""
-        GoToHistoryStore.record(offset)
+        // What was typed is what is kept: a sum goes into the list as the sum,
+        // so it can be picked again, read, and corrected (issue #9).
+        offsetCombo.recordInHistory(always: true)
         jump(to: offset)
     }
 
@@ -557,18 +527,27 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     /// its "0x" prefix, which is not yet an offset, and greeting the user with
     /// an error about text they have not typed would be scolding them for
     /// arriving. The button is still disabled: there is nowhere to go yet.
-    private func updateValidation(text: String? = nil, showsError: Bool = true) {
-        let offset = try? OffsetParser.parse(text ?? offsetCombo.stringValue)
-        goButton.isEnabled = offset != nil
-        if offset != nil {
+    ///
+    /// `acting` is true when Return was pressed on the text: an unfinished sum
+    /// the form waited on while it was typed is then named.
+    private func updateValidation(showsError: Bool = true, acting: Bool = false) {
+        switch offsetCombo.evaluation {
+        case .success:
+            goButton.isEnabled = true
             errorLabel.stringValue = ""
-        } else if showsError {
-            showValidationError()
+            breakdownLabel.stringValue = offsetCombo.breakdown ?? ""
+        case .failure(let error):
+            goButton.isEnabled = false
+            breakdownLabel.stringValue = ""
+            if error == .incomplete && !acting {
+                // A sum still being typed is not a mistake yet: the button
+                // waits, and the form says nothing.
+                errorLabel.stringValue = ""
+            } else if showsError {
+                errorLabel.stringValue = offsetCombo.problemMessage
+                    ?? L("Invalid offset — use hex with 0x prefix or decimal.")
+            }
         }
-    }
-
-    private func showValidationError() {
-        errorLabel.stringValue = L("Invalid offset — use hex with 0x prefix or decimal.")
     }
 
     /// Return in the list: the selected bookmark. With nothing selected nothing
@@ -809,19 +788,13 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     }
 }
 
-extension GoToBookmarksController: NSComboBoxDelegate {
-    /// Every keystroke re-validates the field (§10.1).
+extension GoToBookmarksController: NSTextFieldDelegate {
+    /// Every keystroke re-validates the field (§10.1) — and so does an entry
+    /// picked from the field's list, which only fills the field: the jump is
+    /// still a Return away, so the list cannot navigate the window by itself.
     func controlTextDidChange(_ obj: Notification) {
+        guard (obj.object as AnyObject?) === offsetCombo else { return }
         updateValidation()
-    }
-
-    /// A picked address only fills the field; the jump is still a Return away,
-    /// so the dropdown cannot navigate the window by itself.
-    func comboBoxSelectionDidChange(_ notification: Notification) {
-        // The field's text catches up after this notification, so the picked
-        // item is what to validate — it is a recorded address, so this is what
-        // re-enables the button.
-        updateValidation(text: offsetCombo.objectValueOfSelectedItem as? String)
     }
 }
 
@@ -839,20 +812,6 @@ private final class GoToFormView: NSView {
             return true
         }
         return super.performKeyEquivalent(with: event)
-    }
-}
-
-/// The offset field: a combo box that keeps the caret behind the "0x" prefix
-/// instead of selecting the whole text on focus, so hex digits can be typed
-/// immediately (§10) — the same rule `HexInputField` gives the sheets.
-private final class OffsetComboBox: NSComboBox {
-    override func becomeFirstResponder() -> Bool {
-        let focused = super.becomeFirstResponder()
-        if focused, let editor = currentEditor() as? NSTextView {
-            let length = (stringValue as NSString).length
-            editor.selectedRange = NSRange(location: length, length: 0)
-        }
-        return focused
     }
 }
 

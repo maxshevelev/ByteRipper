@@ -2,6 +2,7 @@ import Cocoa
 import ALSplitView
 import AppPalette
 import HelpUI
+import HexText
 import Localization
 import ToolModuleKit
 
@@ -1869,9 +1870,9 @@ final class FilePaneView: NSView {
         // file's largest address — the last piece's exclusive end, which can be
         // the file's own size — so the offset and the segment's bounds read as
         // aligned columns, zero-padded to that width (§21.3).
-        let width = status.fileSize > 0 ? String(status.fileSize, radix: 16).count : 1
+        let width = status.fileSize.hexDigitCount
         func address(_ value: UInt64) -> String {
-            String(value, radix: 16, uppercase: true).leftPadded(to: width, with: "0")
+            value.bareHexNumber(digits: width)
         }
         var parts: [String] = []
         // The offset is the line's first part, and the bar always leads with it:

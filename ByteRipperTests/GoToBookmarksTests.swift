@@ -13,17 +13,19 @@ final class GoToBookmarksTests: XCTestCase {
     /// touch the real app's history (the same isolation §11's tests use).
     private var isolatedSuiteName = ""
     private var isolatedDefaults: UserDefaults!
+    private var previousDefaults: UserDefaults!
 
     override func setUp() {
         super.setUp()
         (isolatedSuiteName, isolatedDefaults) = isolatedDefaults(for: self)
-        GoToHistoryStore.defaults = isolatedDefaults
+        previousDefaults = AddressHistoryStore.defaults
+        AddressHistoryStore.defaults = isolatedDefaults
     }
 
     override func tearDown() {
         removeTempFiles()
         discardIsolatedDefaults(isolatedSuiteName, isolatedDefaults)
-        GoToHistoryStore.defaults = .standard
+        AddressHistoryStore.defaults = previousDefaults
         isolatedDefaults = nil
         for window in windows { window.orderOut(nil) }
         windows = []
@@ -168,18 +170,75 @@ final class GoToBookmarksTests: XCTestCase {
         XCTAssertEqual(form.errorLabel.stringValue, "")
     }
 
-    /// Picking a recent address re-enables the button: the field's own text
-    /// catches up only after the notification, so the picked item is what the
-    /// form validates.
+    /// Picking a recent address fills the field and re-enables the button — and
+    /// goes nowhere: the jump is still a Return away.
     func testPickingARecentAddressEnablesGoTo() {
-        GoToHistoryStore.record(0x7AF00)
-        let (form, _, _, _) = makeForm()
+        AddressHistoryStore.record(0x7AF00)
+        let (form, _, jumps, _) = makeForm()
         XCTAssertFalse(form.goButton.isEnabled)
 
-        form.offsetCombo.selectItem(at: 0)
+        form.offsetCombo.pick(AddressHistoryStore.recent[0])
+
+        XCTAssertEqual(form.offsetCombo.stringValue, "0x0007AF00")
+        XCTAssertTrue(form.goButton.isEnabled)
+        XCTAssertEqual(form.errorLabel.stringValue, "")
+        XCTAssertEqual(jumps(), [], "a picked entry is an offer, not a jump")
+    }
+
+    // MARK: - Sums (issue #9)
+
+    /// The case the feature exists for: an address in hex plus a length known
+    /// in decimal. The jump goes to what the sum comes to, the sum stays in the
+    /// field as it was typed, and it is the sum that the history keeps — so it
+    /// can be picked again, read, and corrected.
+    func testASumJumpsToItsResultAndIsKeptAsTyped() {
+        let (form, _, jumps, _) = makeForm(fileSize: 0x400000)
+        form.offsetCombo.stringValue = "0x1FE000 + 4096"
+        form.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification,
+                                               object: form.offsetCombo))
 
         XCTAssertTrue(form.goButton.isEnabled)
         XCTAssertEqual(form.errorLabel.stringValue, "")
+        XCTAssertEqual(form.offsetCombo.resultText, "= 0x1FF000", "what Go To will act on, beside the sum")
+        XCTAssertEqual(form.breakdownLabel.stringValue, "0x1FE000 + 0x1000 = 0x1FF000 (2093056)",
+                       "every term in hex as it was read, then the result in both bases")
+
+        form.goToTypedOffset()
+
+        XCTAssertEqual(jumps(), [0x1FF000])
+        XCTAssertEqual(form.offsetCombo.stringValue, "0x1FE000 + 4096", "the sum is never rewritten")
+        XCTAssertEqual(AddressHistoryStore.recent, ["0x1FE000 + 4096"])
+    }
+
+    /// A sum that ends at its operator is not a mistake yet: the button waits
+    /// and the form says nothing. Return on it still goes nowhere.
+    func testAnUnfinishedSumIsNotAnError() {
+        let (form, _, jumps, _) = makeForm()
+        var beeps = 0
+        form.beep = { beeps += 1 }
+        form.offsetCombo.stringValue = "0x30 +"
+        form.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification,
+                                               object: form.offsetCombo))
+
+        XCTAssertFalse(form.goButton.isEnabled)
+        XCTAssertEqual(form.errorLabel.stringValue, "")
+        XCTAssertEqual(form.breakdownLabel.stringValue, "")
+
+        form.goToTypedOffset()
+        XCTAssertEqual(jumps(), [])
+        XCTAssertEqual(beeps, 1)
+        XCTAssertEqual(form.errorLabel.stringValue, "The sum is not finished.", "Return is told why")
+    }
+
+    /// A sum that comes to less than nothing says so, rather than "invalid".
+    func testASumBelowZeroSaysSo() {
+        let (form, _, _, _) = makeForm()
+        form.offsetCombo.stringValue = "0x10 - 0x20"
+        form.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification,
+                                               object: form.offsetCombo))
+
+        XCTAssertFalse(form.goButton.isEnabled)
+        XCTAssertEqual(form.errorLabel.stringValue, "The result is negative.")
     }
 
     func testReturnInTheListGoesToTheSelectedBookmark() throws {
@@ -689,7 +748,6 @@ final class GoToBookmarksTests: XCTestCase {
                        "with nothing clicked and nothing selected there is nothing to delete")
     }
 
-
     // MARK: - Recently typed offsets
 
     func testAJumpFromTheFieldIsRecordedCanonically() {
@@ -698,7 +756,7 @@ final class GoToBookmarksTests: XCTestCase {
 
         form.goToTypedOffset()
 
-        XCTAssertEqual(GoToHistoryStore.recent, ["0x0007AF00"],
+        XCTAssertEqual(AddressHistoryStore.recent, ["0x0007AF00"],
                        "the history lists addresses, not keystrokes")
     }
 
@@ -711,45 +769,44 @@ final class GoToBookmarksTests: XCTestCase {
         form.goToSelectedBookmark()
 
         XCTAssertEqual(jumps(), [0x10])
-        XCTAssertTrue(GoToHistoryStore.recent.isEmpty)
+        XCTAssertTrue(AddressHistoryStore.recent.isEmpty)
     }
 
     func testTheHistoryKeepsTheLastTenMostRecentFirst() {
         for offset in 1...12 {
-            GoToHistoryStore.record(UInt64(offset) * 0x10)
+            AddressHistoryStore.record(UInt64(offset) * 0x10)
         }
 
-        let recent = GoToHistoryStore.recent
-        XCTAssertEqual(recent.count, GoToHistoryStore.limit)
+        let recent = AddressHistoryStore.recent
+        XCTAssertEqual(recent.count, AddressHistoryStore.limit)
         XCTAssertEqual(recent.first, "0x000000C0", "12 * 0x10, the most recent")
-        XCTAssertEqual(GoToHistoryStore.mostRecent, recent.first)
         XCTAssertFalse(recent.contains("0x00000010"), "the oldest two fell off")
     }
 
     func testRecordingAnAddressAgainMovesItToTheFront() {
-        GoToHistoryStore.record(0x10)
-        GoToHistoryStore.record(0x20)
-        GoToHistoryStore.record(0x10)
+        AddressHistoryStore.record(0x10)
+        AddressHistoryStore.record(0x20)
+        AddressHistoryStore.record(0x10)
 
-        XCTAssertEqual(GoToHistoryStore.recent, ["0x00000010", "0x00000020"],
+        XCTAssertEqual(AddressHistoryStore.recent, ["0x00000010", "0x00000020"],
                        "one entry per address, most recent first")
     }
 
     /// The history is persisted: a form opened later offers the same addresses.
     func testTheFieldOffersThePersistedRecents() {
-        GoToHistoryStore.record(0x10)
-        GoToHistoryStore.record(0x7AF00)
+        AddressHistoryStore.record(0x10)
+        AddressHistoryStore.record(0x7AF00)
 
         let (form, _, _, _) = makeForm()
 
-        XCTAssertEqual(form.offsetCombo.objectValues as? [String],
+        XCTAssertEqual(form.offsetCombo.historyMenu().items.map(\.title),
                        ["0x0007AF00", "0x00000010"])
         XCTAssertEqual(form.offsetCombo.stringValue, "0x",
                        "the field is prefilled with the prefix, not the last address")
     }
 
     /// §10: the caret sits behind the "0x" so hex digits can be typed at once —
-    /// the rule the sheets' `HexInputField` follows, in the combo box too.
+    /// the rule every `AddressField` follows.
     func testTheFieldsCaretLandsAfterThe0xPrefix() throws {
         let (form, _, _, _) = makeForm()
         let window = try XCTUnwrap(form.view.window)
@@ -824,6 +881,39 @@ final class GoToBookmarksTests: XCTestCase {
 
         XCTAssertEqual(controller.lastAlertTitle, "Offset beyond end of file")
         XCTAssertEqual(controller.windowModel.pane1.hexSelection().start, 0x100)
+    }
+
+    /// The alert quotes an offset past 4 GB whole, not cut to 32 bits, and
+    /// the file's size as the count of bytes it says it is.
+    func testThePastTheEndAlertQuotesALargeOffsetWhole() throws {
+        let (controller, forms) = try makeController(bytes: [UInt8](repeating: 0x11, count: 0x100))
+        controller.goToPosition()
+        let form = try XCTUnwrap(forms().first)
+
+        form.offsetCombo.stringValue = "0x123456780"
+        form.goToTypedOffset()
+
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertEqual(message, "Offset 0x123456780 is beyond the end of the file(s), "
+                       + "whose size is 0x100 (256 bytes). Moved to the end.")
+    }
+
+    /// With a part's panel in front the jump is the panel's, and its alert
+    /// quotes the offset whole and the part's size in the same form.
+    func testThePanelsPastTheEndAlertQuotesALargeOffsetWhole() throws {
+        let (controller, forms) = try makeController(bytes: [UInt8](repeating: 0x11, count: 0x100))
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<32), named: "part", animated: false))
+        addTeardownBlock { @MainActor in controller.fragments.close(id, animated: false) }
+        controller.goToPosition()
+        let form = try XCTUnwrap(forms().first)
+
+        form.offsetCombo.stringValue = "0x123456780"
+        form.goToTypedOffset()
+
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertTrue(message.hasPrefix("Offset 0x123456780 is beyond the end of "), message)
+        XCTAssertTrue(message.hasSuffix(", whose size is 0x20 (32 bytes). Moved to the end."), message)
+        XCTAssertEqual(try XCTUnwrap(controller.fragments.pane(id)).hexSelection().start, 0x20)
     }
 
     /// A bookmark is an absolute offset (§8), so going to one moves BOTH panes

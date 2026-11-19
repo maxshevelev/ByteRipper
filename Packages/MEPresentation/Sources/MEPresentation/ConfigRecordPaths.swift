@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import MEFirmware
 
 /// What the files of an ID-keyed Configuration stream are called — the paths
@@ -70,7 +71,7 @@ public struct ConfigRecordPaths: Sendable, Equatable {
     public func path(for fileID: Int) -> String? {
         if let path = paths[fileID] { return path }
         guard resolution != nil else { return nil }
-        return String(format: "/Unknown/%08X.bin", fileID)
+        return "/Unknown/\(fileID.bareHexNumber(digits: 8)).bin"
     }
 
     /// Whether the table actually named this record, as against falling back.

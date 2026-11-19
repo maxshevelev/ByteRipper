@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 
 /// Bytes that do not change under the reader, from any thread: the parent a
@@ -189,8 +190,8 @@ public struct PartRefusal: Error, Equatable, Sendable {
         PartRefusal(
             title: L("The length changed"),
             message: L("“%1$@” is %2$@ bytes in %3$@, and this tab is %4$@. A part goes back only at its own length: another length would shift every byte after it, and the file structure may be affected.",
-                       partName, "0x" + String(source, radix: 16, uppercase: true), parentName,
-                       "0x" + String(now, radix: 16, uppercase: true))
+                       partName, source.hexNumber, parentName,
+                       now.hexNumber)
         )
     }
 }

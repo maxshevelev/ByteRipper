@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -141,7 +142,7 @@ public enum MEAAgentQueries {
                 // in the file's order, which `read` reads back.
                 if let extents = node.extents, !extents.isEmpty {
                     members["extents"] = .array(extents.prefix(Self.extentsShown).map {
-                        .object(["start": .string(hex($0.lowerBound)), "end": .string(hex($0.upperBound))])
+                        .object(["start": .string($0.lowerBound.hexNumber), "end": .string($0.upperBound.hexNumber)])
                     })
                     if extents.count > Self.extentsShown {
                         members["extents_note"] = .string("\(extents.count) stretches; the first \(Self.extentsShown) are listed.")
@@ -276,7 +277,7 @@ public enum MEAAgentQueries {
         case .filesNotNamed:
             return "the EFS volume was read, but its files are known only from the firmware database's file table, which was not available"
         case .unreadable(let offset):
-            return "unreadable: the partition table lists an EFS partition at \(hex(UInt64(offset))), but no EFS volume could be read there"
+            return "unreadable: the partition table lists an EFS partition at \(offset.hexNumber), but no EFS volume could be read there"
         case .noPartition:
             return "no EFS partition"
         }
@@ -304,8 +305,8 @@ public enum MEAAgentQueries {
         var members: [String: JSONValue] = ["id": .string(id(node.path)), "title": .string(node.title)]
         if !node.subtitle.isEmpty { members["subtitle"] = .string(node.subtitle) }
         if let range = node.range {
-            members["start"] = .string(hex(range.lowerBound))
-            members["end"] = .string(hex(range.upperBound))
+            members["start"] = .string(range.lowerBound.hexNumber)
+            members["end"] = .string(range.upperBound.hexNumber)
         }
         if let extents = node.extents, !extents.isEmpty { members["stretches"] = .count(extents.count) }
         if !node.children.isEmpty { members["children"] = .count(node.children.count) }
@@ -340,6 +341,4 @@ public enum MEAAgentQueries {
         }
         return parts.compactMap { $0 }
     }
-
-    nonisolated static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
 }

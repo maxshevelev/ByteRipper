@@ -1,4 +1,5 @@
 import Foundation
+import HexText
 import Localization
 
 /// The store as found in one image: the change log, the two `LENV` blocks,
@@ -182,7 +183,7 @@ public enum LenovoDMIFinding: Equatable, Sendable {
             return L("LENV block %1$@ has no signature where it should start.", block + 1)
         case .checksumMismatch(let block, let stored, let computed):
             return L("LENV block %1$@: the checksum is %2$@, the body adds up to %3$@.",
-                     block + 1, LE.hex(UInt64(stored), digits: 4), LE.hex(UInt64(computed), digits: 4))
+                     block + 1, stored.hexNumber(digits: 4), computed.hexNumber(digits: 4))
         case .entriesDoNotFit(let block):
             return L("LENV block %1$@: the entries its header counts do not fit in the block.", block + 1)
         case .storedInTheClear(let block):
@@ -191,9 +192,9 @@ public enum LenovoDMIFinding: Equatable, Sendable {
             return L("The two LENV blocks hold different values for: %1$@. The firmware reads the block in use.",
                      LocalizedText.joined(keys.map(LenovoDMIValue.name(of:)), separator: ", "))
         case .logWriteOffsetOutOfRange(let value):
-            return L("The change log's write offset %1$@ is outside the log.", LE.hex(UInt64(value), digits: 8))
+            return L("The change log's write offset %1$@ is outside the log.", value.hexNumber(digits: 8))
         case .logWriteOffsetMisaligned(let value):
-            return L("The change log's write offset %1$@ does not fall on an entry boundary.", LE.hex(UInt64(value), digits: 8))
+            return L("The change log's write offset %1$@ does not fall on an entry boundary.", value.hexNumber(digits: 8))
         }
     }
 }

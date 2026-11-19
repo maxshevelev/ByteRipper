@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import HexText
 import ToolModuleKit
 import UEFIImage
 
@@ -75,7 +76,7 @@ public enum UEFIAgentDMI {
                 UEFIAgentQueries.summary(of: node, in: tree),
                 [
                     "layout": .string(layout(of: store.kind)),
-                    "size": .string(UEFIAgentQueries.hex(store.range.upperBound - store.range.lowerBound)),
+                    "size": .string((store.range.upperBound - store.range.lowerBound).hexNumber),
                     "path": .array(UEFIAgentQueries.path(to: node.id, in: tree).map { .string($0) })
                 ].merging(UEFIAgentQueries.detailMembers(detail)) { first, _ in first }))
         }

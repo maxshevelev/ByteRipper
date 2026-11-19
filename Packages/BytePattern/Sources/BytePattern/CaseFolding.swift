@@ -30,6 +30,11 @@ public enum SearchError: Error, Equatable, Sendable {
     case emptyPattern
     /// Hex input was malformed: non-hex characters or an odd number of digits.
     case invalidHexPattern
+    /// A `?` that is not half of a `??`: a hole is a whole byte, and half a
+    /// byte cannot be masked.
+    case partialByteMask
+    /// A hex pattern of `??` alone, which would match at every offset.
+    case holesOnly
     /// The text could not be encoded in the requested encoding.
     case undecodableText
 }

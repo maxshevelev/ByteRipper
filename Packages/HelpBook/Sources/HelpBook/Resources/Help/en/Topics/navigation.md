@@ -10,6 +10,7 @@
 @covers menu.view.next-same
 @covers menu.view.previous-same
 @covers window.go-to-form
+@covers editing.address-arithmetic
 @covers menu.view.back
 @covers menu.view.forward
 @covers toolbar.history
@@ -28,9 +29,24 @@ For the purpose of this movement a difference is a whole run of differing bytes 
 - `0x1FE00` — hex, with the `0x` prefix (already in the field).
 - `130560` — decimal, without a prefix.
 
-The field retains the last ten addresses entered. Below it is the [[topic:bookmarks|bookmark list]]: Tab moves the keyboard there, and Return jumps to the selected bookmark.
+The field retains the last ten entries, sums included (see below). Below it is the [[topic:bookmarks|bookmark list]]: Tab moves the keyboard there, and Return jumps to the selected bookmark.
 
 In comparison mode the jump moves **both** panes, which are locked to the same address.
+
+## A sum in place of a number
+
+Every field that takes an address or a length also takes a sum of numbers joined by `+` and `-`, hex and decimal mixed: in Go To, **Edit ▸ Select Block…**, **Edit ▸ Add Cut…** and a bookmark's address.
+
+- `0x1FE000 + 4096` — an address in hex plus a length in decimal.
+- `0x2C0000 - 0x400 - 16` — any number of terms.
+
+The sum stays in the field as typed, so it can be checked and corrected. Its result is shown in bold at the right edge of the field, and the command uses the result. Go To and Select Block also show the whole sum in hex below the field: `0x1FE000 + 0x1000 = 0x1FF000 (2093056)`.
+
+! A number without `0x` is decimal: `0x1FE000 + 40` adds forty, not `0x40`. Check the line below the field when in doubt.
+
+Brackets and multiplication are not supported. A command is not carried out while the sum is unfinished, such as `0x1FE000 +`, or its result is negative.
+
+The arrow at the right edge of the field, or **↓**, lists recent addresses and sums. Choosing one puts it in the field; nothing happens until the command is confirmed.
 
 ## Back to where you were
 
@@ -42,7 +58,7 @@ The history belongs to the tab and holds the last fifty places. In comparison mo
 
 ## Selecting a block
 
-**Edit ▸ Select Block…** selects a range by number rather than by dragging: start and end, or start and length. Both fields accept hex with the `0x` prefix and plain decimal. The command is for selecting by hand, where the start, the end or the length of a range is known or has been worked out.
+**Edit ▸ Select Block…** selects a range by number rather than by dragging: start and end, or start and length. Each field accepts hex with the `0x` prefix, plain decimal, or a sum of both. The command is for selecting by hand, where the start, the end or the length of a range is known or has been worked out.
 
 ! **End** is the address of the last byte of the selection, not of the first byte after it. A start of `0x1000` with an end of `0x1FFF` therefore selects exactly `0x1000` bytes.
 

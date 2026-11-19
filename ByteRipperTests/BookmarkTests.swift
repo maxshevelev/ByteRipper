@@ -632,6 +632,27 @@ final class BookmarkTests: XCTestCase {
                        "a half-typed address leaves the bookmark on its own row, named")
     }
 
+    /// A click outside does not drop an address left as an unfinished sum: the
+    /// popover stays open with the field red, rather than keeping the old row
+    /// without a word.
+    func testAClickOutsideKeepsAnUnfinishedAddress() throws {
+        var events: [String] = []
+        let controller = BookmarkEditPopoverController(
+            row: 0x10, existingName: nil,
+            onCommit: { events.append("commit:\($0):\($1)") },
+            onCancel: { events.append("cancel") }
+        )
+        controller.loadViewIfNeeded()
+        var beeps = 0
+        controller.beep = { beeps += 1 }
+        controller.isAppActive = { true }
+        controller.offsetField.stringValue = "0x20 + 0x"
+        XCTAssertFalse(controller.popoverShouldClose(NSPopover()))
+        XCTAssertTrue(controller.offsetField.textColor == SemanticColors.bad)
+        XCTAssertEqual(beeps, 1)
+        XCTAssertEqual(events, [])
+    }
+
     /// Only the first outcome counts: the close that follows a Return or an Esc
     /// must not commit a second time.
     func testThePopoverSettlesOnce() throws {
@@ -795,7 +816,6 @@ final class BookmarkTests: XCTestCase {
         controller.offsetField.stringValue = "0x1F"
         XCTAssertEqual(controller.editedRow, 0x10, "its own row is always available to it")
     }
-
 
     /// The pane view anchors the popover on the mark itself, and the mark's rect
     /// is the same one the right-click focus ring uses (§20.4).
@@ -1343,6 +1363,9 @@ private extension BookmarkEditPopoverController {
     /// a test can read what it tells the user without knowing the view's shape.
     var labelTexts: [String] {
         func labels(in view: NSView) -> [String] {
+            // The address field's own parts — its result, its list button —
+            // are the field, not text or buttons of the popover.
+            if view is AddressField { return [] }
             let own = (view as? NSTextField).flatMap { $0.isEditable ? nil : $0.stringValue }
             return (own.map { [$0] } ?? []) + view.subviews.flatMap(labels(in:))
         }
@@ -1353,7 +1376,8 @@ private extension BookmarkEditPopoverController {
     /// interface, so a stray OK/Cancel row would be a regression.
     var buttons: [NSButton] {
         func found(in view: NSView) -> [NSButton] {
-            ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(found(in:))
+            if view is AddressField { return [] }
+            return ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(found(in:))
         }
         return found(in: view)
     }

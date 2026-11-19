@@ -27,8 +27,15 @@ let package = Package(
     products: [
         .library(name: "AgentKit", targets: ["AgentKit"])
     ],
+    dependencies: [
+        // How an address or a range is written in a refusal, as the app
+        // writes it everywhere else.
+        .package(path: "../HexText")
+    ],
     targets: [
-        .target(name: "AgentKit"),
+        .target(name: "AgentKit", dependencies: [
+            .product(name: "HexText", package: "HexText")
+        ]),
         .testTarget(
             name: "AgentKitTests",
             dependencies: ["AgentKit"]

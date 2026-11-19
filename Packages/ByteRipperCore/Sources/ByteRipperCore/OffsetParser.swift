@@ -46,9 +46,4 @@ public enum OffsetParser {
         guard let value = UInt64(digits, radix: 16) else { throw ParseError.outOfRange }
         return value
     }
-
-    /// Formats `value` as a lowercase hexadecimal string.
-    public static func hexString(_ value: UInt64) -> String {
-        String(value, radix: 16, uppercase: false)
-    }
 }
