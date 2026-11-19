@@ -1629,7 +1629,9 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: problem)), try XCTUnwrap(order.firstIndex(of: type)))
         XCTAssertEqual(order.firstIndex(of: verdict), try XCTUnwrap(order.firstIndex(of: type)) + 1,
                        "the verdict follows the type")
-        let target = try XCTUnwrap(order.last as? NSTextField)
+        // The target follows the verdict; the code badge and the spacer the
+        // shared cell keeps for a module may come after it, hidden.
+        let target = try XCTUnwrap(order[try XCTUnwrap(order.firstIndex(of: verdict)) + 1] as? NSTextField)
         XCTAssertTrue(target.stringValue.hasPrefix("r.E0"), target.stringValue)
     }
 

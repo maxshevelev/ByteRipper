@@ -323,9 +323,11 @@ final class UEFIChecksumFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(text.minX, icon.maxX,
                                     "the name follows the warning rather than "
                                     + "sitting over it")
-        XCTAssertGreaterThan(text.maxX, flagged.bounds.maxX - 4,
-                             "the name fills the rest of the cell — the slack "
-                             + "goes behind the text, not in front of it")
+        // The name hugs its text, so the code badge can stand right after
+        // it; the slack goes to a spacer behind them, never in front.
+        XCTAssertLessThanOrEqual(text.minX, icon.maxX + 8,
+                                 "the name stands against the warning — the slack "
+                                 + "goes behind the text, not in front of it")
 
         // The row under it checks out, and its name starts where the flagged
         // row's warning does.
