@@ -202,6 +202,21 @@ final class CodeReadingsTests: XCTestCase {
         guard case .json(.object(let listed)) = lines else { return XCTFail("not an object: \(lines)") }
         XCTAssertEqual(listed["matches"]?.arrayValue?.first?["line"], .int(5), "\(listed)")
 
+        // A regular expression given as `search` is text, and finds nothing:
+        // the answer says so and names `pattern`, rather than reading as a
+        // module with nothing left to name.
+        let literal = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("c"),
+            "search": .string(#"LAB_|[ui]Var\d"#)])))
+        guard case .json(.object(let asText)) = literal else { return XCTFail("not an object: \(literal)") }
+        XCTAssertEqual(asText["total"], .int(0), "\(asText)")
+        XCTAssertTrue(asText["note"]?.stringValue?.contains("`pattern`") ?? false, "\(asText)")
+        // Text that finds something, or holds no sign of a pattern, needs no note.
+        let plain = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("c"), "search": .string("nothing here")])))
+        guard case .json(.object(let none)) = plain else { return XCTFail("not an object: \(plain)") }
+        XCTAssertNil(none["note"], "\(none)")
+
         // Where a pattern does nothing, it is refused.
         do {
             _ = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([

@@ -721,6 +721,13 @@ public final class CodeReadings {
                 }
                 body["search"] = .string(search)
                 body["functions_matched"] = .int(Int64(holding))
+                // `search` is text as written. One that reads as a regular
+                // expression and finds nothing would pass for a module with
+                // nothing of it left, so the answer says where patterns go.
+                if matches.isEmpty, search.contains(where: { "|\\[]()*+?^$".contains($0) }) {
+                    body["note"] = .string("`search` is text as written, not a regular expression; "
+                        + "to find any of several things in one call, give it as `pattern`.")
+                }
                 listed = try page("matches", matches, [search])
                 break
             }
