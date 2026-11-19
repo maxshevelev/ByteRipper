@@ -18,7 +18,6 @@ final class FileChangeWatcher {
     var onChange: (() -> Void)?
 
     private var source: DispatchSourceFileSystemObject?
-    private var fileDescriptor: Int32 = -1
     private var debounceWorkItem: DispatchWorkItem?
     private let queue = DispatchQueue(label: "dev.maxik.ByteRipper.fileWatcher")
 
@@ -53,7 +52,6 @@ final class FileChangeWatcher {
     private func start(url: URL) {
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else { return }
-        fileDescriptor = fd
         let src = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .rename, .delete, .extend],
@@ -63,17 +61,15 @@ final class FileChangeWatcher {
         src.setEventHandler { [weak self] in
             self?.scheduleNotify()
         }
-        src.setCancelHandler { [weak self] in
-            self?.closeDescriptor()
+        // The source closes the descriptor it was made with, and nothing else.
+        // A handler that asked the watcher instead closed nothing once the
+        // watcher was gone — `deinit` cancels, the handler runs later — and
+        // after a `rebind` it could close the new file's descriptor, not this
+        // one: either way a descriptor stayed open on a file long deleted.
+        src.setCancelHandler {
+            close(fd)
         }
         src.resume()
-    }
-
-    private func closeDescriptor() {
-        if fileDescriptor >= 0 {
-            close(fileDescriptor)
-            fileDescriptor = -1
-        }
     }
 
     /// Coalesces bursts of events (a save can produce several writes) into one
