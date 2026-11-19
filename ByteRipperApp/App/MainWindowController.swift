@@ -221,9 +221,14 @@ final class MainWindowController: NSWindowController {
         place(size, topLeft: NSPoint(x: window.frame.minX, y: window.frame.maxY), in: visible)
     }
 
+    /// The app's windows, front to back, as the window server orders them.
+    /// A test names the order itself: which window a background test host
+    /// finds in front is the system's choice, not the app's logic.
+    static var windowsFrontToBack: () -> [NSWindow] = { NSApp.orderedWindows }
+
     /// The dump window in front of this one, which a new window steps off.
     private var windowInFront: NSWindow? {
-        NSApp.orderedWindows.first { other in
+        Self.windowsFrontToBack().first { other in
             other !== window && other.isVisible && !other.isMiniaturized
                 && other.windowController is MainWindowController
         }

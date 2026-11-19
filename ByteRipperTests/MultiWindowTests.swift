@@ -220,6 +220,11 @@ final class MultiWindowTests: XCTestCase {
     /// — clear of the Dock and the menu bar — its top-left where the cascade
     /// put it.
     func testAWindowForHandedFilesIsFittedClearOfTheDock() throws {
+        // No other window in front, whatever the test host has open: the
+        // window steps off the visible area's top-left corner.
+        let order = MainWindowController.windowsFrontToBack
+        MainWindowController.windowsFrontToBack = { [] }
+        defer { MainWindowController.windowsFrontToBack = order }
         let controller = MainWindowController(frameAutosaveName: nil)
         defer { controller.close() }
         controller.showWindow(nil)
@@ -237,10 +242,12 @@ final class MultiWindowTests: XCTestCase {
         let zoomed = controller.mainViewController.windowWillUseStandardFrame(window, defaultFrame: .zero)
         XCTAssertEqual(frame.width, min(zoomed.width, visible.width).rounded(.down), accuracy: 1,
                        "as wide as Zoom makes it")
-        if frame.maxX < visible.maxX - 1, frame.minY > visible.minY + 1 {
-            XCTAssertEqual(frame.minX, placed.minX, accuracy: 1, "the left edge stays")
-            XCTAssertEqual(frame.maxY, placed.maxY, accuracy: 1, "the top edge stays")
-        }
+        // The top-left stays where the cascade put it; an edge the new size
+        // would carry past the visible area starts again at its left or top.
+        let left = placed.minX + frame.width > visible.maxX + 1 ? visible.minX : placed.minX
+        let top = placed.maxY - frame.height < visible.minY - 1 ? visible.maxY : placed.maxY
+        XCTAssertEqual(frame.minX, left, accuracy: 1, "the left edge")
+        XCTAssertEqual(frame.maxY, top, accuracy: 1, "the top edge")
     }
 
     /// A window after another steps down and right off it, as a Mac document
@@ -250,12 +257,17 @@ final class MultiWindowTests: XCTestCase {
     /// top, one past the right edge at the left.
     func testNewWindowsCascadeClearOfTheDock() throws {
         var controllers: [MainWindowController] = []
-        defer { controllers.forEach { $0.close() } }
+        // The window shown last is the one in front, as it is in the app. The
+        // order is named here rather than asked of the window server: which
+        // window a background test host finds in front — the app's own launch
+        // window, one another test left open — is the system's choice.
+        let order = MainWindowController.windowsFrontToBack
+        MainWindowController.windowsFrontToBack = { controllers.reversed().compactMap(\.window) }
+        defer {
+            MainWindowController.windowsFrontToBack = order
+            controllers.forEach { $0.close() }
+        }
         for _ in 0..<12 {
-            // The window shown last is the one in front, as it is in the app;
-            // a test host in the background does not bring it there itself,
-            // and a window another test left open would be in front instead.
-            controllers.last?.window?.orderFrontRegardless()
             let controller = MainWindowController(frameAutosaveName: nil)
             controller.showWindow(nil)
             controllers.append(controller)
