@@ -186,7 +186,7 @@ private struct ChecksumPass: Sendable {
 /// tree, so the next tool-module to want the same branch finds it open.
 @MainActor public final class UEFIToolSession: ToolSession {
     private let host: any ToolHost
-    private let controller = UEFIToolViewController()
+    private let controller: UEFIToolViewController
 
     /// The pane's one shared lazy tree — everything this panel shows is read
     /// through it: the outline's rows, the summary line, the detail's fields,
@@ -406,6 +406,7 @@ private struct ChecksumPass: Sendable {
 
     public init(host: any ToolHost) {
         self.host = host
+        controller = UEFIToolViewController(isInPart: host.isPart)
         self.analyzer = MEFirmwareAnalyzer(data: Self.dataSource)
         // The Contents search asks the way the dump's Find bar does, with its
         // recent queries and its pattern library, when the host has them.

@@ -343,7 +343,12 @@ import UEFITool
     /// finds itself out of date and stops.
     private var searchRun = 0
     /// The query the panel last saw, so a change is told from a repeat.
-    private var shownQuery = UEFISearchSettings.query
+    private var shownQuery: UEFITreeQuery
+
+    /// This panel's search, which no other panel follows
+    /// (`UEFISearchState`): a window's, or — `isInPart` — a part panel's,
+    /// which starts shut.
+    let searchState: UEFISearchState
     private var searchObserver: NSObjectProtocol?
     /// The Contents search running, if one is.
     private var contentSearch: Task<Void, Never>?
@@ -409,6 +414,17 @@ import UEFITool
     /// what has changed since, so a column the user dragged keeps the width
     /// they gave it rather than snapping back to the design's.
     private var columnWidthSize = ToolPanelFont.designSize
+
+    /// `isInPart`: the panel is a part panel's, and its search starts shut.
+    init(isInPart: Bool = false) {
+        searchState = isInPart ? .forPart() : .forWindow()
+        shownQuery = searchState.query
+        super.init(nibName: nil, bundle: nil)
+        searchBar.state = searchState
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not from a nib") }
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 520))
@@ -479,7 +495,7 @@ import UEFITool
         searchBar.onSearch = { [weak self] direction in self?.search(direction) }
         searchBar.onStop = { [weak self] in self?.stopSearching() }
         searchBar.onFindAll = { [weak self] in self?.findAllContents() }
-        searchBar.onClose = { UEFISearchSettings.isOpen = false }
+        searchBar.onClose = { [weak self] in self?.searchState.isOpen = false }
         contentResults.onChoose = { [weak self] index in self?.goToContentMatch(index) }
         contentResults.onOpen = { [weak self] index in self?.openContentMatch(index) }
         contentResults.onStop = { [weak self] in self?.stopSearching() }
@@ -642,7 +658,7 @@ import UEFITool
         splitterBelowBar = splitter.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 10)
         applySearchVisibility()
         searchObserver = NotificationCenter.default.addObserver(
-            forName: UEFISearchSettings.didChange, object: nil, queue: .main
+            forName: UEFISearchSettings.didChange, object: searchState, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.searchSettingsChanged() }
         }
@@ -1608,7 +1624,7 @@ import UEFITool
     /// the window, so it answers the menu's action first; with the keyboard
     /// anywhere else the window's own Find bar opens as before.
     @objc func findPattern() {
-        UEFISearchSettings.isOpen = true
+        searchState.isOpen = true
         searchBar.focusField()
     }
 
@@ -1623,9 +1639,9 @@ import UEFITool
     @objc func findPreviousMatch() { findAgain(.backward) }
 
     private func findAgain(_ direction: UEFITreeSearch.Direction) {
-        UEFISearchSettings.isOpen = true
+        searchState.isOpen = true
         searchBar.adoptFindPasteboard(intoEmptyField: true)
-        if UEFISearchSettings.mode == .contents {
+        if searchState.mode == .contents {
             findAllContents()
         } else {
             search(direction)
@@ -1633,15 +1649,15 @@ import UEFITool
     }
 
     @objc private func searchClicked() {
-        UEFISearchSettings.isOpen.toggle()
-        guard UEFISearchSettings.isOpen else { return }
+        searchState.isOpen.toggle()
+        guard searchState.isOpen else { return }
         DispatchQueue.main.async { [weak self] in self?.searchBar.focusField() }
     }
 
     /// The bar open or shut, and the button saying so. Shutting it ends the
     /// search: what it opened is the reader's from here.
     private func applySearchVisibility() {
-        let open = UEFISearchSettings.isOpen
+        let open = searchState.isOpen
         searchBar.isHidden = !open
         splitterBelowSummary?.isActive = !open
         splitterBelowBar?.isActive = open
@@ -1656,7 +1672,7 @@ import UEFITool
     /// a search for the old query is over, and what it opened is left as it is.
     private func searchSettingsChanged() {
         applySearchVisibility()
-        let query = UEFISearchSettings.query
+        let query = searchState.query
         guard query != shownQuery else { return }
         shownQuery = query
         cancelSearch()
@@ -1678,7 +1694,7 @@ import UEFITool
     }
 
     private func search(_ direction: UEFITreeSearch.Direction) {
-        let query = UEFISearchSettings.query
+        let query = searchState.query
         guard !query.isEmpty, let tree else { return }
         // The string searched for is the Mac's find string from here on.
         searchBar.publishToFindPasteboard(query.text)
@@ -1722,7 +1738,7 @@ import UEFITool
     /// reads as bytes and then the text in ASCII and in UTF-16, any case.
     private func contentAttempts() -> [ToolPatternAttempt]? {
         if let query = searchBar.query { return query.attempts() }
-        let text = UEFISearchSettings.content.text.trimmingCharacters(in: .whitespaces)
+        let text = searchState.content.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
         searchBar.publishToFindPasteboard(text)
         var attempts: [ToolPatternAttempt] = []
@@ -1748,7 +1764,7 @@ import UEFITool
     /// the controls are told which.
     func findAllContents() {
         guard let tree else { return }
-        let content = UEFISearchSettings.content
+        let content = searchState.content
         guard let attempts = contentAttempts(), !attempts.isEmpty else { return }  // said by the controls
         guard !isBuilding else {
             waitForTree { [weak self] in self?.findAllContents() }

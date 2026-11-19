@@ -171,7 +171,7 @@ import ToolModuleKit
 
     private func startSession(_ module: any ToolModule.Type, on pane: PaneViewModel) {
         guard let owner else { return }
-        let host = PaneToolHost(pane: pane, owner: owner, tools: self)
+        let host = PaneToolHost(pane: pane, owner: owner, tools: self, isPart: pinnedPane != nil)
         let session = module.makeSession(host: host)
         // Consumed rather than copied: from here the session owns it, and what
         // comes back next time is whatever this session decides to leave.

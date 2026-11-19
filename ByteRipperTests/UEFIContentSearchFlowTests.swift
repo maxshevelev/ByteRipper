@@ -50,6 +50,12 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         super.tearDown()
     }
 
+    /// The search of the window's UEFI Structure panel.
+    private var search: UEFISearchState {
+        let session = controller?.tools.session as? UEFIToolSession
+        return (session?.viewController as! UEFIToolViewController).searchState
+    }
+
     private func open(_ bytes: [UInt8]) throws {
         let url = try tempFile(bytes)
         files.append(url)
@@ -69,8 +75,8 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         session.onDisplay = { _ in parsed.fulfill() }
         wait(for: [parsed], timeout: 5)
         session.onDisplay = nil
-        UEFISearchSettings.isOpen = true
-        UEFISearchSettings.mode = .contents
+        search.isOpen = true
+        search.mode = .contents
         window.layoutIfNeeded()
     }
 
@@ -87,9 +93,9 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         window.setContentSize(NSSize(width: 1200, height: 700))
         try controller.windowModel.pane1.open(url: url)
         controller.apply(mode: .singleFile)
-        UEFISearchSettings.isOpen = true
-        UEFISearchSettings.mode = .contents
         controller.tools.activate(UEFIToolModule.identifier, animated: false)
+        search.isOpen = true
+        search.mode = .contents
         window.layoutIfNeeded()
     }
 
@@ -108,7 +114,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         try openWithoutWaiting(try Self.slowImage())
         let tree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
         XCTAssertFalse(tree.isReady, "the test asks while the tree is read")
-        UEFISearchSettings.content = .init(text: "GH51G", wholeTree: true)
+        search.content = .init(text: "GH51G", wholeTree: true)
         let results = try results()
         let button = try XCTUnwrap(descendants(of: try bar(), NSButton.self).first { $0.accessibilityLabel() == "Find All" })
         button.performClick(nil)
@@ -122,8 +128,8 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         try openWithoutWaiting(try Self.slowImage())
         let tree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
         XCTAssertFalse(tree.isReady)
-        UEFISearchSettings.mode = .names
-        UEFISearchSettings.query = UEFITreeQuery(type: UEFITypes.Item.volume.rawValue)
+        search.mode = .names
+        search.query = UEFITreeQuery(type: UEFITypes.Item.volume.rawValue)
         let bar = try bar()
         bar.onSearch?(.forward)
         XCTAssertEqual(bar.status, .searching, "the bar says it is searching")
@@ -153,7 +159,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     /// Clicks Find All for `text` and waits for the search to be over: the
     /// results panel opens under the tree, with its progress while it runs.
     private func findAll(_ text: String, hex: Bool = false, wholeTree: Bool = true) throws -> UEFIContentResultsView {
-        UEFISearchSettings.content = .init(text: text, wholeTree: wholeTree)
+        search.content = .init(text: text, wholeTree: wholeTree)
         let bar = try bar()
         let button = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.accessibilityLabel() == "Find All" })
         XCTAssertFalse(button.isHiddenOrHasHiddenAncestor, "Find All is on screen in Contents mode")
@@ -189,12 +195,12 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         _ = try findAll("gh51g")
         XCTAssertEqual(button.contentTintColor, .controlAccentColor, "lit while the results are open")
 
-        UEFISearchSettings.mode = .names
+        search.mode = .names
         let arrows = try XCTUnwrap(descendants(of: bar, NSSegmentedControl.self).first { $0.segmentCount == 2 && $0.label(forSegment: 0) == nil })
         XCTAssertEqual(arrows.trackingMode, .momentary, "one joined ‹ › pair")
 
         done.performClick(nil)
-        XCTAssertFalse(UEFISearchSettings.isOpen, "Done shuts the bar")
+        XCTAssertFalse(search.isOpen, "Done shuts the bar")
         XCTAssertTrue(bar.isHidden)
     }
 
@@ -300,7 +306,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     func testTheBoxIsBesideTheSwitchAndTickedForTheWholeTree() throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
         ToolPanelFont.defaults.removeObject(forKey: "UEFIStructure.Search.ContentFromSelection")
-        XCTAssertTrue(UEFISearchSettings.content.wholeTree, "the whole tree unless asked otherwise")
+        XCTAssertTrue(search.content.wholeTree, "the whole tree unless asked otherwise")
         let bar = try bar()
         let box = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.title == "The whole tree" })
         let switcher = try XCTUnwrap(descendants(of: bar, NSSegmentedControl.self).first)
@@ -316,11 +322,11 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         try open(UEFITestImage.intelImageWithME())
         let bar = try bar()
         let note = { self.descendants(of: bar, NSTextField.self).first { $0.stringValue == "ME Region is not searched" } }
-        UEFISearchSettings.content = .init(text: "", wholeTree: true)
+        search.content = .init(text: "", wholeTree: true)
         XCTAssertEqual(note()?.isHidden, false, "the whole tree: said")
-        UEFISearchSettings.content = .init(text: "", wholeTree: false)
+        search.content = .init(text: "", wholeTree: false)
         XCTAssertEqual(note()?.isHidden, true, "from the selected node: not said")
-        UEFISearchSettings.mode = .names
+        search.mode = .names
         XCTAssertEqual(note()?.isHidden, false, "the name search says it whatever the box")
     }
 
@@ -444,9 +450,9 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertFalse(controls.patternField.isHiddenOrHasHiddenAncestor, "on screen in Contents mode")
         XCTAssertFalse(controls.smartButton.isHiddenOrHasHiddenAncestor)
         XCTAssertNotNil(controls.patternField.searchMenuTemplate, "with the menu of recents and the library")
-        UEFISearchSettings.mode = .names
+        search.mode = .names
         XCTAssertFalse(controls.patternField.isDescendant(of: bar), "the name search has its own field")
-        UEFISearchSettings.mode = .contents
+        search.mode = .contents
         XCTAssertTrue(controls.patternField.isDescendant(of: bar), "and back in Contents mode")
     }
 
@@ -505,7 +511,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     /// panel and in a fragment panel's.
     func testTheBoxLeavesTheTypedPatternAlone() throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
-        UEFISearchSettings.content = .init(text: "OLD", wholeTree: true)
+        search.content = .init(text: "OLD", wholeTree: true)
         let results = try findAll("GH51G")
         results.open(0)
         let controller = try XCTUnwrap(controller)
@@ -534,7 +540,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     /// menu — stays too when the box is used.
     func testTheBoxLeavesAPickedPatternAlone() throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
-        UEFISearchSettings.content = .init(text: "OLD", wholeTree: true)
+        search.content = .init(text: "OLD", wholeTree: true)
         FindHistoryStore.record(pattern: "GH51G", encoding: .ascii, caseSensitive: false)
         let controls = try controls()
         controls.rebuildPatternMenu()

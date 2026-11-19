@@ -128,6 +128,11 @@ import PartCodec
     /// a compressed section or a LENV block stored encoded is kept in the
     /// bytes it decodes to. `name` is the title offered to start from.
     func annotateNode(_ id: String, named name: String)
+
+    /// Whether the pane is a part's, in a panel over its file, rather than a
+    /// file of the window's own. A part panel keeps its choices — the tree's
+    /// search, for one — to itself.
+    var isPart: Bool { get }
 }
 
 public extension ToolHost {
@@ -139,6 +144,8 @@ public extension ToolHost {
     /// A host that keeps no annotations — a test double — offers none.
     var canAnnotate: Bool { false }
     func annotateNode(_ id: String, named name: String) {}
+    /// A test double stands for a file of its own.
+    var isPart: Bool { false }
 }
 
 /// The part of a host that reading needs: the file's name and size, its bytes,

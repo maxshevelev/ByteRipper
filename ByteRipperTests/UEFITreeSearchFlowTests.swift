@@ -47,6 +47,12 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         super.tearDown()
     }
 
+    /// The search of the window's UEFI Structure panel.
+    private var search: UEFISearchState {
+        let session = controller?.tools.session as? UEFIToolSession
+        return (session?.viewController as! UEFIToolViewController).searchState
+    }
+
     private func open(_ bytes: [UInt8]) throws {
         let url = try tempFile(bytes)
         files.append(url)
@@ -103,7 +109,7 @@ final class UEFITreeSearchFlowTests: XCTestCase {
     private func searchForTheDriver() throws {
         // The name section inside each driver carries the name too: a file is
         // what is looked for.
-        UEFISearchSettings.query = UEFITreeQuery(text: "mydriver", type: UEFITypes.Item.file.rawValue)
+        search.query = UEFITreeQuery(text: "mydriver", type: UEFITypes.Item.file.rawValue)
         try openTheBar()
     }
 
@@ -144,12 +150,12 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         XCTAssertFalse(field.isHiddenOrHasHiddenAncestor)
         field.stringValue = "driver"
         field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
-        XCTAssertEqual(UEFISearchSettings.query.text, "driver")
+        XCTAssertEqual(search.query.text, "driver")
 
         try openTheBar()
         XCTAssertTrue(field.isHiddenOrHasHiddenAncestor, "the same button shuts it")
-        XCTAssertEqual(UEFISearchSettings.query.text, "driver", "the query stays")
-        XCTAssertFalse(UEFISearchSettings.isOpen)
+        XCTAssertEqual(search.query.text, "driver", "the query stays")
+        XCTAssertFalse(search.isOpen)
     }
 
     /// ⌘F with the keyboard in the tree opens the tree's search and puts the
@@ -163,7 +169,7 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         // Down the responder chain from the tree, as the menu's ⌘F goes in a
         // key window: the panel answers before the window's own Find.
         XCTAssertTrue(outline.tryToPerform(#selector(MainViewController.findPattern), with: nil))
-        XCTAssertTrue(UEFISearchSettings.isOpen)
+        XCTAssertTrue(search.isOpen)
         let field = try XCTUnwrap(descendants(of: try panel, NSSearchField.self).first)
         XCTAssertFalse(field.isHiddenOrHasHiddenAncestor)
         XCTAssertTrue(pumpUntil(2) { (window.firstResponder as? NSText)?.delegate === field },
@@ -199,8 +205,8 @@ final class UEFITreeSearchFlowTests: XCTestCase {
 
         XCTAssertTrue(outline.tryToPerform(#selector(MainViewController.findNextMatch), with: nil),
                       "the panel answers before the window")
-        XCTAssertTrue(UEFISearchSettings.isOpen)
-        XCTAssertEqual(UEFISearchSettings.query.text, "mydriver")
+        XCTAssertTrue(search.isOpen)
+        XCTAssertEqual(search.query.text, "mydriver")
         XCTAssertTrue(pumpUntil(5) {
             outline.selectedRow >= 0
                 && ((try? self.nodeName(atRow: outline.selectedRow)) ?? "").lowercased().contains("mydriver")
@@ -227,12 +233,12 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         pasteboard.clearContents()
         pasteboard.setString("left over", forType: .string)
         try open(UEFITestImage.withTwoVolumes())
-        UEFISearchSettings.query = UEFITreeQuery(type: UEFITypes.Item.volume.rawValue)
+        search.query = UEFITreeQuery(type: UEFITypes.Item.volume.rawValue)
 
         try openTheBar()
 
-        XCTAssertEqual(UEFISearchSettings.query.text, "")
-        XCTAssertEqual(UEFISearchSettings.query.type, UEFITypes.Item.volume.rawValue)
+        XCTAssertEqual(search.query.text, "")
+        XCTAssertEqual(search.query.type, UEFITypes.Item.volume.rawValue)
     }
 
     func testTheTypeAndSubtypeAreKeptAsCodes() throws {
@@ -245,16 +251,16 @@ final class UEFITreeSearchFlowTests: XCTestCase {
 
         type.selectItem(withTitle: "File")
         _ = type.target?.perform(type.action, with: type)
-        XCTAssertEqual(UEFISearchSettings.query.type, UEFITypes.Item.file.rawValue)
+        XCTAssertEqual(search.query.type, UEFITypes.Item.file.rawValue)
         XCTAssertTrue(subtype.isEnabled)
 
         subtype.selectItem(withTitle: "Driver")
         _ = subtype.target?.perform(subtype.action, with: subtype)
-        XCTAssertEqual(UEFISearchSettings.query.subtype, 0x07)
+        XCTAssertEqual(search.query.subtype, 0x07)
 
         type.selectItem(withTitle: "Volume")
         _ = type.target?.perform(type.action, with: type)
-        XCTAssertNil(UEFISearchSettings.query.subtype, "a subtype goes with its type")
+        XCTAssertNil(search.query.subtype, "a subtype goes with its type")
         XCTAssertFalse(subtype.isEnabled)
     }
 
@@ -378,7 +384,7 @@ final class UEFITreeSearchFlowTests: XCTestCase {
 
     func testNothingFoundSaysSo() throws {
         try open(UEFITestImage.withTwoVolumes())
-        UEFISearchSettings.query = UEFITreeQuery(text: "no such node")
+        search.query = UEFITreeQuery(text: "no such node")
         try openTheBar()
         try next()
         XCTAssertTrue(pumpUntil(5) { shownTexts(try! self.panel).contains("Not found") },
@@ -386,11 +392,69 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         XCTAssertEqual(try outline().selectedRow, -1, "the selection is not moved")
     }
 
-    func testTheSecondPanelFollowsTheQuery() throws {
+    /// A part's panel opens with its bar shut, whatever the window's panel
+    /// shows, and what is opened, shut, asked for or scoped in either stays
+    /// in it: no panel follows another's search.
+    func testAPartsSearchStartsShutAndIsItsOwn() throws {
+        try open(UEFITestImage.withTwoVolumes())
+        let controller = try XCTUnwrap(self.controller)
+        let session = try XCTUnwrap(controller.tools.session as? UEFIToolSession)
+        search.query = UEFITreeQuery(text: "mydriver")
+        search.content = .init(text: "GH51G", wholeTree: true)
+        try openTheBar()
+        let field = try XCTUnwrap(descendants(of: try panel, NSSearchField.self).first)
+        XCTAssertFalse(field.isHiddenOrHasHiddenAncestor)
+
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        let volume = try XCTUnwrap(tree.image().allNodes.first { $0.kind == .volume })
+        session.openNodeInPanel(for: volume.id, body: false)
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.expanded != nil }, "the panel is raised")
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        defer { controller.fragments.close(id, animated: false) }
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        XCTAssertTrue(pumpUntil(5) { surface.tools.session is UEFIToolSession && surface.tools.panel != nil })
+        let partPanel = try XCTUnwrap(surface.tools.panel)
+        partPanel.layoutSubtreeIfNeeded()
+        let partField = try XCTUnwrap(descendants(of: partPanel, NSSearchField.self).first)
+        XCTAssertTrue(partField.isHiddenOrHasHiddenAncestor, "a part's bar starts shut")
+
+        let magnifier = try XCTUnwrap(descendants(of: partPanel, NSButton.self).first {
+            $0.toolTip == "Look for a node by its name, its GUID or its type"
+        })
+        magnifier.performClick(nil)
+        XCTAssertFalse(partField.isHiddenOrHasHiddenAncestor, "the part's button opens its bar")
+        magnifier.performClick(nil)
+        XCTAssertTrue(partField.isHiddenOrHasHiddenAncestor, "and shuts it")
+        XCTAssertFalse(field.isHiddenOrHasHiddenAncestor, "the window's bar stays open")
+        XCTAssertTrue(search.isOpen)
+
+        magnifier.performClick(nil)
+        try openTheBar()
+        XCTAssertTrue(field.isHiddenOrHasHiddenAncestor, "the window's bar shuts")
+        XCTAssertFalse(partField.isHiddenOrHasHiddenAncestor, "the part's stays open")
+        try openTheBar()
+
+        let partSession = try XCTUnwrap(surface.tools.session as? UEFIToolSession)
+        let partSearch = try XCTUnwrap(partSession.viewController as? UEFIToolViewController).searchState
+        partSearch.query = UEFITreeQuery(text: "elsewhere", type: UEFITypes.Item.volume.rawValue)
+        partSearch.mode = .contents
+        partSearch.content = .init(text: "OTHER", wholeTree: false)
+        XCTAssertEqual(search.query, UEFITreeQuery(text: "mydriver"), "the window's query stays")
+        XCTAssertEqual(search.mode, .names, "and its mode")
+        XCTAssertEqual(search.content, .init(text: "GH51G", wholeTree: true), "and its scope")
+        XCTAssertEqual(field.stringValue, "mydriver", "and its field")
+
+        search.content = .init(text: "GH51G", wholeTree: false)
+        XCTAssertEqual(partSearch.content, .init(text: "OTHER", wholeTree: false))
+        search.query = UEFITreeQuery(text: "again")
+        XCTAssertEqual(partSearch.query.text, "elsewhere", "nor does the part follow the window")
+    }
+
+    func testTheBarShowsItsPanelsQuery() throws {
         try open(UEFITestImage.withTwoVolumes())
         try openTheBar()
-        UEFISearchSettings.query = UEFITreeQuery(text: "elsewhere")
+        search.query = UEFITreeQuery(text: "elsewhere")
         let field = try XCTUnwrap(descendants(of: try panel, NSSearchField.self).first)
-        XCTAssertEqual(field.stringValue, "elsewhere", "a change made anywhere is shown")
+        XCTAssertEqual(field.stringValue, "elsewhere", "a change of the panel's search is shown")
     }
 }

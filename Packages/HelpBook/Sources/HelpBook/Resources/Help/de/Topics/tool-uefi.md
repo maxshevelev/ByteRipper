@@ -1,4 +1,4 @@
-@source-sha 39d5d6ab496178f315f5442590759cf90a3949583fcee29795bfb7f9f53e25c8
+@source-sha c9cb5b51d2fe97fcf6e1b43f0babdacd653438af6b41c244dacb6dae59f194d5
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -35,7 +35,7 @@ Die Pfeile — ebenso Return und Umschalt-Return im Textfeld — springen zum n�
 
 Der Treffer wird so ausgewählt, wie ein Klick darauf ihn auswählt: Details und Dump folgen. Die Suche öffnet die Zweige auf dem Weg zum Treffer und den Treffer selbst eine Ebene tief. Beim Weitergehen zum nächsten Treffer schließt sie wieder, was sie geöffnet hat und der neue Treffer nicht braucht, sodass der Baum in den Zustand vor der Suche zurückkehrt. Zweige, die der Benutzer geöffnet hat, bleiben unberührt. Öffnet oder schließt der Benutzer einen Zweig, während die Suche darauf steht, klickt er eine andere Zeile an, ändert er die Bedingung oder schließt er die Leiste, bleibt alles, wie es ist.
 
-Der Inhalt einer ME-Region wird nicht durchsucht: Der Unterbaum hat einen anderen Aufbau, den Name, GUID und Typ nicht beschreiben. Die Zeile der ME-Region selbst wird gefunden. Die Suchbedingungen sind in beiden Panels dieselben und bleiben beim erneuten Einlesen der Datei, beim Dateiwechsel und beim Neustart des Programms erhalten.
+Der Inhalt einer ME-Region wird nicht durchsucht: Der Unterbaum hat einen anderen Aufbau, den Name, GUID und Typ nicht beschreiben. Die Zeile der ME-Region selbst wird gefunden. Jedes Panel sucht für sich: Suchbedingungen, Modus, Suchbereich und ob die Suchleiste offen ist, gehören zu diesem Panel und ändern sich nicht in einem anderen Fenster oder in einem Fragment-Panel. Zwischen ihnen wird nur das Muster weitergegeben, über die gemeinsame Suchzeichenfolge. Das Panel eines Fensters beginnt mit der Suche, die im vorigen eingestellt war; sie bleibt daher beim erneuten Einlesen der Datei, beim Dateiwechsel und beim Neustart des Programms erhalten. In einem Fragment-Panel ist die Suchleiste zunächst geschlossen.
 
 ## Suche im Inhalt
 

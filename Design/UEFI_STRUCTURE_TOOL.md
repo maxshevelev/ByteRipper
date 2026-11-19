@@ -107,10 +107,15 @@ A magnifier left of the filter in the title row opens a bar above the tree;
 so does Edit ▸ Find (⌘F) while the tree or its details have the keyboard —
 the panel answers the menu's `findPattern` ahead of the window — and the
 cursor goes to the field. With the keyboard elsewhere ⌘F is the dump's Find. Its first line is the text and two arrows, its second a
-type and — for a file or a section — a subtype. What it shows is one query
-for the app (`UEFISearchSettings`, in the panel defaults), the same in both
-panes, kept through a reparse, a change of file and a restart, and stored as
-text and codes so a change of language leaves it alone.
+type and — for a file or a section — a subtype. Every panel has a search of
+its own (`UEFISearchState`): whether the bar is open, the query, the mode and
+the Contents scope. No panel follows another's — a window's, another window's
+or a part panel's; only the pattern goes from one to the next, through the
+find pasteboard, as between Find bars. A window's panel starts from what the
+last one left in the panel defaults, so its search is kept through a reparse,
+a change of file and a restart; a part panel's starts shut and keeps what it
+changes to itself. Stored as text and codes, so a change of language leaves
+it alone.
 
 **What matches.** The text is a case-insensitive substring of the name the row
 shows, of the node's own name or of its GUID, with the dashes or without when

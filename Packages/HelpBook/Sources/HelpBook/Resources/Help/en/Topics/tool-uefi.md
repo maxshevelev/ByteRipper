@@ -60,7 +60,7 @@ The arrows go to the next and the previous match — as do Return and Shift-Retu
 
 The match is selected as a click on it would select it: the details and the dump follow. The search opens the branches on the way to the match, and the match itself one level down. When it goes on to the next match it shuts again what it opened and the new match does not need, so that the tree returns to the state it had before the search. A branch the reader opened is not touched. A branch the reader opens or shuts while the search stands on it, a click on another row, a changed query or a closed bar leave everything as it is.
 
-The contents of an ME region are not searched: the sub-tree has another structure, which a name, a GUID and a type do not describe. The row of the ME region itself is found. What is asked for is the same in both panels, and it is kept through a re-read of the file, a change of file and a restart of the app.
+The contents of an ME region are not searched: the sub-tree has another structure, which a name, a GUID and a type do not describe. The row of the ME region itself is found. Each panel searches on its own: the query, the mode, the scope and whether the bar is open belong to that panel and do not change in another window or in a fragment panel. Only the pattern passes between them, through the shared search string. A window's panel starts with the search the previous one was left with, so it is kept through a re-read of the file, a change of file and a restart of the app; in a fragment panel the bar starts closed.
 
 ## Searching the contents
 

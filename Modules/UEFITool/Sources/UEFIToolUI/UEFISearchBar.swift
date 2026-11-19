@@ -24,7 +24,7 @@ import UEFITool
 /// joined ‹ › pair, Find All a quiet list glyph lit while its results are
 /// open, and `Done` a push button.
 ///
-/// It holds no query of its own. What it shows is `UEFISearchSettings`', and
+/// It holds no query of its own. What it shows is its `state`'s, and
 /// what the reader changes goes back there; the other pane's bar reads the
 /// same and follows.
 // help: panel.uefi.search
@@ -92,7 +92,12 @@ import UEFITool
         didSet { updateMENote() }
     }
 
-    private var mode: UEFISearchSettings.Mode = UEFISearchSettings.mode
+    private var mode: UEFISearchSettings.Mode = .names
+
+    /// The search this bar shows and changes: its panel's own.
+    var state = UEFISearchState.forPart() {
+        didSet { if state !== oldValue { reload() } }
+    }
 
     /// The name of the node selected in the tree; nil for none. The Contents
     /// search starts there while the box is ticked.
@@ -106,8 +111,12 @@ import UEFITool
         build()
         observer = NotificationCenter.default.addObserver(
             forName: UEFISearchSettings.didChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reload() }
+        ) { [weak self] note in
+            let changed = note.object as AnyObject?
+            MainActor.assumeIsolated {
+                guard let self, changed === self.state else { return }
+                self.reload()
+            }
         }
         findPasteboardWatch = FindPasteboard.observe { [weak self] in
             // The fields shown keep one pattern; a hidden bar takes it as it
@@ -334,7 +343,7 @@ import UEFITool
 
     /// Puts the stored query on the controls, without storing it back.
     private func reload() {
-        let newMode = UEFISearchSettings.mode
+        let newMode = state.mode
         if newMode != mode {
             mode = newMode
             status = .none
@@ -351,7 +360,7 @@ import UEFITool
         updateMENote()
         updateBottomRow()
         if contents {
-            let content = UEFISearchSettings.content
+            let content = state.content
             if let query {
                 if query.text != content.text { query.text = content.text }
             } else {
@@ -367,7 +376,7 @@ import UEFITool
             findAllButton.isEnabled = !content.text.trimmingCharacters(in: .whitespaces).isEmpty
             return
         }
-        let query = UEFISearchSettings.query
+        let query = state.query
         if field.stringValue != query.text, field.currentEditor() == nil || field.placeholderString != namesPlaceholder {
             field.stringValue = query.text
         }
@@ -394,7 +403,7 @@ import UEFITool
     /// The words after the box, while it is clear: the node Find All will
     /// start from.
     private func updateScope() {
-        let content = UEFISearchSettings.content
+        let content = state.content
         scopeLabel.isHidden = mode != .contents || content.wholeTree
         scopeLabel.stringValue = selectedNodeName.map { L("from %1$@", $0) }
             ?? L("Nothing selected: the whole tree")
@@ -408,7 +417,7 @@ import UEFITool
     /// image has one — but not for a Contents search from the selected node,
     /// whose own place is what the line says then.
     private func updateMENote() {
-        let fromNode = mode == .contents && !UEFISearchSettings.content.wholeTree
+        let fromNode = mode == .contents && !state.content.wholeTree
         meNote.isHidden = !showsMENote || fromNode
     }
 
@@ -480,10 +489,10 @@ import UEFITool
             query.adoptFindPasteboard(intoEmptyField: intoEmptyField)
             return
         }
-        let current = mode == .contents ? UEFISearchSettings.content.text : UEFISearchSettings.query.text
+        let current = mode == .contents ? state.content.text : state.query.text
         // Empty means asking for nothing at all: a name search by type alone
         // has an empty text and is still a search.
-        let asksNothing = mode == .contents ? current.isEmpty : UEFISearchSettings.query.isEmpty
+        let asksNothing = mode == .contents ? current.isEmpty : state.query.isEmpty
         var text = FindPasteboard.take(ifChangedSince: &findPasteboardSeen)
         if text == nil, intoEmptyField, asksNothing { text = FindPasteboard.string }
         guard let text, text != current else { return }
@@ -540,7 +549,7 @@ import UEFITool
     // MARK: - What the reader does
 
     private func storeContent(_ change: (inout UEFISearchSettings.Content) -> Void) {
-        var content = UEFISearchSettings.content
+        var content = state.content
         // The field as it is, however its text got there: a pattern picked
         // from its menu, or rewritten by a search (`deadbeef` read as bytes),
         // was never typed, and storing the box without it put the last typed
@@ -548,17 +557,17 @@ import UEFITool
         if mode == .contents, let query { content.text = query.text }
         change(&content)
         if status != .searching { status = .none }
-        UEFISearchSettings.content = content
+        state.content = content
     }
 
     private func store(text: String? = nil, type: UInt8?? = nil, subtype: UInt8?? = nil) {
-        var query = UEFISearchSettings.query
+        var query = state.query
         if let text { query.text = text }
         if let type { query.type = type }
         if let subtype { query.subtype = subtype }
         if !UEFITreeQuery.hasSubtypes(query.type) { query.subtype = nil }
         status = .none
-        UEFISearchSettings.query = query
+        state.query = query
     }
 
     func controlTextDidChange(_ notification: Notification) {
@@ -589,7 +598,7 @@ import UEFITool
     }
 
     @objc private func modeChosen() {
-        UEFISearchSettings.mode = modeControl.selectedSegment == 1 ? .contents : .names
+        state.mode = modeControl.selectedSegment == 1 ? .contents : .names
     }
 
     @objc private func scopeChosen() {
