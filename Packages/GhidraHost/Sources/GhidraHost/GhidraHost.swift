@@ -1147,13 +1147,16 @@ public actor GhidraHost {
     /// of the module, or the lease changed nothing: nothing counted since the
     /// last publish, or what would be stored is what would have been when the
     /// lease was taken. A new exporter's different artifact is no reason for a
-    /// revision nobody wrote.
+    /// revision nobody wrote — unless it grades the functions differently from
+    /// the store (`gradesStale`).
     private func publishChanges(_ module: SHA256Digest, by: String?) async throws -> Publication? {
         guard let token = leases[module], let record = await runningOwner(project(module)) else {
             leases[module] = nil
             // No lease here, as after a restart of this server: a done still means
             // the store gets what the project holds and it has not got.
-            guard await holdsUnpublishedWrites(module) else { return nil }
+            var due = await holdsUnpublishedWrites(module)
+            if !due, let record = await runningOwner(project(module)) { due = await gradesStale(module, record) }
+            guard due else { return nil }
             let publication = try await publish(module, by: by, byHost: true)
             leaseBaselines[module] = nil
             return publication
@@ -1167,6 +1170,7 @@ public actor GhidraHost {
         if !unchanged, quiet(), let baseline = leaseBaselines[module]?.content, let now = await leaseBaseline(record) {
             unchanged = now == baseline
         }
+        if unchanged, quiet(), await gradesStale(module, record) { unchanged = false }
         await releaseStep?(.compared)
         if unchanged, quiet() {
             leases[module] = nil
@@ -1183,6 +1187,22 @@ public actor GhidraHost {
         leaseBaselines[module] = nil
         _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
         return publication
+    }
+
+    /// Whether the store's newest analysis grades the module's functions —
+    /// `review_level`, `review_gaps` — otherwise than the owner's export does
+    /// now: an exporter that counts a placeholder differently changes no byte
+    /// of the program, and a review that reads its progress by the store's row
+    /// would otherwise need a dummy write to see it (issue 596d64b0). Only for a
+    /// reviewed module the store has a reading of; an owner that does not
+    /// answer has not said so.
+    private func gradesStale(_ module: SHA256Digest, _ record: OwnerRecord) async -> Bool {
+        guard (try? project(module).state().published?.review) != nil,
+              let stored = try? await writer.reviewGaps(module: module),
+              let raw = try? await Self.call(record.port, "POST", "/v1/publish?dry_run=1", timeout: 3600).data,
+              let now = try? JSONDecoder().decode(CodeArtifact.self, from: await Self.stored(raw, writer: writer).artifact)
+        else { return false }
+        return now.reviewGapsByEntry() != stored
     }
 
     /// Save and stop the module's owner.

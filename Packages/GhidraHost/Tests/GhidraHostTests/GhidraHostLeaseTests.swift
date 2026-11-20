@@ -264,4 +264,55 @@ final class GhidraHostLeaseTests: XCTestCase {
         _ = try await host.publish(module, by: "agent")
         XCTAssertEqual(written(), ["lease_take first", "publish first by agent r1", "publish_unchanged first by agent r1"])
     }
+
+    /// A give-back with nothing written still publishes when the store grades the
+    /// functions otherwise than the exporter does now — an exporter that counts a
+    /// placeholder differently (issue 596d64b0): the review reads its progress by
+    /// the store's row, and a dummy write was the only way to bring it in line.
+    func testADoneWithNothingWrittenBringsTheStoredGradesInLine() async throws {
+        let image = try image()
+        let host = try host()
+        module = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Module")
+        try await host.take(module)
+        try await comment(host, "published")
+        _ = try await host.publish(module, by: "agent")
+        let writer = await host.writer
+        let store = try XCTUnwrap(writer as? ContentStore)
+        let manifest = try XCTUnwrap(try store.analysis(module: module))
+        let read = try await store.reviewGaps(module: module)
+        let graded = try XCTUnwrap(read)
+        let entry = try XCTUnwrap(graded.first { !$0.value.contains("locals") }?.key)
+
+        // The store as an older exporter left it: one function short of its grade.
+        let stored = try await store.readObject(manifest.artifact.sha256)
+        var artifact = try XCTUnwrap(try JSONSerialization.jsonObject(with: stored) as? [String: Any])
+        var functions = try XCTUnwrap(artifact["functions"] as? [[String: Any]])
+        let index = try XCTUnwrap(functions.firstIndex { ($0["entry"] as? String)?.lowercased() == entry })
+        functions[index]["review_gaps"] = ((functions[index]["review_gaps"] as? [String]) ?? []) + ["locals"]
+        functions[index]["review_level"] = "partial"
+        artifact["functions"] = functions
+        // Published as a revision of its own, as the older exporter's publish was.
+        let olderCode = try store.putObject(try JSONSerialization.data(withJSONObject: artifact))
+        var reading = try XCTUnwrap(manifest.reading)
+        let history = try store.recordRevision(module: module, reading: reading, artifact: olderCode, by: "agent")
+        reading.rev = try XCTUnwrap(history.revisions.last?.rev)
+        let older = try store.putAnalysis(module: manifest.module, recipe: manifest.recipe,
+                                          artifact: try store.object(olderCode),
+                                          source: manifest.source, reading: reading)
+        let project = await host.project(module)
+        var state = try project.state()
+        state.published?.artifact = older.artifact.sha256.hex
+        state.published?.rev = reading.rev
+        try project.write(state)
+        let stale = try await store.reviewGaps(module: module)
+        XCTAssertNotEqual(stale, graded, "the store reads the older grade")
+
+        let given = try await host.release(module, by: "agent")
+        XCTAssertNotNil(given, "the grades are published although nothing was written")
+        let now = try await store.reviewGaps(module: module)
+        XCTAssertEqual(now, graded)
+        let revision = try await store.latestRevision(module: module)
+        XCTAssertEqual(revision?.rev, reading.rev + 1, "the grades are the store's next revision")
+    }
 }
