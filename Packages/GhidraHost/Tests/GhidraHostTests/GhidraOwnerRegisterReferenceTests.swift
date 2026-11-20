@@ -83,6 +83,30 @@ final class GhidraOwnerRegisterReferenceTests: XCTestCase {
         let after = try await carried()
         XCTAssertTrue(after.isEmpty, "\(after)")
     }
+
+    /// An LEA computes a value from a register the analysis knows: in
+    /// IhisiServicesSmm `LEA R8D,[RAX + 0x4]` with RAX at 0x8010 is the status
+    /// 0x8014, and its DATA reference kept `&DAT_00008014` in the C after the
+    /// status was named (issue 7a68b7e1). Here `LEA RDX,[RBX + 0x4]` at 0x41C6
+    /// in 0x3FCC has a DATA reference to 0x4004; naming the value in the
+    /// function lets it go, though no instruction there holds it whole.
+    func testAValueAnLeaComputesIsNoAddressOnceNamed() async throws {
+        func computed() async throws -> [[String: Any]] {
+            let rows = try await read("/v1/disassembly/0x3FCC?from=0x41C6&limit=1")["instructions"] as? [[String: Any]] ?? []
+            let row = try XCTUnwrap(rows.first { ($0["address"] as? String)?.uppercased() == "0X41C6" }, "\(rows)")
+            return (row["references"] as? [[String: Any]] ?? []).filter { ($0["to"] as? String)?.uppercased() == "0X4004" }
+        }
+        let before = try await computed()
+        XCTAssertFalse(before.isEmpty, "the premise: the LEA has a reference to 0x4004")
+
+        try await host.take(module)
+        let data = try await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: [
+            "name": "TEST_VALUE_4004", "value": "0x4004", "functions": ["0x3FCC"]]))
+        let answer = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNotNil(answer["address_references_dropped"], "\(answer)")
+        let after = try await computed()
+        XCTAssertTrue(after.isEmpty, "\(after)")
+    }
 }
 
 /// A constant in an image based at 0 is no address, though Ghidra may make a

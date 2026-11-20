@@ -767,9 +767,13 @@ public class Owner {
                 // READ of a device register is real.
                 ghidra.program.model.symbol.RefType type = reference.getReferenceType();
                 if (type != ghidra.program.model.symbol.RefType.DATA && type != ghidra.program.model.symbol.RefType.PARAM) continue;
-                if (!ghidra.program.model.lang.OperandType.isRegister(instruction.getOperandType(index))
+                // An LEA computes its `[reg+disp]`, reads nothing: `LEA R8D,[RAX + 0x4]`
+                // with RAX at 0x8010 is the status 0x8014 (issue 7a68b7e1).
+                boolean computed = instruction.getMnemonicString().equalsIgnoreCase("LEA")
+                    && instruction.getDefaultOperandRepresentation(index).contains("[");
+                if (!computed && (!ghidra.program.model.lang.OperandType.isRegister(instruction.getOperandType(index))
                     || instruction.getScalar(index) != null
-                    || instruction.getDefaultOperandRepresentation(index).contains("[")) continue;
+                    || instruction.getDefaultOperandRepresentation(index).contains("["))) continue;
                 manager.delete(reference);
                 dropped++;
             }
@@ -849,7 +853,9 @@ public class Owner {
                     if (count != null) droppedReferences += count.getAsInt();
                 }
             }
-            if (!dryRun && !applied.isEmpty()) droppedReferences += dropCarriedAddress(function, value);
+            // Named in these functions, the value is no address in any of them,
+            // even one that only computes it (issue 7a68b7e1).
+            if (!dryRun) droppedReferences += dropCarriedAddress(function, value);
         }
         JsonObject answer = identity();
         answer.addProperty("name", name);
@@ -6171,6 +6177,8 @@ public class Owner {
         equate.addReference(constant.hash(), constant.at());
         Function function = program.getFunctionManager().getFunctionContaining(asked);
         if (function != null) decompiled.remove(function.getEntryPoint());
+        int dropped = dropCarriedAddress(function, value);
+        if (dropped > 0) answer.addProperty("address_references_dropped", dropped);
         answer.addProperty("name", equate.getDisplayName());
         answer.addProperty("references", equate.getReferenceCount());
         return answer;
