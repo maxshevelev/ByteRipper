@@ -3376,6 +3376,13 @@ public class Owner {
                 if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
                 if (throughBaseRegister(instruction, reference.getOperandIndex())) continue;
                 if (!ExportCode.namedByOperands(instruction, reference.getToAddress())) continue;
+                // An immediate in an image based at zero is a constant, not an
+                // address: GetApicId's `MOV R8D,0x400` is the x2APIC enable
+                // bit, and Ghidra's PARAM reference to 0x400 made AsmReadCr2
+                // its callee (issue 787b26b6). Such an image reaches its data
+                // RIP-relative, through a memory operand.
+                if (!baseIsReal && !instruction.getDefaultOperandRepresentation(
+                        Math.max(0, reference.getOperandIndex())).contains("[")) continue;
                 named.add(reference.getToAddress());
             }
             if (baseIsReal) {
