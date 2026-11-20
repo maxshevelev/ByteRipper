@@ -151,15 +151,18 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             }
             return column
         }
-        let start = small(L("1. Start Claude Code in Terminal:"))
-        let claude = copyable(Self.startCommand)
-        let then = small(L("2. In its session, type the command of the role:"))
+        let start = small(L("1. Start Claude Code in Terminal, one window for each role, under the role's name:"))
+        let mac = AgentService.macName
+        let claude = copyable(Self.startCommand(role: "Reviewer", mac: mac))
+        let claudeVerifier = copyable(Self.startCommand(role: "Verifier", mac: mac))
+        let named = small(L("The two sessions find each other by these names; a session cannot name itself once it runs."))
+        let then = small(L("2. In each session, type the command of its role:"))
         let reviewer = command(Self.reviewerCommand, L("Reviewer: reviews modules and publishes them."))
         let verifier = command(Self.verifierCommand,
                                L("Verifier: checks the Reviewer's results and changes nothing."))
         let why = small(L("Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown."))
         let needs = small(L("Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows."))
-        let body = [intro, start, claude, then, reviewer, verifier, why, needs]
+        let body = [intro, start, claude, claudeVerifier, named, then, reviewer, verifier, why, needs]
         reviewAgents.addArrangedSubview(title)
         for view in body {
             reviewAgents.addArrangedSubview(view)
@@ -172,10 +175,15 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         reviewAgents.isHidden = true
     }
 
-    /// Started in Terminal; the role's prompt is then typed in its session.
-    /// Claude Code knows an MCP server's prompts only after connecting to it,
-    /// so `claude "/mcp__…"` at the start answers "Unknown command".
-    static let startCommand = "claude"
+    /// Started in Terminal under the role's session name; the role's prompt
+    /// is then typed in its session. Claude Code knows an MCP server's prompts
+    /// only after connecting to it, so `claude "/mcp__…"` at the start answers
+    /// "Unknown command". The name is how the pair finds each other with
+    /// `ListAgents` and `SendMessage`, and a session cannot set it itself: the
+    /// roles name their peer as `Verifier · <Mac>` and `Reviewer · <Mac>`.
+    static func startCommand(role: String, mac: String) -> String {
+        "claude -n '" + "\(role) · \(mac)".replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
     /// The role's prompt, which the app's MCP gives from the server's kit.
     static let reviewerCommand = "/mcp__byteripper__reviewer"
     static let verifierCommand = "/mcp__byteripper__verifier"

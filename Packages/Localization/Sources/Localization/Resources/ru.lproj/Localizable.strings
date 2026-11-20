@@ -1937,8 +1937,9 @@
 "The code of this analysis in the analysis store on this Mac is damaged." = "Код этого разбора в хранилище разборов на этом Mac повреждён.";
 "Review agents" = "Агенты разбора";
 "This server gives agents the roles of a review pair. Start each in its own Terminal window." = "Сервер выдаёт агентам роли пары разбора. Каждую роль запустите в отдельном окне Терминала.";
-"1. Start Claude Code in Terminal:" = "1. Запустите Claude Code в Терминале:";
-"2. In its session, type the command of the role:" = "2. В открывшейся сессии введите команду роли:";
+"1. Start Claude Code in Terminal, one window for each role, under the role's name:" = "1. Запустите Claude Code в Терминале, по окну на каждую роль, под именем роли:";
+"2. In each session, type the command of its role:" = "2. В каждой сессии введите команду её роли:";
+"The two sessions find each other by these names; a session cannot name itself once it runs." = "Сессии находят друг друга по этим именам. Запущенная сессия сама себя переименовать не может.";
 "Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown." = "Команды ByteRipper становятся известны Claude Code только после подключения к нему. Поэтому команду вводят в открытой сессии: переданная в claude при запуске, она не распознаётся.";
 "Reviewer: reviews modules and publishes them." = "Reviewer: разбирает модули и публикует их.";
 "Verifier: checks the Reviewer's results and changes nothing." = "Verifier: проверяет результаты Reviewer и ничего не изменяет.";

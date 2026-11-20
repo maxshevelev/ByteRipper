@@ -213,7 +213,10 @@ final class CodeAnalysisLocationTests: XCTestCase {
         settings.reviewKit = cache(refused: false)
         await wait("the commands") { !settings.reviewAgents.isHidden }
         let texts = Self.labels(in: settings.reviewAgents).map(\.stringValue)
-        XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.startCommand), "\(texts)")
+        for role in ["Reviewer", "Verifier"] {
+            let start = CodeAnalysisSettingsViewController.startCommand(role: role, mac: AgentService.macName)
+            XCTAssertTrue(texts.contains(start), "each session starts under its role's name: \(texts)")
+        }
         XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.reviewerCommand), "\(texts)")
         XCTAssertFalse(texts.contains { $0.hasPrefix("claude \"/") },
                        "a prompt is typed in the session, never given to claude at the start: \(texts)")
@@ -237,6 +240,15 @@ final class CodeAnalysisLocationTests: XCTestCase {
         try location.choose(.thisMac, server: address, token: nil)
         settings.refresh()
         XCTAssertTrue(settings.reviewAgents.isHidden, "no review pair with the analyses on this Mac")
+    }
+
+    /// The pair finds each other by session name, which only the start sets:
+    /// the role's name and the Mac's, quoted for the shell whatever the Mac
+    /// is called.
+    func testTheStartCommandNamesTheSessionForItsRole() {
+        typealias Settings = CodeAnalysisSettingsViewController
+        XCTAssertEqual(Settings.startCommand(role: "Reviewer", mac: "Bench-Mac"), "claude -n 'Reviewer · Bench-Mac'")
+        XCTAssertEqual(Settings.startCommand(role: "Verifier", mac: "Max's Mac"), "claude -n 'Verifier · Max'\\''s Mac'")
     }
 
     func testWhenTheReviewAgentsShow() {

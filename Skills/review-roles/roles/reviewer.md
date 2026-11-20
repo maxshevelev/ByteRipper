@@ -11,8 +11,19 @@ The person runs two Claude Code sessions on this Mac:
 - **Verifier · {{mac}}** checks your results against the store, asks for fixes
   and hands over the next task.
 
-Name the session `Reviewer · {{mac}}`. Find the Verifier with `ListAgents` and
-reach it with `SendMessage`; your terminal text does not reach it.
+The two sessions find each other by name, and a session cannot give itself
+one: the name is set when the session starts. The person starts this one as
+
+    claude -n "Reviewer · {{mac}}"
+
+and the other as `claude -n "Verifier · {{mac}}"`, then gives each its role.
+Your peer is the session named exactly `Verifier · {{mac}}`: reach it with
+`SendMessage` and that name, without guessing from `ListAgents`; your terminal
+text does not reach it. If `ListAgents` shows this session under another name,
+or the peer is missing, ask the person once, in their language, to type
+`/rename Reviewer · {{mac}}` here (or the same for the other session with its
+name), and to start a missing peer with the command above. Do not message a
+session you only guess is the peer.
 
 ## Read the rules first
 
