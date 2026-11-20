@@ -148,6 +148,8 @@ public class Owner {
     // The write lease (§7.3): one holder at a time, renewed by every write.
     private String leaseToken;
     private String leaseHolder;
+    /** A frame slot a refused rename showed keeps no name: first use, storage. */
+    private Object[] refusedSlot;
     private long leaseExpires;
     private long leaseTtl;
     // The review document of the last publish, for GET /v1/review.
@@ -509,7 +511,8 @@ public class Owner {
                 // A register or `unique:` piece with a name Ghidra made up is
                 // the decompiler splitting a value as a review types around
                 // it, not a name the review missed.
-                if (fragment(symbol.getStorage()) || ExportCode.unwrittenFrameSlot(symbol)) {
+                if (fragment(symbol.getStorage()) || ExportCode.unwrittenFrameSlot(symbol)
+                        || ExportCode.refusedName(symbol)) {
                     fragments++;
                     fragmentNames.add(symbol.getName());
                 } else {
@@ -4956,6 +4959,7 @@ public class Owner {
         long before = program.getModificationNumber();
         int transaction = program.startTransaction(exchange.getRequestURI().getPath());
         boolean done = false;
+        refusedSlot = null;
         try {
             JsonObject answer = change.apply(body);
             noteWriteOnMarks(exchange, body, before);
@@ -4963,6 +4967,25 @@ public class Owner {
             System.out.println("OWNER CHANGE " + leaseHolder + " " + exchange.getRequestURI().getPath()
                                + " " + body);
             return answer;
+        } finally {
+            endTransaction(transaction, done, before);
+            recordRefusedSlot();
+        }
+    }
+
+    /** After a refused rename is rolled back: the slot it showed keeps no name. */
+    private void recordRefusedSlot() {
+        Object[] slot = refusedSlot;
+        refusedSlot = null;
+        if (slot == null) return;
+        long before = program.getModificationNumber();
+        int transaction = program.startTransaction("slot the decompiler keeps no name on");
+        boolean done = false;
+        try {
+            ExportCode.recordRefusedName(program, (Address) slot[0], (String) slot[1]);
+            done = true;
+        } catch (Exception error) {
+            System.out.println("OWNER refused slot not recorded: " + error);
         } finally {
             endTransaction(transaction, done, before);
         }
@@ -4994,6 +5017,7 @@ public class Owner {
             long before = program.getModificationNumber();
             int transaction = program.startTransaction("batch item");
             boolean done = false;
+            refusedSlot = null;
             try {
                 JsonObject answer = change.apply(element.getAsJsonObject()).deepCopy();
                 noteWriteOnMarks(exchange, element.getAsJsonObject(), before);
@@ -5013,6 +5037,7 @@ public class Owner {
                 answers.add(refused);
             } finally {
                 endTransaction(transaction, done, before);
+                recordRefusedSlot();
             }
         }
         System.out.println("OWNER BATCH " + leaseHolder + " "
@@ -6970,8 +6995,14 @@ public class Owner {
                     + "(?![A-Za-z0-9_])").matcher(c == null ? "" : c).find();
             }
             if (!taken) {
+                // A frame slot the decompiler keeps no name on is its piece
+                // from here on, not a local left to name (issue 025eb415):
+                // recorded once the refused change is rolled back.
+                boolean frameSlot = askedStorage.startsWith("Stack[-") && askedFirstUse != null && placeholder(asked);
+                if (frameSlot) refusedSlot = new Object[] {askedFirstUse, askedStorage};
                 throw new Failure(409, "the decompiler did not keep the name " + applied + " on " + match.getName()
-                    + " (" + match.getStorage() + "); nothing was changed — say what it is in a comment");
+                    + " (" + match.getStorage() + "); nothing was changed — say what it is in a comment"
+                    + (frameSlot ? ". The slot no longer counts as a local left to name" : ""));
             }
             // The name can land on another symbol: a zero hash gives Ghidra
             // nothing of its own to commit against, and the symbol stored at

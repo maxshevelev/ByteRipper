@@ -747,6 +747,39 @@ public class ExportCode extends GhidraScript {
      * slot above the return address is an undeclared parameter, and stays a
      * gap.
      */
+    /**
+     * The program's record of the frame slots the decompiler would not keep a
+     * name on: a rename of one was tried, and its C still printed the
+     * placeholder (issue 025eb415). By its first use, one storage per line.
+     * The destination of a struct copied by value with REP MOVSD is such a
+     * slot when the decompiler reads it as a register left by a call: the
+     * review can only say what it is in a comment, so it is the decompiler's
+     * piece, not a local left to name.
+     */
+    static final String REFUSED_NAMES = "ByteRipper: slots the decompiler keeps no name on";
+
+    static boolean refusedName(HighSymbol symbol) {
+        Address at = symbol.getPCAddress();
+        ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
+        if (at == null || storage == null || symbol.getHighFunction() == null) return false;
+        ghidra.program.model.listing.Program program = symbol.getHighFunction().getFunction().getProgram();
+        ghidra.program.model.util.StringPropertyMap map =
+            program.getUsrPropertyManager().getStringPropertyMap(REFUSED_NAMES);
+        String held = map == null ? null : map.getString(at);
+        return held != null && Arrays.asList(held.split("\n")).contains(storage.toString());
+    }
+
+    /** Records a refused slot; in a transaction of the caller's. */
+    static void recordRefusedName(ghidra.program.model.listing.Program program, Address at, String storage)
+            throws Exception {
+        ghidra.program.model.util.PropertyMapManager maps = program.getUsrPropertyManager();
+        ghidra.program.model.util.StringPropertyMap map = maps.getStringPropertyMap(REFUSED_NAMES);
+        if (map == null) map = maps.createStringPropertyMap(REFUSED_NAMES);
+        String held = map.getString(at);
+        if (held != null && Arrays.asList(held.split("\n")).contains(storage)) return;
+        map.add(at, held == null ? storage : held + "\n" + storage);
+    }
+
     static boolean unwrittenFrameSlot(HighSymbol symbol) {
         ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
         if (storage == null || !storage.isStackStorage() || storage.getStackOffset() >= 0) return false;
@@ -981,7 +1014,7 @@ public class ExportCode extends GhidraScript {
                 // A register or `unique:` piece is the decompiler's split
                 // of a value, not a stored variable: it is not a name the
                 // review missed.
-                if (fragment(symbol.getStorage()) || unwrittenFrameSlot(symbol)) continue;
+                if (fragment(symbol.getStorage()) || unwrittenFrameSlot(symbol) || refusedName(symbol)) continue;
                 boolean named = !placeholder(symbol.getName()) && !undefined(symbol.getDataType());
                 String storage = symbol.getStorage().toString();
                 Boolean known = slots.get(storage);
