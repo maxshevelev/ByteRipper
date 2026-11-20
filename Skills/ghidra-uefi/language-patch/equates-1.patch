@@ -1,0 +1,13 @@
+--- a/Ghidra/Features/Decompiler/src/decompile/cpp/coreaction.cc
++++ b/Ghidra/Features/Decompiler/src/decompile/cpp/coreaction.cc
+@@ -1198,6 +1198,10 @@
+     if (check == Varnode::symcheck_incomplete && vn->getType()->getMetatype() != TYPE_PTR) continue;
+     if (vn->hasNoDescend()) continue;
+     if (vn->isSpacebase()) continue; // Don't use constant 0 which is already spacebase
++    // ByteRipper equates-1: a constant the program names with an equate is a value, not
++    // a pointer, even where a symbol sits at the same address (an image based at zero)
++    SymbolEntry *named = vn->getSymbolEntry();
++    if (named != (SymbolEntry *)0 && named->getSymbol()->getCategory() == Symbol::equate) continue;
+     //    if (vn->getSize() != rspc->getAddrSize()) continue; // Must be size of pointer
+ 
+     PcodeOp *op = vn->loneDescend();

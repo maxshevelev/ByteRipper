@@ -1,6 +1,6 @@
 # The x86 language patch and the decompiler patch
 
-Two patches, applied together by `Scripts/make-patched-ghidra.sh` to a copy of
+Three patches, applied together by `Scripts/make-patched-ghidra.sh` to a copy of
 a stock install. The stock install is not touched.
 
 `descriptor-tables-1.patch` changes Ghidra 12.2's
@@ -89,3 +89,41 @@ behavior. Registers are not changed.
   storage. Signatures set before keep the explicit storage they were given.
 - At a new Ghidra version the script stops, because `fspec.cc` is another file:
   read the patch against it, then make a new patch and a new id.
+
+# The decompiler patch: named constants
+
+`equates-1.patch` changes one action of the decompiler,
+`ActionConstantPtr` in `Ghidra/Features/Decompiler/src/decompile/cpp/coreaction.cc`.
+It is built into the same `decompile` as `stack-params-1`.
+
+## What it corrects
+
+The decompiler turns a constant into a pointer when its value is the address
+of a symbol and the constant is copied, compared, added or passed where a
+pointer could go. In an image based at zero a small constant often equals an
+address in the code: IhisiServicesSmm's status 0x802B is also a jump target
+inside its SMI handler. Once that target had a label, some 40 handlers printed
+`(UINTN)&CommandLookupDone` for the status, although each `MOV EAX,0x802b`
+carried the equate `IHISI_STATUS_BUFFER_RANGE_ERROR` and no reference to the
+address was left (issues 7d8fd720, 7a68b7e1). An equate does not stop the
+rule: it is applied to the constant before type recovery, and the rule never
+looks at it.
+
+With the patch the rule leaves alone a constant the program names with an
+equate. A constant without one is treated as before, so real pointers to
+globals, and pointers in modules based at their link address, do not change.
+
+| constant | stock | patched |
+|---|---|---|
+| `0x802B` with an equate, a label at 0x802B | `&CommandLookupDone` | `IHISI_STATUS_BUFFER_RANGE_ERROR` |
+| `0x802B` with no equate, a label at 0x802B | `&CommandLookupDone` | `&CommandLookupDone` |
+
+## What depends on it
+
+- The marker `byteripper-decompiler-patch` names both decompiler patches on
+  its first line, `stack-params-1+equates-1`. `decompiler_patch` in the owner's
+  `hello` and in the artifact carries the same text, and the recipe id reads
+  `-decomp-stack-params-1-equates-1`.
+- Like `stack-params-1`, it changes the C printed, not the program kept.
+- At a new Ghidra version the script stops, because `coreaction.cc` is another
+  file: read the patch against it, then make a new patch and a new id.

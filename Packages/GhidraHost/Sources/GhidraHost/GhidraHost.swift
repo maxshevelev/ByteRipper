@@ -1423,7 +1423,7 @@ public actor GhidraHost {
         var id = "code-v\(exporter)-ghidra-\(safeRecipe(ghidra ?? "unknown"))"
         // A patched language prints other C from the same Ghidra.
         if let patch = artifact["language_patch"] as? String { id += "-lang-\(safeRecipe(patch))" }
-        // So does a patched decompiler (stack-params-1).
+        // So does a patched decompiler (stack-params-1, equates-1).
         if let patch = artifact["decompiler_patch"] as? String { id += "-decomp-\(safeRecipe(patch))" }
         if let types {
             if let dash = types.range(of: "-r", options: .backwards),

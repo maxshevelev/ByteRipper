@@ -1,7 +1,8 @@
 #!/bin/bash
 # Makes the Ghidra the analyses run on: a copy of a stock install with the x86
 # language patched and compiled, and the decompiler's 32-bit x86 stack
-# parameters corrected and rebuilt; the stock install left as it was.
+# parameters and its reading of named constants corrected and rebuilt; the
+# stock install left as it was.
 #
 #   Scripts/make-patched-ghidra.sh <stock ghidra home> <new folder>
 #
@@ -23,6 +24,7 @@ patches="$here/../Skills/ghidra-uefi/language-patch"
 [ -d "$patches" ] || patches="$here/../ghidra/language-patch"
 id=descriptor-tables-1
 decompiler_id=stack-params-1
+equates_id=equates-1
 languages=Ghidra/Processors/x86/data/languages
 cpp=Ghidra/Features/Decompiler/src/decompile/cpp
 java=Ghidra/Framework/SoftwareModeling/src/main/java
@@ -44,6 +46,13 @@ if [ "$have" != "$fspec_sha" ]; then
     echo "$stock/$cpp/fspec.cc is not the file $decompiler_id was made against: read the patch against it first" >&2
     exit 1
 fi
+# The decompiler's coreaction.cc the third patch was made against.
+coreaction_sha=c41b8f4563591820a8a9904f4b745a631e6470d6484b9967dbe465dc28863876
+have="$(shasum -a 256 "$stock/$cpp/coreaction.cc" | cut -d' ' -f1)"
+if [ "$have" != "$coreaction_sha" ]; then
+    echo "$stock/$cpp/coreaction.cc is not the file $equates_id was made against: read the patch against it first" >&2
+    exit 1
+fi
 if [ -e "$stock/byteripper-language-patch" ]; then
     echo "$stock already carries a language patch: start from a stock install" >&2
     exit 1
@@ -59,6 +68,7 @@ mkdir -p "$copy/$java"
 unzip -q -o "$stock/Ghidra/Framework/SoftwareModeling/lib/SoftwareModeling-src.zip" \
     ghidra/program/model/lang/ParamEntry.java -d "$copy/$java"
 patch -s -p1 -d "$copy" < "$patches/$decompiler_id.patch"
+patch -s -p1 -d "$copy" < "$patches/$equates_id.patch"
 build="$(mktemp -d)"
 cp -R "$copy/$cpp/" "$build/"
 make -s -C "$build" -j8 ghidra_opt CXX="clang++ -std=c++11" >/dev/null
@@ -72,7 +82,7 @@ classes="$(mktemp -d)"
 (cd "$classes" && "$JAVA_HOME/bin/jar" uf "$copy/$modeling" ghidra/program/model/lang/ParamEntry*.class)
 rm -rf "$classes"
 {
-    echo "$decompiler_id"
+    echo "$decompiler_id+$equates_id"
     (cd "$copy" && shasum -a 256 "Ghidra/Features/Decompiler/os/$os/decompile" "$modeling")
 } > "$copy/byteripper-decompiler-patch"
 for spec in x86.slaspec x86-64.slaspec; do
@@ -82,6 +92,6 @@ done
     echo "$id"
     (cd "$copy" && shasum -a 256 "$languages/x86.sla" "$languages/x86-64.sla")
 } > "$copy/byteripper-language-patch"
-echo "made $copy: $id, $decompiler_id"
+echo "made $copy: $id, $decompiler_id, $equates_id"
 sed -n '2,$p' "$copy/byteripper-language-patch"
 sed -n '2,$p' "$copy/byteripper-decompiler-patch"
