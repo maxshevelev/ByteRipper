@@ -1,3 +1,4 @@
+import AppPalette
 import Cocoa
 import IntelCPUID
 import ToolModuleKit
@@ -70,6 +71,18 @@ final class CPUIDLookupWindowTests: XCTestCase {
         XCTAssertTrue(lookup.tableScroll.isHidden, "no models: the heading is all there is")
         XCTAssertEqual(lookup.statusLabel.stringValue,
                        "No models are listed for this CPUID. What is known about it is above.")
+        XCTAssertEqual(lookup.statusLabel.textColor, .secondaryLabelColor, "an answer, if a short one")
+    }
+
+    /// A search that found nothing says so in red, as the Find bar's "Not
+    /// found"; one that found something, in the secondary colour.
+    func testNothingFoundIsSaidInRed() {
+        lookup.setQuery("no such processor zzz")
+        XCTAssertEqual(lookup.statusLabel.stringValue,
+                       "Nothing found. Check the spelling, or try part of the number.")
+        XCTAssertEqual(lookup.statusLabel.textColor, SemanticColors.bad)
+        lookup.setQuery("B06F5")
+        XCTAssertEqual(lookup.statusLabel.textColor, .secondaryLabelColor)
     }
 
     /// A search that found something is remembered, and replaces what was

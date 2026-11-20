@@ -1,4 +1,5 @@
 import Cocoa
+import AppPalette
 import HelpUI
 import IntelCPUID
 import Localization
@@ -265,6 +266,9 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
         tableView.reloadData()
 
         let status: String
+        // Nothing found is a negative answer: in red, as the Find bar's
+        // "Not found" is.
+        var nothingFound = false
         if lookup.tables.isEmpty {
             status = refreshing
                 ? L("Loading…")
@@ -273,15 +277,18 @@ final class CPUIDLookupViewController: NSViewController, NSSearchFieldDelegate, 
             status = L("%1$@ processors under %2$@ CPUIDs. Type to search.",
                        String(lookup.modelCount), String(lookup.cpuidCount))
         } else if rows.isEmpty, let heading = headings.first {
+            nothingFound = heading.family == nil
             status = heading.family == nil
                 ? L("The table has no entry for this CPUID.")
                 : L("No models are listed for this CPUID. What is known about it is above.")
         } else if rows.isEmpty {
+            nothingFound = true
             status = L("Nothing found. Check the spelling, or try part of the number.")
         } else {
             status = L("Found: %1$@", String(rows.count))
         }
         statusLabel.stringValue = status
+        statusLabel.textColor = nothingFound ? SemanticColors.bad : .secondaryLabelColor
         footerLabel?.stringValue = lookup.tables.retrieved.map { L("Updated %1$@. Data and sources:", $0) }
             ?? L("Data and sources:")
 
