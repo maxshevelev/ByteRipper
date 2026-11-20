@@ -121,4 +121,31 @@ final class GhidraOwnerImmediateReferenceTests: XCTestCase {
         XCTAssertFalse(callees.isEmpty, "its calls stay: \(entry)")
         XCTAssertEqual(entry["data_references"] as? [String], [], "\(entry)")
     }
+
+    /// In an image based at zero a constant can equal a code address, and
+    /// the analysis gives the operand a reference there, so the C prints
+    /// `&LAB_…` for a status code (issue 7d8fd720). A review naming the value
+    /// names that operand too: it is an immediate, and the false reference
+    /// goes. 0x601C holds the mask 0x400, which the analysis took for code.
+    func testAConstantTakenForAnAddressTakesAnEquate() async throws {
+        let before = try await read("/v1/disassembly/0x6004?limit=80")["instructions"] as? [[String: Any]] ?? []
+        let mask = try XCTUnwrap(before.first { ($0["address"] as? String)?.uppercased() == "0X601C" })
+        XCTAssertFalse((mask["references"] as? [[String: Any]] ?? []).isEmpty, "the premise: a reference to 0x400 \(mask)")
+
+        try await host.take(module)
+        let data = try await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: [
+            "name": "TEST_MASK_0400", "value": "0x400", "functions": ["0x6004"]]))
+        let answer = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let applied = (answer["applied"] as? [[String: Any]] ?? []).compactMap { ($0["address"] as? String)?.uppercased() }
+        XCTAssertTrue(applied.contains("0X601C"), "named as an immediate: \(answer)")
+        let refused = (answer["not_immediate"] as? [[String: Any]] ?? []).compactMap { ($0["address"] as? String)?.uppercased() }
+        XCTAssertFalse(refused.contains("0X601C"), "\(answer)")
+
+        let after = try await read("/v1/disassembly/0x6004?limit=80")["instructions"] as? [[String: Any]] ?? []
+        let named = try XCTUnwrap(after.first { ($0["address"] as? String)?.uppercased() == "0X601C" })
+        XCTAssertTrue((named["references"] as? [[String: Any]] ?? []).isEmpty, "the false reference went: \(named)")
+        let c = try await read("/v1/function/0x6004")["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("TEST_MASK_0400"), "the C prints the name: \(c)")
+        XCTAssertFalse(c.contains("LAB_00000400") || c.contains("FUN_00000400"), "not an address: \(c)")
+    }
 }

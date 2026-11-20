@@ -707,6 +707,43 @@ public class Owner {
     }
 
     /**
+     * An immediate Ghidra took for an address: in an image based at zero a
+     * small constant — an IHISI status 0x802B — equals some code address, and
+     * the analysis gave the operand a DATA reference there, so the C prints
+     * `&LAB_0000802b` (issue 7d8fd720). The operand is a constant by itself:
+     * no memory operand, and every reference from it lands on its own value.
+     * Named by a review, it is an immediate, and the reference goes.
+     */
+    private boolean immediateTakenForAddress(Instruction instruction, int index) {
+        if (program.getImageBase().getOffset() >= 0x10000) return false;
+        int type = instruction.getOperandType(index);
+        ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(index);
+        if (scalar == null || !ghidra.program.model.lang.OperandType.isScalar(type)
+            || ghidra.program.model.lang.OperandType.isDynamic(type)) return false;
+        if (instruction.getDefaultOperandRepresentation(index).contains("[")) return false;
+        ghidra.program.model.symbol.Reference[] references = instruction.getOperandReferences(index);
+        if (references.length == 0) return false;
+        for (ghidra.program.model.symbol.Reference reference : references) {
+            if (!reference.isMemoryReference() || reference.getToAddress().getOffset() != scalar.getUnsignedValue()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The references `immediateTakenForAddress` saw, let go; how many. */
+    private int dropFalseAddress(Instruction instruction, int index) {
+        if (!immediateTakenForAddress(instruction, index)) return 0;
+        ghidra.program.model.symbol.ReferenceManager manager = program.getReferenceManager();
+        int dropped = 0;
+        for (ghidra.program.model.symbol.Reference reference : instruction.getOperandReferences(index)) {
+            manager.delete(reference);
+            dropped++;
+        }
+        return dropped;
+    }
+
+    /**
      * One name on a value wherever `functions` hold it as an immediate operand.
      * Only an immediate: a value by itself would also match a displacement or
      * an address. An operand that already has another name keeps it and is
@@ -744,7 +781,7 @@ public class Owner {
                     ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(index);
                     if (scalar == null || !holds(scalar, value)) continue;
                     Address at = instruction.getAddress();
-                    if (!isImmediate(instruction, index)) {
+                    if (!isImmediate(instruction, index) && !immediateTakenForAddress(instruction, index)) {
                         JsonObject item = new JsonObject();
                         item.addProperty("address", hex(at));
                         item.addProperty("operand", index);
@@ -5856,7 +5893,7 @@ public class Owner {
         boolean inDisplacement = false;
         for (int index = 0; index < instruction.getNumOperands() && scalar == null; index++) {
             if (operand >= 0 && index != operand) continue;
-            if (operand < 0 && !isImmediate(instruction, index)) {
+            if (operand < 0 && !isImmediate(instruction, index) && !immediateTakenForAddress(instruction, index)) {
                 for (Object object : instruction.getOpObjects(index)) {
                     if (object instanceof ghidra.program.model.scalar.Scalar candidate && (value == null
                         || holds(candidate, value))) {
@@ -5969,6 +6006,8 @@ public class Owner {
             dropEquates(table, at, operand);
             if (equate == null) equate = table.createEquate(name, held);
         }
+        int dropped = dropFalseAddress(instruction, operand);
+        if (dropped > 0) answer.addProperty("address_reference_dropped", true);
         equate.addReference(at, operand);
         answer.addProperty("name", equate.getDisplayName());
         answer.addProperty("references", equate.getReferenceCount());
