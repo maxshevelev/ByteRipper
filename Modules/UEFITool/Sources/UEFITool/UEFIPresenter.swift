@@ -432,7 +432,7 @@ public enum UEFIPresenter {
     /// file's name: the name is the file's, and a file's name is not translated.
     public static func partName(of node: UEFINode, body: Bool = false, image: UEFIImage? = nil,
                                 in language: AppLanguage = Localization.appLanguage) -> String {
-        let shown = node.displayName(in: language)
+        let shown = fileName(node, in: language) ?? node.displayName(in: language)
         let name = shown.isEmpty ? L("Node", in: language) : shown
         if node.kind == .section, let image, let module = moduleName(above: node.id, in: image, language: language) {
             let section = imageFormat(ofSection: node) ?? name
@@ -448,12 +448,21 @@ public enum UEFIPresenter {
         var path = id.path
         while true {
             if let file = image.node(NodeID(path)), file.kind == .file {
-                let name = file.displayName(in: language)
+                let name = fileName(file, in: language) ?? file.displayName(in: language)
                 return name.isEmpty ? nil : name
             }
             guard !path.isEmpty else { return nil }
             path.removeLast()
         }
+    }
+
+    /// A file's name as the tree shows it ahead of its header's: the text of
+    /// its Name section, found inside a compressed section too. A PEIM whose
+    /// Name section is compressed has none on its header, and the parser names
+    /// it by its type — `PEIM` — which every such module shares. Nil for a
+    /// node that is not a file, or a file with no Name section.
+    static func fileName(_ node: UEFINode, in language: AppLanguage) -> String? {
+        UEFITreeDisplay.ownName(of: node)
     }
 
     /// An image section's format, `PE32`, `PIC`, `TE`; nil for any other.

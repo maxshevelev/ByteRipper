@@ -13,7 +13,7 @@ final class CodePartNameTests: XCTestCase {
         let secCore = UEFINode(id: .root.child(0).child(0), kind: .file, subtype: 0x03,
                                name: "SecCore", header: 0..<0x18, body: 0x18..<0x80,
                                children: [UEFINode(id: .root.child(0).child(0).child(0), kind: .section,
-                                                   subtype: 0x15, name: "UI", header: 0x18..<0x1C, body: 0x1C..<0x1C),
+                                                   subtype: 0x15, name: "SecCore", header: 0x18..<0x1C, body: 0x1C..<0x1C),
                                           pe32])
         let peim = UEFINode(id: .root.child(0).child(1), kind: .file, subtype: 0x06,
                             name: "S3RestoreAcpiPei", header: 0x80..<0x98, body: 0x98..<0xF0, children: [te])
@@ -27,13 +27,37 @@ final class CodePartNameTests: XCTestCase {
                        "a file whose body is the image: the bytes say the format")
         XCTAssertNil(UEFIPresenter.codePartName(of: volume.id, in: image, bytes: []), "no file, no module name")
 
-        // Any section of a module opens under the module's name.
+        // Any section of a module opens under the module's name; a Name
+        // section's own name is its text, as the parser reads it.
         let ui = secCore.children[0]
-        XCTAssertEqual(UEFIPresenter.partName(of: ui, body: true, image: image), "SecCore ▸ UI")
-        XCTAssertEqual(UEFIPresenter.partName(of: ui, body: false, image: image), "SecCore ▸ UI with header")
+        XCTAssertEqual(UEFIPresenter.partName(of: ui, body: true, image: image), "SecCore ▸ SecCore")
+        XCTAssertEqual(UEFIPresenter.partName(of: ui, body: false, image: image), "SecCore ▸ SecCore with header")
         XCTAssertEqual(UEFIPresenter.nodeOpen(for: pe32, in: image, body: true)?.partName, "SecCore ▸ PE32")
         XCTAssertEqual(UEFIPresenter.partName(of: secCore, body: true, image: image), "SecCore body",
                        "the file itself keeps its own name")
         XCTAssertEqual(UEFIPresenter.partName(of: pe32, body: true), "PE32 image body", "without the image, as before")
+    }
+
+    /// A module whose Name section is inside its compressed section — a PEIM
+    /// in a compressed volume, AhciBusPei — has no name on its file header:
+    /// the parser names the file by its type. Its panel takes the name the
+    /// tree shows, read from that Name section, not `PEIM`.
+    func testAModuleNamedInsideItsCompressedSectionIsCalledByThatName() {
+        let base = NodeID.root.child(0).child(0)
+        let name = UEFINode(id: base.child(0).child(0), kind: .section, subtype: 0x15,
+                            name: "AhciBusPei", header: 0x30..<0x34, body: 0x34..<0x4A)
+        let pe32 = UEFINode(id: base.child(0).child(1), kind: .section, subtype: 0x10,
+                            name: "PE32 image", header: 0x4C..<0x50, body: 0x50..<0xC0)
+        let lzma = UEFINode(id: base.child(0), kind: .section, subtype: 0x02, name: "LZMA section",
+                            header: 0x18..<0x30, body: 0x30..<0xC0, children: [name, pe32])
+        let file = UEFINode(id: base, kind: .file, subtype: 0x06, name: "PEIM",
+                            header: 0..<0x18, body: 0x18..<0xC0, children: [lzma])
+        let volume = UEFINode(id: .root.child(0), kind: .volume, name: "Volume",
+                              header: 0..<0, body: 0..<0x100, children: [file])
+        let image = UEFIImage(size: 0x100, roots: [volume])
+
+        XCTAssertEqual(UEFIPresenter.codePartName(of: pe32.id, in: image, bytes: [0x4D, 0x5A]), "AhciBusPei ▸ PE32")
+        XCTAssertEqual(UEFIPresenter.partName(of: pe32, body: true, image: image), "AhciBusPei ▸ PE32")
+        XCTAssertEqual(UEFIPresenter.partName(of: file, body: true, image: image), "AhciBusPei body")
     }
 }
