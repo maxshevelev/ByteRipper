@@ -1,3 +1,5 @@
+import AppPalette
+import ByteRipperCore
 import XCTest
 @testable import ToolModuleKit
 import UEFIImage
@@ -172,6 +174,40 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertGreaterThan(results.frame.height, 50, "the panel is open under the tree")
         XCTAssertTrue(results.progressBar.isHidden)
         return results
+    }
+
+    /// A pattern the chosen encoding cannot read is said as the dump's Find
+    /// bar says it: "Invalid pattern" in the error colour, the sentence behind
+    /// it in the tooltip — GUID with Smart Search off is one such.
+    func testAnInvalidGuidIsSaidAsTheFindBarSaysIt() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let bar = try bar()
+        let field = try XCTUnwrap(descendants(of: bar, NSSearchField.self).first)
+        let encoding = try XCTUnwrap(descendants(of: bar, NSPopUpButton.self).first { $0.accessibilityLabel() == "Encoding" })
+        let smart = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.accessibilityLabel() == "Smart Search" })
+        if smart.state == .on { smart.performClick(nil) }
+        XCTAssertEqual(smart.state, .off, "the premise: the chosen encoding is the search")
+        encoding.selectItem(at: SearchEncoding.allCases.firstIndex(of: .guid)!)
+        encoding.sendAction(encoding.action, to: encoding.target)
+        field.stringValue = "CDEA2BD3-FC25-4C1C"
+        NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field)
+        let button = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.accessibilityLabel() == "Find All" })
+        button.performClick(nil)
+        _ = pumpUntil(0.5) { false }
+        window?.layoutIfNeeded()
+
+        let said = descendants(of: bar, NSTextField.self).first { $0.stringValue == "Invalid pattern" }
+        let label = try XCTUnwrap(said, "the bar says the pattern is not one")
+        XCTAssertFalse(label.isHiddenOrHasHiddenAncestor, "on screen")
+        XCTAssertGreaterThanOrEqual(label.frame.width, label.intrinsicContentSize.width - 1, "whole: \(label.frame)")
+        // An image with an ME region has its note on the same line.
+        bar.showsMENote = true
+        window?.layoutIfNeeded()
+        XCTAssertFalse(label.isHiddenOrHasHiddenAncestor, "on screen beside the ME note")
+        XCTAssertGreaterThanOrEqual(label.frame.width, label.intrinsicContentSize.width - 1,
+                                    "whole beside the ME note: \(label.frame)")
+        XCTAssertEqual(label.toolTip, "Invalid GUID — write it as CDEA2BD3-FC25-4C1C-B97C-B31186064990.")
+        XCTAssertEqual(label.textColor, SemanticColors.bad, "in the Find bar's error colour")
     }
 
     /// The bar's first line starts with Find and ends with Done, which shuts
