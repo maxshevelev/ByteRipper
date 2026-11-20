@@ -57,6 +57,32 @@ final class GhidraOwnerRegisterReferenceTests: XCTestCase {
         XCTAssertFalse(callees.contains { $0.hasPrefix("code at") }, "\(fill) \(callees)")
         XCTAssertEqual(entry["data_references"] as? [String], [], "\(entry)")
     }
+
+    /// The analysis carries a constant on through registers and gives the
+    /// register operands a reference to it as well: in IhisiServicesSmm
+    /// `MOV RAX,RBX` and `MOV ECX,EAX` kept DATA and PARAM references to the
+    /// status 0x802B after its immediates were named, so the address kept
+    /// its label and the C still printed `&LAB_0000802b` (issue 7d8fd720).
+    /// Here 0x1960 holds 0x1200, and `SHR R8,0xc` at 0x1B24 has a PARAM
+    /// reference to it. Naming the value in the function lets those go.
+    func testAValueNamedInAFunctionIsNoAddressInItsRegisters() async throws {
+        func carried() async throws -> [[String: Any]] {
+            let rows = try await read("/v1/disassembly/0x1960?from=0x1B24&limit=1")["instructions"] as? [[String: Any]] ?? []
+            let row = try XCTUnwrap(rows.first { ($0["address"] as? String)?.uppercased() == "0X1B24" }, "\(rows)")
+            return (row["references"] as? [[String: Any]] ?? []).filter { ($0["to"] as? String)?.uppercased() == "0X1200" }
+        }
+        let before = try await carried()
+        XCTAssertFalse(before.isEmpty, "the premise: SHR R8 carries a reference to 0x1200")
+
+        try await host.take(module)
+        let data = try await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: [
+            "name": "TEST_SIZE_1200", "value": "0x1200", "functions": ["0x1960"]]))
+        let answer = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertFalse((answer["applied"] as? [[String: Any]] ?? []).isEmpty, "the premise: 0x1960 holds 0x1200 \(answer)")
+        XCTAssertNotNil(answer["address_references_dropped"], "\(answer)")
+        let after = try await carried()
+        XCTAssertTrue(after.isEmpty, "\(after)")
+    }
 }
 
 /// A constant in an image based at 0 is no address, though Ghidra may make a
@@ -144,6 +170,7 @@ final class GhidraOwnerImmediateReferenceTests: XCTestCase {
         let after = try await read("/v1/disassembly/0x6004?limit=80")["instructions"] as? [[String: Any]] ?? []
         let named = try XCTUnwrap(after.first { ($0["address"] as? String)?.uppercased() == "0X601C" })
         XCTAssertTrue((named["references"] as? [[String: Any]] ?? []).isEmpty, "the false reference went: \(named)")
+        XCTAssertNotNil(answer["address_references_dropped"], "\(answer)")
         let c = try await read("/v1/function/0x6004")["c"] as? String ?? ""
         XCTAssertTrue(c.contains("TEST_MASK_0400"), "the C prints the name: \(c)")
         XCTAssertFalse(c.contains("LAB_00000400") || c.contains("FUN_00000400"), "not an address: \(c)")

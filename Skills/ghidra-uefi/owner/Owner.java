@@ -744,6 +744,40 @@ public class Owner {
     }
 
     /**
+     * The same value carried on in a register: the analysis follows `MOV
+     * EAX,0x802b` into `MOV RAX,RBX` and `MOV ECX,EAX` and gives those a DATA
+     * or PARAM reference to 0x802B too. While any reference is left, the
+     * address keeps its label, and the decompiler prints the constant as
+     * `&LAB_0000802b` whatever equate it has (issue 7d8fd720). In a function
+     * where the value is named, in an image based at zero, a reference the
+     * analysis made from a register operand to exactly that value goes.
+     */
+    private int dropCarriedAddress(Function function, long value) {
+        if (function == null || program.getImageBase().getOffset() >= 0x10000) return 0;
+        ghidra.program.model.symbol.ReferenceManager manager = program.getReferenceManager();
+        int dropped = 0;
+        InstructionIterator instructions = program.getListing().getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
+                int index = reference.getOperandIndex();
+                if (index < 0 || reference.getSource() != ghidra.program.model.symbol.SourceType.ANALYSIS
+                    || !reference.isMemoryReference() || reference.getToAddress().getOffset() != value) continue;
+                // A register by itself: `[RAX]` is a read through it, and its
+                // READ of a device register is real.
+                ghidra.program.model.symbol.RefType type = reference.getReferenceType();
+                if (type != ghidra.program.model.symbol.RefType.DATA && type != ghidra.program.model.symbol.RefType.PARAM) continue;
+                if (!ghidra.program.model.lang.OperandType.isRegister(instruction.getOperandType(index))
+                    || instruction.getScalar(index) != null
+                    || instruction.getDefaultOperandRepresentation(index).contains("[")) continue;
+                manager.delete(reference);
+                dropped++;
+            }
+        }
+        return dropped;
+    }
+
+    /**
      * One name on a value wherever `functions` hold it as an immediate operand.
      * Only an immediate: a value by itself would also match a displacement or
      * an address. An operand that already has another name keeps it and is
@@ -772,6 +806,7 @@ public class Owner {
         JsonArray applied = new JsonArray();
         JsonArray skipped = new JsonArray();
         JsonArray notImmediate = new JsonArray();
+        int droppedReferences = 0;
         ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
         for (Function function : functions) {
             InstructionIterator instructions = program.getListing().getInstructions(function.getBody(), true);
@@ -810,9 +845,11 @@ public class Owner {
                     one.remove("dry_run");
                     one.addProperty("address", hex(at));
                     one.addProperty("operand", index);
-                    applyEquate(one);
+                    JsonElement count = applyEquate(one).get("address_references_dropped");
+                    if (count != null) droppedReferences += count.getAsInt();
                 }
             }
+            if (!dryRun && !applied.isEmpty()) droppedReferences += dropCarriedAddress(function, value);
         }
         JsonObject answer = identity();
         answer.addProperty("name", name);
@@ -822,6 +859,7 @@ public class Owner {
         answer.add("applied", applied);
         answer.add("skipped", skipped);
         if (notImmediate.size() > 0) answer.add("not_immediate", notImmediate);
+        if (droppedReferences > 0) answer.addProperty("address_references_dropped", droppedReferences);
         return answer;
     }
 
@@ -6007,7 +6045,11 @@ public class Owner {
             if (equate == null) equate = table.createEquate(name, held);
         }
         int dropped = dropFalseAddress(instruction, operand);
-        if (dropped > 0) answer.addProperty("address_reference_dropped", true);
+        if (dropped > 0) {
+            dropped += dropCarriedAddress(program.getFunctionManager().getFunctionContaining(at),
+                                          instruction.getScalar(operand).getUnsignedValue());
+            answer.addProperty("address_references_dropped", dropped);
+        }
         equate.addReference(at, operand);
         answer.addProperty("name", equate.getDisplayName());
         answer.addProperty("references", equate.getReferenceCount());
