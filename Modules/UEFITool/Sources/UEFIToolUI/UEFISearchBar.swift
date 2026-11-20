@@ -458,8 +458,9 @@ import UEFITool
             progressBar.isHidden = true
             stopButton.isHidden = true
         case .none, .notFound:
+            // Nothing found is said in red too, as the Find bar says it.
             statusLabel.stringValue = status == .notFound ? L("Not found") : ""
-            statusLabel.textColor = .secondaryLabelColor
+            statusLabel.textColor = status == .notFound ? SemanticColors.bad : .secondaryLabelColor
             statusLabel.toolTip = nil
             statusLabel.isHidden = false
             progressBar.isHidden = true

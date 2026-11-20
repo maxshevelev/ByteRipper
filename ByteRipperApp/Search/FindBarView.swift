@@ -371,7 +371,9 @@ final class FindBarView: NSView {
             ControlHelp.describe(warningView, nil)
             return
         }
-        countLabel.textColor = .secondaryLabelColor
+        // A search that found nothing is a negative answer too: in red, as
+        // a pattern that is not one is.
+        countLabel.textColor = count.map { $0.hasMatches } == false ? SemanticColors.bad : .secondaryLabelColor
         countLabel.stringValue = count?.text ?? ""
         countLabel.isHidden = count == nil
         countLabel.toolTip = count?.warning

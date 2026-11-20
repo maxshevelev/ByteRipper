@@ -1,4 +1,5 @@
 import Cocoa
+import AppPalette
 import ByteRipperCore
 import HelpUI
 import HexText
@@ -422,6 +423,7 @@ final class SearchResultsViewController: NSViewController {
             scrollView.isHidden = false
         case .tooMany(let total):
             messageLabel.stringValue = L("%1$@ matches — too many to list. Refine the pattern.", Self.grouped(total))
+            messageLabel.textColor = .secondaryLabelColor
             messageLabel.isHidden = false
             scrollView.isHidden = true
         case .empty:
@@ -429,10 +431,12 @@ final class SearchResultsViewController: NSViewController {
             // where the rows were. An empty table would read as a panel that
             // failed to load rather than as a pattern that occurs nowhere.
             messageLabel.stringValue = L("No matches.")
+            messageLabel.textColor = SemanticColors.bad  // a negative answer, as the bar's "Not found"
             messageLabel.isHidden = false
             scrollView.isHidden = true
         case .searching:
             messageLabel.stringValue = L("Searching…")
+            messageLabel.textColor = .secondaryLabelColor
             messageLabel.isHidden = false
             scrollView.isHidden = true
         }

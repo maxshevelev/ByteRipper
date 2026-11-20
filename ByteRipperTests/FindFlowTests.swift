@@ -494,6 +494,7 @@ final class FindFlowTests: XCTestCase {
         combo.stringValue = "FF FF"
         try clickFindNext(window)
         XCTAssertTrue(pumpUntil(3) { bar.countTextForTests == "Not found" })
+        XCTAssertEqual(bar.countColorForTests, SemanticColors.bad, "a search that found nothing is said in red")
         XCTAssertFalse(bar.navControlEnabledForTests, "nothing to step through")
         XCTAssertFalse(bar.findAllEnabledForTests, "nothing to list")
 
@@ -1824,6 +1825,7 @@ final class FindFlowTests: XCTestCase {
         let message = try XCTUnwrap(descendants(of: view.view, NSTextField.self)
             .first { $0.stringValue == "No matches." })
         XCTAssertFalse(message.isHidden, "it says so where the rows would have been")
+        XCTAssertEqual(message.textColor, SemanticColors.bad, "in red, as the bar's Not found")
     }
 
     /// A press of ‹ › on a search that is already indexed must **step**: no
