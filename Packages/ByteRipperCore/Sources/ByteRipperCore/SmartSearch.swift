@@ -91,6 +91,12 @@ public enum SmartSearch {
         return pairs.allSatisfy { $0 == "??" || $0.allSatisfy(\.isHexDigit) }
     }
 
+    /// Whether `text` reads as a GUID — `CDEA2BD3-FC25-4C1C-B97C-B31186064990`,
+    /// braces optional — and so is looked for as one before anything else.
+    public static func looksLikeGuid(_ text: String) -> Bool {
+        MaskedPattern.guidBytes(text) != nil
+    }
+
     /// The encodings a text pattern is tried in, in order: the ones a reader is
     /// most likely to have meant first. ASCII before UTF-8 because they ask the
     /// same question of a plain string and ASCII is the narrower claim; the
@@ -98,8 +104,8 @@ public enum SmartSearch {
     /// a character.
     public static let textOrder: [SearchEncoding] = [.ascii, .utf8, .utf16LE, .utf16BE]
 
-    /// What to look for, in the order to look: hex first when the text reads as
-    /// hex, then the text encodings.
+    /// What to look for, in the order to look: a GUID first when the text
+    /// reads as one, hex when it reads as hex, then the text encodings.
     ///
     /// `preferred` goes in front of all of it. It is for a pattern the *user*
     /// brought an encoding with — one picked out of the field's history, where
@@ -107,6 +113,8 @@ public enum SmartSearch {
     /// encoding as much as about the pattern, and guessing over it would throw
     /// away what the user already knows. Typing anything is not such a
     /// statement, and then this is nil and the order is read off the pattern.
+    /// A text that reads as a GUID goes before even that: written so, it says
+    /// what it is more plainly than any encoding a history entry carries.
     ///
     /// Attempts asking the same question are merged, so the file is scanned
     /// once per question rather than once per encoding. An encoding that cannot
@@ -116,6 +124,7 @@ public enum SmartSearch {
     public static func attempts(for text: String, caseSensitive: Bool,
                                 preferring preferred: SearchEncoding? = nil) -> [Attempt] {
         var order: [SearchEncoding] = []
+        if looksLikeGuid(text) { order.append(.guid) }
         if let preferred { order.append(preferred) }
         if looksLikeHexBytes(text) { order.append(.hex) }
         order.append(contentsOf: textOrder)

@@ -126,10 +126,24 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(seen, 0x1FFF)
     }
 
+    /// A GUID as code writes it is found as the bytes it is in an image, and
+    /// anything that is not one GUID is refused.
+    func testAGuidIsFoundAsItsBytesInMemory() async throws {
+        try open([0x00, 0x11, 0xD3, 0x2B, 0xEA, 0xCD, 0x25, 0xFC, 0x1C, 0x4C,
+                  0xB9, 0x7C, 0xB3, 0x11, 0x86, 0x06, 0x49, 0x90, 0x22])
+        let found = try await client.answer("find_bytes", ["guid": "{cdea2bd3-fc25-4c1c-b97c-b31186064990}"])
+        XCTAssertEqual(starts(found), ["0x2"])
+        XCTAssertEqual(found["matches"]?.arrayValue?.first?["encoding"], "guid")
+        let bad = try await client.call("find_bytes", ["guid": "CDEA2BD3FC254C1CB97CB31186064990"])
+        XCTAssertTrue(bad.answer.stringValue?.hasPrefix("`guid` is not a GUID.") == true, "\(bad.answer)")
+        let both = try await client.call("find_bytes", ["guid": "CDEA2BD3-FC25-4C1C-B97C-B31186064990", "hex": "00"])
+        XCTAssertEqual(both.answer, "Give one of `text`, `hex` and `guid`.")
+    }
+
     func testAPatternThatCannotBeSearchedIsRefused() async throws {
         try open([1, 2, 3, 4])
         let neither = try await client.call("find_bytes")
-        XCTAssertEqual(neither.answer, "Give `text` or `hex`, one of them.")
+        XCTAssertEqual(neither.answer, "Give one of `text`, `hex` and `guid`.")
         let odd = try await client.call("find_bytes", ["hex": "ABC"])
         XCTAssertTrue(odd.answer.stringValue?.hasPrefix("`hex` is not a byte pattern.") == true)
         let holes = try await client.call("find_bytes", ["hex": "?? ??"])

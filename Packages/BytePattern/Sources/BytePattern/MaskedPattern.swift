@@ -71,6 +71,41 @@ public struct MaskedPattern: Equatable, Sendable {
         return MaskedPattern(bytes: bytes, isWild: wild, folding: .exact)
     }
 
+    /// A GUID as text — `CDEA2BD3-FC25-4C1C-B97C-B31186064990`, any case,
+    /// in braces or not — as the 16 bytes an EFI_GUID is in memory: the
+    /// first three fields little-endian, the last eight bytes as written,
+    /// `D3 2B EA CD 25 FC 1C 4C B9 7C B3 11 86 06 49 90`. Anything else is
+    /// `invalidGuidPattern`: a GUID search asks for exactly one GUID.
+    public static func guid(_ text: String) throws -> MaskedPattern {
+        guard let bytes = guidBytes(text) else { throw SearchError.invalidGuidPattern }
+        return MaskedPattern(bytes: bytes, folding: .exact)
+    }
+
+    /// The bytes of `text` read as a GUID, or nil when it is not one.
+    public static func guidBytes(_ text: String) -> [UInt8]? {
+        var body = Substring(text.trimmingCharacters(in: .whitespaces))
+        if body.first == "{" || body.last == "}" {
+            guard body.first == "{", body.last == "}", body.count >= 2 else { return nil }
+            body = body.dropFirst().dropLast()
+        }
+        let fields = body.split(separator: "-", omittingEmptySubsequences: false)
+        guard fields.map(\.count) == [8, 4, 4, 4, 12],
+              fields.allSatisfy({ $0.allSatisfy(\.isHexDigit) }) else { return nil }
+        func pairs(_ field: Substring) -> [UInt8] {
+            stride(from: 0, to: field.count, by: 2).map {
+                let from = field.index(field.startIndex, offsetBy: $0)
+                return UInt8(field[from..<field.index(from, offsetBy: 2)], radix: 16)!
+            }
+        }
+        var bytes: [UInt8] = []
+        bytes += pairs(fields[0]).reversed()
+        bytes += pairs(fields[1]).reversed()
+        bytes += pairs(fields[2]).reversed()
+        bytes += pairs(fields[3])
+        bytes += pairs(fields[4])
+        return bytes
+    }
+
     /// Whether any byte of the pattern is a hole.
     public var hasHoles: Bool { isWild.contains(true) }
 

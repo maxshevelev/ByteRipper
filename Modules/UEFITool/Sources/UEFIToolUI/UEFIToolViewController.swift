@@ -1663,14 +1663,18 @@ import UEFITool
 
     /// What the Contents search asks for, in the order to look: the app's
     /// pattern controls' attempts — the encoding chosen, or Smart Search's one
-    /// encoding after another — or, without them, hex bytes when the text
-    /// reads as bytes and then the text in ASCII and in UTF-16, any case.
+    /// encoding after another — or, without them, a GUID's bytes when the text
+    /// reads as one, hex bytes when it reads as bytes, and then the text in
+    /// ASCII and in UTF-16, any case.
     private func contentAttempts() -> [ToolPatternAttempt]? {
         if let query = searchBar.query { return query.attempts() }
         let text = UEFISearchSettings.content.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
         searchBar.publishToFindPasteboard(text)
         var attempts: [ToolPatternAttempt] = []
+        if let guid = try? MaskedPattern.guid(text) {
+            attempts.append(ToolPatternAttempt(pattern: guid, encoding: "guid", encodingName: "GUID"))
+        }
         let hexLike = text.split(separator: " ").allSatisfy { $0.count == 2 || $0.count % 2 == 0 }
         if hexLike, let hex = try? MaskedPattern.hex(text) {
             attempts.append(ToolPatternAttempt(pattern: hex, encoding: "hex", encodingName: "Hex"))
