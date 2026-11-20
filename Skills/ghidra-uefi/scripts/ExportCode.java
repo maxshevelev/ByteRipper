@@ -715,6 +715,24 @@ public class ExportCode extends GhidraScript {
     // variable: a value split as a review types around it, not a name missed.
     // A value split over two registers — `EDX:4,EAX:4` for a 64-bit one — is
     // one piece too: `isRegisterStorage()` is true of a single register only.
+    /**
+     * A slot of the function's own frame that it reads and never writes:
+     * Ghidra's `in_stack_…`. A struct passed by value is copied there with
+     * REP MOVSD before a call, and the decompiler, not seeing the stores,
+     * reads the copy's dwords as inputs. It keeps no name or type on them
+     * (issue 596d64b0), so they are its pieces, not locals a review missed. A
+     * slot above the return address is an undeclared parameter, and stays a
+     * gap.
+     */
+    static boolean unwrittenFrameSlot(HighSymbol symbol) {
+        ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
+        if (storage == null || !storage.isStackStorage() || storage.getStackOffset() >= 0) return false;
+        ghidra.program.model.pcode.HighVariable high = symbol.getHighVariable();
+        if (high == null) return false;
+        ghidra.program.model.pcode.Varnode representative = high.getRepresentative();
+        return representative != null && representative.isInput();
+    }
+
     private static boolean fragment(ghidra.program.model.listing.VariableStorage storage) {
         if (storage == null) return false;
         if (storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage()) return true;
@@ -940,7 +958,7 @@ public class ExportCode extends GhidraScript {
                 // A register or `unique:` piece is the decompiler's split
                 // of a value, not a stored variable: it is not a name the
                 // review missed.
-                if (fragment(symbol.getStorage())) continue;
+                if (fragment(symbol.getStorage()) || unwrittenFrameSlot(symbol)) continue;
                 boolean named = !placeholder(symbol.getName()) && !undefined(symbol.getDataType());
                 String storage = symbol.getStorage().toString();
                 Boolean known = slots.get(storage);

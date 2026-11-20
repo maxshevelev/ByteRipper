@@ -509,7 +509,7 @@ public class Owner {
                 // A register or `unique:` piece with a name Ghidra made up is
                 // the decompiler splitting a value as a review types around
                 // it, not a name the review missed.
-                if (fragment(symbol.getStorage())) {
+                if (fragment(symbol.getStorage()) || ExportCode.unwrittenFrameSlot(symbol)) {
                     fragments++;
                     fragmentNames.add(symbol.getName());
                 } else {

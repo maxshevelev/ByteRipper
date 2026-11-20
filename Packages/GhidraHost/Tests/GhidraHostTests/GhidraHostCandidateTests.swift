@@ -414,6 +414,47 @@ final class GhidraHostCandidateTests: XCTestCase {
         XCTAssertEqual(there?.name, "ShortBodyRenamed")
     }
 
+    /// A struct passed by value is copied onto the outgoing stack with REP
+    /// MOVSD, and the decompiler shows the copy's dwords as `in_stack_…`
+    /// slots of the frame that the function reads and never writes. Ghidra
+    /// keeps no name on them, so they are its pieces, like a register's, and
+    /// not locals a review left unnamed (issue 596d64b0). `IdeBusPei`'s
+    /// AtapiPacketCommandIn (0x130B) passes IDE_BASE_REGISTERS that way.
+    func testAByValueCopyOnTheOutgoingStackIsNotALocalToName() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_BYVALUE_MODULE"] else {
+            throw XCTSkip("GHIDRA_BYVALUE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostCandidateTests-byvalue-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "IdeBusPei")
+        try await host.take(module)
+        defer { Task { await host.stop(module) } }
+        var inStack: [String] = []
+        var unclaimed: [String] = []
+        for entry in ["0x130B", "0x1774", "0x1BCF"] {
+            let read = try json(await host.read(module, "/v1/function/\(entry)"))
+            let locals = read["locals"] as? [[String: Any]] ?? []
+            let copies = locals.compactMap { local -> String? in
+                guard let name = local["name"] as? String, name.hasPrefix("in_stack_"),
+                      (local["storage"] as? String ?? "").hasPrefix("Stack[-") else { return nil }
+                return name
+            }
+            inStack += copies
+            let pieces = (read["leftovers"] as? [String: Any])?["fragment_names"] as? [String] ?? []
+            unclaimed += copies.filter { !pieces.contains($0) }.map { "\(entry) \($0)" }
+        }
+        XCTAssertFalse(inStack.isEmpty, "the module no longer shows the by-value copies this test is about")
+        XCTAssertEqual(unclaimed, [], "counted as locals to name")
+    }
+
     /// A thunk has no body: it does not move. `PeiVariable` holds one.
     func testAThunkDoesNotMove() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_THUNK_MODULE"] else {
