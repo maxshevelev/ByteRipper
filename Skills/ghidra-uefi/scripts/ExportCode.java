@@ -526,6 +526,29 @@ public class ExportCode extends GhidraScript {
     }
 
     /**
+     * Whether an operand of `instruction` names `to`: holds it as an address or
+     * a constant, or reaches it RIP-relative. A reference Ghidra derived from a
+     * register's value names nothing the instruction holds — `REP STOSW`
+     * through RDI, loaded earlier from `[RSI + 0x323C]`, gets DATA references
+     * to 0x323C and 0x323E at image base 0 (issue 458a6f76) — and the
+     * instruction that loaded the register carries the address if it is one.
+     */
+    static boolean namedByOperands(Instruction instruction, Address to) {
+        for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+            for (Object part : instruction.getOpObjects(operand)) {
+                if (part instanceof Address address && address.equals(to)) return true;
+                if (part instanceof ghidra.program.model.scalar.Scalar scalar
+                        && scalar.getUnsignedValue() == to.getOffset()) return true;
+                if (part instanceof ghidra.program.model.lang.Register register
+                        && (register.getName().equalsIgnoreCase("RIP") || register.getName().equalsIgnoreCase("EIP"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Whether `scalar` is the scale of an index register in a memory operand
      * (`RDI*0x1`), which the operand's objects list beside its displacement.
      */

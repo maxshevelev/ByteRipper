@@ -3375,6 +3375,7 @@ public class Owner {
             for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
                 if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
                 if (throughBaseRegister(instruction, reference.getOperandIndex())) continue;
+                if (!ExportCode.namedByOperands(instruction, reference.getToAddress())) continue;
                 named.add(reference.getToAddress());
             }
             if (baseIsReal) {
