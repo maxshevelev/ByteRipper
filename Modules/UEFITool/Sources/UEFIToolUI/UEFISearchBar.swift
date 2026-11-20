@@ -1,4 +1,5 @@
 import AppKit
+import AppPalette
 import HelpUI
 import Localization
 import ToolModuleKit
@@ -431,13 +432,17 @@ import UEFITool
     private func updateStatus() {
         switch status {
         case .problem(let label, let detail):
+            // In the error colour, as the dump's Find bar says a pattern is
+            // not one.
             statusLabel.stringValue = label
+            statusLabel.textColor = SemanticColors.bad
             statusLabel.toolTip = detail
             statusLabel.isHidden = false
             progressBar.isHidden = true
             stopButton.isHidden = true
         case .none, .notFound:
             statusLabel.stringValue = status == .notFound ? L("Not found") : ""
+            statusLabel.textColor = .secondaryLabelColor
             statusLabel.toolTip = nil
             statusLabel.isHidden = false
             progressBar.isHidden = true
