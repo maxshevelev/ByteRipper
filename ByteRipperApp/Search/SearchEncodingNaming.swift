@@ -13,6 +13,7 @@ extension SearchEncoding {
     var displayName: String {
         switch self {
         case .hex: return L("Hex bytes")
+        case .guid: return "GUID"
         case .ascii: return "ASCII"
         case .utf8: return "UTF-8"
         case .utf16LE: return "UTF-16 LE"

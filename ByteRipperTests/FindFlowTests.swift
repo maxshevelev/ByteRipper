@@ -624,6 +624,38 @@ final class FindFlowTests: XCTestCase {
         XCTAssertEqual(bar.countColorForTests, .secondaryLabelColor)
     }
 
+    // MARK: - GUID
+
+    /// A GUID typed as code writes it is found as the bytes it is in an
+    /// image: Smart Search tries it as a GUID first and leaves GUID chosen.
+    /// With GUID chosen by hand and Smart Search off, text that is not one GUID
+    /// is an invalid pattern, as text that is not hex is for Hex bytes.
+    func testAGuidIsFoundAsItsBytesAndAnythingElseIsNoGuid() throws {
+        let guid: [UInt8] = [0xD3, 0x2B, 0xEA, 0xCD, 0x25, 0xFC, 0x1C, 0x4C,
+                             0xB9, 0x7C, 0xB3, 0x11, 0x86, 0x06, 0x49, 0x90]
+        let (controller, window, url) = try makeController([0x00, 0x11] + guid + [0x22])
+        defer { cleanup(controller, url) }
+        controller.findPattern()
+        let bar = try findBar(window)
+        let (combo, encoding, _, _) = try barControls(window)
+
+        combo.stringValue = "CDEA2BD3-FC25-4C1C-B97C-B31186064990"
+        try clickFindNext(window)
+        XCTAssertTrue(pumpUntil(3) { bar.countTextForTests == "1 of 1" }, bar.countTextForTests)
+        XCTAssertEqual(controller.windowModel.pane1.hexSelection().start, 2)
+        XCTAssertEqual(bar.encodingForTests, .guid, "Smart Search says what found it")
+
+        try withoutSmartSearch(window)
+        encoding.selectItem(at: SearchEncoding.allCases.firstIndex(of: .guid)!)
+        encoding.sendAction(encoding.action, to: encoding.target)
+        combo.stringValue = "D3 2B EA CD"
+        NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: combo)
+        try clickFindNext(window)
+        XCTAssertEqual(bar.countTextForTests, "Invalid pattern")
+        XCTAssertEqual(bar.countTooltipForTests,
+                       "Invalid GUID — write it as CDEA2BD3-FC25-4C1C-B97C-B31186064990.")
+    }
+
     // MARK: - Holes and overlapping matches (#33)
 
     /// `??` is any byte: `24 ?? 4D 49` finds `$DMI` and `$BMI` alike, through
@@ -1074,7 +1106,7 @@ final class FindFlowTests: XCTestCase {
         controller.findPattern()
         let (_, encoding, _, _) = try barControls(window)
 
-        XCTAssertEqual(encoding.itemTitles, ["Hex bytes", "ASCII", "UTF-8", "UTF-16 LE", "UTF-16 BE"])
+        XCTAssertEqual(encoding.itemTitles, ["Hex bytes", "GUID", "ASCII", "UTF-8", "UTF-16 LE", "UTF-16 BE"])
         XCTAssertEqual(encoding.itemTitles.count, SearchEncoding.allCases.count,
                        "one item per encoding, in the enum's order")
     }

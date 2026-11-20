@@ -215,4 +215,53 @@ final class SmartSearchTests: XCTestCase {
             XCTAssertTrue(error is CancellationError)
         }
     }
+
+    // MARK: - GUID
+
+    /// A GUID is written as text and stored as bytes: its first three fields
+    /// little-endian, the last eight bytes as written — the EFI_GUID in
+    /// memory. `CDEA2BD3-FC25-4C1C-B97C-B31186064990` is
+    /// `D3 2B EA CD 25 FC 1C 4C B9 7C B3 11 86 06 49 90`.
+    func testAGuidIsSearchedAsItsBytesInMemory() throws {
+        let expected: [UInt8] = [0xD3, 0x2B, 0xEA, 0xCD, 0x25, 0xFC, 0x1C, 0x4C,
+                                 0xB9, 0x7C, 0xB3, 0x11, 0x86, 0x06, 0x49, 0x90]
+        for text in ["CDEA2BD3-FC25-4C1C-B97C-B31186064990", "cdea2bd3-fc25-4c1c-b97c-b31186064990",
+                     "{CDEA2BD3-FC25-4C1C-B97C-B31186064990}", "  CDEA2BD3-FC25-4C1C-B97C-B31186064990 "] {
+            let pattern = try SearchEngine.parsePattern(text, encoding: .guid)
+            XCTAssertEqual(pattern.bytes, expected, text)
+            XCTAssertEqual(pattern.encoding, .guid, text)
+            XCTAssertFalse(pattern.hasHoles, text)
+        }
+    }
+
+    /// With GUID chosen and Smart Search off, the field must read as a GUID,
+    /// as a hex pattern must read as bytes: anything else is an invalid
+    /// pattern, not a search for something else.
+    func testAnythingButAGuidIsAnInvalidGuidPattern() {
+        for text in ["", "CDEA2BD3FC254C1CB97CB31186064990", "CDEA2BD3-FC25-4C1C-B97C-B3118606499",
+                     "CDEA2BD3-FC25-4C1C-B97C-B31186064990-", "CDEA2BD3-FC25-4C1C-B97CB31186064990",
+                     "XDEA2BD3-FC25-4C1C-B97C-B31186064990", "{CDEA2BD3-FC25-4C1C-B97C-B31186064990",
+                     "D3 2B EA CD", "BootLogo"] {
+            XCTAssertThrowsError(try SearchEngine.parsePattern(text, encoding: .guid), text) { error in
+                XCTAssertEqual(error as? SearchError, .invalidGuidPattern, text)
+            }
+        }
+        XCTAssertFalse(SmartSearch.looksLikeGuid("CDEA2BD3FC254C1CB97CB31186064990"))
+        XCTAssertTrue(SmartSearch.looksLikeGuid("{cdea2bd3-fc25-4c1c-b97c-b31186064990}"))
+    }
+
+    /// Smart Search tries a text that reads as a GUID as a GUID first — before
+    /// anything else, an encoding brought from the history included — and
+    /// then as the text it also is.
+    func testAGuidIsTriedFirst() {
+        let text = "CDEA2BD3-FC25-4C1C-B97C-B31186064990"
+        let attempts = SmartSearch.attempts(for: text, caseSensitive: false)
+        XCTAssertEqual(attempts.first?.encodings, [.guid])
+        XCTAssertEqual(attempts.dropFirst().first?.encodings.first, .ascii, "then as text")
+        XCTAssertEqual(SmartSearch.attempts(for: text, caseSensitive: false, preferring: .utf16LE).first?.encodings,
+                       [.guid])
+        XCTAssertFalse(SmartSearch.attempts(for: "DEADBEEF", caseSensitive: false)
+            .contains { $0.encodings.contains(.guid) }, "no GUID attempt for what is not one")
+    }
 }
+

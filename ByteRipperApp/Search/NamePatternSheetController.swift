@@ -31,7 +31,7 @@ final class NamePatternSheetController: SheetViewController {
 
     /// What is being kept, in the words the menu will use for it.
     private static func describe(_ entry: SearchPatternEntry) -> String {
-        let flags = entry.encoding == .hex
+        let flags = !PatternQueryControls.supportsCaseFolding(entry.encoding)
             ? entry.encoding.displayName
             : entry.encoding.displayName + ", "
                 + (entry.caseSensitive ? L("match case") : L("ignore case"))

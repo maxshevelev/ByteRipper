@@ -137,11 +137,11 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     }
 
     /// Whether case-insensitive matching is meaningful for `encoding`: every
-    /// text encoding, and not hex, whose input is bytes.
+    /// text encoding, and not hex or a GUID, whose input is bytes.
     static func supportsCaseFolding(_ encoding: SearchEncoding) -> Bool {
         switch encoding {
         case .ascii, .utf8, .utf16LE, .utf16BE: return true
-        case .hex: return false
+        case .hex, .guid: return false
         }
     }
 
@@ -449,7 +449,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
             title.append(NSAttributedString(string: "\(entry.name): ", attributes: row))
         }
         title.append(NSAttributedString(string: "\"\(entry.pattern)\"", attributes: row))
-        let flags = entry.encoding == .hex
+        let flags = !Self.supportsCaseFolding(entry.encoding)
             ? entry.encoding.displayName
             : entry.encoding.displayName + ", "
                 + (entry.caseSensitive ? L("match case") : L("ignore case"))
@@ -698,8 +698,9 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
         stagedPattern = nil
         select(entry.encoding)
         pickedEncoding = entry.encoding
-        // Hex is always byte-exact: its flag is recorded but never restored.
-        if entry.encoding != .hex {
+        // Hex and a GUID are always byte-exact: their flag is recorded but
+        // never restored.
+        if Self.supportsCaseFolding(entry.encoding) {
             caseButton.state = entry.caseSensitive ? .on : .off
             Self.defaults.set(entry.caseSensitive, forKey: Self.caseSensitiveKey)
         }
@@ -723,6 +724,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
             switch searchError {
             case .emptyPattern: return L("Enter a non-empty pattern.")
             case .invalidHexPattern: return L("Invalid hex — use pairs like DE AD BE EF.")
+            case .invalidGuidPattern:
+                return L("Invalid GUID — write it as CDEA2BD3-FC25-4C1C-B97C-B31186064990.")
             case .partialByteMask: return L("?? stands for a whole byte — half a byte cannot be masked.")
             case .holesOnly: return L("A pattern of ?? alone matches everywhere — give at least one byte.")
             case .undecodableText: return L("Text cannot be encoded in the selected encoding.")

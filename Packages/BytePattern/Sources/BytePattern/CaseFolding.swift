@@ -30,6 +30,8 @@ public enum SearchError: Error, Equatable, Sendable {
     case emptyPattern
     /// Hex input was malformed: non-hex characters or an odd number of digits.
     case invalidHexPattern
+    /// GUID input was not a GUID: `8-4-4-4-12` hex digits, braces optional.
+    case invalidGuidPattern
     /// A `?` that is not half of a `??`: a hole is a whole byte, and half a
     /// byte cannot be masked.
     case partialByteMask

@@ -10,7 +10,7 @@ extension CaseFolding {
         switch encoding {
         // Hex input is bytes; bytes have no case to fold. (The *parser* accepts
         // `de ad` and `DE AD` alike — that is the input, not the comparison.)
-        case .hex: self = .exact
+        case .hex, .guid: self = .exact
         case .ascii, .utf8: self = .asciiBytes
         case .utf16LE: self = .utf16(littleEndian: true)
         case .utf16BE: self = .utf16(littleEndian: false)
@@ -23,6 +23,9 @@ public enum SearchEncoding: String, CaseIterable, Sendable {
     /// Input is a hexadecimal byte sequence: `DEADBEEF`, `DE AD BE EF`, or
     /// `0xDE 0xAD`, case-insensitive.
     case hex
+    /// Input is one GUID, `CDEA2BD3-FC25-4C1C-B97C-B31186064990`, looked
+    /// for as the 16 bytes an EFI_GUID is in memory.
+    case guid
     case ascii
     case utf8
     case utf16LE
@@ -96,6 +99,8 @@ public enum SearchEngine {
             let masked = try MaskedPattern.hex(text)
             guard allowingHoles || !masked.hasHoles else { throw SearchError.invalidHexPattern }
             return SearchPattern(bytes: masked.bytes, isWild: masked.isWild, encoding: .hex)
+        case .guid:
+            return SearchPattern(bytes: try MaskedPattern.guid(text).bytes, encoding: .guid)
         case .ascii: bytes = try encode(text, using: .ascii)
         case .utf8: bytes = try encode(text, using: .utf8)
         case .utf16LE: bytes = try encode(text, using: .utf16LittleEndian)

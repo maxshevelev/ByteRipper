@@ -56,7 +56,9 @@ final class AgentFindTools {
                 from the last one. A text the file holds only compressed is found this way and not the \
                 other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any \
                 case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything \
-                ("24 ?? 4D 49"). Each match: the `encoding` that matched; without `node`, `start`, `end` \
+                ("24 ?? 4D 49"); `guid` is a GUID as code writes it, "CDEA2BD3-FC25-4C1C-B97C-B31186064990", \
+                looked for as the 16 bytes it is in an image — the first three groups byte-reversed: \
+                D3 2B EA CD 25 FC 1C 4C B9 7C B3 11 86 06 49 90. Each match: the `encoding` that matched; without `node`, `start`, `end` \
                 (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree \
                 order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, from its \
                 first byte (its part "all"), and `body_offset`, from its body's, when the match lies in the \
@@ -78,8 +80,9 @@ final class AgentFindTools {
                 """,
             inputSchema: AgentSchema.object(UEFIAgentNodeData.patternProperties.merging([
                 "document": AgentSchema.string("The document's id from `documents`. Default: the focused one."),
-                "text": AgentSchema.string("A text to find. Give `text` or `hex`."),
+                "text": AgentSchema.string("A text to find. Give one of `text`, `hex` and `guid`."),
                 "hex": AgentSchema.string("Bytes to find, as hex pairs; `??` for any byte: \"24 ?? 4D 49\"."),
+                "guid": AgentSchema.string("A GUID to find, \"CDEA2BD3-FC25-4C1C-B97C-B31186064990\", braces optional: its bytes in memory."),
                 "encoding": AgentSchema.choice(["ascii", "utf16le", "both"],
                                                "How `text` is stored. Default \"both\"."),
                 "ignore_case": AgentSchema.boolean("Letters in either case — ASCII letters of `text`. Default false."),
@@ -107,9 +110,22 @@ final class AgentFindTools {
     private func patterns(_ arguments: AgentArguments) throws -> [Wanted] {
         let text = try arguments.optionalString("text")
         let hex = try arguments.optionalString("hex")
+        let guid = try arguments.optionalString("guid")
+        guard [text, hex, guid].compactMap({ $0 }).count == 1 else {
+            throw AgentToolError("Give one of `text`, `hex` and `guid`.")
+        }
+        // The find bar's own reading of a GUID (`SearchEngine.parsePattern`),
+        // so the agent and the bar look for the same bytes.
+        if let guid {
+            guard let pattern = try? SearchEngine.parsePattern(guid, encoding: .guid) else {
+                throw AgentToolError("`guid` is not a GUID. Write it as code does, 8-4-4-4-12 hex digits: "
+                    + "\"CDEA2BD3-FC25-4C1C-B97C-B31186064990\", braces optional.")
+            }
+            return [Wanted(pattern: MaskedPattern(pattern, folding: .exact), encoding: "guid")]
+        }
         switch (text, hex) {
         case (nil, nil), (.some, .some):
-            throw AgentToolError("Give `text` or `hex`, one of them.")
+            throw AgentToolError("Give one of `text`, `hex` and `guid`.")
         case (_, .some(let hex)):
             do {
                 return [Wanted(pattern: try MaskedPattern.hex(hex), encoding: "hex")]

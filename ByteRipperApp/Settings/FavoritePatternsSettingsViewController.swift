@@ -780,9 +780,11 @@ final class FavoritePatternsSettingsViewController: NSViewController,
                                     action: #selector(casePicked(_:)))
             checkbox.tag = row
             checkbox.state = entry.caseSensitive ? .on : .off
-            // Hex is byte-exact whatever the flag holds, so there is nothing to
-            // tick (§11) — the same reason the bar's toggle leaves the bar.
-            checkbox.isEnabled = entry.encoding != .hex && FavoritePatternStore.conflicts.isEmpty
+            // Hex and a GUID are byte-exact whatever the flag holds, so there
+            // is nothing to tick (§11) — the same reason the bar's toggle
+            // leaves the bar.
+            checkbox.isEnabled = PatternQueryControls.supportsCaseFolding(entry.encoding)
+                && FavoritePatternStore.conflicts.isEmpty
             checkbox.setAccessibilityLabel(L("Match Case"))
             return cell(around: checkbox, inset: 2)
         default:
@@ -901,6 +903,8 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             return PatternQueryControls.errorText(for: SearchError.partialByteMask)
         } catch SearchError.holesOnly {
             return PatternQueryControls.errorText(for: SearchError.holesOnly)
+        } catch SearchError.invalidGuidPattern {
+            return PatternQueryControls.errorText(for: SearchError.invalidGuidPattern)
         } catch {}
         return encoding == .hex
             ? L("“%1$@” is not hex — use pairs like DE AD BE EF.", pattern)
