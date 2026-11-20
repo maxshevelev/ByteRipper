@@ -201,6 +201,46 @@ final class ServerMCPTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(anyMembers["total"]?.int64Value ?? 0, 1, "\(any)")
     }
 
+    /// The server's `find_bytes` is the app's (`UEFIAgentFind`): a GUID is
+    /// its bytes in memory, matches overlap as in the find bar, each says
+    /// `where` it is, and `context` previews the bytes around it.
+    func testFindBytesIsTheAppsSearch() async throws {
+        let find = try tool("find_bytes", tools())
+        func run(_ values: [String: JSONValue]) async throws -> [String: JSONValue] {
+            let answer = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments(values)))
+            guard case .json(.object(let members)) = answer else { throw AgentToolError("not an object: \(answer)") }
+            return members
+        }
+        // The stub image holds runs of zero bytes.
+        let zeros = try await run(["hex": "00 00 00 00"])
+        let apart = try await run(["hex": "00 00 00 00", "overlapping": false])
+        XCTAssertGreaterThan(zeros["total"]?.int64Value ?? 0, apart["total"]?.int64Value ?? 0,
+                             "matches overlap unless asked not to")
+
+        let guid = try await run(["guid": "{00000000-0000-0000-0000-000000000000}", "show": "count"])
+        let sixteen = Array(repeating: "00", count: 16).joined(separator: " ")
+        let bytes = try await run(["hex": .string(sixteen), "show": "count"])
+        XCTAssertEqual(guid["total"], bytes["total"], "a GUID is the 16 bytes it is in memory")
+        do {
+            _ = try await run(["guid": "CDEA2BD3-FC25-4C1C-B97C"])
+            XCTFail("half a GUID is refused")
+        } catch let error as AgentToolError {
+            XCTAssertTrue(error.message.contains("`guid`"), error.message)
+        }
+        do {
+            _ = try await run(["text": "MZ", "hex": "4D 5A"])
+            XCTFail("two patterns are refused")
+        } catch let error as AgentToolError {
+            XCTAssertEqual(error.message, "Give one of `text`, `hex` and `guid`.")
+        }
+
+        let shown = try await run(["text": "MZ", "encoding": "ascii", "context": 2])
+        let match = try XCTUnwrap(shown["matches"]?.arrayValue?.first)
+        XCTAssertNotNil(match["where"]?.arrayValue, "\(match)")
+        XCTAssertEqual(match["preview"]?["before"], .count(2), "\(match)")
+        XCTAssertNotNil(shown["range"], "the range searched")
+    }
+
     /// With `node`, the search covers what the UEFI tree holds at and under
     /// it, and each match says where in the tree it is; without it, the
     /// file's own addresses only. What a compressed section decompresses to is

@@ -34,308 +34,33 @@ final class AgentFindTools {
 
     nonisolated func tools() -> [AgentTool] { [findTool, openPartTool] }
 
-    /// The most bytes a preview takes on either side of a match.
-    nonisolated static let maxContext = 64
-
     // MARK: - find_bytes
 
+    /// `find_bytes` is `UEFIAgentFind`'s, the analysis server's too: here it
+    /// runs over the open panel's bytes, unsaved edits included.
     private nonisolated var findTool: AgentTool {
         AgentTool(
             name: "find_bytes",
             title: "Find bytes or text",
-            description: """
-                Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: the \
-                document's bytes as they are stored, with unsaved edits — the find bar's own search — in \
-                address order, `offset`/`end` limiting the range. With `node` (an id from `uefi_tree`, \
-                `uefi_find` or `uefi_at`, or "root" for the whole image): what the UEFI tree holds at and \
-                under that node — every container opened, every compressed section searched in what it \
-                decompresses to (nested ones too), a BIOS Guard update in its assembled region, a Lenovo LENV \
-                block stored XOR-encoded decoded — and only so: a compressed stream or an encoded block as \
-                stored is not searched, nor is an ME region. Opening everything takes a few seconds on a large \
-                image the first time; the same search of unchanged bytes again — a next page — is answered \
-                from the last one. A text the file holds only compressed is found this way and not the \
-                other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any \
-                case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything \
-                ("24 ?? 4D 49"); `guid` is a GUID as code writes it, "CDEA2BD3-FC25-4C1C-B97C-B31186064990", \
-                looked for as the 16 bytes it is in an image — the first three groups byte-reversed: \
-                D3 2B EA CD 25 FC 1C 4C B9 7C B3 11 86 06 49 90. Each match: the `encoding` that matched; without `node`, `start`, `end` \
-                (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree \
-                order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, from its \
-                first byte (its part "all"), and `body_offset`, from its body's, when the match lies in the \
-                body (its part "body", what `uefi_node_data` and `pattern_part` read by default), its \
-                `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed \
-                section, `in_compressed: true`, the `section` (open it with `open_part` part \
-                "decompressed") and `buffer_start`/`buffer_end` in what it decompresses to, which \
-                `uefi_node_data` reads — and `decoded` ("XOR 77") in a LENV block decoded. With `context`, \
-                a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map \
-                names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the \
-                compressed sections that would not decompress. Matches overlap, as in the find \
-                bar: "AA" in "AAAA" is three, or two with `overlapping` false. Pages: `limit` is a ceiling — a \
-                page also stops before the answer passes the size bound and says `truncated: "size"`; pass \
-                `next` back as `after` until it is null. `show` "compact" answers each match as where it is \
-                and no more — `node` by its id with `node_offset` and `body_offset`, or `start` — and "count" answers `total` \
-                alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of \
-                `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be \
-                anything, such as an operand that holds an address. With `survey`, which dumps of a folder hold a string.
-                """,
-            inputSchema: AgentSchema.object(UEFIAgentNodeData.patternProperties.merging([
-                "document": AgentSchema.string("The document's id from `documents`. Default: the focused one."),
-                "text": AgentSchema.string("A text to find. Give one of `text`, `hex` and `guid`."),
-                "hex": AgentSchema.string("Bytes to find, as hex pairs; `??` for any byte: \"24 ?? 4D 49\"."),
-                "guid": AgentSchema.string("A GUID to find, \"CDEA2BD3-FC25-4C1C-B97C-B31186064990\", braces optional: its bytes in memory."),
-                "encoding": AgentSchema.choice(["ascii", "utf16le", "both"],
-                                               "How `text` is stored. Default \"both\"."),
-                "ignore_case": AgentSchema.boolean("Letters in either case — ASCII letters of `text`. Default false."),
-                "overlapping": AgentSchema.boolean("Count matches that overlap one another, as the find bar does. Default true."),
-                "offset": AgentSchema.offset("Where the search of the document starts. Default 0x0. Not with `node`."),
-                "end": AgentSchema.offset("The first byte after the searched range. Default: the end. Not with `node`."),
-                "node": AgentSchema.string("Search what the UEFI tree holds at and under this node, decompressed and decoded; \"root\" for the whole image."),
-                "context": AgentSchema.integer("Bytes before and after each match to show in `preview`. Default 0, at most 64."),
-                "show": AgentSchema.choice(UEFIAgentContentSearch.shows, UEFIAgentContentSearch.showHelp),
-                "limit": AgentSchema.limit(default: 100, maximum: 1000),
-                "after": AgentSchema.after
-            ]) { $1 }),
+            description: UEFIAgentFind.description(
+                contents: "the document's bytes as they are stored, with unsaved edits", opensParts: true,
+                extra: "With `survey`, which dumps of a folder hold a string."),
+            inputSchema: AgentSchema.object(UEFIAgentFind.properties(
+                document: "The document's id from `documents`. Default: the focused one.")),
             annotations: .readOnly
         ) { call in
             try await self.find(call.arguments)
         }
     }
 
-    /// One pattern the search runs, and what its matches are called.
-    private struct Wanted {
-        var pattern: MaskedPattern
-        var encoding: String
-    }
-
-    private func patterns(_ arguments: AgentArguments) throws -> [Wanted] {
-        let text = try arguments.optionalString("text")
-        let hex = try arguments.optionalString("hex")
-        let guid = try arguments.optionalString("guid")
-        guard [text, hex, guid].compactMap({ $0 }).count == 1 else {
-            throw AgentToolError("Give one of `text`, `hex` and `guid`.")
-        }
-        // The find bar's own reading of a GUID (`SearchEngine.parsePattern`),
-        // so the agent and the bar look for the same bytes.
-        if let guid {
-            guard let pattern = try? SearchEngine.parsePattern(guid, encoding: .guid) else {
-                throw AgentToolError("`guid` is not a GUID. Write it as code does, 8-4-4-4-12 hex digits: "
-                    + "\"CDEA2BD3-FC25-4C1C-B97C-B31186064990\", braces optional.")
-            }
-            return [Wanted(pattern: MaskedPattern(pattern, folding: .exact), encoding: "guid")]
-        }
-        switch (text, hex) {
-        case (nil, nil), (.some, .some):
-            throw AgentToolError("Give one of `text`, `hex` and `guid`.")
-        case (_, .some(let hex)):
-            do {
-                return [Wanted(pattern: try MaskedPattern.hex(hex), encoding: "hex")]
-            } catch {
-                throw AgentToolError("`hex` is not a byte pattern. Give pairs of hex digits and `??` for any byte, "
-                    + "e.g. \"24 ?? 4D 49\". A hole is a whole byte — half a byte (`2?`) cannot be masked — "
-                    + "and a pattern of `??` alone matches everywhere.")
-            }
-        case (.some(let text), _):
-            guard !text.isEmpty else { throw AgentToolError("`text` is empty.") }
-            let encoding = try arguments.choice("encoding", from: ["ascii", "utf16le", "both"], default: "both")
-            let ignoreCase = try arguments.bool("ignore_case", default: false)
-            var wanted: [Wanted] = []
-            if encoding != "utf16le" {
-                guard let ascii = text.data(using: .ascii) else {
-                    throw AgentToolError("`text` is not ASCII; look for it with `encoding` \"utf16le\".")
-                }
-                wanted.append(Wanted(pattern: MaskedPattern(bytes: Array(ascii), folding: ignoreCase ? .asciiBytes : .exact),
-                                     encoding: "ascii"))
-            }
-            if encoding != "ascii" {
-                let units = Array(text.utf16).flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] }
-                wanted.append(Wanted(pattern: MaskedPattern(bytes: units,
-                                                            folding: ignoreCase ? .utf16(littleEndian: true) : .exact),
-                                     encoding: "utf16le"))
-            }
-            return wanted
-        }
-    }
-
     private func find(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try diff.resolve(arguments.optionalString("document"))
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
-        let wanted = try await UEFIAgentNodeData.pattern(host, arguments)
-            .map { [Wanted(pattern: $0, encoding: "hex")] } ?? patterns(arguments)
-        let overlapping = try arguments.bool("overlapping", default: true)
-        let context = Int(max(0, min(Int64(Self.maxContext), try arguments.has("context") ? arguments.integer("context") : 0)))
-        let show = try arguments.choice("show", from: UEFIAgentContentSearch.shows, default: "full")
-        if show != "full", context > 0 { throw AgentToolError("`context` shows bytes around a match: it needs `show` \"full\".") }
-        let limit = show == "count" ? 0 : try arguments.limit(default: 100, maximum: 1000)
-
-        if let text = try arguments.optionalString("node") {
-            return try await findInTree(arguments, place: place, host: host, wanted: wanted, node: text,
-                                        overlapping: overlapping, context: context, limit: limit, show: show)
-        }
-        let storage: any ByteStorage = try diff.snapshot(place)
-        let scope: Range<UInt64> = 0..<storage.size
-        var envelope: [String: JSONValue] = ["document": .string(place.id)]
-        // `offset` and `end` are the document's addresses.
-        let offset = try arguments.optionalOffset("offset") ?? 0
-        let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
-        guard !scope.isEmpty else { throw AgentToolError("\(place.named) holds no bytes to search.") }
-        guard offset < UInt64(scope.count) else {
-            throw AgentToolError("`offset` \(offset.hexNumber) is past the end of \(place.named), "
-                + "which is \(scope.count.hexNumber) bytes long.")
-        }
-        guard offset < end else {
-            throw AgentToolError("`end` \(end.hexNumber) is not after `offset` \(offset.hexNumber): "
-                + "the range holds no bytes.")
-        }
-        guard end <= UInt64(scope.count) else {
-            throw AgentToolError("The range \((offset..<end).halfOpenHexText) is not inside "
-                + "\(place.named), which is \(scope.count.hexNumber) bytes long.")
-        }
-        let range = (scope.lowerBound + offset)..<(scope.lowerBound + end)
-        envelope["range"] = AgentHostTools.range(offset..<end)
-        if wanted.allSatisfy({ $0.pattern.count > range.count }) {
-            throw AgentToolError("The pattern is longer than the range searched.")
-        }
-
-        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
-            [host.contentVersion, JSONValue.object(arguments.values.filter { $0.key != "after" && $0.key != "limit" }).jsonText]))
-        let first = paging.first
-        let patterns = wanted.map(\.pattern)
-        let (total, page) = try await Task.detached(priority: .userInitiated) {
-            var total = 0
-            var page: [(range: Range<UInt64>, pattern: Int)] = []
-            try SearchEngine.matches(of: patterns, in: storage, range: range, overlapping: overlapping) { match, pattern in
-                if total >= first, page.count < limit { page.append((match, pattern)) }
-                total += 1
-                return true
-            }
-            return (total, page)
-        }.value
-        envelope["total"] = .count(total)
-        if show == "count" {
-            envelope["matches"] = .array([])
-            envelope["next"] = .null
-            return .json(.object(envelope))
-        }
-        if show == "compact" {
-            let rows = page.map { match in
-                UEFIAgentContentSearch.compact(.object(["start": .string(match.range.lowerBound.hexNumber),
-                                                        "encoding": .string(wanted[match.pattern].encoding)]),
-                                               keepingEncoding: wanted.count > 1)
-            }
-            return .json(try paging.answer(envelope, key: "matches", items: rows, total: total, bound: arguments.answerBound))
-        }
-
-        // Where each match is: the firmware's areas it lies in.
-        let places = await diff.locate(host, page.map(\.range)).map { $0.map(AgentDiffTools.placeJSON) }
-
-        var items: [JSONValue] = []
-        for (match, places) in zip(page, places) {
-            var members: [String: JSONValue] = [
-                "encoding": .string(wanted[match.pattern].encoding),
-                "where": .array(places)
-            ]
-            members["start"] = .string(match.range.lowerBound.hexNumber)
-            members["end"] = .string(match.range.upperBound.hexNumber)
-            // An area the flash map names for a secret — MSDM, a password, a
-            // key — gives its matches but not the bytes around them.
-            let secret = places.contains { UEFIAgentRegions.isSecretName($0["name"]?.stringValue ?? "") }
-            if secret, context > 0 { members["redacted"] = true }
-            if context > 0, !secret {
-                let around = max(scope.lowerBound, match.range.lowerBound &- UInt64(min(UInt64(context), match.range.lowerBound)))
-                    ..< min(scope.upperBound, match.range.upperBound + UInt64(context))
-                let bytes = (try? storage.read(at: around.lowerBound, length: around.count)) ?? []
-                members["preview"] = [
-                    "hex": .string(AgentBytes.hexText(bytes)),
-                    "text": .string(wanted[match.pattern].encoding == "utf16le"
-                                    ? AgentBytes.utf16le(bytes) : AgentBytes.printable(bytes)),
-                    "before": .count(Int(match.range.lowerBound - around.lowerBound))
-                ]
-            }
-            items.append(.object(members))
-        }
-        return .json(try paging.answer(envelope, key: "matches", items: items, total: total,
-                                       bound: arguments.answerBound) { item in
-            guard case .object(var members) = item, members["preview"] != nil else { return nil }
-            members["preview"] = nil
-            members["truncated"] = "item"
-            return .object(members)
-        })
+        return .json(try await UEFIAgentFind.run(arguments, host: host,
+                                                 document: .init(id: place.id, named: place.named),
+                                                 locators: diff.locators))
     }
 
-    /// `find_bytes` with `node`: what the UEFI tree holds at and under it,
-    /// decompressed and decoded (`UEFIContentSearch`, the UEFI panel's
-    /// Contents search), each match placed at its node and in its volume.
-    private func findInTree(_ arguments: AgentArguments, place: AgentDesk.Place, host: PaneToolHost,
-                            wanted: [Wanted], node text: String, overlapping: Bool, context: Int,
-                            limit: Int, show: String) async throws -> AgentAnswer {
-        guard !arguments.has("offset"), !arguments.has("end") else {
-            throw AgentToolError("`offset` and `end` are the document's: with `node` the search covers what the tree holds "
-                + "under it, decompressed and decoded, which is no one range of addresses. Leave them out, or search the "
-                + "document without `node`.")
-        }
-        let tree = try await UEFIAgentQueries.readyTree(host)
-        let start = try UEFIAgentQueries.nodeID(text)
-        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
-            [host.contentVersion, JSONValue.object(arguments.values.filter { $0.key != "after" && $0.key != "limit" }).jsonText]))
-        let result: UEFIContentSearch.Result
-        do {
-            result = try await UEFIContentSearch.run(wanted.map(\.pattern), from: start, in: tree,
-                                                     overlapping: overlapping, keep: paging.first + limit,
-                                                     padding: UInt64(context))
-        } catch UEFIContentSearchError.unknownNode(let id) {
-            throw UEFIAgentQueries.unknownNode(id)
-        }
-        var envelope: [String: JSONValue] = [
-            "document": .string(place.id),
-            "total": .count(result.total),
-            "searched": .string(result.searchedBytes.hexNumber),
-            "buffers": .count(result.buffers)
-        ]
-        if start == .root {
-            envelope["node"] = "root"
-        } else if let node = tree.node(start) {
-            envelope["node"] = UEFIAgentQueries.summary(of: node, in: tree)
-        }
-        if !result.unreadSections.isEmpty {
-            envelope["unread"] = .array(result.unreadSections.map { .string($0.description) })
-        }
-        if result.matches.count < min(result.total, paging.first + limit) {
-            envelope["note"] = .string("Too many matches to place them all in tree order; these are the first "
-                + "\(result.matches.count). Search from a deeper `node` to narrow it.")
-        }
-        if show == "count" {
-            envelope["matches"] = .array([])
-            envelope["next"] = .null
-            envelope["note"] = nil
-            return .json(.object(envelope))
-        }
-        let items: [JSONValue] = result.matches.dropFirst(paging.first).prefix(limit).map { match in
-            let entry = UEFIAgentContentSearch.entry(for: match, encoding: wanted[match.pattern].encoding, in: tree)
-            if show == "compact" { return UEFIAgentContentSearch.compact(entry, keepingEncoding: wanted.count > 1) }
-            guard case .object(var members) = entry else { return .null }
-            guard context > 0 else { return .object(members) }
-            // An area the flash map names for a secret gives its matches but
-            // not the bytes around them.
-            if let node = match.node.flatMap(tree.node), UEFIAgentRegions.isSecret(node, in: tree) {
-                members["redacted"] = true
-                return .object(members)
-            }
-            members["preview"] = [
-                "hex": .string(AgentBytes.hexText(match.excerpt)),
-                "text": .string(wanted[match.pattern].encoding == "utf16le"
-                                ? AgentBytes.utf16le(match.excerpt) : AgentBytes.printable(match.excerpt)),
-                "before": .count(match.excerptMatch.lowerBound)
-            ]
-            return .object(members)
-        }
-        return .json(try paging.answer(envelope, key: "matches", items: items, total: result.total,
-                                       bound: arguments.answerBound) { item in
-            guard case .object(var members) = item, members["preview"] != nil else { return nil }
-            members["preview"] = nil
-            members["truncated"] = "item"
-            return .object(members)
-        })
-    }
 
     // MARK: - open_part
 

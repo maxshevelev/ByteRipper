@@ -3,6 +3,7 @@ import AgentKit
 import ByteRipperCore
 import HexText
 import ToolModuleKit
+import UEFITool
 
 /// Two documents compared byte by byte (`Design/AGENT_PLAN.md`, stage 8):
 /// `diff`, the runs where they differ, read without touching the screen; then
@@ -183,21 +184,13 @@ final class AgentDiffTools {
     // MARK: - Structure
 
     /// The locators, finest first.
-    private var locators: [ToolAgentLocator] {
+    var locators: [ToolAgentLocator] {
         modules().compactMap { $0.agentLocator }.sorted { $0.precedence > $1.precedence }
     }
 
     /// Each range placed by the finest locator that can say.
     func locate(_ host: PaneToolHost, _ ranges: [Range<UInt64>]) async -> [[ToolAgentPlace]] {
-        var result = ranges.map { _ -> [ToolAgentPlace] in [] }
-        guard !ranges.isEmpty else { return result }
-        for locator in locators {
-            let open = result.indices.filter { result[$0].isEmpty }
-            guard !open.isEmpty else { break }
-            let answers = await locator.locate(host, open.map { ranges[$0] })
-            for (index, places) in zip(open, answers) { result[index] = places }
-        }
-        return result
+        await UEFIAgentFind.locate(host, ranges, by: locators)
     }
 
     /// The areas of the image that overlap `range`, each with the bytes and
@@ -271,10 +264,7 @@ final class AgentDiffTools {
     }
 
     nonisolated static func placeJSON(_ place: ToolAgentPlace) -> JSONValue {
-        var members: [String: JSONValue] = ["kind": .string(place.kind), "name": .string(place.name)]
-        if !place.id.isEmpty { members["id"] = .string(place.id) }
-        if let label = place.label { members["label"] = .string(label) }
-        return .object(members)
+        UEFIAgentFind.placeJSON(place)
     }
 
     // MARK: - compare
