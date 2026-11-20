@@ -1,4 +1,5 @@
 import AppKit
+import AppPalette
 import HelpUI
 import Localization
 import ToolModuleKit
@@ -245,10 +246,12 @@ import ToolModuleKit
         case .idle:
             header.stringValue = L("Search results (0)")
             message.stringValue = ""
+            message.textColor = .secondaryLabelColor
         case .searching(let progress):
             header.stringValue = L("Search results (searching…)")
             progressBar.doubleValue = progress
             message.stringValue = L("Searching…")
+            message.textColor = .secondaryLabelColor
         case .done(let total, let scope):
             let count = rows.count == total
                 ? Self.grouped(total)
@@ -256,6 +259,7 @@ import ToolModuleKit
             header.stringValue = scope.map { L("Search results in %1$@ (%2$@)", $0, count) }
                 ?? L("Search results (%1$@)", count)
             message.stringValue = L("No matches.")
+            message.textColor = SemanticColors.bad  // a negative answer, as the bar's "Not found"
         }
         let searching: Bool
         if case .searching = state { searching = true } else { searching = false }

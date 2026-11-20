@@ -383,6 +383,8 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         try next()
         XCTAssertTrue(pumpUntil(5) { shownTexts(try! self.panel).contains("Not found") },
                       "the bar says it")
+        let said = try XCTUnwrap(descendants(of: try panel, NSTextField.self).first { $0.stringValue == "Not found" })
+        XCTAssertEqual(said.textColor, SemanticColors.bad, "in red, as the dump's Find bar says it")
         XCTAssertEqual(try outline().selectedRow, -1, "the selection is not moved")
     }
 

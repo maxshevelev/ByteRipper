@@ -531,7 +531,10 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         let controls = try controls()
         controls.caseButton.state = .on
         controls.caseToggled()
-        XCTAssertEqual(try findAll("gh51g").state, .done(total: 0, scope: nil))
+        let none = try findAll("gh51g")
+        XCTAssertEqual(none.state, .done(total: 0, scope: nil))
+        let said = try XCTUnwrap(descendants(of: none, NSTextField.self).first { $0.stringValue == "No matches." })
+        XCTAssertEqual(said.textColor, SemanticColors.bad, "nothing found is said in red, as the bar's Not found")
         XCTAssertEqual(try findAll("GH51G").state, .done(total: 1, scope: nil))
         controls.caseButton.state = .off
         controls.caseToggled()
