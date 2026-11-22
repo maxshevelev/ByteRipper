@@ -88,7 +88,7 @@ public enum SmartSearch {
             guard groups.allSatisfy({ $0.count == 2 }) else { return false }
             pairs = groups
         }
-        return pairs.allSatisfy { $0 == "??" || $0.allSatisfy(\.isHexDigit) }
+        return pairs.allSatisfy { $0 == "??" || $0.allSatisfy { $0.isASCII && $0.isHexDigit } }
     }
 
     /// Whether `text` reads as a GUID — `CDEA2BD3-FC25-4C1C-B97C-B31186064990`,

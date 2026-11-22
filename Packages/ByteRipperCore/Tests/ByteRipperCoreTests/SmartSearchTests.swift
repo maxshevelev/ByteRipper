@@ -241,14 +241,20 @@ final class SmartSearchTests: XCTestCase {
         for text in ["", "CDEA2BD3FC254C1CB97CB31186064990", "CDEA2BD3-FC25-4C1C-B97C-B3118606499",
                      "CDEA2BD3-FC25-4C1C-B97C-B31186064990-", "CDEA2BD3-FC25-4C1C-B97CB31186064990",
                      "XDEA2BD3-FC25-4C1C-B97C-B31186064990", "{CDEA2BD3-FC25-4C1C-B97C-B31186064990",
-                     "D3 2B EA CD", "BootLogo"] {
+                     "D3 2B EA CD", "BootLogo", Self.fullWidthGuid] {
             XCTAssertThrowsError(try SearchEngine.parsePattern(text, encoding: .guid), text) { error in
                 XCTAssertEqual(error as? SearchError, .invalidGuidPattern, text)
             }
         }
         XCTAssertFalse(SmartSearch.looksLikeGuid("CDEA2BD3FC254C1CB97CB31186064990"))
         XCTAssertTrue(SmartSearch.looksLikeGuid("{cdea2bd3-fc25-4c1c-b97c-b31186064990}"))
+        XCTAssertFalse(SmartSearch.looksLikeGuid(Self.fullWidthGuid))
+        XCTAssertFalse(SmartSearch.looksLikeHexBytes("ＤＥ ＡＤ ＢＥ ＥＦ"))
     }
+
+    /// Full-width digits are hex digits to `Character.isHexDigit` but not to
+    /// `UInt8(_:radix:)`: a GUID typed with them once crashed the search.
+    private static let fullWidthGuid = "ＣＤＥＡ2BD3-FC25-4C1C-B97C-B31186064990"
 
     /// Smart Search tries a text that reads as a GUID as a GUID first — before
     /// anything else, an encoding brought from the history included — and

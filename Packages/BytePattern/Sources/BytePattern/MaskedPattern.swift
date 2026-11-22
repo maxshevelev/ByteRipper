@@ -39,7 +39,7 @@ public struct MaskedPattern: Equatable, Sendable {
             var rest = Substring(token)
             if rest.lowercased().hasPrefix("0x") { rest = rest.dropFirst(2) }
             guard !rest.isEmpty,
-                  rest.allSatisfy({ $0.isHexDigit || $0 == "?" }) else { throw SearchError.invalidHexPattern }
+                  rest.allSatisfy({ Self.isASCIIHexDigit($0) || $0 == "?" }) else { throw SearchError.invalidHexPattern }
             symbols.append(contentsOf: rest)
         }
         // No digits at all is not a hex pattern, as the find bar has always said.
@@ -90,20 +90,28 @@ public struct MaskedPattern: Equatable, Sendable {
         }
         let fields = body.split(separator: "-", omittingEmptySubsequences: false)
         guard fields.map(\.count) == [8, 4, 4, 4, 12],
-              fields.allSatisfy({ $0.allSatisfy(\.isHexDigit) }) else { return nil }
-        func pairs(_ field: Substring) -> [UInt8] {
-            stride(from: 0, to: field.count, by: 2).map {
-                let from = field.index(field.startIndex, offsetBy: $0)
-                return UInt8(field[from..<field.index(from, offsetBy: 2)], radix: 16)!
+              fields.allSatisfy({ $0.allSatisfy(Self.isASCIIHexDigit) }) else { return nil }
+        func pairs(_ field: Substring) -> [UInt8]? {
+            var bytes: [UInt8] = []
+            var from = field.startIndex
+            while from < field.endIndex {
+                let to = field.index(from, offsetBy: 2)
+                guard let byte = UInt8(field[from..<to], radix: 16) else { return nil }
+                bytes.append(byte)
+                from = to
             }
+            return bytes
         }
-        var bytes: [UInt8] = []
-        bytes += pairs(fields[0]).reversed()
-        bytes += pairs(fields[1]).reversed()
-        bytes += pairs(fields[2]).reversed()
-        bytes += pairs(fields[3])
-        bytes += pairs(fields[4])
-        return bytes
+        guard let data1 = pairs(fields[0]), let data2 = pairs(fields[1]), let data3 = pairs(fields[2]),
+              let data4High = pairs(fields[3]), let data4Low = pairs(fields[4]) else { return nil }
+        return data1.reversed() + data2.reversed() + data3.reversed() + data4High + data4Low
+    }
+
+    /// Whether `character` is 0–9, A–F or a–f. `Character.isHexDigit` also
+    /// takes the full-width ０–９, Ａ–Ｆ, ａ–ｆ, which `UInt8(_:radix:)` then
+    /// refuses: a field that passed the one would fail the other.
+    static func isASCIIHexDigit(_ character: Character) -> Bool {
+        character.isASCII && character.isHexDigit
     }
 
     /// Whether any byte of the pattern is a hole.
