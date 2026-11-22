@@ -3435,6 +3435,11 @@ public class Owner {
         JsonArray below = new JsonArray();
         for (Function function : program.getFunctionManager().getFunctions(true)) {
             JsonObject heldMark = libraryMark(function);
+            // A mark of an entry the review declined is no link: the function
+            // is the module's, and nothing is offered to that entry. Such a
+            // mark is left by a decline from before a decline took it off
+            // (issue 93d59e47).
+            if (heldMark != null && declined(function).contains(string(heldMark, "id", ""))) heldMark = null;
             JsonObject candidate = libraryCandidate(function);
             if (heldMark == null && candidate == null) continue;
             String kind = candidate != null ? candidate.get("kind").getAsString() : markKind(function, heldMark);
@@ -3480,7 +3485,7 @@ public class Owner {
             libraryDependencies(function, fid, item);
             // A body applied as a variant of another entry says which, and
             // the assert codes that made it one.
-            JsonObject mark = libraryMark(function);
+            JsonObject mark = heldMark;
             // The version this review was made on: a change on the entry's
             // current version is its next one, from any module.
             if (mark != null) {
@@ -4410,6 +4415,8 @@ public class Owner {
             if (function == null) continue;
             String before = libraryState(function);
             String id = required(item, "id");
+            // An entry the review declined does not mark its function again.
+            if (declined(function).contains(id)) continue;
             ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
             if (hash == null) continue;
             JsonObject held = libraryMark(function);

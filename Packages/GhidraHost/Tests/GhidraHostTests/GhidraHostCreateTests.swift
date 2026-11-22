@@ -255,6 +255,20 @@ final class GhidraHostLibraryTests: XCTestCase {
         let row = try XCTUnwrap(rows?.first { $0["entry"] as? String == there })
         XCTAssertNil(row["library_entry"] as? [String: Any], "\(row)")
         XCTAssertEqual(row["name"] as? String, "OwnHobList")
+
+        // A mark of the declined entry that came back — a project declined
+        // before a decline took the mark off, or marked again since — is no
+        // link: the publish offers nothing to that entry (issue 93d59e47).
+        _ = try await host.write(other, "/v1/library/mark", body: body([
+            "items": [["address": there, "id": id, "version": 1, "kind": "edk2"]]]))
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "plate", "text": "Still the module's own function."]))
+        let again = try await host.publish(other, by: "agent")
+        XCTAssertEqual(again.library?.conflicts.count ?? 0, 0, "\(String(describing: again.library))")
+        XCTAssertEqual(again.library?.updated.count ?? 0, 0, "\(String(describing: again.library))")
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 1, "the entry is untouched")
+        let after = try json(await host.readCall(other, "functions", query: [:]))["functions"] as? [[String: Any]]
+        XCTAssertNil(after?.first { $0["entry"] as? String == there }?["library_entry"] as? [String: Any])
     }
 
     /// An entry made where the function keeps EDX names that program's own
