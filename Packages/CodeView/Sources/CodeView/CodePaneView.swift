@@ -2544,14 +2544,32 @@ import ToolModuleKit
 
     /// The record of the module's review, drawn in the tab.
     func drawInterfaces() {
-        interfacesPanel.show(manifest.reading?.interfaces) { [weak self] address in
+        var unplaced = false
+        interfacesPanel.show(manifest.reading?.interfaces) { [weak self] recorded in
             guard let self else { return nil }
+            let address = self.interfaceInstruction(for: recorded)
             let place = self.model.indices(of: CodeLocation(address: address))
+            if place.function == nil, self.model.function(at: address) == nil { unplaced = true }
             guard let function = place.function ?? self.model.function(at: address) else { return nil }
             let entry = self.model.functions[function].entry
             let name = self.navigatorName(of: function)
             return address == entry ? name : "\(name) + 0x\(String(address.value - entry.value, radix: 16, uppercase: true))"
         }
+        // A descriptor's use may lie in code not read yet: read it, quietly,
+        // and draw the places again.
+        if unplaced, !model.pendingFunctions.isEmpty {
+            whenRead(nil, quietly: true) { [weak self] in self?.drawInterfaces() }
+        }
+    }
+
+    /// Where an interface's recorded place is in the code. An instruction
+    /// or a function's entry is itself; an address in the module's data —
+    /// the descriptor an install passes, which a review may record in place
+    /// of the call — is the instruction that hands it over, its first use.
+    func interfaceInstruction(for address: CodeAddress) -> CodeAddress {
+        if model.function(at: address) != nil || model.line(at: address) != nil
+            || model.pendingFunction(holding: address) != nil { return address }
+        return model.uses(of: address).first?.from ?? address
     }
 
     /// An interface's place, opened from the tab. A function's entry — a
@@ -2559,7 +2577,8 @@ import ToolModuleKit
     /// other place is where the module supplies the GUID: the call is
     /// selected in the C, as a POST code's call is, the C shown for it; a
     /// descriptor no instruction holds selects its bytes.
-    func openInterfaceAddress(_ address: CodeAddress) {
+    func openInterfaceAddress(_ recorded: CodeAddress) {
+        let address = interfaceInstruction(for: recorded)
         if showsDescription { showDescription(false) }
         if model.function(at: address) != nil {
             go(to: CodeLocation(function: address))
@@ -2643,8 +2662,19 @@ import ToolModuleKit
         // and on to its own `;`. A call the decompiler breaks over two lines
         // is taken whole.
         func character(_ index: Int) -> Character { Character(UnicodeScalar(c.character(at: index)) ?? " ") }
+        // A `;` or a brace inside a comment ends no statement: the walk back
+        // steps over a comment whole, or a pre comment's tail would be taken
+        // into the statement below it.
+        let comments = Self.commentRanges(in: c)
         var start = anchor
-        while start > 0, !";{}".contains(character(start - 1)) { start -= 1 }
+        while start > 0 {
+            if let comment = comments.last(where: { $0.location < start && start <= NSMaxRange($0) }) {
+                start = comment.location
+                continue
+            }
+            if ";{}".contains(character(start - 1)) { break }
+            start -= 1
+        }
         skipping: while start < anchor {
             if character(start).isWhitespace {
                 start += 1
@@ -2666,6 +2696,40 @@ import ToolModuleKit
         let end = semicolon.location != NSNotFound && semicolon.location - anchor < 600
             ? NSMaxRange(semicolon) : lineEnd
         return NSRange(location: start, length: max(0, end - start))
+    }
+
+    /// Where the C's comments are, `/* … */` and `// …` to the line's end,
+    /// in order. A string or a character literal holds no comment.
+    static func commentRanges(in c: NSString) -> [NSRange] {
+        let slash = UInt16(UInt8(ascii: "/")), star = UInt16(UInt8(ascii: "*")), newline = UInt16(UInt8(ascii: "\n"))
+        let quote = UInt16(UInt8(ascii: "\"")), apostrophe = UInt16(UInt8(ascii: "'")), backslash = UInt16(UInt8(ascii: "\\"))
+        var ranges: [NSRange] = []
+        var index = 0
+        let length = c.length
+        while index < length {
+            let unit = c.character(at: index)
+            let next = index + 1 < length ? c.character(at: index + 1) : 0
+            if unit == slash, next == star {
+                let close = c.range(of: "*/", range: NSRange(location: index + 2, length: length - index - 2))
+                let end = close.location == NSNotFound ? length : NSMaxRange(close)
+                ranges.append(NSRange(location: index, length: end - index))
+                index = end
+            } else if unit == slash, next == slash {
+                var end = index + 2
+                while end < length, c.character(at: end) != newline { end += 1 }
+                ranges.append(NSRange(location: index, length: end - index))
+                index = end
+            } else if unit == quote || unit == apostrophe {
+                var end = index + 1
+                while end < length, c.character(at: end) != unit, c.character(at: end) != newline {
+                    end += c.character(at: end) == backslash ? 2 : 1
+                }
+                index = min(length, end + 1)
+            } else {
+                index += 1
+            }
+        }
+        return ranges
     }
 
     /// The switch says which tab is in front: a list, or Search. The list's

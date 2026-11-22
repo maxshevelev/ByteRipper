@@ -131,7 +131,10 @@ final class CodePaneViewTests: XCTestCase {
     /// the C — shown for it — as a POST code's call is; a callback opens its
     /// function.
     func testAnInterfacesPlaceSelectsItsCallInTheC() throws {
-        let c = "void Caller(void)\n{\n  Setup();\n  /* install the list */\n  Status = (**(code **)(*PeiServices + 0x18))\n                    (PeiServices,&mPpiList);\n}\n"
+        // A `;` and braces in the comment above end no statement: only the
+        // call is selected, not the comment's tail (the person's report of
+        // 2026-11-22, PeiCore's EFI_SEC_HOB_DATA_PPI).
+        let c = "void Caller(void)\n{\n  Setup();\n  /* install the list; it holds {the descriptors} */\n  Status = (**(code **)(*PeiServices + 0x18))\n                    (PeiServices,&mPpiList);\n}\n"
         let install = (c as NSString).range(of: "Status = (**(code **)(*PeiServices + 0x18))\n                    (PeiServices,&mPpiList);")
         let list = (c as NSString).range(of: "mPpiList")
         let json: [String: Any] = [
@@ -172,6 +175,31 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual((code.string as NSString).substring(with: code.selectedRange()),
                        (c as NSString).substring(with: install))
         XCTAssertEqual(view.lastFlash, .c(code.selectedRange()), "the flash marks the statement, not the name")
+
+        // A review that recorded the descriptor itself, an address in the
+        // module's data: its place is the instruction that hands it over,
+        // shown as a link and opened as the call (the person's report of
+        // 2026-11-22, AmdCcxVhRnPei's install at 0x9AC9A10).
+        XCTAssertEqual(view.interfaceInstruction(for: CodeAddress(0x400)), CodeAddress(0x221))
+        code.setSelectedRange(NSRange(location: 0, length: 0))
+        view.openInterfaceAddress(CodeAddress(0x400))
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x221))
+        XCTAssertEqual((code.string as NSString).substring(with: code.selectedRange()),
+                       (c as NSString).substring(with: install))
+        var descriptor = shown
+        descriptor.reading = AnalysisReading(project: "p", rev: 2, interfaces: ModuleInterfaces(installs: [
+            ModuleInterfaces.Interface(guid: installed.guid, name: installed.name, kind: .ppi, address: "0x400",
+                                       condition: "always", purpose: "Gives the store to the modules after it.")]))
+        let byDescriptor = CodePaneView(manifest: descriptor, artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        byDescriptor.frame = view.frame
+        byDescriptor.layoutSubtreeIfNeeded()
+        byDescriptor.showInterfacesTab(true)
+        let panel = byDescriptor.interfacesPanel
+        let entry = try XCTUnwrap((0..<panel.outline.numberOfRows).first {
+            panel.outline.item(atRow: $0) is CodeInterfacesPanel.EntryItem
+        })
+        panel.outline.expandItem(panel.outline.item(atRow: entry))
+        XCTAssertTrue(panel.linesForTests.contains("    At: Caller + 0x1"), "\(panel.linesForTests)")
 
         view.openInterfaceAddress(CodeAddress(0x355))
         XCTAssertEqual(view.selectedFunction?.name, "Setup", "a callback opens its function")
