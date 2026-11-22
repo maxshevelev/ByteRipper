@@ -6187,8 +6187,16 @@ final class CodeNavigatorCell: NSTableCellView {
     }
 
     private func drawMark() {
+        // A system symbol (`showsSymbol`) has no mark to draw again: it keeps
+        // its image and takes the selection's colour, or it would be lost on
+        // the selection's fill.
+        guard let mark else {
+            icon.contentTintColor = backgroundStyle == .emphasized
+                ? .alternateSelectedControlTextColor : .secondaryLabelColor
+            return
+        }
         let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
-        icon.image = mark.map {
+        icon.image = Optional(mark).map {
             CodeNavigatorIcon.image($0.glyph, color: $0.color, side: side,
                                     inverted: backgroundStyle == .emphasized)
         }
@@ -6271,6 +6279,7 @@ final class CodeNavigatorCell: NSTableCellView {
         icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: side - 2, weight: .regular))
         icon.isHidden = false
+        drawMark()
         iconWidth.constant = side
         iconGap.constant = 5
     }

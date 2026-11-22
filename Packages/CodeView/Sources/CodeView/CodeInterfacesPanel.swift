@@ -257,7 +257,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? NSTableCellView ?? {
             let cell = NSTableCellView()
             cell.identifier = id
-            let text = NSTextField(wrappingLabelWithString: "")
+            let text = InterfacesDetailField(wrappingLabelWithString: "")
             text.lineBreakMode = .byWordWrapping
             text.isSelectable = false
             text.translatesAutoresizingMaskIntoConstraints = false
@@ -271,7 +271,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             ])
             return cell
         }()
-        cell.textField?.attributedStringValue = detail.text
+        (cell.textField as? InterfacesDetailField)?.show(detail.text)
         return cell
     }
 
@@ -320,6 +320,12 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         cell.textField?.attributedStringValue = line
         cell.toolTip = entry.interface.guid
         return cell
+    }
+
+    /// The rows say when they are selected, so what is coloured in them — a
+    /// (?), a place in blue — takes the selection's colour.
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        InterfacesRowView()
     }
 
     /// A width the rows have not been measured at: the lines wrap anew.
@@ -417,5 +423,73 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             default: nil
             }
         }
+    }
+}
+
+/// A row of the Interfaces tree. On the selection's fill a link's blue and the
+/// (?)'s cannot be seen: while the row is selected in a focused list they take
+/// the selection's text colour, and a place keeps an underline to say it is a
+/// link.
+final class InterfacesRowView: NSTableRowView {
+    override var isSelected: Bool { didSet { restyle() } }
+    override var isEmphasized: Bool { didSet { restyle() } }
+
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        restyle()
+    }
+
+    /// Whether the row stands on the accent fill.
+    var onSelection: Bool { isSelected && isEmphasized }
+
+    func restyle() {
+        let on = onSelection
+        func walk(_ view: NSView) {
+            if let button = view as? HelpButton {
+                button.contentTintColor = on ? .alternateSelectedControlTextColor : .linkColor
+            } else if let field = view as? InterfacesDetailField {
+                field.selected = on
+            }
+            view.subviews.forEach(walk)
+        }
+        subviews.forEach(walk)
+    }
+}
+
+/// A detail's text, drawn again in the selection's colour while its row is
+/// selected.
+final class InterfacesDetailField: NSTextField {
+    private var shown = NSAttributedString()
+
+    var selected = false {
+        didSet { if selected != oldValue { draw() } }
+    }
+
+    func show(_ text: NSAttributedString) {
+        shown = text
+        selected = (enclosingRow as? InterfacesRowView)?.onSelection ?? false
+        draw()
+    }
+
+    private var enclosingRow: NSView? {
+        var view = superview
+        while let current = view, !(current is NSTableRowView) { view = current.superview }
+        return view
+    }
+
+    private func draw() {
+        guard selected else {
+            attributedStringValue = shown
+            return
+        }
+        let text = NSMutableAttributedString(attributedString: shown)
+        let whole = NSRange(location: 0, length: text.length)
+        shown.enumerateAttribute(.foregroundColor, in: whole) { color, range, _ in
+            if (color as? NSColor) == NSColor.linkColor {
+                text.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            }
+        }
+        text.addAttribute(.foregroundColor, value: NSColor.alternateSelectedControlTextColor, range: whole)
+        attributedStringValue = text
     }
 }

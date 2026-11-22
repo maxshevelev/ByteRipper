@@ -91,6 +91,37 @@ final class CodePaneViewTests: XCTestCase {
         panel.choose(row: entry)
         XCTAssertEqual(view.selectedFunctionIndex, 0, "the call's function opens")
 
+        // A selected row keeps its glyph and draws its colours in the
+        // selection's: the entry's puzzle piece, the place's link.
+        panel.outline.selectRowIndexes([entry, entry + 4], byExtendingSelection: false)
+        panel.outline.layoutSubtreeIfNeeded()
+        for row in [entry, entry + 4] {
+            (panel.outline.rowView(atRow: row, makeIfNecessary: true) as? InterfacesRowView)?.isEmphasized = true
+        }
+        let entryCell = try XCTUnwrap(panel.outline.view(atColumn: 0, row: entry, makeIfNecessary: true)
+                                      as? CodeNavigatorCell)
+        entryCell.backgroundStyle = .emphasized
+        XCTAssertNotNil(entryCell.icon.image, "the glyph stays on the selection")
+        XCTAssertEqual(entryCell.icon.contentTintColor, .alternateSelectedControlTextColor)
+        let at = try XCTUnwrap((panel.outline.view(atColumn: 0, row: entry + 4, makeIfNecessary: true)
+                                as? NSTableCellView)?.textField as? InterfacesDetailField)
+        XCTAssertTrue(at.attributedStringValue.string.hasPrefix("At:"))
+        let place = (at.attributedStringValue.string as NSString).range(of: "FUN_00000220")
+        XCTAssertEqual(at.attributedStringValue.attribute(.foregroundColor, at: place.location, effectiveRange: nil)
+                       as? NSColor, .alternateSelectedControlTextColor)
+        XCTAssertNotNil(at.attributedStringValue.attribute(.underlineStyle, at: place.location, effectiveRange: nil),
+                        "still reads as a link")
+        let groupRow = try XCTUnwrap((0..<panel.outline.numberOfRows).first {
+            panel.outline.item(atRow: $0) is CodeInterfacesPanel.GroupItem
+        })
+        panel.outline.selectRowIndexes([groupRow], byExtendingSelection: false)
+        let groupView = try XCTUnwrap(panel.outline.rowView(atRow: groupRow, makeIfNecessary: true) as? InterfacesRowView)
+        groupView.isEmphasized = true
+        func helps(_ v: NSView) -> [HelpButton] { (v as? HelpButton).map { [$0] } ?? v.subviews.flatMap(helps) }
+        XCTAssertEqual(helps(groupView).first?.contentTintColor, .alternateSelectedControlTextColor)
+        groupView.isSelected = false
+        XCTAssertEqual(helps(groupView).first?.contentTintColor, .linkColor)
+
         view.showSearchTab(true)
         XCTAssertTrue(view.interfacesPanel.isHidden, "one tab at a time")
         XCTAssertEqual(view.navigatorListIndex, 5)
