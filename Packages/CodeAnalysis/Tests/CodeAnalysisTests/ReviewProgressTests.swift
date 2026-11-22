@@ -5,6 +5,11 @@ import XCTest
 /// tree's badge beside the module's name.
 final class ReviewProgressTests: XCTestCase {
     private let digest = SHA256Digest(data: Data("described".utf8))
+    /// All three lists answered, one of them empty: a finished record.
+    private let answered = ModuleInterfaces(installs: [], locates: [
+        .init(guid: "0AE8CE5D-E448-4437-A8D7-EBF5F194F731", name: "EFI_PEI_READ_ONLY_VARIABLE2_PPI", kind: .ppi,
+              address: "0x1A2", condition: "always",
+              purpose: "Reads the setup variables.", required: true)], notifies: [])
 
     private func manifest(levels: [String: Int]?, reading: AnalysisReading?) -> AnalysisManifest {
         let bytes = Data("module".utf8)
@@ -20,10 +25,34 @@ final class ReviewProgressTests: XCTestCase {
         XCTAssertEqual(manifest(levels: nil, reading: nil).reviewProgress, .mechanical)
     }
 
-    func testEveryFunctionDoneAndADescriptionIsComplete() {
+    func testEveryFunctionDoneADescriptionAndTheInterfacesAreComplete() {
         let done = ["full": 10, "library": 4, "no_body": 1, "partial": 0]
-        XCTAssertEqual(manifest(levels: done, reading: AnalysisReading(rev: 3, description: digest)).reviewProgress,
+        XCTAssertEqual(manifest(levels: done, reading: AnalysisReading(rev: 3, description: digest,
+                                                                       interfaces: answered)).reviewProgress,
                        .complete)
+    }
+
+    /// A list nil is a part of the review not done: an empty one is an answer.
+    func testAnInterfacesListNotAnsweredIsPartial() {
+        let done = ["full": 10]
+        XCTAssertEqual(manifest(levels: done, reading: AnalysisReading(rev: 3, description: digest)).reviewProgress,
+                       .partial, "no record")
+        var short = answered
+        short.notifies = nil
+        XCTAssertEqual(manifest(levels: done, reading: AnalysisReading(rev: 3, description: digest,
+                                                                       interfaces: short)).reviewProgress,
+                       .partial, "notifies not answered")
+        XCTAssertEqual(short.unanswered, ["notifies"])
+        XCTAssertEqual(manifest(levels: ["decompiled": 4], reading: AnalysisReading(rev: 1, interfaces: short))
+                       .reviewProgress, .partial, "a record is the review's own")
+    }
+
+    /// The record rides in the review document; one without it has none.
+    func testTheInterfacesComeFromTheReviewDocument() throws {
+        let encoded = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(answered))
+        let document = try JSONSerialization.data(withJSONObject: ["interfaces": encoded, "functions": [:]])
+        XCTAssertEqual(ModuleInterfaces.of(reviewDocument: document), answered)
+        XCTAssertNil(ModuleInterfaces.of(reviewDocument: try JSONSerialization.data(withJSONObject: ["functions": [:]])))
     }
 
     func testAFunctionShortOfTheBarIsPartial() {
@@ -133,7 +162,7 @@ final class ReviewProgressTests: XCTestCase {
             ["entry": "0x20", "review_level": "no_body"]]])
         let plain = try JSONSerialization.data(withJSONObject: ["functions": [["entry": "0x10"]]])
         let old = try store.putAnalysis(module: module("Reviewed"), recipe: recipe, artifact: reviewed,
-                                        reading: AnalysisReading(rev: 2, description: digest))
+                                        reading: AnalysisReading(rev: 2, description: digest, interfaces: answered))
         _ = try store.putAnalysis(module: module("Plain"), recipe: recipe, artifact: plain)
         // As an earlier build wrote it: no review_levels.
         var written = old

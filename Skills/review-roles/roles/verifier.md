@@ -197,6 +197,14 @@ FILE_GUID alone; no conclusion from the neighbouring modules; the same code
 base and certainty as the origin line in `What it is`. A module without a
 category is not closed.
 
+**The interfaces.** Before closing, read the record (`ghidra_interfaces`, or
+`code_modules`'s `interfaces`) against the code: search the module for every
+install, lookup and notify call — through the services table and through the
+wrappers it calls — and check that each is listed with the right GUID, name,
+address and condition, that its purpose says what the code does with it, that a lookup's `required` matches what the code does
+without it, and that an empty list is true. A module with an unanswered list
+is not closed.
+
 Reply with a numbered list of fixes, each with its address and what you
 observed, or with the closure and the next task the person gave. State a
 finding only as far as you read it, and say what you did not check.

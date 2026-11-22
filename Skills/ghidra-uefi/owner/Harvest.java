@@ -55,6 +55,13 @@ final class Harvest {
     static final java.util.List<String> ORIGIN_CATEGORIES =
         java.util.List.of("edk2", "edk2_modified", "amd", "intel", "vendor", "unknown");
     static final java.util.List<String> ORIGIN_CONFIDENCES = java.util.List.of("established", "inferred");
+    /**
+     * What the module installs, locates and is notified of, as JSON
+     * `{installs?, locates?, notifies?}`: a list missing is one the review has
+     * not answered, an empty one an answer (`ModuleInterfaces`).
+     */
+    static final String INTERFACES = "interfaces";
+    static final java.util.List<String> INTERFACE_LISTS = java.util.List.of("installs", "locates", "notifies");
     /** The longest description the owner keeps, in UTF-8 bytes. */
     static final int DESCRIPTION_LIMIT = 256 * 1024;
 
@@ -111,8 +118,9 @@ final class Harvest {
         JsonObject equates = now.getAsJsonObject("equates");
         String description = description(program);
         JsonObject origin = origin(program);
+        JsonObject interfaces = interfaces(program);
         boolean reviewed = functions.size() > 0 || comments.size() > 0 || data.size() > 0 || types.size() > 0
-            || equates.size() > 0 || description != null || origin != null;
+            || equates.size() > 0 || description != null || origin != null || interfaces != null;
         JsonObject document = new JsonObject();
         document.add("comments", comments);
         document.add("data", data);
@@ -132,6 +140,8 @@ final class Harvest {
         // Only when the review said: one that did not harvests to the bytes it
         // did before an origin was kept.
         if (origin != null) document.add("origin", origin);
+        // The same: a review that answered none of the lists harvests as before.
+        if (interfaces != null) document.add("interfaces", interfaces);
         document.addProperty("project", projectId);
         document.addProperty("schema", 1);
         document.add("types", types);
@@ -157,6 +167,27 @@ final class Harvest {
     static void setOrigin(Program program, JsonObject origin) {
         Options options = program.getOptions(OPTIONS);
         if (origin == null) options.removeOption(ORIGIN); else options.setString(ORIGIN, origin.toString());
+    }
+
+    // MARK: - The module's interfaces
+
+    /** The record as the review left it; null while it has answered no list. */
+    static JsonObject interfaces(Program program) {
+        String text = program.getOptions(OPTIONS).getString(INTERFACES, null);
+        if (text == null || text.isEmpty()) return null;
+        try {
+            JsonObject record = JsonParser.parseString(text).getAsJsonObject();
+            return record.size() == 0 ? null : record;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /** Sets the record; null or one with no list removes it. Inside a transaction. */
+    static void setInterfaces(Program program, JsonObject record) {
+        Options options = program.getOptions(OPTIONS);
+        if (record == null || record.size() == 0) options.removeOption(INTERFACES);
+        else options.setString(INTERFACES, record.toString());
     }
 
     // MARK: - The module description

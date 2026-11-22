@@ -2048,3 +2048,26 @@
 "code name" = "кодовое имя";
 "?? stands for a whole byte — half a byte cannot be masked." = "?? обозначает целый байт — замаскировать половину байта нельзя.";
 "A pattern of ?? alone matches everywhere — give at least one byte." = "Шаблон из одних ?? совпадает везде — укажите хотя бы один байт.";
+
+/* The module popover's dependencies */
+"Not recorded yet" = "Ещё не записано";
+"Installs" = "Устанавливает";
+"Locates" = "Ищет";
+"Notified of" = "Получает уведомления о";
+"always" = "всегда";
+"reinstalls" = "переустанавливает";
+"handed over" = "передаётся ядру";
+"required" = "обязательно";
+"optional" = "необязательно";
+
+/* The code panel's Interfaces tab */
+"Interfaces" = "Интерфейсы";
+"Interfaces: what the module installs, looks up and is notified of" = "Интерфейсы: что модуль устанавливает, ищет и чего ожидает";
+"The review has not recorded them all yet" = "Разбор записал ещё не все списки";
+"The module uses no PPI or protocol" = "Модуль не использует ни PPI, ни протоколов";
+"1 interface" = "1 интерфейс";
+"%1$@ interfaces" = "Интерфейсов: %1$@";
+"When:" = "Когда:";
+"Protocol" = "Протокол";
+"At:" = "Где:";
+"Callback:" = "Обработчик:";

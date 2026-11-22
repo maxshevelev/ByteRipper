@@ -137,9 +137,10 @@ public enum GhidraTools {
         holder at a time writes and publishes a module, and reading needs nothing; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
-        `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
+        `ghidra_type_uses` (where every module names a type), `ghidra_description`, `ghidra_interfaces`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
-        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`. \
+        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_set_interfaces` (what the module installs, \
+        locates and is notified of: a review is not complete while a list is unanswered), `ghidra_code_mode`, `ghidra_equate`. \
         A library function lives in the shared registry and nowhere else: a module holds a link to its entry. \
         `ghidra_library_candidate` proposes a reviewed function for it — `edk2`, `amd` (AGESA) or `intel` (FSP/RC), by the \
         criteria in the skill's "Library functions" — and `ghidra_publish` decides: the registry takes every candidate, or the publish is refused until that is resolved. A body the registry \
@@ -805,6 +806,20 @@ public enum GhidraTools {
                 return try await answer { try await backend.readCall(module, "description", query: asked) }
             },
             AgentTool(
+                name: "ghidra_interfaces",
+                title: "Read the module's interfaces",
+                description: """
+                    What the module installs, locates and is notified of, as the review recorded it with \
+                    `ghidra_set_interfaces`: `installs`, `locates` and `notifies`, each a list — left out \
+                    while the review has not answered it — and `unanswered`, the lists not answered yet. A module's \
+                    review is not complete while any is unanswered.
+                    """,
+                inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"])
+            ) { call in
+                let module = try module(call.arguments)
+                return try await answer { try await backend.readCall(module, "interfaces", query: [:]) }
+            },
+            AgentTool(
                 name: "ghidra_type_definition",
                 title: "Read a type's definition",
                 description: """
@@ -1375,6 +1390,92 @@ public enum GhidraTools {
                 if try arguments.bool("delete", default: false) { body["delete"] = .bool(true) }
                 if let section = try arguments.optionalString("section") { body["section"] = .string(section) }
                 return body
+            },
+            AgentTool(
+                name: "ghidra_set_interfaces",
+                title: "Record the module's interfaces",
+                description: """
+                    Records what the module installs, locates and is notified of, read from its code — the \
+                    record the app shows in the module's popover and a dependency graph is built from, \
+                    without reading the description. Each list given replaces that list; null takes the \
+                    answer back; a list not given stays. An empty list is an answer: the module does none \
+                    of that. A list left unanswered keeps the review short of complete. `installs`: \
+                    InstallPpi, ReInstallPpi, a list handed over at entry; InstallProtocolInterface, \
+                    InstallMultipleProtocolInterfaces, ReinstallProtocolInterface. `locates`: LocatePpi, \
+                    LocateProtocol, HandleProtocol on a known GUID, outside the dependency expression. \
+                    `notifies`: NotifyPpi, RegisterProtocolNotify, a protocol notify event. One call that \
+                    installs a descriptor list gives one entry per GUID, all with the call's address. The \
+                    dependency expression is not written here: the UEFI parser reads it from the FFS file. \
+                    Each entry carries its `purpose`: why the module needs it and what it gives. Every entry is checked — the GUID's form, the address a call in a function or a typed \
+                    datum, a callback a function's entry — and one wrong entry refuses the whole call. The \
+                    answer is the record, as `ghidra_interfaces` reads it.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "installs": [
+                "type": "array",
+                "items": [
+                    "type": "object",
+                    "properties": [
+                        "guid": AgentSchema.string("The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\"."),
+                        "name": AgentSchema.string("Its C name, as the code and the GUID table have it: \"EFI_PEI_MEMORY_DISCOVERED_PPI\"."),
+                        "kind": AgentSchema.choice(["ppi", "protocol"], "A PPI or a protocol."),
+                        "address": AgentSchema.string("Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it."),
+                        "condition": AgentSchema.string("`always`, or when it happens: \"only on S3 resume\", \"only in recovery\"."),
+                        "purpose": AgentSchema.string("One or two sentences: why the module needs this and what it gives — what the interface is used for here, and anything particular about its use (a field it reads, a second install, what a failed lookup leads to)."),
+                        "method": AgentSchema.choice(["install", "reinstall", "handoff"], "install (InstallPpi, InstallProtocolInterface, InstallMultipleProtocolInterfaces; the default), reinstall (ReInstallPpi, ReinstallProtocolInterface), handoff (a list handed over without a service call: SecCore's to PeiCore, PeiCore's own).")
+                    ],
+                    "required": ["guid", "name", "kind", "address", "condition", "purpose"],
+                    "additionalProperties": false
+                ]
+            ],
+                    "locates": [
+                "type": "array",
+                "items": [
+                    "type": "object",
+                    "properties": [
+                        "guid": AgentSchema.string("The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\"."),
+                        "name": AgentSchema.string("Its C name, as the code and the GUID table have it: \"EFI_PEI_MEMORY_DISCOVERED_PPI\"."),
+                        "kind": AgentSchema.choice(["ppi", "protocol"], "A PPI or a protocol."),
+                        "address": AgentSchema.string("Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it."),
+                        "condition": AgentSchema.string("`always`, or when it happens: \"only on S3 resume\", \"only in recovery\"."),
+                        "purpose": AgentSchema.string("One or two sentences: why the module needs this and what it gives — what the interface is used for here, and anything particular about its use (a field it reads, a second install, what a failed lookup leads to)."),
+                        "required": AgentSchema.boolean("true when the module stops or fails without it, false when it goes on.")
+                    ],
+                    "required": ["guid", "name", "kind", "address", "condition", "purpose", "required"],
+                    "additionalProperties": false
+                ]
+            ],
+                    "notifies": [
+                "type": "array",
+                "items": [
+                    "type": "object",
+                    "properties": [
+                        "guid": AgentSchema.string("The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\"."),
+                        "name": AgentSchema.string("Its C name, as the code and the GUID table have it: \"EFI_PEI_MEMORY_DISCOVERED_PPI\"."),
+                        "kind": AgentSchema.choice(["ppi", "protocol"], "A PPI or a protocol."),
+                        "address": AgentSchema.string("Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it."),
+                        "condition": AgentSchema.string("`always`, or when it happens: \"only on S3 resume\", \"only in recovery\"."),
+                        "purpose": AgentSchema.string("One or two sentences: why the module needs this and what it gives — what the interface is used for here, and anything particular about its use (a field it reads, a second install, what a failed lookup leads to)."),
+                        "callback": AgentSchema.string("The entry of the function called.")
+                    ],
+                    "required": ["guid", "name", "kind", "address", "condition", "purpose", "callback"],
+                    "additionalProperties": false
+                ]
+            ]
+                ], required: ["module"]),
+                annotations: .edit
+            ) { call in
+                let module = try module(call.arguments)
+                var fields: [String: JSONValue] = [:]
+                for list in ["installs", "locates", "notifies"] {
+                    if let given = call.arguments.values[list] { fields[list] = given }
+                }
+                guard !fields.isEmpty else {
+                    throw AgentToolError("Give installs, locates or notifies; an empty list is an answer, null takes one back.")
+                }
+                let payload = JSONValue.object(fields).encoded()
+                return try await answer { try await backend.writeCall(module, "set/interfaces", body: payload) }
             },
             write("ghidra_type", "type", "Define a type",
                   "Adds a structure, union, enum or typedef from C to the module, shared with modules opened "

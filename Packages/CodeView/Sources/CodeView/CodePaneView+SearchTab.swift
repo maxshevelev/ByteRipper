@@ -18,6 +18,10 @@ extension CodePaneView {
 
     /// Puts the Search tab in front of the lists, or the lists back.
     public func showSearchTab(_ shows: Bool) {
+        if shows, showsInterfacesTab {
+            showsInterfacesTab = false
+            interfacesPanel.isHidden = true
+        }
         showsSearchTab = shows
         searchPanel.isHidden = !shows
         drawListSwitch()

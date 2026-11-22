@@ -115,7 +115,11 @@ stores a link and no text of it);
 `ghidra_description` and `ghidra_describe` for the module description (the
 whole document, or one `## ` section) and its origin category (`origin`:
 `edk2`, `edk2_modified`, `amd`, `intel`, `vendor`, `unknown` — the evidence and
-its order are in `reference/description.md`, "The origin category"); `ghidra_publish` at a coherent
+its order are in `reference/description.md`, "The origin category");
+`ghidra_interfaces` and `ghidra_set_interfaces` for the module's interfaces
+record — what it installs, locates and is notified of, each with its GUID,
+address and condition (`reference/description.md`, "The interfaces record");
+`ghidra_publish` at a coherent
 checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a
 review makes of the code".
 
@@ -277,6 +281,16 @@ Names alone do not get there. Every review applies these rules:
    linked as `[Name](0xADDRESS)` or written as `` `Name` `` opens there.
    A review is not finished while its description says nothing of what the
    review found.
+8. **Its interfaces are recorded, not only described.** Every
+   `InstallPpi`, `LocatePpi`, `NotifyPpi` and their protocol counterparts goes
+   into the interfaces record with `ghidra_set_interfaces`: the GUID, its name,
+   the address where the module supplies it, the condition, and its purpose —
+   why the module needs it and what it gives. Each of the
+   three lists is answered — an empty list when the module does none of it —
+   and the review is not complete while one is unanswered. Find them all: the
+   services table's slots, the wrappers the module calls, the descriptor lists
+   one call installs, a list handed over at entry. The `Interactions` section
+   says in prose what the record lists.
 
 ### What a finished function looks like
 

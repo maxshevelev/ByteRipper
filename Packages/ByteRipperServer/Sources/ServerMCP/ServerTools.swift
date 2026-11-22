@@ -79,11 +79,11 @@ public enum ServerTools {
             holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is \
             Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex \
             view shows (none when read by `module` alone). These are stored observations, not a live \
-            disassembly; the C is Ghidra's reading of the instructions, not the source. `origin` is whose code the module is, as its review set it (`ghidra_describe`'s `origin`).
+            disassembly; the C is Ghidra's reading of the instructions, not the source. `interfaces` is what it installs, locates and is notified of, as `code_modules` gives it. `origin` is whose code the module is, as its review set it (`ghidra_describe`'s `origin`).
             """,
         modules: """
             The PE32/TE modules of a dump that have a stored code analysis: their image `node`, name, \
-            the analyses (`recipes`, newest first), how many functions the newest found, and `origin`, whose code the module is as its review set it (`category`, `confidence`, `vendor`; null while unset). The modules \
+            the analyses (`recipes`, newest first), how many functions the newest found, and `origin`, whose code the module is as its review set it (`category`, `confidence`, `vendor`; null while unset); `interfaces`, what the module installs, locates and is notified of as its review recorded it (`ghidra_set_interfaces`: `installs`, `locates`, `notifies`, each null while unanswered, and `unanswered`; null while it has recorded none); and `depex`, the dependency expression of the FFS file that holds the image, read from the dump (`expression`, `guids`; null where the file has none). The modules \
             are found by their bytes — the same module in another dump has the same analysis — including \
             those inside compressed sections, which are opened for it: seconds on a large image the first \
             time. Read one with `code_query`.

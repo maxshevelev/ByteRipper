@@ -342,6 +342,7 @@ public class Owner {
                 if (path.equals("/v1/stale-links")) { json(exchange, 200, staleLinks()); return; }
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
+                if (path.equals("/v1/interfaces")) { json(exchange, 200, interfaces()); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
                 if (path.equals("/v1/types")) { json(exchange, 200, types(query)); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
@@ -374,6 +375,7 @@ public class Owner {
                     case "/v1/set/comment" -> write(exchange, this::setComment);
                     case "/v1/set/data" -> write(exchange, this::setData);
                     case "/v1/set/description" -> write(exchange, this::setDescription);
+                    case "/v1/set/interfaces" -> write(exchange, this::setInterfaces);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
                     case "/v1/redecode" -> write(exchange, this::redecode);
                     case "/v1/function/extend" -> write(exchange, this::extendFunction);
@@ -4780,6 +4782,129 @@ public class Owner {
         if (section != null && !section.isEmpty()) answer.addProperty("section", section);
         if (delete) answer.addProperty("removed", section == null || section.isEmpty() ? "description" : section);
         return answer;
+    }
+
+    // MARK: - The module's interfaces
+
+    private static final java.util.regex.Pattern GUID =
+        java.util.regex.Pattern.compile("[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}");
+
+    /** The record with the lists still unanswered: what `ghidra_interfaces` reads. */
+    private JsonObject interfaces() {
+        JsonObject answer = identity();
+        JsonObject record = Harvest.interfaces(program);
+        JsonArray unanswered = new JsonArray();
+        for (String list : Harvest.INTERFACE_LISTS) {
+            if (record != null && record.has(list)) answer.add(list, record.get(list));
+            else { answer.add(list, com.google.gson.JsonNull.INSTANCE); unanswered.add(list); }
+        }
+        answer.add("unanswered", unanswered);
+        return answer;
+    }
+
+    /**
+     * Answers one list or more: each one given replaces the list it names, a
+     * JSON null takes the answer back, and a list not given stays as it was.
+     * Every entry is checked before anything is written; one wrong entry
+     * refuses the whole call.
+     */
+    private JsonObject setInterfaces(JsonObject body) throws Exception {
+        for (String key : body.keySet()) {
+            if (!Harvest.INTERFACE_LISTS.contains(key)) {
+                throw new Failure(400, "`" + key + "` is not a list of the record: installs, locates, notifies");
+            }
+        }
+        if (body.size() == 0) throw new Failure(400, "give installs, locates or notifies; an empty list is an answer");
+        JsonObject record = Harvest.interfaces(program);
+        record = record == null ? new JsonObject() : record.deepCopy();
+        for (String list : Harvest.INTERFACE_LISTS) {
+            if (!body.has(list)) continue;
+            JsonElement given = body.get(list);
+            if (given.isJsonNull()) { record.remove(list); continue; }
+            if (!given.isJsonArray()) throw new Failure(400, "`" + list + "` is a list, or null to take it back");
+            JsonArray checked = new JsonArray();
+            int index = 0;
+            for (JsonElement element : given.getAsJsonArray()) {
+                checked.add(interfaceEntry(list, index++, element));
+            }
+            record.add(list, checked);
+        }
+        Harvest.setInterfaces(program, record);
+        return interfaces();
+    }
+
+    /** One entry, checked and written in its canonical form. */
+    private JsonObject interfaceEntry(String list, int index, JsonElement element) throws Failure {
+        String where = list + "[" + index + "]";
+        if (!element.isJsonObject()) throw new Failure(400, where + " is an object");
+        JsonObject given = element.getAsJsonObject();
+        java.util.Set<String> allowed = new java.util.HashSet<>(
+            java.util.List.of("guid", "name", "kind", "address", "condition", "purpose"));
+        if (list.equals("installs")) allowed.add("method");
+        if (list.equals("locates")) allowed.add("required");
+        if (list.equals("notifies")) allowed.add("callback");
+        for (String key : given.keySet()) {
+            if (!allowed.contains(key)) throw new Failure(400, where + ": `" + key + "` is not a field of " + list);
+        }
+        String guid = string(given, "guid", "").trim();
+        if (!GUID.matcher(guid).matches()) {
+            throw new Failure(400, where + ": guid is written 8-4-4-4-12, as 0AE8CE5D-E448-4437-A8D7-EBF5F194F731");
+        }
+        String name = string(given, "name", "").trim();
+        if (name.isEmpty() || !name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new Failure(400, where + ": name is the GUID's C name, as EFI_PEI_MEMORY_DISCOVERED_PPI");
+        }
+        String kind = string(given, "kind", "");
+        if (!kind.equals("ppi") && !kind.equals("protocol")) throw new Failure(400, where + ": kind is ppi or protocol");
+        String condition = string(given, "condition", "").trim();
+        if (condition.isEmpty()) throw new Failure(400, where + ": condition is `always` or when it happens");
+        String purpose = string(given, "purpose", "").trim();
+        if (purpose.isEmpty()) {
+            throw new Failure(400, where + ": purpose says in a sentence or two why the module needs this and what it "
+                + "gives: what the interface is used for here, and anything particular about its use");
+        }
+        String method = list.equals("installs") ? string(given, "method", "install") : null;
+        if (method != null && !java.util.List.of("install", "reinstall", "handoff").contains(method)) {
+            throw new Failure(400, where + ": method is install, reinstall or handoff");
+        }
+        Address address = address(string(given, "address", ""));
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        Instruction instruction = listing.getInstructionAt(address);
+        boolean inCode = instruction != null && program.getFunctionManager().getFunctionContaining(address) != null;
+        Data data = listing.getDataAt(address);
+        boolean typedData = data != null && data.isDefined();
+        if (!inCode && !typedData) {
+            String why = instruction != null ? "an instruction outside any function"
+                : program.getMemory().contains(address) ? "neither an instruction nor a typed datum"
+                : "outside the module";
+            throw new Failure(409, where + ": " + hex(address) + " is " + why + ". The address is where the module "
+                + "supplies the GUID: the call, in a function, that passes it or its descriptor, or the descriptor "
+                + "or list itself, typed with ghidra_set_data first");
+        }
+        JsonObject entry = new JsonObject();
+        entry.addProperty("guid", guid.toUpperCase(java.util.Locale.ROOT));
+        entry.addProperty("name", name);
+        entry.addProperty("kind", kind);
+        entry.addProperty("address", hex(address));
+        entry.addProperty("condition", condition);
+        entry.addProperty("purpose", purpose);
+        if (method != null) entry.addProperty("method", method);
+        if (list.equals("locates")) {
+            if (!given.has("required") || !given.get("required").isJsonPrimitive()
+                || !given.get("required").getAsJsonPrimitive().isBoolean()) {
+                throw new Failure(400, where + ": required is true when the module stops or fails without it, false otherwise");
+            }
+            entry.addProperty("required", given.get("required").getAsBoolean());
+        }
+        if (list.equals("notifies")) {
+            Address callback = address(string(given, "callback", ""));
+            if (program.getFunctionManager().getFunctionAt(callback) == null) {
+                throw new Failure(409, where + ": callback " + hex(callback) + " is no function's entry; "
+                    + "a notify function the table alone names is made with ghidra_function_create");
+            }
+            entry.addProperty("callback", hex(callback));
+        }
+        return entry;
     }
 
     /** Turns `old_text` and `new_text` into the section's new `text`. */

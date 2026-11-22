@@ -299,6 +299,26 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(opened, 1)
     }
 
+    /// The dependencies under the summary: a list unanswered says so, an
+    /// empty one says none, and the popover keeps what it was given.
+    func testTheSummaryPopoverListsTheDependencies() throws {
+        let popover = ToolPanelModuleSummaryPopover(name: "PeiVariable")
+        popover.loadView()
+        XCTAssertEqual(popover.shownDependencies, [], "nothing until they are read")
+        let groups: [ToolPanelModuleSummaryPopover.DependencyGroup] = [
+            .init(title: "Dependency expression", lines: ["PUSH EFI_PEI_READ_ONLY_VARIABLE2_PPI END"]),
+            .init(title: "Installs", lines: []),
+            .init(title: "Locates", lines: nil)
+        ]
+        popover.showDependencies(groups)
+        XCTAssertEqual(popover.shownDependencies, groups)
+        func all(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(all) }
+        let texts = all(popover.view).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(texts.contains("PUSH EFI_PEI_READ_ONLY_VARIABLE2_PPI END"))
+        XCTAssertTrue(texts.contains("None"), "an empty list is an answer")
+        XCTAssertTrue(texts.contains("Not recorded yet"), "an unanswered one says so")
+    }
+
     /// A long summary wraps inside the popover's margins, where the title
     /// and the button stand, however long it is.
     /// An information popover's action is its default button: Return does
@@ -327,7 +347,8 @@ final class ToolRowMarksTests: XCTestCase {
         let stack = try XCTUnwrap(view.subviews.first as? NSStackView)
         let fields = stack.arrangedSubviews.compactMap { $0 as? NSTextField }
         let title = try XCTUnwrap(fields.first), words = try XCTUnwrap(fields.last)
-        let row = try XCTUnwrap(stack.arrangedSubviews.compactMap { $0 as? NSStackView }.first)
+        // The button row is the last stack: the dependencies' stands above it.
+        let row = try XCTUnwrap(stack.arrangedSubviews.compactMap { $0 as? NSStackView }.last)
         // Where each one's text stands: a text field's frame runs past its
         // text by its alignment insets.
         func box(_ v: NSView) -> NSRect { view.convert(v.alignmentRect(forFrame: v.frame), from: v.superview) }

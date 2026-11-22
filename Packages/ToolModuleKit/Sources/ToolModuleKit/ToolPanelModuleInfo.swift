@@ -1,4 +1,5 @@
 import AppKit
+import HelpBook
 import HelpUI
 import Localization
 
@@ -100,6 +101,8 @@ public final class ToolPanelModuleInfoButton: ToolPanelInfoButton {
                                                     action: #selector(openClicked))
     private let codeProgress = NSProgressIndicator()
     private let codeState = NSTextField(labelWithString: "")
+    private let dependencies = NSStackView()
+    private var dependencyGroups: [DependencyGroup] = []
 
     public init(name: String) {
         self.name = name
@@ -124,6 +127,77 @@ public final class ToolPanelModuleInfoButton: ToolPanelInfoButton {
         words.isHidden = false
         wordsProgress.stopAnimation(nil)
         wordsProgress.isHidden = true
+    }
+
+    /// One group of the module's dependencies: a heading, and its lines —
+    /// nil while the review has not answered it, empty when the answer is none.
+    public struct DependencyGroup: Equatable, Sendable {
+        public var title: String
+        public var lines: [String]?
+        /// The SF Symbol before the heading: one per kind of dependency.
+        public var symbol: String?
+        /// The help the heading's (?) opens: the place that explains this kind.
+        public var help: HelpLink?
+        public init(title: String, lines: [String]?, symbol: String? = nil, help: HelpLink? = nil) {
+            self.title = title
+            self.lines = lines
+            self.symbol = symbol
+            self.help = help
+        }
+    }
+
+    /// The module's dependencies, under the summary: its dependency expression
+    /// and what it installs, locates and is notified of. Each group says
+    /// "Not recorded yet" while unanswered and "None" when answered empty.
+    public func showDependencies(_ groups: [DependencyGroup]) {
+        loadViewIfNeeded()
+        dependencyGroups = groups
+        dependencies.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for group in groups {
+            dependencies.addArrangedSubview(Self.heading(of: group))
+            let lines = group.lines.map { $0.isEmpty ? [L("None")] : $0 } ?? [L("Not recorded yet")]
+            let said = group.lines?.isEmpty == false
+            for line in lines {
+                let label = NSTextField(wrappingLabelWithString: line)
+                label.font = said ? .monospacedSystemFont(ofSize: ToolPanelPopover.size - 1, weight: .regular)
+                    : ToolPanelPopover.proseFont
+                label.textColor = said ? .labelColor : .secondaryLabelColor
+                label.isSelectable = said
+                label.preferredMaxLayoutWidth = ToolPanelPopover.inner
+                dependencies.addArrangedSubview(label)
+            }
+            if let last = dependencies.arrangedSubviews.last {
+                dependencies.setCustomSpacing(ToolPanelPopover.spacing, after: last)
+            }
+        }
+        dependencies.isHidden = groups.isEmpty
+    }
+
+    /// A group's heading: its glyph, its words, and the (?) of its help.
+    private static func heading(of group: DependencyGroup) -> NSView {
+        let header = NSTextField(labelWithString: group.title)
+        header.font = ToolPanelPopover.headerFont
+        var views: [NSView] = []
+        if let symbol = group.symbol,
+           let image = NSImage(systemSymbolName: symbol, accessibilityDescription: group.title)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: ToolPanelPopover.size, weight: .semibold)) {
+            let glyph = NSImageView(image: image)
+            glyph.contentTintColor = .secondaryLabelColor
+            glyph.translatesAutoresizingMaskIntoConstraints = false
+            // Sized from the picture: a configured symbol's intrinsic size is not it.
+            NSLayoutConstraint.activate([glyph.widthAnchor.constraint(equalToConstant: image.size.width),
+                                         glyph.heightAnchor.constraint(equalToConstant: image.size.height)])
+            views.append(glyph)
+        }
+        views.append(header)
+        if let help = group.help {
+            views.append(HelpButton.inline(for: help, pointSize: ToolPanelPopover.size))
+        }
+        let row = NSStackView(views: views)
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = (ToolPanelPopover.spacing / 2).rounded()
+        return row
     }
 
     /// The code is loaded: **Open with Code** opens it.
@@ -153,6 +227,7 @@ public final class ToolPanelModuleInfoButton: ToolPanelInfoButton {
     public var isLoadingSummary: Bool { !wordsProgress.isHidden }
     public var isLoadingCode: Bool { !codeProgress.isHidden }
     public var canOpenCode: Bool { open.isEnabled }
+    public var shownDependencies: [DependencyGroup] { dependencies.isHidden ? [] : dependencyGroups }
     public func clickOpen() { open.performClick(nil) }
 
     override public func loadView() {
@@ -169,6 +244,13 @@ public final class ToolPanelModuleInfoButton: ToolPanelInfoButton {
         words.widthAnchor.constraint(equalToConstant: ToolPanelPopover.inner).isActive = true
         words.isHidden = true
         stack.addArrangedSubview(words)
+
+        // The dependencies, filled once the analysis and the file are read.
+        dependencies.orientation = .vertical
+        dependencies.alignment = .leading
+        dependencies.spacing = ToolPanelPopover.spacing / 2
+        dependencies.isHidden = true
+        stack.addArrangedSubview(dependencies)
 
         // The button, dimmed beside a spinner until the code is loaded.
         open.isEnabled = false

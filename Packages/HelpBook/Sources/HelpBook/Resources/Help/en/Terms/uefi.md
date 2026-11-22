@@ -884,6 +884,43 @@ The body is a postfix expression: `PUSH` a GUID, combine the values with `AND`, 
 @see term:ppi
 @see topic:pei-dxe
 
+
+@term module-installs
+@name Installs
+@short The PPIs or protocols a module installs, as its review read them from the code.
+
+A module installs a [[term:ppi|PPI]] with `InstallPpi` and replaces one with `ReInstallPpi`; in DXE it installs a [[term:protocol|protocol]] with `InstallProtocolInterface` or `InstallMultipleProtocolInterfaces`. Once installed, the interface can satisfy the [[term:depex|dependency expression]] of the modules that wait for it, so this list says which modules this one lets run.
+
+The module's popover lists each interface by name with the condition under which it is installed: **always**, or a case such as resume from S3 or recovery. **reinstalls** marks a replacement of an interface installed earlier; **handed over** marks a list passed to the core at start-up rather than installed by a call. When a module that should run does not, check whether the module that installs what it waits for ran, and whether that condition held.
+
+@see term:module-locates
+@see term:module-notified-of
+@see term:depex
+
+@term module-locates
+@name Locates
+@short The PPIs or protocols a module looks up while it runs, beyond its dependency expression.
+
+A module asks for an interface with `LocatePpi`, or in DXE with `LocateProtocol` or `HandleProtocol`. An interface its [[term:depex|dependency expression]] already requires is installed before the module runs; one that is only looked up may be missing, and the module then decides what to do.
+
+The module's popover marks each lookup **required** when the module stops or fails without the interface, and **optional** when it goes on without it. A required lookup that fails is a common reason for a module to run and then do nothing visible.
+
+@see term:module-installs
+@see term:module-notified-of
+@see term:depex
+
+@term module-notified-of
+@name Notified of
+@short The PPIs or protocols a module asks to be told about when they appear.
+
+A module registers a callback with `NotifyPpi`, or in DXE with `RegisterProtocolNotify` or a notify event, and the core calls it when another module installs that interface. Part of a module's work thus happens later than its start, at the moment the interface appears: memory found, the end of PEI, a console ready.
+
+The module's popover lists each interface with the condition under which the module registers for it. If the interface is never installed, that part of the module's work never runs.
+
+@see term:module-installs
+@see term:module-locates
+@see term:ppi
+
 @term dxe
 @name DXE
 @short Driver Execution Environment: the phase after PEI in which DXE drivers install protocols and the boot services come up.

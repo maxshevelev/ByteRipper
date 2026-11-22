@@ -2048,3 +2048,26 @@
 "code name" = "Codename";
 "?? stands for a whole byte — half a byte cannot be masked." = "?? steht für ein ganzes Byte — ein halbes Byte lässt sich nicht maskieren.";
 "A pattern of ?? alone matches everywhere — give at least one byte." = "Ein Muster nur aus ?? passt überall — geben Sie mindestens ein Byte an.";
+
+/* The module popover's dependencies */
+"Not recorded yet" = "Noch nicht erfasst";
+"Installs" = "Installiert";
+"Locates" = "Sucht";
+"Notified of" = "Benachrichtigt über";
+"always" = "immer";
+"reinstalls" = "installiert neu";
+"handed over" = "an den Kern übergeben";
+"required" = "erforderlich";
+"optional" = "optional";
+
+/* The code panel's Interfaces tab */
+"Interfaces" = "Interfaces";
+"Interfaces: what the module installs, looks up and is notified of" = "Interfaces: was das Modul installiert, sucht und erwartet";
+"The review has not recorded them all yet" = "Die Analyse hat noch nicht alle Listen erfasst";
+"The module uses no PPI or protocol" = "Das Modul verwendet weder PPIs noch Protokolle";
+"1 interface" = "1 Interface";
+"%1$@ interfaces" = "%1$@ Interfaces";
+"When:" = "Wann:";
+"Protocol" = "Protokoll";
+"At:" = "Stelle:";
+"Callback:" = "Rückruf:";

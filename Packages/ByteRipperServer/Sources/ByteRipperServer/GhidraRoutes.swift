@@ -13,12 +13,12 @@ enum GhidraRoutes {
 
     /// The owner's read calls a client may make (`Design/GHIDRA_SHARED_PLAN.md` §7.1).
     static let reads: [String] = ["hello", "functions", "gaps", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
-                                   "types", "description"]
+                                   "types", "description", "interfaces"]
     /// The owner's write calls, each under the host's lease.
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "delete/function", "set/flow",
                                       "merge/functions", "clear/locals", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
-                                      "set/data", "set/description", "set/code-mode", "redecode", "set/equate",
+                                      "set/data", "set/description", "set/interfaces", "set/code-mode", "redecode", "set/equate",
                                       "function/extend",
                                       "type", "save"]
 

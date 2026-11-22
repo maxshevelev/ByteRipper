@@ -188,7 +188,45 @@ The main chains of execution and the reactions to events, in plain language.
 
 The other modules and the parts of the machine it works with: what it needs from
 them, what it gives them, and the settings it reads or keeps, each said by what
-it is for. Not a table of GUIDs.
+it is for. Not a table of GUIDs: the table is the module's interfaces record
+(below), and this section is the prose about it — why the module installs what
+it installs, what a condition means on the bench, what happens when a lookup
+fails, how the dependency expression orders it among its neighbours.
+
+### The interfaces record
+
+Beside the description, every review writes the module's interfaces record with
+`ghidra_set_interfaces` — a structured record, not a section, which the app
+shows in the module's popover and a dependency graph is built from without
+reading the description. It has three lists, each read from the module's code:
+
+- `installs` — every `InstallPpi`, `ReInstallPpi` (`method: reinstall`), list
+  handed over at entry (`method: handoff`: SecCore's list to PeiCore, PeiCore's
+  own); `InstallProtocolInterface`, `InstallMultipleProtocolInterfaces`,
+  `ReinstallProtocolInterface` in DXE;
+- `locates` — every `LocatePpi`, `LocateProtocol`, `HandleProtocol` on a known
+  GUID that the dependency expression does not already guarantee, with
+  `required: true` when the module stops or fails without it;
+- `notifies` — every `NotifyPpi`, `RegisterProtocolNotify` or protocol notify
+  event, with the `callback` it registers.
+
+Each entry has the GUID, its C name, `ppi` or `protocol`, the address, the
+condition — `always`, or when it happens in the review's words ("only on S3
+resume", "only in recovery") — and the purpose: one or two sentences on why the
+module needs it and what it gives, and anything particular about its use (a
+field it reads, a second install, what a failed lookup leads to). The app shows
+the purpose under the entry in the code panel's Interfaces tab, so it is
+written for the same reader as the description. The address is where the module supplies the
+GUID: the call in the function that passes the GUID or its descriptor — to the
+service, or to a wrapper such as `PeiServicesInstallPpi` that the module calls,
+since that is where the condition is — or the typed descriptor or list itself
+where no call of the module's holds it. A call that installs a descriptor list
+gives one entry per GUID, all at the call's address.
+
+A list is unanswered until written, and an empty list is an answer: the module
+installs nothing. The review is not complete while any of the three is
+unanswered. The dependency expression is not written here: it is in the FFS
+file beside the image, and the UEFI parser reads it from the dump.
 
 ### `## Inside the module`
 

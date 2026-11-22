@@ -144,6 +144,12 @@ never worked out.
    libraries — from the module's own bytes only; a GUID match alone is not
    `established`, and what the neighbouring modules are proves nothing. It
    agrees with the origin line in `What it is`.
+   Record the module's interfaces with `ghidra_set_interfaces` by "The
+   interfaces record" there: every install, lookup and notification in the
+   code, each with its GUID, name, the address where the module supplies it,
+   its condition and its purpose; an empty list where the module does none of it. Read
+   the record back with `ghidra_interfaces`: `unanswered` is empty before you
+   report the module done, and `Interactions` says in prose what it lists.
 7. Before each publish, run `ghidra_publish` with `dry_run: true`. If it would
    change a registry entry or a shared type another review published, stop:
    the real publish would be refused. Propose it if the code proves the shared

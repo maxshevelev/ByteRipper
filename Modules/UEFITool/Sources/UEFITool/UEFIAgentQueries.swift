@@ -213,7 +213,7 @@ public enum UEFIAgentQueries {
 
     /// The section that carries a dependency expression: the node itself when
     /// it is one, otherwise the dependency section among a file's children.
-    nonisolated static func dependencySection(of node: UEFINode) -> UEFINode? {
+    public nonisolated static func dependencySection(of node: UEFINode) -> UEFINode? {
         if node.kind == .section, let type = node.subtype,
            DependencyExpression.Kind(sectionType: type) != nil {
             return node
@@ -228,7 +228,7 @@ public enum UEFIAgentQueries {
     /// A module's dependency expression, as an agent reads it: the kind, the
     /// text, the GUIDs it pushes, every opcode with its offset, and what does
     /// not parse. Nil when the node has no dependency expression.
-    static func dependencyAnswer(
+    public static func dependencyAnswer(
         for node: UEFINode, in tree: LazyUEFITree, catalogue: GuidsCatalogue
     ) -> JSONValue? {
         guard let section = dependencySection(of: node),

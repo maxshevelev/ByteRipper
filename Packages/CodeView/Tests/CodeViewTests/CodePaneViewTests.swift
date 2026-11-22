@@ -51,6 +51,51 @@ final class CodePaneViewTests: XCTestCase {
         """.utf8))
     }
 
+    /// The Interfaces tab, between Status and Search: the three kinds as a
+    /// tree, an unanswered one saying so, an interface's details under it,
+    /// and a click on one opening the code where the module supplies it.
+    func testTheInterfacesTabListsTheRecordAndOpensItsPlaces() throws {
+        var reviewed = manifest()
+        let located = ModuleInterfaces.Interface(
+            guid: "0AE8CE5D-E448-4437-A8D7-EBF5F194F731", name: "EFI_PEI_READ_ONLY_VARIABLE2_PPI", kind: .ppi,
+            address: "0x221", condition: "only on S3 resume", purpose: "Reads the setup variables.", required: true)
+        reviewed.reading = AnalysisReading(project: "p", rev: 2,
+                                           interfaces: ModuleInterfaces(installs: [], locates: [located]))
+        let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let tabs = try XCTUnwrap(first(NSSegmentedControl.self, in: view) { $0.label(forSegment: 0) == "Functions" })
+        XCTAssertEqual(tabs.segmentCount, 6)
+        XCTAssertEqual(CodePaneView.interfacesSegment, 4, "after Status")
+        XCTAssertEqual(CodePaneView.searchSegment, 5, "Search stays last")
+
+        view.showInterfacesTab(true)
+        XCTAssertEqual(view.navigatorListIndex, 4)
+        XCTAssertFalse(view.interfacesPanel.isHidden)
+        XCTAssertTrue(view.searchPanel.isHidden)
+        let panel = view.interfacesPanel
+        XCTAssertEqual(panel.linesForTests, ["Installs", "Locates", "  EFI_PEI_READ_ONLY_VARIABLE2_PPI", "Notified of"])
+        XCTAssertEqual(panel.summaryLabel.stringValue, "The review has not recorded them all yet")
+
+        let entry = try XCTUnwrap((0..<panel.outline.numberOfRows).first {
+            panel.outline.item(atRow: $0) is CodeInterfacesPanel.EntryItem
+        })
+        panel.outline.expandItem(panel.outline.item(atRow: entry))
+        XCTAssertEqual(Array(panel.linesForTests.dropFirst(3).prefix(4)), [
+            "    Reads the setup variables.",
+            "    When: only on S3 resume",
+            "    PPI 0AE8CE5D-E448-4437-A8D7-EBF5F194F731",
+            "    At: FUN_00000220 + 0x1"
+        ])
+        panel.choose(row: entry)
+        XCTAssertEqual(view.selectedFunctionIndex, 0, "the call's function opens")
+
+        view.showSearchTab(true)
+        XCTAssertTrue(view.interfacesPanel.isHidden, "one tab at a time")
+        XCTAssertEqual(view.navigatorListIndex, 5)
+    }
+
     /// The module's name in the header can be selected and copied.
     func testTheModuleNameCanBeSelected() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),

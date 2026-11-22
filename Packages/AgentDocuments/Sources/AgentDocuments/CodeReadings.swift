@@ -587,7 +587,8 @@ public final class CodeReadings {
             "module": .string(source.manifest.module.name),
             "sha256": .string(source.manifest.module.sha256.hex),
             "recipe": .string(source.manifest.recipe.id),
-            "origin": originItem(source.manifest.reading?.origin)
+            "origin": originItem(source.manifest.reading?.origin),
+            "interfaces": interfacesItem(source.manifest.reading?.interfaces)
         ]
         if let document = source.document { body["document"] = .string(document) }
         if let node = source.node { body["node"] = .string(node) }
@@ -957,8 +958,14 @@ public final class CodeReadings {
                 "sha256": .string(manifest.module.sha256.hex),
                 "recipes": .array(recipes.map { .string($0.recipe.id) }),
                 "functions": .int(Int64(manifest.stats.functions)),
-                "origin": originItem(manifest.reading?.origin)
+                "origin": originItem(manifest.reading?.origin),
+                "interfaces": interfacesItem(manifest.reading?.interfaces)
             ]
+            // The dependency expression is the FFS file's, beside the image:
+            // read from the dump for every module, reviewed or not.
+            if let file = UEFITreeMarks.moduleFile(of: id, in: image), let node = image.node(file) {
+                row["depex"] = UEFIAgentQueries.dependencyAnswer(for: node, in: tree, catalogue: catalogue) ?? .null
+            }
             if let label = UEFITreeDisplay.nameAfterParent(of: id, in: tree, catalogue: catalogue,
                                                            image: image, in: .english) {
                 row["label"] = .string(label)
@@ -982,6 +989,33 @@ private func originItem(_ origin: ModuleOrigin?) -> JSONValue {
     if let confidence = origin.confidence { item["confidence"] = .string(confidence.rawValue) }
     if let vendor = origin.vendor { item["vendor"] = .string(vendor) }
     return .object(item)
+}
+
+/// What the module installs, locates and is notified of, as its review
+/// recorded it: null while it has recorded none of it; a list null while the
+/// review has not answered it, `unanswered` naming those.
+private func interfacesItem(_ interfaces: ModuleInterfaces?) -> JSONValue {
+    guard let interfaces else { return .null }
+    func entries(_ list: [ModuleInterfaces.Interface]?) -> JSONValue {
+        guard let list else { return .null }
+        return .array(list.map { entry in
+            var item: [String: JSONValue] = [
+                "guid": .string(entry.guid), "name": .string(entry.name), "kind": .string(entry.kind.rawValue),
+                "address": .string(entry.address), "condition": .string(entry.condition),
+                "purpose": .string(entry.purpose)
+            ]
+            if let method = entry.method { item["method"] = .string(method.rawValue) }
+            if let required = entry.required { item["required"] = .bool(required) }
+            if let callback = entry.callback { item["callback"] = .string(callback) }
+            return .object(item)
+        })
+    }
+    return .object([
+        "installs": entries(interfaces.installs),
+        "locates": entries(interfaces.locates),
+        "notifies": entries(interfaces.notifies),
+        "unanswered": .array(interfaces.unanswered.map(JSONValue.string))
+    ])
 }
 
 /// A function's place in the library registry, as `code_query` answers it.

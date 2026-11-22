@@ -295,14 +295,18 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     /// Whose code the module is, as the review established it; nil while the
     /// review has not said, and in everything published before it could.
     public var origin: ModuleOrigin?
+    /// What the module installs, locates and is notified of, as the review
+    /// read it from the code; nil while it has written none of the three.
+    public var interfaces: ModuleInterfaces?
 
     public init(project: String? = nil, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil,
-                origin: ModuleOrigin? = nil) {
+                origin: ModuleOrigin? = nil, interfaces: ModuleInterfaces? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
         self.description = description
         self.origin = origin
+        self.interfaces = interfaces
     }
 
     /// The objects this reading names besides the artifact.
@@ -600,8 +604,9 @@ public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
     /// a function below the bar, no description, or levels not counted (a
     /// manifest written before they were).
     case partial
-    /// Every function full, linked to the registry or bodiless, and the
-    /// module described.
+    /// Every function full, linked to the registry or bodiless, the module
+    /// described, and its installs, lookups and notifications answered
+    /// (`ModuleInterfaces`).
     case complete
 
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
@@ -613,11 +618,12 @@ public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
 public extension AnalysisManifest {
     var reviewProgress: ReviewProgress {
         guard let reading else { return .mechanical }
-        let described = reading.description != nil || reading.origin != nil
+        let described = reading.description != nil || reading.origin != nil || reading.interfaces != nil
         if let levels = stats.reviewLevels, !described, (levels[ReviewLevel.full.rawValue] ?? 0) == 0 {
             return .mechanical
         }
-        guard let levels = stats.reviewLevels, reading.description != nil else { return .partial }
+        guard let levels = stats.reviewLevels, reading.description != nil,
+              reading.interfaces?.isComplete == true else { return .partial }
         let short = levels.contains { level, count in count > 0 && !ReviewProgress.done.contains(level) }
         return short ? .partial : .complete
     }

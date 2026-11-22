@@ -206,6 +206,11 @@ import ToolModuleKit
     let searchPanel = CodeSearchPanel()
     /// Whether the Search tab is the one in front of the lists.
     public internal(set) var showsSearchTab = false
+    /// The navigator's Interfaces tab: what the module installs, looks up
+    /// and is notified of, as its review recorded them.
+    let interfacesPanel = CodeInterfacesPanel()
+    /// Whether the Interfaces tab is the one in front of the lists.
+    public internal(set) var showsInterfacesTab = false
     /// The search of every function in flight.
     var searchAllTask: Task<Void, Never>?
     /// The query the Search tab last ran, while its result stands.
@@ -440,7 +445,7 @@ import ToolModuleKit
         modeControl = NSSegmentedControl(labels: ["ASM", "C"], trackingMode: .selectOne,
                                          target: nil, action: nil)
         listControl = NSSegmentedControl(
-            labels: [L("Functions"), L("Strings"), L("POST"), L("Status"), ""],
+            labels: [L("Functions"), L("Strings"), L("POST"), L("Status"), "", ""],
             trackingMode: .selectOne, target: nil, action: nil)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -1615,7 +1620,7 @@ import ToolModuleKit
     /// The navigator's title and rows for the list in front, with the selected
     /// function's row chosen when Functions is showing.
     private func drawNavigator() {
-        listControl.selectedSegment = showsSearchTab ? Self.searchSegment : state.list.rawValue
+        listControl.selectedSegment = shownSegment
         // The switch speaks about the functions only: with another list in
         // front the filter takes its room.
         let showsOrder = state.list == .functions
@@ -2505,24 +2510,66 @@ import ToolModuleKit
             showSearchTab(true)
             return
         }
+        if listControl.selectedSegment == Self.interfacesSegment {
+            showInterfacesTab(true)
+            return
+        }
         guard let list = List(rawValue: listControl.selectedSegment) else { return }
         showSearchTab(false)
+        showInterfacesTab(false)
         selectList(list)
     }
 
-    /// The Search tab's place in the switch, after the lists.
-    static let searchSegment = List.allCases.count
+    /// The Interfaces tab's place in the switch, after the lists.
+    static let interfacesSegment = List.allCases.count
+    /// The Search tab's place in the switch, last.
+    static let searchSegment = List.allCases.count + 1
+
+    /// The segment of the tab in front.
+    private var shownSegment: Int {
+        showsSearchTab ? Self.searchSegment : showsInterfacesTab ? Self.interfacesSegment : state.list.rawValue
+    }
+
+    /// Puts the Interfaces tab in front of the lists, or the lists back.
+    public func showInterfacesTab(_ shows: Bool) {
+        if shows, showsSearchTab {
+            showsSearchTab = false
+            searchPanel.isHidden = true
+        }
+        showsInterfacesTab = shows
+        interfacesPanel.isHidden = !shows
+        if shows { drawInterfaces() }
+        drawListSwitch()
+    }
+
+    /// The record of the module's review, drawn in the tab.
+    func drawInterfaces() {
+        interfacesPanel.show(manifest.reading?.interfaces) { [weak self] address in
+            guard let self else { return nil }
+            let place = self.model.indices(of: CodeLocation(address: address))
+            guard let function = place.function ?? self.model.function(at: address) else { return nil }
+            let entry = self.model.functions[function].entry
+            let name = self.navigatorName(of: function)
+            return address == entry ? name : "\(name) + 0x\(String(address.value - entry.value, radix: 16, uppercase: true))"
+        }
+    }
+
+    /// An interface's place, opened from the tab as a link opens it.
+    func openInterfaceAddress(_ address: CodeAddress) {
+        if showsDescription { showDescription(false) }
+        go(to: CodeLocation(address: address))
+    }
 
     /// The switch says which tab is in front: a list, or Search. The list's
     /// filter bar goes while the tab is up — the keyboard with it, or its
     /// focus ring would be drawn over the tab.
     func drawListSwitch() {
-        listControl.selectedSegment = showsSearchTab ? Self.searchSegment : state.list.rawValue
-        if showsSearchTab, let responder = window?.firstResponder as? NSView,
+        listControl.selectedSegment = shownSegment
+        if showsSearchTab || showsInterfacesTab, let responder = window?.firstResponder as? NSView,
            responder.isDescendant(of: navigatorBar) {
             window?.makeFirstResponder(functionTable)
         }
-        navigatorBar.isHidden = showsSearchTab
+        navigatorBar.isHidden = showsSearchTab || showsInterfacesTab
     }
 
     /// What the Search tab searches in its scope: the description as the
@@ -3406,6 +3453,12 @@ import ToolModuleKit
                                      accessibilityDescription: L("Find in All Functions")),
                              forSegment: Self.searchSegment)
         listControl.setToolTip(L("Find in All Functions"), forSegment: Self.searchSegment)
+        // help: panel.code.interfaces
+        listControl.setImage(NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
+                                     accessibilityDescription: L("Interfaces")),
+                             forSegment: Self.interfacesSegment)
+        listControl.setToolTip(L("Interfaces: what the module installs, looks up and is notified of"),
+                               forSegment: Self.interfacesSegment)
         listControl.setContentHuggingPriority(.defaultLow, for: .horizontal)
         listControl.translatesAutoresizingMaskIntoConstraints = false
 
@@ -3511,6 +3564,17 @@ import ToolModuleKit
             searchPanel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
             searchPanel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
             searchPanel.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor)
+        ])
+        // The Interfaces tab stands where the Search tab does.
+        interfacesPanel.translatesAutoresizingMaskIntoConstraints = false
+        interfacesPanel.isHidden = true
+        interfacesPanel.onChoose = { [weak self] address in self?.openInterfaceAddress(address) }
+        functionPane.addSubview(interfacesPanel)
+        NSLayoutConstraint.activate([
+            interfacesPanel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),
+            interfacesPanel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
+            interfacesPanel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
+            interfacesPanel.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor)
         ])
         // help: panel.code.new-clear
         clearNewMarksButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
@@ -3983,6 +4047,7 @@ import ToolModuleKit
         }
         syncingSelection = false
         searchPanel.zoomChanged()
+        interfacesPanel.zoomChanged()
         drawnC = nil
         drawnDiff = nil
         updateC(keepingPlace: true)

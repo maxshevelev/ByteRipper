@@ -2358,6 +2358,8 @@ private struct ChecksumPass: Sendable {
                 .map { $0.displayName(in: Localization.appLanguage) } ?? ""
             : manifest.module.name
         let popover = controller.showModuleSummary(name: name, beside: view)
+        popover.showDependencies(Self.dependencyGroups(
+            depex: Self.dependencyText(ofModule: nodeID, in: tree, names: guids), interfaces: manifest.reading?.interfaces))
         let index = codeAnalysisIndex
         Task { [weak self, weak popover] in
             let text = await Task.detached(priority: .userInitiated) { () -> String? in
@@ -2382,6 +2384,43 @@ private struct ChecksumPass: Sendable {
             }
             _ = self
         }
+    }
+
+    /// The dependency expression of the FFS file holding image `nodeID`, as
+    /// text with the GUIDs named; "" where the file has none, nil where the
+    /// image sits in no file.
+    static func dependencyText(ofModule nodeID: NodeID, in tree: LazyUEFITree,
+                                           names: GuidsCatalogue) -> String? {
+        let image = tree.image()
+        guard let file = UEFITreeMarks.moduleFile(of: nodeID, in: image), let node = image.node(file) else { return nil }
+        guard let section = UEFIAgentQueries.dependencySection(of: node), let type = section.subtype,
+              let kind = DependencyExpression.Kind(sectionType: type),
+              let reader = tree.spaceReaders.reader(for: section.space),
+              let bytes = reader.bytes(section.body) else { return "" }
+        return DependencyExpression(kind: kind, bytes: bytes).text(name: { names.name(of: $0) }) ?? ""
+    }
+
+    /// The groups a module's popover shows: the dependency expression from the
+    /// dump, then the review's three lists, each nil while unanswered.
+    nonisolated static func dependencyGroups(depex: String?,
+                                             interfaces: ModuleInterfaces?) -> [ToolPanelModuleSummaryPopover.DependencyGroup] {
+        typealias Group = ToolPanelModuleSummaryPopover.DependencyGroup
+        func line(_ entry: ModuleInterfaces.Interface, _ marks: [String]) -> String {
+            let condition = entry.condition == "always" ? L("always") : entry.condition
+            return ([entry.name] + marks).joined(separator: " · ") + " — " + condition
+        }
+        var groups: [Group] = []
+        if let depex { groups.append(Group(title: L("Dependency expression"), lines: depex.isEmpty ? [] : [depex],
+                                         symbol: "flowchart", help: .term(HelpTermID("depex")))) }
+        groups.append(Group(title: L("Installs"), lines: interfaces?.installs?.map { entry in
+            line(entry, entry.method == .reinstall ? [L("reinstalls")] : entry.method == .handoff ? [L("handed over")] : [])
+        }, symbol: "square.and.arrow.up", help: .term(HelpTermID("module-installs"))))
+        groups.append(Group(title: L("Locates"), lines: interfaces?.locates?.map { entry in
+            line(entry, entry.required == true ? [L("required")] : [L("optional")])
+        }, symbol: "magnifyingglass", help: .term(HelpTermID("module-locates"))))
+        groups.append(Group(title: L("Notified of"), lines: interfaces?.notifies?.map { line($0, []) },
+                            symbol: "bell", help: .term(HelpTermID("module-notified-of"))))
+        return groups
     }
 
     /// Opens the code `opening` makes ready, busy until the panel opens: the
