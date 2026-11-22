@@ -131,16 +131,18 @@ final class CodePaneViewTests: XCTestCase {
     /// the C — shown for it — as a POST code's call is; a callback opens its
     /// function.
     func testAnInterfacesPlaceSelectsItsCallInTheC() throws {
-        let c = "void Caller(void)\n{\n  Setup();\n  (*PeiServices)->InstallPpi(PeiServices,&mPpiList);\n}\n"
-        let install = (c as NSString).range(of: "(*PeiServices)->InstallPpi(PeiServices,&mPpiList)")
+        let c = "void Caller(void)\n{\n  Setup();\n  /* install the list */\n  Status = (**(code **)(*PeiServices + 0x18))\n                    (PeiServices,&mPpiList);\n}\n"
+        let install = (c as NSString).range(of: "Status = (**(code **)(*PeiServices + 0x18))\n                    (PeiServices,&mPpiList);")
+        let list = (c as NSString).range(of: "mPpiList")
         let json: [String: Any] = [
             "script_version": 5, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
             "functions": [
                 ["entry": "0x220", "name": "Caller", "c": c,
-                 "c_sites": [[install.location, install.length, "0x222"]],
+                 "c_spans": [[list.location, list.length, "global", "0x400"]],
                  "instructions": [
                     ["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"],
-                    ["address": "0x221", "bytes": "E8", "mnemonic": "CALL", "text": "CALL 0x355"],
+                    ["address": "0x221", "bytes": "68", "mnemonic": "PUSH", "text": "PUSH 0x400",
+                     "references": [["from": "0x221", "to": "0x400", "type": "DATA"]]],
                     ["address": "0x222", "bytes": "FF", "mnemonic": "CALL", "text": "CALL dword ptr [EAX + 0x18]"]]],
                 ["entry": "0x355", "name": "Setup", "c": "void Setup(void)\n{\n}\n",
                  "instructions": [["address": "0x355", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
@@ -158,12 +160,17 @@ final class CodePaneViewTests: XCTestCase {
         view.showDecompiledC(false)
         view.selectFunction(at: 1)
 
-        view.openInterfaceAddress(CodeAddress(0x222))
+        // The instruction that hands the descriptor over, as a review
+        // records it: the call through the services table that takes it has
+        // no place of its own in the C, and the descriptor's name finds it.
+        view.openInterfaceAddress(CodeAddress(0x221))
         XCTAssertTrue(view.showsDecompiledC, "the C is shown for the call")
         XCTAssertEqual(view.selectedFunction?.name, "Caller")
-        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222))
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x221))
         let code = try XCTUnwrap(all(CodeTextView.self, in: view).first)
-        XCTAssertEqual(code.selectedRange(), install, "the call in the C")
+        XCTAssertEqual(code.selectedRange().length, install.length, "the whole statement that installs it")
+        XCTAssertEqual((code.string as NSString).substring(with: code.selectedRange()),
+                       (c as NSString).substring(with: install))
 
         view.openInterfaceAddress(CodeAddress(0x355))
         XCTAssertEqual(view.selectedFunction?.name, "Setup", "a callback opens its function")

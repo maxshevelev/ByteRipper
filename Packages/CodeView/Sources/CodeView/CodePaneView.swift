@@ -2565,8 +2565,82 @@ import ToolModuleKit
             go(to: CodeLocation(function: address))
             return
         }
+        if model.line(at: address) == nil, let pending = model.pendingFunction(holding: address) {
+            whenRead([pending]) { [weak self] in self?.openInterfaceAddress(address) }
+            return
+        }
+        guard let line = model.line(at: address) else { return showSite(address) }
         if !showsDecompiledC { showDecompiledC(true) }
-        showSite(address)
+        jump {
+            state.selectLine(line)
+            drawSelection()
+        }
+        if let range = statementInC(supplying: address) {
+            let shown = NSRange(location: range.location + cShift, length: range.length)
+            if NSMaxRange(shown) <= (cTextView.string as NSString).length {
+                cTextView.setSelectedRange(shown)
+                cTextView.scrollRangeToVisible(shown)
+            }
+        }
+        notifyInstruction()
+        flashArrival()
+    }
+
+    /// Where in its function's C the module supplies an interface, as a
+    /// range of the function's `c`: the whole statement that makes the
+    /// call. The review may record the call itself, or the instruction that
+    /// hands it the GUID or the descriptor — a `PUSH` of the argument, an
+    /// `LEA` into a register. The call is found by its place in the C
+    /// (`c_sites`); an argument by the name the C gives what it points at
+    /// (`c_spans`), which stands inside the call even when the call goes
+    /// through a services table and has no place of its own; failing both,
+    /// the first call after the argument that the C places. Nil where none.
+    func statementInC(supplying address: CodeAddress) -> NSRange? {
+        guard let line = model.line(at: address) else { return nil }
+        let function = model.functions[model.lines[line].function]
+        guard let c = function.c.map({ $0 as NSString }), let index = function.instructions.firstIndex(where: { $0.address == address })
+        else { return nil }
+        // A name in the signature is not the call: only the body's.
+        let brace = c.range(of: "{").location
+        let body = brace == NSNotFound ? 0 : brace
+        let anchor: Int? = {
+            if let site = function.cSites.first(where: { $0.address == address }) { return site.start }
+            let targets = Set(function.instructions[index].references.map(\.to))
+            if let span = function.cSpans.first(where: { span in
+                span.start > body && span.target.map(targets.contains) == true
+            }) { return span.start }
+            let sites = Dictionary(function.cSites.map { ($0.address, $0.start) }, uniquingKeysWith: { first, _ in first })
+            return function.instructions[index...].lazy.compactMap { sites[$0.address] }.first
+        }()
+        guard let anchor, anchor < c.length else { return nil }
+        // The statement: back from the anchor to the end of the one before
+        // it — a `;`, `{` or `}` — past the blanks and comments after that,
+        // and on to its own `;`. A call the decompiler breaks over two lines
+        // is taken whole.
+        func character(_ index: Int) -> Character { Character(UnicodeScalar(c.character(at: index)) ?? " ") }
+        var start = anchor
+        while start > 0, !";{}".contains(character(start - 1)) { start -= 1 }
+        skipping: while start < anchor {
+            if character(start).isWhitespace {
+                start += 1
+            } else if c.substring(from: start).hasPrefix("/*") {
+                let close = c.range(of: "*/", range: NSRange(location: start, length: anchor - start))
+                guard close.location != NSNotFound else { break skipping }
+                start = NSMaxRange(close)
+            } else if c.substring(from: start).hasPrefix("//") {
+                let newline = c.range(of: "\n", range: NSRange(location: start, length: anchor - start))
+                guard newline.location != NSNotFound else { break skipping }
+                start = NSMaxRange(newline)
+            } else {
+                break
+            }
+        }
+        let semicolon = c.range(of: ";", range: NSRange(location: anchor, length: c.length - anchor))
+        let lineRange = c.lineRange(for: NSRange(location: anchor, length: 0))
+        let lineEnd = NSMaxRange(lineRange) - (c.substring(with: lineRange).hasSuffix("\n") ? 1 : 0)
+        let end = semicolon.location != NSNotFound && semicolon.location - anchor < 600
+            ? NSMaxRange(semicolon) : lineEnd
+        return NSRange(location: start, length: max(0, end - start))
     }
 
     /// The switch says which tab is in front: a list, or Search. The list's
