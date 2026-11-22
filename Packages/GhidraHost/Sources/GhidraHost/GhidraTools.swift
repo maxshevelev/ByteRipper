@@ -614,7 +614,10 @@ public enum GhidraTools {
                     "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
                     still names itself, or one still typed `undefined`, or no plate comment — each with \
                     `leftovers`, and `summary` says how many of how many; that filter decompiles every \
-                    function, so it is slow on a large module. `leftovers.fragments` counts the \
+                    function, so it is slow on a large module. `leftovers.local_list` names each \
+                    local `leftovers.locals` counts — `name`, `type`, `storage`, `first_use` to rename \
+                    or retype it by, and `why`: `unnamed`, or `untyped` for a named one still typed \
+                    `undefined`. `leftovers.fragments` counts the \
                     register and `unique:` pieces the decompiler splits off while a review types a \
                     function — its own artefacts, which do not make a function unfinished, though a \
                     name like `uVar1` among them still prints in the C — and `fragment_names` names \

@@ -117,9 +117,58 @@ so the same module is typed by the same headers every time.
    they install (`mDebugMask`); `CreateEventEx` names its callback after the
    event group (`OnEventReadyToBoot`); `RegisterProtocolNotify` and `NotifyPpi`
    after what they wait for (`OnShellEnvironment2Installed`).
-7. **DEBUG names.** A function whose call passes a `%a` format and exactly one
+   The same for SMM: `SmmLocateProtocol` and `SmmHandleProtocol` (`Mm…` too).
+7. **Typed values, in rounds.** What the steps above typed is the start of
+   more, repeated while a round finds something:
+   - IA32 PEI: the PEI Services pointer kept below the IDT. A variable that
+     holds the IDT's base — the patched language's
+     `InterruptDescriptorTableBase()`, or stock Ghidra's descriptor that `SIDT`
+     writes — and that the code reads 4 bytes below is `EFI_PEI_SERVICES ***`,
+     called `IdtBase` when nobody named it: the call reads
+     `(*(*IdtBase[-1])->LocatePpi)(IdtBase[-1], …)`.
+   - An out argument of a call whose type is known: `&Smst` handed to
+     `GetSmstLocation` is `EFI_SMM_SYSTEM_TABLE2 *` (a global of Ghidra's
+     name becomes `gSmst`), `&Root` handed to `OpenVolume` is
+     `EFI_FILE_PROTOCOL *`.
+   - A variable copied from a value of an EDK2 table or interface type, and
+     a function whose every return is one, returns that type.
+   After each round the service calls are followed again.
+8. **DEBUG names.** A function whose call passes a `%a` format and exactly one
    identifier-like string is named by it — EDK2's `__FUNCTION__`. An
    identifier two functions both pass names neither.
+
+The typing — steps 4 to 7 — only fills what has no type: Ghidra's
+`undefined`, its own `int`, `uint`, `longlong`, `code *`, `void *` and
+pointers to them. An EDK2 integer (`UINTN`, `UINT32`) or any structure
+someone chose stays. A variable someone named keeps its name and gets the
+type. A register local the decompiler made and nobody named is left alone:
+Ghidra would give the type to every later value in that register. A variable
+gets a type only when every value written into it is of that type — a
+register a review named for a status also holds the table pointer for a few
+instructions. A `void *` a review chose stays unless exactly one call fills
+it: a slot one function hands to several lookups is `void *` on purpose.
+
+## Run again over reviewed modules
+
+`ApplyUefi.retype` runs steps 4 to 7 on a program a review has worked on:
+the owner's `/v1/uefi/retype`, and the server's `POST /ghidra/v1/retype`
+(an administrator's, no agent tool), which takes each reviewed module in
+turn, types it, publishes a module that changed as a revision of its own and
+gives it back. Library links are left as they are.
+
+Typing one place can make the decompiler read a function's frame anew: a
+review's name moves to the next stack slot, or a type the review set gives
+way to one Ghidra guessed — most often when a global function pointer the
+function calls through gets its signature. So the run first notes, for each
+function, the names a review gave and their types as the C prints them, and
+after typing reads every function again. A function where such a name is
+gone, or holds another type (other than an untyped one that became an
+interface's), is put back as the review left it — its variables, its
+parameters and return, then the globals it reads, then what it calls — and
+the run leaves it alone; the log says `put back <function>`. The run's table — raw
+`(code **)` calls before and after, the revision, and the names the C no
+longer shows because two variables a review named apart now read as one —
+is `GET /ghidra/v1/retype` and `retype-<date>.json` beside the projects.
 
 Every name is `SourceType.ANALYSIS`; its reason is kept in the program
 property `ByteRipper.nameReason`, which `ExportCode.java` writes beside the

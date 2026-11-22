@@ -199,6 +199,10 @@ public actor GhidraHost {
     /// again does, and a new exporter's artifact is no reason for a revision.
     /// It holds while the owner's count of changes stands where it was, so a run
     /// of refused writes, each giving its lease back, pays for one export.
+    /// The retype run (`GhidraHost+Retype`): its rows so far, and whether it
+    /// is still going.
+    var retypeRows: [RetypeRow] = []
+    var retypeRunning = false
     var leaseBaselines: [SHA256Digest: (writes: Int?, content: LeaseBaseline)] = [:]
     /// How many exports a baseline has cost, for the tests.
     private(set) var leaseBaselinesTaken = 0

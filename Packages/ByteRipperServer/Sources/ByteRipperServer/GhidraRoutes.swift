@@ -323,6 +323,22 @@ enum GhidraRoutes {
             return .json(try await answer { try await host.take(module, holder: holder(request)) })
         }
 
+        // The UEFI pass's typing again over the reviewed modules, run once by
+        // an administrator (the person's decision of 2026-11-22): each module
+        // taken, typed where it has no type, published, given back. `modules`
+        // limits it; the GET reads the table so far.
+        router.add("POST", "\(prefix)/retype", maxBodyBytes: 64 << 10, access: .rights([.admin])) { request in
+            struct Start: Decodable { var modules: [String]? }
+            let start = request.body.isEmpty ? Start() : try request.json(Start.self)
+            let modules = try start.modules?.map { try digest($0) }
+            let by = request.principal?.name ?? "an administrator"
+            try await answer { try await host.startRetype(modules, by: "retype run by \(by)") }
+            return .json(await host.retypeProgress())
+        }
+        router.add("GET", "\(prefix)/retype", access: .rights([.admin])) { _ in
+            .json(await host.retypeProgress())
+        }
+
         // Every module in work, and the leases closed and not yet taken again.
         router.add("GET", "\(prefix)/leases", access: .rights([.ghidraUse])) { _ in
             .json(await host.leaseRows())

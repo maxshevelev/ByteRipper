@@ -4,7 +4,8 @@ import Foundation
 
 /// Where the owner's Java comes from, and where it is built.
 public struct OwnerSources: Equatable, Sendable {
-    /// `Owner.java`, `Harvest.java`, `TypeText.java` and `ExportCode.java`.
+    /// `Owner.java`, `Harvest.java`, `TypeText.java`, `ExportCode.java` and
+    /// `ApplyUefi.java` (its typing runs in the owner too: `/v1/uefi/retype`).
     public let files: [URL]
     /// The folder of the Ghidra scripts `analyzeHeadless` runs —
     /// `ApplyUefi.java`, `ExportCode.java`, `BuildUefiTypes.java`.
@@ -16,7 +17,7 @@ public struct OwnerSources: Equatable, Sendable {
     }
 
     /// The scripts a folder holds, in the layout this server reads: `owner/`
-    /// with the owner's three sources and `scripts/` with the Ghidra scripts.
+    /// with the owner's sources and `scripts/` with the Ghidra scripts.
     /// The repository's `Skills/ghidra-uefi` has it, and so does the
     /// distribution's `ghidra/`.
     public static func directory(at root: URL) -> OwnerSources {
@@ -25,7 +26,8 @@ public struct OwnerSources: Equatable, Sendable {
         return OwnerSources(files: [owner.appendingPathComponent("Owner.java"),
                                     owner.appendingPathComponent("Harvest.java"),
                                     owner.appendingPathComponent("TypeText.java"),
-                                    scripts.appendingPathComponent("ExportCode.java")],
+                                    scripts.appendingPathComponent("ExportCode.java"),
+                                    scripts.appendingPathComponent("ApplyUefi.java")],
                             scripts: scripts)
     }
 

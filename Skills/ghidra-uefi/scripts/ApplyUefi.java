@@ -98,7 +98,10 @@ public class ApplyUefi extends GhidraScript {
     private DecompInterface decompiler;
     private Function entry;
     private boolean pei;
-    private int named, typedParameters, typedGlobals, typedLocals;
+    private int named, typedParameters, typedGlobals, typedLocals, typedReturns;
+    /// Functions the pass leaves as they are: in a reviewed module, the
+    /// library's links, which read as their registry entry's text.
+    private final Set<Address> skip = new HashSet<>();
 
     /// The types that follow the arguments down the calls, and the global a
     /// value of that type is called by when the module keeps one.
@@ -119,29 +122,16 @@ public class ApplyUefi extends GhidraScript {
     public void run() throws Exception {
         String[] args = getScriptArgs();
         if (args.length < 3) {
-            println("usage: ApplyUefi.java <uefi.gdt> <guids.tsv> <pei|dxe>");
+            println("usage: ApplyUefi.java <uefi.gdt> <guids.tsv> <pei|dxe> [retype]");
+            return;
+        }
+        if (args.length > 3 && args[3].equals("retype")) {
+            retype(new File(args[0]), new File(args[1]), args[2].equalsIgnoreCase("pei"), null);
             return;
         }
         pei = args[2].equalsIgnoreCase("pei");
-        archive = FileDataTypeManager.openFileArchive(new File(args[0]), false);
+        open(new File(args[0]), new File(args[1]));
         try {
-            Iterator<DataType> all = archive.getAllDataTypes();
-            while (all.hasNext()) {
-                DataType type = all.next();
-                archiveTypes.putIfAbsent(type.getName(), type);
-            }
-            readGuids(new File(args[1]));
-            try {
-                reasons = currentProgram.getUsrPropertyManager().createStringPropertyMap(REASON);
-            } catch (Exception exists) {
-                reasons = currentProgram.getUsrPropertyManager().getStringPropertyMap(REASON);
-            }
-
-            decompiler = new DecompInterface();
-            decompiler.toggleCCode(false);
-            decompiler.toggleSyntaxTree(true);
-            decompiler.openProgram(currentProgram);
-
             declareFirstPair("InstallMultipleProtocolInterfaces");
             declareFirstPair("UninstallMultipleProtocolInterfaces");
             dropThisCall();
@@ -150,21 +140,286 @@ public class ApplyUefi extends GhidraScript {
             propagateParameters();
             nameGlobals();
             followServiceCalls();
+            typeFromValues();
             nameFromDebugStrings();
             efiApiFunctionTypes();
             hexUint8();
         } finally {
-            if (decompiler != null) decompiler.dispose();
-            archive.close();
+            close();
         }
         println(String.format(
-            "ApplyUefi: %d GUIDs, %d parameters, %d globals, %d locals typed; %d functions named",
-            guidAt.size(), typedParameters, typedGlobals, typedLocals, named));
+            "ApplyUefi: %d GUIDs, %d parameters, %d globals, %d locals, %d returns typed; %d functions named",
+            guidAt.size(), typedParameters, typedGlobals, typedLocals, typedReturns, named));
         // The signatures and types set here schedule Ghidra's own analysis
         // again (stack frames, parameter ids). Run it to the end now, so what
         // the export reads in this run is the program a kept project saves:
         // the batch artifact and an owner's publish of the same program agree.
         analyzeChanges(currentProgram);
+    }
+
+    private void open(File gdt, File guids) throws Exception {
+        archive = FileDataTypeManager.openFileArchive(gdt, false);
+        Iterator<DataType> all = archive.getAllDataTypes();
+        while (all.hasNext()) {
+            DataType type = all.next();
+            archiveTypes.putIfAbsent(type.getName(), type);
+        }
+        readGuids(guids);
+        try {
+            reasons = currentProgram.getUsrPropertyManager().createStringPropertyMap(REASON);
+        } catch (Exception exists) {
+            reasons = currentProgram.getUsrPropertyManager().getStringPropertyMap(REASON);
+        }
+        decompiler = new DecompInterface();
+        decompiler.toggleCCode(false);
+        decompiler.toggleSyntaxTree(true);
+        decompiler.openProgram(currentProgram);
+    }
+
+    private void close() {
+        if (decompiler != null) decompiler.dispose();
+        decompiler = null;
+        if (archive != null) archive.close();
+        archive = null;
+    }
+
+    /// The typing steps again, on a program a review has worked on: what the
+    /// pass types now that it did not when the module was created. It types
+    /// only what is still untyped — `int`, `undefined`, `code *` — and never
+    /// changes a name or a type a review set: a variable the review named
+    /// keeps its name and gets the type. Nothing is renamed that a review
+    /// named, no signature is replaced, no convention changed. The owner runs
+    /// it in its program (`/v1/uefi/retype`) after `set(state, …)`; answers
+    /// how many places it typed.
+    public int retype(File gdt, File guids, boolean pei, Set<Address> skip) throws Exception {
+        this.pei = pei;
+        if (skip != null) this.skip.addAll(skip);
+        open(gdt, guids);
+        int undone = 0;
+        try {
+            Map<Function, Kept> kept = keep();
+            findEntry();
+            propagateParameters();
+            nameGlobals();
+            followServiceCalls();
+            typeFromValues();
+            undone = undoWhereReviewLost(kept);
+        } finally {
+            close();
+        }
+        int typed = Math.max(0, typedParameters + typedGlobals + typedLocals + typedReturns - undone);
+        println(String.format("ApplyUefi retype: %d parameters, %d globals, %d locals, %d returns typed; "
+            + "%d functions put back", typedParameters, typedGlobals, typedLocals, typedReturns, revertedFunctions));
+        return typed;
+    }
+
+    /// A function as the review left it: what the database holds of its
+    /// variables and return, and the names the review gave as the
+    /// decompiler prints them, with their types.
+    private record Kept(List<KeptVariable> locals, List<DataType> parameters, List<SourceType> parameterSources,
+                        DataType returned, SourceType signatureSource, Map<String, DataType> reviewNames) { }
+
+    private record KeptVariable(String name, ghidra.program.model.listing.VariableStorage storage, int firstUse,
+                                DataType type, SourceType source) { }
+
+    private int revertedFunctions = 0;
+
+    /// Each global the pass typed, with the type it had (none: undefined).
+    private final Map<Address, DataType> globalsBefore = new HashMap<>();
+
+    private Map<Function, Kept> keep() {
+        Map<Function, Kept> kept = new HashMap<>();
+        for (Function function : currentProgram.getFunctionManager().getFunctions(true)) {
+            if (monitor.isCancelled()) break;
+            HighFunction high = decompile(function);
+            if (high == null) continue;
+            List<KeptVariable> locals = new ArrayList<>();
+            for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+                locals.add(new KeptVariable(local.getName(), local.getVariableStorage(), local.getFirstUseOffset(),
+                    local.getDataType(), local.getSource()));
+            }
+            List<DataType> parameters = new ArrayList<>();
+            List<SourceType> sources = new ArrayList<>();
+            for (Parameter parameter : function.getParameters()) {
+                parameters.add(parameter.getDataType());
+                sources.add(parameter.getSource());
+            }
+            kept.put(function, new Kept(locals, parameters, sources, function.getReturnType(),
+                function.getSignatureSource(), reviewNames(high)));
+        }
+        return kept;
+    }
+
+    /// The names a review gave the function's parameters and locals, as the
+    /// decompiler prints them, with their types.
+    private static Map<String, DataType> reviewNames(HighFunction high) {
+        Map<String, DataType> names = new HashMap<>();
+        Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+        while (symbols.hasNext()) {
+            HighSymbol symbol = symbols.next();
+            Symbol held = symbol.getSymbol();
+            if (held == null || held.getSource() != SourceType.USER_DEFINED) continue;
+            names.put(symbol.getName(), symbol.getDataType());
+        }
+        return names;
+    }
+
+    /// Typing one place can make the decompiler read a function's frame
+    /// anew: a review's name moves to another slot, or a type the review set
+    /// gives way to one Ghidra guessed. A function whose review names lost
+    /// that way is put back as the review left it, with what it calls when
+    /// that is not enough, and the pass leaves it alone. Answers how many
+    /// typed places were put back.
+    private int undoWhereReviewLost(Map<Function, Kept> kept) {
+        int undone = 0;
+        Set<Function> putBack = new HashSet<>();
+        for (int round = 0; round < 4 && !monitor.isCancelled(); round++) {
+            decompiler.flushCache();
+            Set<Function> lost = new HashSet<>();
+            for (Map.Entry<Function, Kept> each : kept.entrySet()) {
+                // Read even a function the pass now leaves alone: it is
+                // the one being checked.
+                DecompileResults results = decompiler.decompileFunction(each.getKey(), 60, monitor);
+                HighFunction high = results != null && results.decompileCompleted() ? results.getHighFunction() : null;
+                if (high == null) continue;
+                if (reviewLost(each.getValue().reviewNames(), reviewNames(high))) {
+                    lost.add(each.getKey());
+                    if (round > 0) {
+                        Map<String, DataType> now = reviewNames(high);
+                        for (Map.Entry<String, DataType> name : each.getValue().reviewNames().entrySet()) {
+                            DataType at = now.get(name.getKey());
+                            if (at == null || name.getValue() != null && !at.isEquivalent(name.getValue())) {
+                                println("ApplyUefi retype: still lost in " + each.getKey().getName() + ": "
+                                    + name.getKey() + " " + (name.getValue() == null ? "?" : name.getValue().getDisplayName())
+                                    + " -> " + (at == null ? "gone" : at.getDisplayName()));
+                            }
+                        }
+                    }
+                }
+            }
+            println("ApplyUefi retype: round " + round + ", review names lost in " + lost.size() + " functions");
+            if (lost.isEmpty()) break;
+            Set<Function> back = new HashSet<>(lost);
+            // Later rounds, when that was not enough: what the function
+            // calls typed it too, through the parameters and returns it
+            // reads.
+            if (round > 1) for (Function function : lost) back.addAll(function.getCalledFunctions(monitor));
+            // A global the function reads, typed by the pass: a call through
+            // it now has a signature, and the stack reads differently.
+            if (round > 0) for (Function function : lost) undone += putBackGlobals(function);
+            for (Function function : back) {
+                Kept state = kept.get(function);
+                if (state == null) continue;
+                undone += putBack(function, state);
+                skip.add(function.getEntryPoint());
+                if (putBack.add(function)) {
+                    revertedFunctions++;
+                    println("ApplyUefi retype: put back " + function.getName() + " at " + function.getEntryPoint());
+                }
+            }
+        }
+        return undone;
+    }
+
+    /// Whether a review name is gone, or holds a type other than the one it
+    /// had — unless it had none and now has an interface or table's type.
+    private static boolean reviewLost(Map<String, DataType> before, Map<String, DataType> after) {
+        for (Map.Entry<String, DataType> name : before.entrySet()) {
+            DataType now = after.get(name.getKey());
+            if (now == null) return true;
+            DataType was = name.getValue();
+            if (was == null || now.isEquivalent(was)) continue;
+            if (untyped(was) && knownPointer(now)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    /// Puts back the globals the pass typed that the function refers to.
+    private int putBackGlobals(Function function) {
+        int changed = 0;
+        ghidra.program.model.symbol.ReferenceManager references = currentProgram.getReferenceManager();
+        for (Address at : function.getBody().getAddresses(true)) {
+            for (ghidra.program.model.symbol.Reference reference : references.getReferencesFrom(at)) {
+                Address target = reference.getToAddress();
+                if (!globalsBefore.containsKey(target)) continue;
+                DataType was = globalsBefore.remove(target);
+                Data held = currentProgram.getListing().getDataAt(target);
+                if (held == null || was != null && held.getDataType().isEquivalent(was)) continue;
+                try {
+                    currentProgram.getListing().clearCodeUnits(target, held.getMaxAddress(), false);
+                    if (was != null) DataUtilities.createData(currentProgram, target, was, -1,
+                        DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA);
+                    changed++;
+                    println("ApplyUefi retype: put back the global at " + target);
+                } catch (Exception refused) {
+                    println("ApplyUefi retype: could not put back the global at " + target + ": " + refused.getMessage());
+                }
+            }
+        }
+        return changed;
+    }
+
+    /// Puts the function's variables and return back as `state` holds them.
+    /// Answers how many places changed back.
+    private int putBack(Function function, Kept state) {
+        int changed = 0;
+        Map<String, KeptVariable> held = new HashMap<>();
+        for (KeptVariable local : state.locals()) held.put(local.storage() + "@" + local.firstUse(), local);
+        Set<String> present = new HashSet<>();
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            String key = local.getVariableStorage() + "@" + local.getFirstUseOffset();
+            KeptVariable was = held.get(key);
+            try {
+                if (was == null) {
+                    function.removeVariable(local);
+                    changed++;
+                    continue;
+                }
+                present.add(key);
+                if (!local.getDataType().isEquivalent(was.type())) {
+                    local.setDataType(was.type(), was.source());
+                    changed++;
+                }
+                if (!local.getName().equals(was.name())) local.setName(was.name(), was.source());
+            } catch (Exception refused) {
+                println("ApplyUefi retype: could not put back " + local.getName() + " in " + function.getName()
+                    + ": " + refused.getMessage());
+            }
+        }
+        // A variable the typing replaced — Ghidra commits a retyped local as
+        // a new one — comes back as it was.
+        for (Map.Entry<String, KeptVariable> each : held.entrySet()) {
+            if (present.contains(each.getKey())) continue;
+            KeptVariable was = each.getValue();
+            try {
+                function.addLocalVariable(new ghidra.program.model.listing.LocalVariableImpl(
+                    was.name(), was.firstUse(), was.type(), was.storage(), currentProgram), was.source());
+                changed++;
+            } catch (Exception refused) {
+                println("ApplyUefi retype: could not bring back " + was.name() + " in " + function.getName()
+                    + ": " + refused.getMessage());
+            }
+        }
+        Parameter[] parameters = function.getParameters();
+        for (int index = 0; index < parameters.length && index < state.parameters().size(); index++) {
+            if (parameters[index].getDataType().isEquivalent(state.parameters().get(index))) continue;
+            try {
+                parameters[index].setDataType(state.parameters().get(index), state.parameterSources().get(index));
+                changed++;
+            } catch (Exception refused) {
+                // As above.
+            }
+        }
+        if (!function.getReturnType().isEquivalent(state.returned())) {
+            try {
+                function.setReturnType(state.returned(), state.signatureSource());
+                changed++;
+            } catch (Exception refused) {
+                // As above.
+            }
+        }
+        return changed;
     }
 
     // MARK: - Types and GUIDs
@@ -381,6 +636,18 @@ public class ApplyUefi extends GhidraScript {
 
     // MARK: - The entry point and the parameters
 
+    private void findEntry() {
+        for (Address address : currentProgram.getSymbolTable().getExternalEntryPointIterator()) {
+            Function function = getFunctionAt(address);
+            if (function != null) {
+                entry = function;
+                return;
+            }
+        }
+        List<Function> named = getGlobalFunctions("entry");
+        if (!named.isEmpty()) entry = named.get(0);
+    }
+
     private void typeEntry() throws Exception {
         for (Address address : currentProgram.getSymbolTable().getExternalEntryPointIterator()) {
             Function function = getFunctionAt(address);
@@ -531,6 +798,7 @@ public class ApplyUefi extends GhidraScript {
 
     private HighFunction decompile(Function function) {
         if (function == null || function.isExternal() || function.isThunk()) return null;
+        if (skip.contains(function.getEntryPoint())) return null;
         DecompileResults results = decompiler.decompileFunction(function, 60, monitor);
         return results != null && results.decompileCompleted() ? results.getHighFunction() : null;
     }
@@ -574,12 +842,19 @@ public class ApplyUefi extends GhidraScript {
             HighFunctionDBUtil.commitParamsToDatabase(high, true,
                 HighFunctionDBUtil.ReturnCommitOption.NO_COMMIT, SourceType.ANALYSIS);
         }
+        if (skip.contains(callee.getEntryPoint())) return false;
         Parameter parameter = callee.getParameter(index);
-        if (parameter == null || parameter.getSource() == SourceType.USER_DEFINED
-                || parameter.getSource() == SourceType.IMPORTED) return false;
+        if (parameter == null) return false;
         DataType current = parameter.getDataType();
         DataType wanted = argument.getDataType();
         if (key(current).equals(key(wanted))) return false;
+        // A parameter a review named, or the image's symbols: its type only,
+        // and only while it has none.
+        if (parameter.getSource() == SourceType.USER_DEFINED || parameter.getSource() == SourceType.IMPORTED) {
+            if (!untyped(current, parameter.getSource()) || current.getLength() != wanted.getLength()) return false;
+            parameter.setDataType(wanted, parameter.getSource());
+            return true;
+        }
         if (!Undefined.isUndefined(current) && !(current instanceof Pointer
                 && Undefined.isUndefined(((Pointer) current).getDataType()))
                 && current.getLength() != wanted.getLength()) return false;
@@ -648,7 +923,14 @@ public class ApplyUefi extends GhidraScript {
 
     private boolean typeGlobal(Address address, DataType type, String name, String reason) {
         Symbol primary = currentProgram.getSymbolTable().getPrimarySymbol(address);
-        if (primary != null && primary.getSource() != SourceType.DEFAULT) return false;
+        if (primary != null && primary.getSource() != SourceType.DEFAULT) {
+            // Named already — by the review or this pass — so the name stays;
+            // a place with no type yet still gets the type.
+            Data held = currentProgram.getListing().getDataAt(address);
+            if (held != null && held.isDefined() && !untyped(held.getDataType(), primary.getSource())) return false;
+            if (held != null && held.getDataType().isEquivalent(type)) return false;
+            return putData(address, type);
+        }
         if (!putData(address, type)) {
             // The place could not take the type; its name still helps.
             return label(address, name, reason);
@@ -660,6 +942,10 @@ public class ApplyUefi extends GhidraScript {
     /// undefined, a pointer, a value of the same size — gives way; anything
     /// else (a structure, a string, a user's type) is kept.
     private boolean putData(Address address, DataType type) {
+        if (!globalsBefore.containsKey(address)) {
+            Data held = currentProgram.getListing().getDataAt(address);
+            globalsBefore.put(address, held != null && held.isDefined() ? held.getDataType() : null);
+        }
         try {
             DataUtilities.createData(currentProgram, address, type, -1,
                 DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA);
@@ -767,6 +1053,14 @@ public class ApplyUefi extends GhidraScript {
                     case "LocatePpi":
                         consumed(high, op, 2, 5, "LocatePpi");
                         break;
+                    case "SmmLocateProtocol":
+                    case "MmLocateProtocol":
+                        consumed(high, op, 1, 3, field);
+                        break;
+                    case "SmmHandleProtocol":
+                    case "MmHandleProtocol":
+                        consumed(high, op, 2, 3, field);
+                        break;
                     case "InstallProtocolInterface":
                         installed(op, 2, 4);
                         break;
@@ -851,7 +1145,11 @@ public class ApplyUefi extends GhidraScript {
             currentProgram.getAddressFactory(), reference);
         if (stack == null || !stack.isStackAddress()) return;
         HighSymbol local = high.getLocalSymbolMap().findLocal(stack, null);
-        if (local == null || local.isNameLocked()) return;
+        if (local == null) return;
+        if (local.isNameLocked()) {
+            if (pointerType != null && untyped(local.getDataType())) typeLocal(local, pointerType);
+            return;
+        }
         try {
             HighFunctionDBUtil.updateDBVariable(local, base,
                 pointerType != null ? pointerType : local.getDataType(), SourceType.ANALYSIS);
@@ -947,6 +1245,504 @@ public class ApplyUefi extends GhidraScript {
             return safeAddress(value);
         } catch (Exception error) {
             return null;
+        }
+    }
+
+    // MARK: - Values that carry a type
+
+    /// No type anyone chose: Ghidra's `undefined`, a plain integer of a
+    /// pointer's size (`int`, `uint`, `longlong`), `code *`, `void *`, and
+    /// pointers to those (`int *`, `undefined4 **`). An EDK2 typedef — `UINTN`, `UINT32` —
+    /// was chosen, and so was any structure.
+    /// `untyped` for a place someone may have typed: a `void *` a review
+    /// chose stays — a slot one function hands to several lookups of
+    /// different interfaces is `void *` on purpose.
+    static boolean untyped(DataType type, SourceType source) {
+        if (!untyped(type)) return false;
+        return source != SourceType.USER_DEFINED || !voidPointer(type);
+    }
+
+    /// Whether a stack local is written only through its address, handed
+    /// to exactly one call.
+    private boolean filledByOneCall(HighSymbol local) {
+        ghidra.program.model.listing.VariableStorage storage = local.getStorage();
+        if (storage == null || !storage.isStackStorage()) return false;
+        long offset = storage.getStackOffset();
+        HighFunction high = local.getHighFunction();
+        int calls = 0;
+        Iterator<PcodeOpAST> ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            PcodeOpAST op = ops.next();
+            if (op.getOpcode() != PcodeOp.CALL && op.getOpcode() != PcodeOp.CALLIND) continue;
+            for (int index = 1; index < op.getNumInputs(); index++) {
+                PcodeOp reference = op.getInput(index).getDef();
+                while (reference != null && (reference.getOpcode() == PcodeOp.CAST || reference.getOpcode() == PcodeOp.COPY)) {
+                    reference = reference.getInput(0).getDef();
+                }
+                if (reference == null || reference.getOpcode() != PcodeOp.PTRSUB) continue;
+                Address stack = HighFunctionDBUtil.getSpacebaseReferenceAddress(currentProgram.getAddressFactory(), reference);
+                if (stack != null && stack.isStackAddress() && stack.getOffset() == offset) calls++;
+            }
+        }
+        if (calls != 1) return false;
+        HighVariable variable = local.getHighVariable();
+        if (variable == null) return true;
+        for (Varnode instance : variable.getInstances()) {
+            PcodeOp def = instance.getDef();
+            if (def != null && def.getOpcode() != PcodeOp.INDIRECT && def.getOpcode() != PcodeOp.MULTIEQUAL) return false;
+        }
+        return true;
+    }
+
+    /// A pointer, at any depth, to `void`.
+    static boolean voidPointer(DataType type) {
+        DataType at = type;
+        while (at instanceof TypeDef def) at = def.getBaseDataType();
+        if (!(at instanceof Pointer)) return false;
+        while (at instanceof Pointer pointer) at = pointer.getDataType();
+        return at instanceof VoidDataType;
+    }
+
+    static boolean untyped(DataType type) {
+        if (type == null) return true;
+        if (Undefined.isUndefined(type) || type instanceof ghidra.program.model.data.DefaultDataType) return true;
+        if (type instanceof Pointer pointer) {
+            DataType target = pointer.getDataType();
+            if (target == null) return true;
+            if (target instanceof FunctionDefinition && "code".equals(target.getName())) return true;
+            // `void *`: a pointer that says nothing of what it points to. It
+            // gets a type only from a lookup's GUID or a call's signature.
+            if (target instanceof VoidDataType) return true;
+            return untyped(target);
+        }
+        // Ghidra's own `int`, `uint`, `longlong`: an EDK2 integer is a typedef.
+        return !(type instanceof TypeDef) && type instanceof ghidra.program.model.data.AbstractIntegerDataType;
+    }
+
+    /// A type for a value the decompiler sees as one of the specifications'
+    /// tables or interfaces: a pointer, at any depth, to a structure or a
+    /// typedef of one from the EDK2 archive.
+    /// Who named or typed a local: its database symbol's source, none for
+    /// one only the decompiler made.
+    private static SourceType source(HighSymbol local) {
+        Symbol held = local.getSymbol();
+        return held == null ? null : held.getSource();
+    }
+
+    private static boolean knownPointer(DataType type) {
+        if (!(type instanceof Pointer)) return false;
+        DataType at = type;
+        while (at instanceof Pointer pointer) at = pointer.getDataType();
+        if (at == null) return false;
+        DataType base = at instanceof TypeDef def ? def.getBaseDataType() : at;
+        if (!(base instanceof Structure)) return false;
+        // A copy Ghidra made of a type two archives define differently is
+        // nobody's type.
+        if (at.getName().contains("conflict")) return false;
+        ghidra.program.model.data.SourceArchive source = at.getSourceArchive();
+        DataTypeManager manager = at.getDataTypeManager();
+        ghidra.program.model.data.SourceArchive local = manager == null ? null : manager.getLocalSourceArchive();
+        return source != null && (local == null || !source.getSourceArchiveID().equals(local.getSourceArchiveID()))
+            && !source.getSourceArchiveID().equals(DataTypeManager.BUILT_IN_ARCHIVE_UNIVERSAL_ID);
+    }
+
+    /// Gives a local its type, keeping its name: a name the review locked
+    /// stays locked.
+    private boolean typeLocal(HighSymbol local, DataType type) {
+        return typeLocal(local, type, null);
+    }
+
+    private boolean typeLocal(HighSymbol local, DataType type, String name) {
+        if (local.isParameter()) return false;
+        if (!untyped(local.getDataType())) return false;
+        // A `void *` a review chose is kept unless one call fills it: a slot
+        // the function hands to several lookups, or writes itself, holds
+        // more than one interface.
+        if (source(local) == SourceType.USER_DEFINED && voidPointer(local.getDataType())
+                && !filledByOneCall(local)) return false;
+        // A register local Ghidra would make holds its type from its first
+        // use to the end of the function: every later value in that register
+        // would take the type too. One the review already made is its own
+        // range; a stack slot or a value the decompiler keys by hash is
+        // exactly one variable.
+        ghidra.program.model.listing.VariableStorage storage = local.getStorage();
+        if (storage != null && storage.isRegisterStorage() && local.getSymbol() == null) return false;
+        try {
+            SourceType source = local.isNameLocked() ? SourceType.USER_DEFINED : SourceType.ANALYSIS;
+            String given = local.isNameLocked() || name == null ? null : name;
+            try {
+                HighFunctionDBUtil.updateDBVariable(local, given, type, source);
+            } catch (ghidra.util.exception.DuplicateNameException taken) {
+                HighFunctionDBUtil.updateDBVariable(local, null, type, source);
+            }
+            typedLocals++;
+            return true;
+        } catch (Exception moved) {
+            // The storage moved or the variable is not a single one.
+            return false;
+        }
+    }
+
+    /// Types a variable — a local, a parameter or a global — that holds no
+    /// type yet. Answers whether it did.
+    private boolean typeVariable(HighFunction high, HighVariable variable, DataType type) {
+        return typeVariable(high, variable, type, null);
+    }
+
+    /// `name` is given to a local nobody named (`iVar1`); a name a review
+    /// gave stays.
+    private boolean typeVariable(HighFunction high, HighVariable variable, DataType type, String name) {
+        if (variable == null || type == null || !untyped(variable.getDataType())) return false;
+        if (variable.getDataType() != null && variable.getDataType().getLength() != type.getLength()
+                && !Undefined.isUndefined(variable.getDataType())) return false;
+        HighSymbol symbol = variable.getSymbol();
+        if (symbol == null) return false;
+        if (symbol.isGlobal()) {
+            Address address = symbol.getStorage() != null && symbol.getStorage().isMemoryStorage()
+                ? symbol.getStorage().getMinAddress() : null;
+            if (address == null) return false;
+            Symbol named = currentProgram.getSymbolTable().getPrimarySymbol(address);
+            if (!untyped(variable.getDataType(), named == null ? null : named.getSource())) return false;
+            if (!putData(address, type)) return false;
+            typedGlobals++;
+            return true;
+        }
+        if (symbol.isParameter()) {
+            Function function = high.getFunction();
+            int index = ((ghidra.program.model.pcode.HighParam) variable).getSlot();
+            try {
+                if (function.getParameterCount() <= index) {
+                    HighFunctionDBUtil.commitParamsToDatabase(high, true,
+                        HighFunctionDBUtil.ReturnCommitOption.NO_COMMIT, SourceType.ANALYSIS);
+                }
+                Parameter parameter = function.getParameter(index);
+                if (parameter == null || !untyped(parameter.getDataType(), parameter.getSource())) return false;
+                SourceType source = parameter.getSource() == SourceType.DEFAULT ? SourceType.ANALYSIS : parameter.getSource();
+                parameter.setDataType(type, source);
+                typedParameters++;
+                return true;
+            } catch (Exception refused) {
+                return false;
+            }
+        }
+        return typeLocal(symbol, type, name);
+    }
+
+    /// Typing that needs a typed value to start from, repeated while it finds
+    /// more: each round's types are the next round's starting points.
+    ///  - IA32 PEI: the PEI Services pointer kept below the IDT. A variable
+    ///    the code reads 4 bytes below, in a function that executes SIDT, is
+    ///    the IDT's base, `EFI_PEI_SERVICES ***`: `*IdtBase[-1]` is the table.
+    ///  - An out argument of a call whose type is known: `&Smst` handed to
+    ///    `GetSmstLocation (…, EFI_SMM_SYSTEM_TABLE2 **)` is the table,
+    ///    `&Root` handed to `OpenVolume` the root directory's protocol.
+    ///  - A variable copied from a value of a known table or interface type.
+    ///  - A function whose every return is such a value returns that type,
+    ///    `GetPeiServicesTablePointer` the pointer the IDT keeps.
+    /// The service calls are followed again after each round, so a lookup
+    /// through a table typed this round types its result too.
+    private void typeFromValues() throws Exception {
+        for (int round = 0; round < 4 && !monitor.isCancelled(); round++) {
+            int before = typedParameters + typedGlobals + typedLocals + typedReturns;
+            for (Function function : currentProgram.getFunctionManager().getFunctions(true)) {
+                if (monitor.isCancelled()) break;
+                HighFunction high = decompile(function);
+                if (high == null) continue;
+                boolean changed = pei && typeIdtBases(high);
+                if (!changed) changed = typeOutArguments(high);
+                if (!changed) changed = typeCopies(high);
+                if (!changed) typeReturn(high);
+            }
+            if (typedParameters + typedGlobals + typedLocals + typedReturns == before) break;
+            followServiceCalls();
+        }
+    }
+
+    private boolean typeIdtBases(HighFunction high) {
+        if (currentProgram.getDefaultPointerSize() != 4) return false;
+        DataType services = type("EFI_PEI_SERVICES");
+        if (services == null) return false;
+        boolean sidt = false;
+        Iterator<PcodeOpAST> ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            PcodeOpAST op = ops.next();
+            if (op.getOpcode() != PcodeOp.CALLOTHER) continue;
+            String name = currentProgram.getLanguage().getUserDefinedOpName((int) op.getInput(0).getOffset());
+            // Stock Ghidra calls SIDT's operation `sidt`; the patched x86
+            // language (descriptor-tables-1) reads it as the IDTR's two parts.
+            if (name != null && (name.toLowerCase().contains("sidt")
+                    || name.equals("InterruptDescriptorTableBase"))) sidt = true;
+        }
+        if (!sidt) return false;
+        boolean changed = false;
+        ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            PcodeOpAST op = ops.next();
+            if (op.getOpcode() != PcodeOp.LOAD || op.getOutput() == null || op.getOutput().getSize() != 4) continue;
+            PcodeOp address = op.getInput(1).getDef();
+            while (address != null && (address.getOpcode() == PcodeOp.CAST || address.getOpcode() == PcodeOp.COPY)) {
+                address = address.getInput(0).getDef();
+            }
+            if (address == null) continue;
+            Varnode base = null;
+            if (address.getOpcode() == PcodeOp.INT_ADD && address.getInput(1).isConstant()
+                    && (address.getInput(1).getOffset() & 0xFFFFFFFFL) == 0xFFFFFFFCL) base = address.getInput(0);
+            if (address.getOpcode() == PcodeOp.INT_SUB && address.getInput(1).isConstant()
+                    && address.getInput(1).getOffset() == 4) base = address.getInput(0);
+            if (address.getOpcode() == PcodeOp.PTRADD && address.getInput(1).isConstant()
+                    && (address.getInput(1).getOffset() & 0xFFFFFFFFL) == 0xFFFFFFFFL) base = address.getInput(0);
+            if (base == null || !fromIdtBase(base)) continue;
+            // A variable that also holds other values — a register a review
+            // named for one of them — is not the IDT's base.
+            if (!everyValue(base.getHigh(), this::fromIdtBase)) continue;
+            if (typeVariable(high, base.getHigh(), pointer(services, 3), "IdtBase")) changed = true;
+        }
+        return changed;
+    }
+
+    /// Whether a value is the IDT's base: the patched language's
+    /// `InterruptDescriptorTableBase()`, or — stock Ghidra, whose `sidt`
+    /// writes the descriptor to memory — four bytes read from a stack
+    /// descriptor. Through copies, casts and the joins of branches.
+    private boolean fromIdtBase(Varnode value) {
+        Deque<Varnode> waiting = new ArrayDeque<>();
+        Set<Varnode> seen = new HashSet<>();
+        waiting.add(value);
+        while (!waiting.isEmpty() && seen.size() < 32) {
+            Varnode at = waiting.poll();
+            if (!seen.add(at)) continue;
+            PcodeOp def = at.getDef();
+            if (def == null) continue;
+            switch (def.getOpcode()) {
+                case PcodeOp.COPY, PcodeOp.CAST, PcodeOp.INDIRECT -> waiting.add(def.getInput(0));
+                case PcodeOp.MULTIEQUAL -> { for (Varnode input : def.getInputs()) waiting.add(input); }
+                case PcodeOp.CALLOTHER -> {
+                    String name = currentProgram.getLanguage().getUserDefinedOpName((int) def.getInput(0).getOffset());
+                    if ("InterruptDescriptorTableBase".equals(name)) return true;
+                }
+                case PcodeOp.LOAD -> {
+                    PcodeOp address = def.getInput(1).getDef();
+                    while (address != null && (address.getOpcode() == PcodeOp.CAST || address.getOpcode() == PcodeOp.COPY)) {
+                        address = address.getInput(0).getDef();
+                    }
+                    if (address != null && address.getOpcode() == PcodeOp.PTRSUB
+                            && HighFunctionDBUtil.getSpacebaseReferenceAddress(currentProgram.getAddressFactory(), address) != null
+                            && currentProgram.getLanguage().getUserDefinedOpName(0) != null
+                            && !hasPatchedIdt()) return true;
+                }
+                default -> { }
+            }
+        }
+        return false;
+    }
+
+    /// Whether the language reads SIDT as the patched one does.
+    private boolean hasPatchedIdt() {
+        for (int index = 0; index < currentProgram.getLanguage().getNumberOfUserDefinedOpNames(); index++) {
+            if ("InterruptDescriptorTableBase".equals(currentProgram.getLanguage().getUserDefinedOpName(index))) return true;
+        }
+        return false;
+    }
+
+    /// The function type a call goes through: the callee's signature, or the
+    /// field of a typed table or interface it loads its target from.
+    private ghidra.program.model.listing.FunctionSignature calledSignature(PcodeOp call) {
+        if (call.getOpcode() == PcodeOp.CALL) {
+            Function callee = getFunctionAt(call.getInput(0).getAddress());
+            return callee == null ? null : callee.getSignature();
+        }
+        Varnode target = call.getInput(0);
+        for (int depth = 0; target != null && depth < 4; depth++) {
+            HighVariable held = target.getHigh();
+            DataType type = held == null ? null : held.getDataType();
+            while (type instanceof TypeDef def) type = def.getBaseDataType();
+            if (type instanceof Pointer pointer) {
+                DataType at = pointer.getDataType();
+                while (at instanceof TypeDef def) at = def.getBaseDataType();
+                if (at instanceof FunctionDefinition definition && !"code".equals(definition.getName())) return definition;
+            }
+            PcodeOp def = target.getDef();
+            if (def == null) return null;
+            int code = def.getOpcode();
+            if (code == PcodeOp.COPY || code == PcodeOp.CAST) { target = def.getInput(0); continue; }
+            if (code != PcodeOp.LOAD) return null;
+            PcodeOp field = def.getInput(1).getDef();
+            if (field == null || (field.getOpcode() != PcodeOp.PTRSUB && field.getOpcode() != PcodeOp.INT_ADD)) return null;
+            Varnode tableVarnode = field.getInput(0);
+            Varnode offset = field.getInput(1);
+            if (!offset.isConstant() || tableVarnode.getHigh() == null) return null;
+            DataType tableType = tableVarnode.getHigh().getDataType();
+            if (!(tableType instanceof Pointer tablePointer)) return null;
+            DataType table = tablePointer.getDataType();
+            while (table instanceof TypeDef def2) table = def2.getBaseDataType();
+            if (!(table instanceof Structure structure)) return null;
+            DataTypeComponent component = structure.getComponentAt((int) offset.getOffset());
+            if (component == null) return null;
+            DataType slot = component.getDataType();
+            while (slot instanceof TypeDef def3) slot = def3.getBaseDataType();
+            if (!(slot instanceof Pointer slotPointer)) return null;
+            DataType function = slotPointer.getDataType();
+            while (function instanceof TypeDef def4) function = def4.getBaseDataType();
+            return function instanceof FunctionDefinition definition ? definition : null;
+        }
+        return null;
+    }
+
+    private boolean typeOutArguments(HighFunction high) {
+        boolean changed = false;
+        Iterator<PcodeOpAST> ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            PcodeOpAST op = ops.next();
+            if (op.getOpcode() != PcodeOp.CALL && op.getOpcode() != PcodeOp.CALLIND) continue;
+            ghidra.program.model.listing.FunctionSignature signature = calledSignature(op);
+            if (signature == null) continue;
+            ParameterDefinition[] parameters = signature.getArguments();
+            for (int index = 0; index < parameters.length && index + 1 < op.getNumInputs(); index++) {
+                DataType declared = parameters[index].getDataType();
+                while (declared instanceof TypeDef def) declared = def.getBaseDataType();
+                if (!(declared instanceof Pointer outer)) continue;
+                DataType wanted = outer.getDataType();
+                if (!knownPointer(wanted)) continue;
+                Varnode argument = op.getInput(index + 1);
+                Address global = constantAddress(argument);
+                if (global != null) {
+                    Data held = currentProgram.getListing().getDataAt(global);
+                    Symbol named = currentProgram.getSymbolTable().getPrimarySymbol(global);
+                    if (held != null && held.isDefined()
+                            && !untyped(held.getDataType(), named == null ? null : named.getSource())) continue;
+                    String name = TRACKED.get(key(wanted));
+                    if (name != null ? typeGlobal(global, wanted, name, "written through the "
+                            + parameters[index].getName() + " argument of " + signature.getName())
+                        : putData(global, wanted)) {
+                        typedGlobals++;
+                        changed = true;
+                    }
+                    continue;
+                }
+                PcodeOp reference = argument.getDef();
+                while (reference != null && (reference.getOpcode() == PcodeOp.CAST || reference.getOpcode() == PcodeOp.COPY)) {
+                    reference = reference.getInput(0).getDef();
+                }
+                if (reference == null || reference.getOpcode() != PcodeOp.PTRSUB) continue;
+                Address stack = HighFunctionDBUtil.getSpacebaseReferenceAddress(
+                    currentProgram.getAddressFactory(), reference);
+                if (stack == null || !stack.isStackAddress()) continue;
+                HighSymbol local = high.getLocalSymbolMap().findLocal(stack, null);
+                if (local == null || !untyped(local.getDataType())
+                        || local.getDataType() != null && local.getDataType().getLength() != wanted.getLength()) continue;
+                if (typeLocal(local, wanted)) changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /// A variable a value of a known table or interface type is copied into.
+    private boolean typeCopies(HighFunction high) {
+        boolean changed = false;
+        Iterator<PcodeOpAST> ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            PcodeOpAST op = ops.next();
+            if (op.getOpcode() != PcodeOp.COPY && op.getOpcode() != PcodeOp.CAST
+                    && op.getOpcode() != PcodeOp.LOAD) continue;
+            Varnode out = op.getOutput();
+            if (out == null || out.getHigh() == null || out.getHigh().getSymbol() == null) continue;
+            DataType value = copiedType(op);
+            if (!knownPointer(value)) continue;
+            // Every value the variable holds must be one of that type: a
+            // register a review named for a status, a counter or a length
+            // also holds the table pointer for a few instructions.
+            DataType wanted = value;
+            if (!everyValue(out.getHigh(), at -> {
+                    PcodeOp def = at.getDef();
+                    if (def == null) return false;
+                    if (def.getOpcode() != PcodeOp.COPY && def.getOpcode() != PcodeOp.CAST
+                            && def.getOpcode() != PcodeOp.LOAD) return false;
+                    DataType held = copiedType(def);
+                    return held != null && held.isEquivalent(wanted);
+                })) continue;
+            if (typeVariable(high, out.getHigh(), value)) changed = true;
+        }
+        return changed;
+    }
+
+    /// Whether every value written into the variable passes `test`. The
+    /// joins of branches and the decompiler's indirect effects carry the
+    /// values of other writes, so they are passed over.
+    private static boolean everyValue(HighVariable variable, java.util.function.Predicate<Varnode> test) {
+        if (variable == null) return false;
+        boolean any = false;
+        for (Varnode instance : variable.getInstances()) {
+            PcodeOp def = instance.getDef();
+            if (def == null) {
+                // Read before any write here: a parameter's or a register's
+                // value from the caller — another value.
+                if (instance.isInput()) return false;
+                continue;
+            }
+            if (def.getOpcode() == PcodeOp.MULTIEQUAL || def.getOpcode() == PcodeOp.INDIRECT) continue;
+            if (!test.test(instance)) return false;
+            any = true;
+        }
+        return any;
+    }
+
+    /// The type of the value a COPY, CAST or LOAD writes: the source's, or
+    /// for `x = *IdtBase[-1]` the pointer's target.
+    private static DataType copiedType(PcodeOp op) {
+        {
+            DataType value;
+            if (op.getOpcode() == PcodeOp.LOAD) {
+                // `x = *IdtBase[-1]`: the loaded type is the pointer's target.
+                HighVariable from = op.getInput(1).getHigh();
+                DataType pointerType = from == null ? null : from.getDataType();
+                value = pointerType instanceof Pointer pointer ? pointer.getDataType() : null;
+                if (value == null) {
+                    PcodeOp address = op.getInput(1).getDef();
+                    if (address != null && (address.getOpcode() == PcodeOp.PTRADD || address.getOpcode() == PcodeOp.INT_ADD)
+                            && address.getInput(0).getHigh() != null
+                            && address.getInput(0).getHigh().getDataType() instanceof Pointer pointer) {
+                        value = pointer.getDataType();
+                    }
+                }
+            } else {
+                HighVariable from = op.getInput(0).getHigh();
+                value = from == null ? null : from.getDataType();
+            }
+            return value;
+        }
+    }
+
+    private void typeReturn(HighFunction high) {
+        Function function = high.getFunction();
+        if (!untyped(function.getReturnType(), function.getSignatureSource())
+                || function.getReturnType() instanceof VoidDataType) return;
+        DataType found = null;
+        Iterator<PcodeOpAST> ops = high.getPcodeOps();
+        while (ops.hasNext()) {
+            PcodeOpAST op = ops.next();
+            if (op.getOpcode() != PcodeOp.RETURN) continue;
+            if (op.getNumInputs() < 2 || op.getInput(1).getHigh() == null) return;
+            DataType value = op.getInput(1).getHigh().getDataType();
+            if (!knownPointer(value)) {
+                PcodeOp def = op.getInput(1).getDef();
+                if (def != null && def.getOpcode() == PcodeOp.LOAD && def.getInput(1).getHigh() != null
+                        && def.getInput(1).getHigh().getDataType() instanceof Pointer pointer) {
+                    value = pointer.getDataType();
+                }
+            }
+            if (!knownPointer(value)) return;
+            if (found != null && !found.isEquivalent(value)) return;
+            found = value;
+        }
+        if (found == null || found.getLength() != function.getReturnType().getLength()
+                && !Undefined.isUndefined(function.getReturnType())) return;
+        try {
+            SourceType source = function.getSignatureSource() == SourceType.DEFAULT
+                ? SourceType.ANALYSIS : function.getSignatureSource();
+            function.setReturnType(found, source);
+            typedReturns++;
+        } catch (Exception refused) {
+            // The return storage cannot hold it.
         }
     }
 

@@ -376,6 +376,7 @@ public class Owner {
                     case "/v1/set/data" -> write(exchange, this::setData);
                     case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/set/interfaces" -> write(exchange, this::setInterfaces);
+                    case "/v1/uefi/retype" -> write(exchange, this::retypeUefi);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
                     case "/v1/redecode" -> write(exchange, this::redecode);
                     case "/v1/function/extend" -> write(exchange, this::extendFunction);
@@ -496,6 +497,7 @@ public class Owner {
     private JsonObject leftovers(Function function) {
         int parameters = 0, locals = 0, fragments = 0;
         JsonArray fragmentNames = new JsonArray();
+        JsonArray localList = new JsonArray();
         for (Parameter parameter : function.getParameters()) {
             if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) parameters++;
         }
@@ -519,6 +521,18 @@ public class Owner {
                     fragmentNames.add(symbol.getName());
                 } else {
                     locals++;
+                    // Which one, so a review need not guess: a local named
+                    // but still `undefined` counts as much as an unnamed one
+                    // (issues 3eae8ad6, 3a8ce8e7).
+                    JsonObject item = new JsonObject();
+                    item.addProperty("name", symbol.getName());
+                    DataType type = symbol.getDataType();
+                    item.addProperty("type", type == null ? null : type.getDisplayName());
+                    item.addProperty("storage", symbol.getStorage().toString());
+                    Address first = symbol.getPCAddress();
+                    item.addProperty("first_use", first == null ? null : hex(first));
+                    item.addProperty("why", placeholder(symbol.getName()) ? "unnamed" : "untyped");
+                    localList.add(item);
                 }
             }
             // A placeholder the C prints that no symbol carries — a zero-hash
@@ -546,7 +560,10 @@ public class Owner {
         if (parameters == 0 && locals == 0 && fragments == 0 && !noPlate) return null;
         JsonObject answer = new JsonObject();
         if (parameters > 0) answer.addProperty("params", parameters);
-        if (locals > 0) answer.addProperty("locals", locals);
+        if (locals > 0) {
+            answer.addProperty("locals", locals);
+            answer.add("local_list", localList);
+        }
         if (fragments > 0) {
             answer.addProperty("fragments", fragments);
             answer.add("fragment_names", fragmentNames);
@@ -2349,10 +2366,24 @@ public class Owner {
         java.util.List<DataType> there = new java.util.ArrayList<>();
         shared.findDataTypes(name, there);
         if (there.isEmpty()) {
+            // Resolving a type brings what it is made of along: a slot's
+            // function type carries in the protocol its `This` points to,
+            // ahead of the protocol's own turn, which then finds it there and
+            // the same. What this module brings in is this module's too
+            // (issue 7c5142fe), or the author's correction of it reads as
+            // another's type.
+            java.util.List<String> broughtIn = carriedIn(shared, here);
             shared.resolve(here, DataTypeConflictHandler.KEEP_HANDLER);
             merge.written = true;
             if (!merge.added.contains(name)) merge.added.add(name);
             recordOrigin(origins, name, module);
+            for (String part : broughtIn) {
+                java.util.List<DataType> now = new java.util.ArrayList<>();
+                shared.findDataTypes(part, now);
+                if (now.isEmpty()) continue;
+                if (!merge.added.contains(part)) merge.added.add(part);
+                if (originOf(origins, part).isEmpty()) recordOrigin(origins, part, module);
+            }
             return true;
         }
         DataType theirs = exactly(there, name);
@@ -3022,6 +3053,33 @@ public class Owner {
     }
 
     /** The withdrawn name `type` is or is made of, however deep; null when none. */
+    /**
+     * The program's own types `type` is made of, at every depth, that the
+     * shared archive does not hold yet: what resolving it will bring in. A
+     * type from the EDK2 archive or a built-in one is not the module's.
+     */
+    private java.util.List<String> carriedIn(FileDataTypeManager shared, DataType type) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        ghidra.program.model.data.SourceArchive local = program.getDataTypeManager().getLocalSourceArchive();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        java.util.ArrayDeque<DataType> waiting = new java.util.ArrayDeque<>(madeOf(type));
+        seen.add(type.getPathName());
+        while (!waiting.isEmpty()) {
+            DataType at = waiting.poll();
+            if (!seen.add(at.getPathName())) continue;
+            waiting.addAll(madeOf(at));
+            String name = at.getName();
+            if (name == null || name.isEmpty() || names.contains(name)) continue;
+            if (at.getDataTypeManager() != program.getDataTypeManager()) continue;
+            ghidra.program.model.data.SourceArchive source = at.getSourceArchive();
+            if (source != null && local != null && !source.getSourceArchiveID().equals(local.getSourceArchiveID())) continue;
+            java.util.List<DataType> there = new java.util.ArrayList<>();
+            shared.findDataTypes(name, there);
+            if (there.isEmpty()) names.add(name);
+        }
+        return names;
+    }
+
     private static String withdrawnWithin(DataType type, JsonObject withdrawn) {
         if (withdrawn.size() == 0) return null;
         java.util.Set<String> seen = new java.util.HashSet<>();
@@ -4808,6 +4866,38 @@ public class Owner {
      * Every entry is checked before anything is written; one wrong entry
      * refuses the whole call.
      */
+    /**
+     * The UEFI pass's typing again, in this program: the PEI Services pointer
+     * below the IDT, protocol and PPI pointers by their GUID, the SMST, and
+     * what follows from them — only where a place has no type yet, never a
+     * name or a type a review set (`ApplyUefi.retype`). `{"guids": path,
+     * "phase": "pei"|"dxe", "skip": [entry, …]}` — `skip` the functions it
+     * leaves as they are, the library's links; the archive is the one this
+     * owner opened with.
+     * Answers how many places it typed.
+     */
+    private JsonObject retypeUefi(JsonObject body) throws Exception {
+        String guids = required(body, "guids");
+        String phase = string(body, "phase", "dxe");
+        String types = options.get("types");
+        if (types == null || !new File(types).isFile()) throw new Failure(409, "this owner was opened with no EDK2 archive");
+        if (!new File(guids).isFile()) throw new Failure(400, "no GUID table at " + guids);
+        ApplyUefi pass = new ApplyUefi();
+        java.io.StringWriter log = new java.io.StringWriter();
+        pass.set(new ghidra.app.script.GhidraState(null, null, program, null, null, null),
+                 ghidra.util.task.TaskMonitor.DUMMY, new java.io.PrintWriter(log));
+        java.util.Set<Address> skip = new java.util.HashSet<>();
+        if (body.has("skip") && body.get("skip").isJsonArray()) {
+            for (JsonElement entry : body.getAsJsonArray("skip")) skip.add(address(entry.getAsString()));
+        }
+        int typed = pass.retype(new File(types), new File(guids), phase.equalsIgnoreCase("pei"), skip);
+        System.out.println("OWNER retype: " + log.toString().trim());
+        JsonObject answer = new JsonObject();
+        answer.addProperty("typed", typed);
+        answer.addProperty("log", log.toString().trim());
+        return answer;
+    }
+
     private JsonObject setInterfaces(JsonObject body) throws Exception {
         for (String key : body.keySet()) {
             if (!Harvest.INTERFACE_LISTS.contains(key)) {

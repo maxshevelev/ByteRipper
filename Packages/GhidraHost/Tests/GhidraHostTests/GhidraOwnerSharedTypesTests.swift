@@ -141,4 +141,52 @@ final class GhidraOwnerSharedTypesTests: XCTestCase {
         let now = try json(await host.read(writer, "/v1/type?name=PROBE_OFFSET"))
         XCTAssertEqual(now["same"] as? Bool, true, "\(now)")
     }
+
+    /// Issue 7c5142fe: a protocol whose slots take `This` comes into the
+    /// archive with its slots' types, which carry the structure in before its
+    /// own turn — and it got no origin, so the author's correction of it was
+    /// refused as another's type.
+    func testAProtocolCarriedInByItsSlotsIsTheAuthorsOwn() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerCarriedType-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraOwnerCarriedType"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: String(paths[1])))
+        let writer = SHA256Digest(data: image)
+        _ = try await host.createCached(module: image, name: "Writer")
+        defer { Task { await host.stop(writer) } }
+        try await host.take(writer)
+        func define(_ c: String) async throws {
+            _ = try await host.write(writer, "/v1/type", body: body(["c": c, "description": "Only this test's."]))
+        }
+        try await define("""
+            typedef struct _PROBE_SLOT_PROTOCOL PROBE_SLOT_PROTOCOL;
+            struct _PROBE_SLOT_PROTOCOL {
+              UINT64 Revision;
+              EFI_STATUS (*Read)(PROBE_SLOT_PROTOCOL *This, UINT32 *Value);
+              EFI_STATUS (*Write)(PROBE_SLOT_PROTOCOL *This, UINT32 Value);
+            };
+            """)
+        _ = try await host.publish(writer, by: "agent")
+
+        try await define("""
+            typedef struct _PROBE_SLOT_PROTOCOL PROBE_SLOT_PROTOCOL;
+            struct _PROBE_SLOT_PROTOCOL {
+              UINT64 Revision;
+              UINT8 Kind;
+              EFI_STATUS (*Read)(PROBE_SLOT_PROTOCOL *This, UINT32 *Value);
+              EFI_STATUS (*Write)(PROBE_SLOT_PROTOCOL *This, UINT32 Value);
+            };
+            """)
+        let corrected = try await host.publish(writer, by: "agent")
+        XCTAssertTrue(corrected.typesTakenAsOrigin.contains { $0.hasSuffix("PROBE_SLOT_PROTOCOL") },
+                      "\(corrected.typesTakenAsOrigin)")
+    }
 }
