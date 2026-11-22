@@ -96,4 +96,67 @@ final class GhidraHostTypeProposalTests: XCTestCase {
         let own = await host.tickets?.ticket(proposer.hex)?.remarks.first
         XCTAssertNil(own, "the proposer is not told of its own")
     }
+
+    /// An agreed proposal and the author's own types in one publish: the
+    /// proposal covers the names it lists, and a type the module itself wrote
+    /// and no other holds is taken beside it, as it would be alone (issue
+    /// df2e22df).
+    func testAnAgreedProposalAndTheAuthorsOwnTypesGoTogether() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count >= 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set to two modules")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostMixedProposalTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let holder = "GhidraHostMixedProposalTests"
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 300,
+                                                   holder: holder,
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
+                              writer: store)
+        let first = try Data(contentsOf: URL(fileURLWithPath: String(paths[0])))
+        let second = try Data(contentsOf: URL(fileURLWithPath: String(paths[1])))
+        let writer = SHA256Digest(data: first), proposer = SHA256Digest(data: second)
+        _ = try await host.createCached(module: first, name: "Writer")
+        _ = try await host.createCached(module: second, name: "Proposer")
+        defer { Task { await host.stop(writer); await host.stop(proposer) } }
+        func define(_ module: SHA256Digest, _ c: String) async throws {
+            try await host.take(module)
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["c": c]))
+        }
+        func call(_ request: TypeProposalBook.Request) async throws -> [String: Any] {
+            try json(await host.typeProposalCall(request, holder: holder))
+        }
+
+        try await define(writer, "typedef struct _MIXED_PPI { unsigned int Size; void *Run; } MIXED_PPI;")
+        _ = try await host.publish(writer, by: "agent")
+        // The proposer's own type, in the shared archive as its own.
+        try await define(proposer, "typedef struct _OWN_PPI { unsigned int Size; } OWN_PPI;")
+        _ = try await host.publish(proposer, by: "agent")
+
+        let proposed = "typedef struct _MIXED_PPI { unsigned int Size; unsigned int Flags; void *Run; } MIXED_PPI;"
+        try await define(proposer, proposed)
+        let proposal = try await call(.init(action: .propose, agent: "Reviewer", module: proposer.hex,
+                                            reason: "Run is called through +0x08"))
+        let id = try XCTUnwrap(proposal["id"] as? String)
+        XCTAssertEqual(Set(proposal["names"] as? [String] ?? []), ["MIXED_PPI", "_MIXED_PPI"], "\(proposal)")
+        _ = try await call(.init(action: .vote, agent: "Verifier", id: id, choice: .agree))
+        let agreed = try await call(.init(action: .vote, agent: "Review Manager", id: id, choice: .agree))
+        XCTAssertEqual(agreed["state"] as? String, "agreed")
+
+        // After the vote, the author corrects its own type too.
+        try await define(proposer, "typedef struct _OWN_PPI { unsigned int Size; unsigned int Mode; } OWN_PPI;")
+        let preview = try json(await host.preview(proposer))
+        XCTAssertEqual(preview["types_agreed"] as? [String], [id], "\(preview)")
+        XCTAssertNil(preview["types_refused"], "\(preview)")
+        XCTAssertTrue((preview["types_taken_as_origin"] as? [String] ?? []).contains("OWN_PPI"), "\(preview)")
+        let published = try await host.publish(proposer, by: "agent")
+        XCTAssertTrue(published.typeConflictsTaken.contains("MIXED_PPI"), "\(published.typeConflictsTaken)")
+        XCTAssertTrue(published.typesTakenAsOrigin.contains("OWN_PPI"), "\(published.typesTakenAsOrigin)")
+        let shared = try json(await host.read(writer, "/v1/type?name=OWN_PPI"))["shared"] as? [String: Any]
+        XCTAssertTrue((shared?["c"] as? String ?? "").contains("Mode"), "\(String(describing: shared))")
+        let applied = try await call(.init(action: .read, id: id))
+        XCTAssertEqual(applied["state"] as? String, "applied")
+    }
 }

@@ -134,22 +134,32 @@ extension GhidraHost {
         var merged = TypesMerged(try await typesCall(module, "/v1/types/merge", body: try JSONSerialization.data(
             withJSONObject: ["archive": folder.path])))
         var proposals: [String] = []
+        var takenAsOrigin: [String] = []
+        var blocking: [String: [String]] = [:]
         let replacements = merged.replacements
         if !replacements.isEmpty,
-           let agreed = try await agreedReplacement(module, replacements: replacements) {
-            // What the agents agreed is taken, on a fresh copy of the version
-            // the refused merge read.
-            try? FileManager.default.removeItem(at: folder)
-            (folder, current) = try await archiveWorkingCopy(bits: bits)
-            merged = TypesMerged(try await typesCall(module, "/v1/types/merge?take_type_conflicts=1",
-                                                     body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
-            proposals = agreed
+           let cover = try await agreedCoverage(module, replacements: replacements), !cover.proposals.isEmpty {
+            // What no proposal lists may be the author's own types: taken
+            // with the agreed ones, as they would be alone (issue df2e22df).
+            var rest = cover.rest.isEmpty
+            if !rest, Self.ownTypes(cover.rest, origins: merged.origins, module: module) {
+                blocking = await otherTypeHolders(cover.rest, module: module, bits: bits)
+                rest = blocking.isEmpty
+            }
+            if rest {
+                // What the agents agreed is taken, on a fresh copy of the
+                // version the refused merge read.
+                try? FileManager.default.removeItem(at: folder)
+                (folder, current) = try await archiveWorkingCopy(bits: bits)
+                merged = TypesMerged(try await typesCall(module, "/v1/types/merge?take_type_conflicts=1",
+                                                         body: try JSONSerialization.data(withJSONObject: ["archive": folder.path])))
+                proposals = cover.proposals
+                takenAsOrigin = cover.rest
+            }
         }
         // The author corrects its own type: one this module wrote and no other
         // module of this size holds is taken without a vote. A vote is for a
         // change that could reach another module.
-        var takenAsOrigin: [String] = []
-        var blocking: [String: [String]] = [:]
         if !merged.replacements.isEmpty, proposals.isEmpty,
            Self.ownTypes(merged.replacements, origins: merged.origins, module: module) {
             let replacements = merged.replacements

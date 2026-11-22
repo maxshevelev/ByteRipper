@@ -296,17 +296,31 @@ extension GhidraHost {
     /// proposed and the shared copy still the one the voters read. Nil when
     /// any is not covered; then the publish is refused as before.
     func agreedReplacement(_ module: SHA256Digest, replacements: [String]) async throws -> [String]? {
+        guard let cover = try await agreedCoverage(module, replacements: replacements), cover.rest.isEmpty,
+              !cover.proposals.isEmpty else { return nil }
+        return cover.proposals
+    }
+
+    /// The agreed proposals that cover some of the replacements, and the
+    /// names none of them lists (`rest`): those are decided otherwise — the
+    /// author's own types, taken without a vote (issue df2e22df). Nil when a
+    /// name a proposal lists is no longer as the voters read it.
+    func agreedCoverage(_ module: SHA256Digest, replacements: [String]) async throws
+        -> (proposals: [String], rest: [String])? {
         guard let book = typeProposals, !replacements.isEmpty else { return nil }
         let agreed = await book.agreed(module: module.hex)
-        guard !agreed.isEmpty else { return nil }
         var ids: Set<String> = []
+        var rest: [String] = []
         for name in replacements {
-            guard let proposal = agreed.first(where: { $0.names.contains(name) }) else { return nil }
+            guard let proposal = agreed.first(where: { $0.names.contains(name) }) else {
+                rest.append(name)
+                continue
+            }
             let now = try await typeDefinition(module, name: name)
             guard now.program == proposal.moduleC[name], now.shared == proposal.sharedC[name] else { return nil }
             ids.insert(proposal.id)
         }
-        return ids.sorted()
+        return (ids.sorted(), rest)
     }
 
     /// What a module that uses a replaced definition reads on its ticket.

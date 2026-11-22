@@ -1014,16 +1014,25 @@ public actor GhidraHost {
         // An agreed proposal that covers every replacement is what the
         // publish would apply: the preview says so, as the publish decides it.
         var agreedProposals: [String]?
-        if writer.keepsTypeArchives, !replacing.isEmpty {
-            agreedProposals = try? await agreedReplacement(module, replacements: replacing)
-            if let agreedProposals { preview["types_agreed"] = agreedProposals }
-        }
         let previewBits = Self.archiveBits(language: (artifact["program"] as? [String: Any])?["language"] as? String ?? "")
         // The author's own types, which no other module of this size holds:
-        // the publish takes them without a vote.
+        // the publish takes them without a vote — beside agreed ones too.
         var takenAsOrigin = false
         var blocking: [String: [String]] = [:]
-        if writer.keepsTypeArchives, !replacing.isEmpty, agreedProposals == nil,
+        if writer.keepsTypeArchives, !replacing.isEmpty,
+           let cover = try? await agreedCoverage(module, replacements: replacing), !cover.proposals.isEmpty {
+            var rest = cover.rest.isEmpty
+            if !rest, Self.ownTypes(cover.rest, origins: typeOrigins, module: module) {
+                blocking = await otherTypeHolders(cover.rest, module: module, bits: previewBits)
+                rest = blocking.isEmpty
+            }
+            if rest {
+                agreedProposals = cover.proposals
+                preview["types_agreed"] = cover.proposals
+                if !cover.rest.isEmpty { preview["types_taken_as_origin"] = cover.rest }
+            }
+        }
+        if writer.keepsTypeArchives, !replacing.isEmpty, agreedProposals == nil, blocking.isEmpty,
            Self.ownTypes(replacing, origins: typeOrigins, module: module) {
             blocking = await otherTypeHolders(replacing, module: module, bits: previewBits)
             if blocking.isEmpty {
