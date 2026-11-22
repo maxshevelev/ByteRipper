@@ -2575,15 +2575,19 @@ import ToolModuleKit
             state.selectLine(line)
             drawSelection()
         }
+        // The arrival's flash marks the statement too, not the function's
+        // name, which it marks for an instruction the C does not place.
+        var statement: NSRange?
         if let range = statementInC(supplying: address) {
             let shown = NSRange(location: range.location + cShift, length: range.length)
             if NSMaxRange(shown) <= (cTextView.string as NSString).length {
                 cTextView.setSelectedRange(shown)
                 cTextView.scrollRangeToVisible(shown)
+                statement = shown
             }
         }
         notifyInstruction()
-        flashArrival()
+        flashArrival(cMark: statement)
     }
 
     /// Where in its function's C the module supplies an interface, as a

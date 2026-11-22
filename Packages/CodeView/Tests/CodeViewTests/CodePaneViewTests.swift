@@ -171,6 +171,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(code.selectedRange().length, install.length, "the whole statement that installs it")
         XCTAssertEqual((code.string as NSString).substring(with: code.selectedRange()),
                        (c as NSString).substring(with: install))
+        XCTAssertEqual(view.lastFlash, .c(code.selectedRange()), "the flash marks the statement, not the name")
 
         view.openInterfaceAddress(CodeAddress(0x355))
         XCTAssertEqual(view.selectedFunction?.name, "Setup", "a callback opens its function")
