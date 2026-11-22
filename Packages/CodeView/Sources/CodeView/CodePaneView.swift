@@ -6586,6 +6586,14 @@ final class CodeNavigatorCell: NSTableCellView {
                 .map(CodeNavigatorIcon.group)
         default: nil
         }
+        showsMark(mark)
+    }
+
+    /// A mark of the navigator's kind for a row that is not a function — a
+    /// heading or an interface of the Interfaces tab: a glyph on a coloured
+    /// square, drawn again on a selected row as a function's is.
+    func showsMark(_ mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?, named name: String? = nil) {
+        if let name { iconName = name }
         self.mark = mark
         let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
         drawMark()

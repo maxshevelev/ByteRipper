@@ -46,6 +46,24 @@ enum CodeNavigatorIcon {
         (.badge(name), .systemBlue)
     }
 
+    /// A PPI the module installs, locates or waits for: a piece that fits
+    /// into another, in the function names' colour.
+    static let ppi = (glyph: Glyph.symbol("puzzlepiece.extension.fill"), color: CodeColors.function)
+    /// A protocol: the same piece, in indigo.
+    static let protocolInterface = (glyph: Glyph.symbol("puzzlepiece.extension.fill"), color: NSColor.systemIndigo)
+
+    /// A heading of the Interfaces tab: its sign, on a square in a colour of
+    /// its own.
+    static func interfaceGroup(_ symbol: String) -> (glyph: Glyph, color: NSColor) {
+        let color: NSColor = switch symbol {
+        case "square.and.arrow.up": .systemGreen
+        case "magnifyingglass": .systemBlue
+        case "bell": .systemOrange
+        default: .systemPurple
+        }
+        return (.symbol(symbol), color)
+    }
+
     /// How wide a mark is at `side`: a square, or a badge — its name and
     /// the frame's room on either side of it.
     static func width(of glyph: Glyph, side: CGFloat) -> CGFloat {

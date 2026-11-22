@@ -91,8 +91,8 @@ final class CodePaneViewTests: XCTestCase {
         panel.choose(row: entry)
         XCTAssertEqual(view.selectedFunctionIndex, 0, "the call's function opens")
 
-        // A selected row keeps its glyph and draws its colours in the
-        // selection's: the entry's puzzle piece, the place's link.
+        // A selected row keeps its mark, drawn again on a plate as a
+        // function's is, and the place's link takes the selection's colour.
         panel.outline.selectRowIndexes([entry, entry + 4], byExtendingSelection: false)
         panel.outline.layoutSubtreeIfNeeded()
         for row in [entry, entry + 4] {
@@ -101,8 +101,11 @@ final class CodePaneViewTests: XCTestCase {
         let entryCell = try XCTUnwrap(panel.outline.view(atColumn: 0, row: entry, makeIfNecessary: true)
                                       as? CodeNavigatorCell)
         entryCell.backgroundStyle = .emphasized
-        XCTAssertNotNil(entryCell.icon.image, "the glyph stays on the selection")
-        XCTAssertEqual(entryCell.icon.contentTintColor, .alternateSelectedControlTextColor)
+        let plain = entryCell.icon.image
+        entryCell.backgroundStyle = .normal
+        XCTAssertNotNil(entryCell.icon.image, "the mark stays on the selection")
+        XCTAssertFalse(entryCell.icon.image === plain, "drawn again for the selection")
+        entryCell.backgroundStyle = .emphasized
         let at = try XCTUnwrap((panel.outline.view(atColumn: 0, row: entry + 4, makeIfNecessary: true)
                                 as? NSTableCellView)?.textField as? InterfacesDetailField)
         XCTAssertTrue(at.attributedStringValue.string.hasPrefix("At:"))
@@ -225,6 +228,16 @@ final class CodePaneViewTests: XCTestCase {
         view.showInterfacesTab(true)
         XCTAssertTrue(view.interfacesPanel.linesForTests.contains { $0.contains("AMD_PSP_FTPM_PPI") },
                       "\(view.interfacesPanel.linesForTests)")
+        // Drawn as the Functions list is: a heading's sign and an
+        // interface's kind on coloured squares, the name in the rows' weight.
+        let outline = view.interfacesPanel.outline
+        let heading = try XCTUnwrap(outline.view(atColumn: 0, row: 0, makeIfNecessary: true) as? CodeNavigatorCell)
+        XCTAssertEqual(heading.iconName, "square.and.arrow.up")
+        XCTAssertEqual(heading.textField?.stringValue, "Installs (1)")
+        let entry = try XCTUnwrap(outline.view(atColumn: 0, row: 1, makeIfNecessary: true) as? CodeNavigatorCell)
+        XCTAssertEqual(entry.iconName, "ppi")
+        let font = try XCTUnwrap(entry.textField?.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        XCTAssertFalse(font.fontDescriptor.symbolicTraits.contains(.bold))
         var registry = GuidRegistry()
         registry.entries[guid] = GuidEntry(name: "gAmdPspFtpmFactoryResetPpiGuid", kind: .ppi,
                                            source: .review(module: SHA256Digest(data: Data("m".utf8)), address: "0x1"),

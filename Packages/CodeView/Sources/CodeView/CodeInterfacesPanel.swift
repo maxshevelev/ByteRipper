@@ -419,21 +419,20 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         cell.showsDisclosure(true)
         cell.showsCalls(expandable: expandable, expanded: outlineView.isItemExpanded(group))
         cell.onToggle = { [weak self] in self?.toggle(group) }
-        cell.showsSymbol(group.symbol)
-        let line = NSMutableAttributedString(string: group.title, attributes: [
-            .font: CodePaneView.navigatorBoldFont(), .foregroundColor: NSColor.labelColor
-        ])
-        let detail: String = if let conditions = group.conditions { conditions.isEmpty ? L("None") : "" } else {
+        // A heading as the Functions list draws a review group's: its sign
+        // on a coloured square, the name one weight up in grey, and how many
+        // rows it holds.
+        cell.showsMark(CodeNavigatorIcon.interfaceGroup(group.symbol), named: group.symbol)
+        let detail: String = if let conditions = group.conditions { conditions.isEmpty ? " — " + L("None") : "" } else {
             switch group.entries {
-            case nil: L("Not recorded yet")
-            case let list? where list.isEmpty: L("None")
-            case let list?: String(list.count)
+            case nil: " — " + L("Not recorded yet")
+            case let list?: " (\(list.count))"
             }
         }
-        line.append(NSAttributedString(string: " " + detail, attributes: [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
-        ]))
-        cell.textField?.attributedStringValue = line
+        cell.textField?.attributedStringValue = NSAttributedString(string: group.title + detail, attributes: [
+            .font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ])
         Self.putHelp(group.help, named: group.title, in: cell)
         return cell
     }
@@ -445,10 +444,13 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         cell.showsDisclosure(true)
         cell.showsCalls(expandable: true, expanded: outlineView.isItemExpanded(entry))
         cell.onToggle = { [weak self] in self?.toggle(entry) }
-        cell.showsSymbol(entry.interface.kind == .ppi ? "puzzlepiece.extension" : "puzzlepiece")
+        // An interface as a function is drawn: its kind's mark, its name in
+        // the rows' weight.
+        cell.showsMark(entry.interface.kind == .ppi ? CodeNavigatorIcon.ppi : CodeNavigatorIcon.protocolInterface,
+                       named: entry.interface.kind == .ppi ? "ppi" : "protocol")
         cell.indent = Self.entryInset
         let line = NSMutableAttributedString(string: entry.interface.name, attributes: [
-            .font: CodePaneView.navigatorBoldFont(), .foregroundColor: NSColor.labelColor
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
         ])
         if !entry.marks.isEmpty {
             line.append(NSAttributedString(string: " " + entry.marks.joined(separator: ", "), attributes: [
