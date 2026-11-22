@@ -2554,10 +2554,19 @@ import ToolModuleKit
         }
     }
 
-    /// An interface's place, opened from the tab as a link opens it.
+    /// An interface's place, opened from the tab. A function's entry — a
+    /// notification's callback — opens the function, as a link does. Any
+    /// other place is where the module supplies the GUID: the call is
+    /// selected in the C, as a POST code's call is, the C shown for it; a
+    /// descriptor no instruction holds selects its bytes.
     func openInterfaceAddress(_ address: CodeAddress) {
         if showsDescription { showDescription(false) }
-        go(to: CodeLocation(address: address))
+        if model.function(at: address) != nil {
+            go(to: CodeLocation(function: address))
+            return
+        }
+        if !showsDecompiledC { showDecompiledC(true) }
+        showSite(address)
     }
 
     /// The switch says which tab is in front: a list, or Search. The list's

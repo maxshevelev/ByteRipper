@@ -127,6 +127,48 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.navigatorListIndex, 5)
     }
 
+    /// An interface's place opens the call that supplies it, selected in
+    /// the C — shown for it — as a POST code's call is; a callback opens its
+    /// function.
+    func testAnInterfacesPlaceSelectsItsCallInTheC() throws {
+        let c = "void Caller(void)\n{\n  Setup();\n  (*PeiServices)->InstallPpi(PeiServices,&mPpiList);\n}\n"
+        let install = (c as NSString).range(of: "(*PeiServices)->InstallPpi(PeiServices,&mPpiList)")
+        let json: [String: Any] = [
+            "script_version": 5, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "Caller", "c": c,
+                 "c_sites": [[install.location, install.length, "0x222"]],
+                 "instructions": [
+                    ["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"],
+                    ["address": "0x221", "bytes": "E8", "mnemonic": "CALL", "text": "CALL 0x355"],
+                    ["address": "0x222", "bytes": "FF", "mnemonic": "CALL", "text": "CALL dword ptr [EAX + 0x18]"]]],
+                ["entry": "0x355", "name": "Setup", "c": "void Setup(void)\n{\n}\n",
+                 "instructions": [["address": "0x355", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        var shown = manifest()
+        let installed = ModuleInterfaces.Interface(
+            guid: "0AE8CE5D-E448-4437-A8D7-EBF5F194F731", name: "EFI_PEI_READ_ONLY_VARIABLE2_PPI", kind: .ppi,
+            address: "0x222", condition: "always", purpose: "Gives the store to the modules after it.")
+        shown.reading = AnalysisReading(project: "p", rev: 2, interfaces: ModuleInterfaces(installs: [installed]))
+        let view = CodePaneView(manifest: shown, artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.showDecompiledC(false)
+        view.selectFunction(at: 1)
+
+        view.openInterfaceAddress(CodeAddress(0x222))
+        XCTAssertTrue(view.showsDecompiledC, "the C is shown for the call")
+        XCTAssertEqual(view.selectedFunction?.name, "Caller")
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222))
+        let code = try XCTUnwrap(all(CodeTextView.self, in: view).first)
+        XCTAssertEqual(code.selectedRange(), install, "the call in the C")
+
+        view.openInterfaceAddress(CodeAddress(0x355))
+        XCTAssertEqual(view.selectedFunction?.name, "Setup", "a callback opens its function")
+    }
+
     /// The module's name in the header can be selected and copied.
     func testTheModuleNameCanBeSelected() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
