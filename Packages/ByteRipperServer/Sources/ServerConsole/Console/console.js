@@ -1691,6 +1691,8 @@
     return { root, update };
   }
 
+  // A proposal as the agents name it: the first eight characters of its id.
+  const shortID = (id) => String(id || "").slice(0, 8);
   const proposalNames = (p) => p.names.filter((n) => !(n.startsWith("_") && p.names.includes(n.slice(1))));
   const proposalTitle = (p) => `Proposal of ${p.name || "a module"}`;
   // A change of the registry itself, in words: what it does to which entry or body.
@@ -1709,13 +1711,14 @@
   function proposalTable(rows) {
     return h("table", { class: "lines" },
       h("thead", {}, h("tr", {},
-        h("th", { class: "w-who", text: "Module" }), h("th", { text: "Types and entries" }), h("th", { class: "w-state", text: "State" }),
+        h("th", { class: "w-who", text: "Module" }), h("th", { class: "w-id", text: "ID" }), h("th", { text: "Types and entries" }), h("th", { class: "w-state", text: "State" }),
         h("th", { text: "Votes" }), h("th", { text: "Author" }))),
       h("tbody", {}, rows.map((p) => {
         const names = proposalNames(p);
         return detailRow(`proposal:${p.id}`, proposalTitle(p), () => proposalDetail(p, names),
           { class: p.state === "open" || p.state === "agreed" ? "" : "dim" },
           whoCell("proposals", p.name || "module", p.module),
+          h("td", { class: "mono", title: p.id, text: shortID(p.id) }),
           h("td", { class: "mono", text: p.change ? changeText(p.change)
             : names.concat(Object.values(p.entries || {}).map((e) => e.name)).join(", ") }),
           h("td", {}, proposalPill(p.state)),
@@ -1838,7 +1841,8 @@
       h("span", { class: "grow" }), buttons);
     return h("div", { class: "stack" },
       status,
-      h("div", { class: "row" }, h("span", { class: "muted", text: `Proposed ${when(p.at)}` })),
+      h("div", { class: "row" }, h("span", { class: "muted", text: `Proposed ${when(p.at)}` }),
+        h("span", { class: "mono", title: p.id, text: shortID(p.id) })),
       decided, applied,
       h("div", { class: "remark" }, h("div", { class: "row" }, h("b", { text: p.author }), h("span", { class: "muted", text: "why" })),
         h("div", { class: "remark-text", text: p.reason })),

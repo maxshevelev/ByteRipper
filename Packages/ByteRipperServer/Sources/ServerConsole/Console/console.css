@@ -642,6 +642,7 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 table.lines { table-layout: fixed; }
 table.lines th.w-who { width: 24%; }
 table.lines th.w-state { width: 84px; }
+table.lines th.w-id { width: 76px; }
 table.lines th.w-n { width: 74px; }
 table.lines th.w-time { width: 92px; }
 table.lines th.w-open { width: 160px; }
