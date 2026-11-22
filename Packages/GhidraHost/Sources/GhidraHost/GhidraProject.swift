@@ -163,6 +163,8 @@ public protocol AnalysisWriter: Sendable {
     func readLibraryIndex() async throws -> LibraryIndex
     /// A review's name for a GUID, by the registry's rule (`ContentStore.offerGuid`).
     func offerGuid(_ offer: GuidOffer, by: String?, dryRun: Bool) async throws -> GuidOfferResult
+    /// The GUID registry; empty where the store was never seeded.
+    func readGuidRegistry() async throws -> GuidRegistry
     func readLibraryHistory(id: String) async throws -> LibraryHistory?
     func readObject(_ digest: SHA256Digest) async throws -> Data
     /// Each module's newest analysis, for a question about all of them.
@@ -310,6 +312,7 @@ extension ContentStore: AnalysisWriter {
     }
 
     public func readLibraryIndex() async throws -> LibraryIndex { try libraryIndex() }
+    public func readGuidRegistry() async throws -> GuidRegistry { try guidRegistry() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try object(digest) }
     public func newestAnalyses() async throws -> [AnalysisManifest] {
@@ -410,6 +413,7 @@ extension RemoteStore: AnalysisWriter {
     }
 
     public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }
+    public func readGuidRegistry() async throws -> GuidRegistry { try await guidRegistry() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try await libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try await object(digest) }
 

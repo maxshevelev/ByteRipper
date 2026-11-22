@@ -640,3 +640,21 @@ final class InterfacesDetailField: NSTextField {
         attributedStringValue = text
     }
 }
+
+extension DependencyOutline {
+    /// The expression with each interface under the GUID registry's name,
+    /// where the registry holds its GUID.
+    func named(by registry: GuidRegistry) -> DependencyOutline {
+        guard !registry.entries.isEmpty else { return self }
+        func renamed(_ condition: Condition) -> Condition {
+            switch condition {
+            case let .interface(guid, name): .interface(guid: guid, name: registry.name(of: guid) ?? name)
+            case let .not(inner): .not(renamed(inner))
+            case let .allOf(list): .allOf(list.map(renamed))
+            case let .anyOf(list): .anyOf(list.map(renamed))
+            case .always, .never: condition
+            }
+        }
+        return DependencyOutline(conditions: conditions.map(renamed), prefix: prefix, unreadable: unreadable)
+    }
+}

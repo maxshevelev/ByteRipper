@@ -304,7 +304,10 @@ extension GhidraHost {
     /// The agreed proposals that cover some of the replacements, and the
     /// names none of them lists (`rest`): those are decided otherwise — the
     /// author's own types, taken without a vote (issue df2e22df). Nil when a
-    /// name a proposal lists is no longer as the voters read it.
+    /// name a proposal lists is no longer as the voters read it. A comment
+    /// is not what they voted on: comments are the last publish's (the
+    /// 2026-11-06 rule), so one written since does not undo the agreement
+    /// (issue 0e3e55f8).
     func agreedCoverage(_ module: SHA256Digest, replacements: [String]) async throws
         -> (proposals: [String], rest: [String])? {
         guard let book = typeProposals, !replacements.isEmpty else { return nil }
@@ -317,7 +320,8 @@ extension GhidraHost {
                 continue
             }
             let now = try await typeDefinition(module, name: name)
-            guard now.program == proposal.moduleC[name], now.shared == proposal.sharedC[name] else { return nil }
+            guard Self.sameLayout(now.program, proposal.moduleC[name]),
+                  Self.sameLayout(now.shared, proposal.sharedC[name]) else { return nil }
             ids.insert(proposal.id)
         }
         return (ids.sorted(), rest)
@@ -457,5 +461,20 @@ extension GhidraHost {
             }
         }
         return recipients
+    }
+}
+
+extension GhidraHost {
+    /// Two definitions in C as the owner prints them, the same but for their
+    /// `//` comments: a field's comment after it, or a line of its own.
+    nonisolated static func sameLayout(_ a: String?, _ b: String?) -> Bool {
+        func bare(_ text: String?) -> [String]? {
+            text?.components(separatedBy: "\n").compactMap { line -> String? in
+                let code = line.range(of: "//").map { String(line[..<$0.lowerBound]) } ?? line
+                let trimmed = code.trimmingCharacters(in: .whitespaces)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+        }
+        return bare(a) == bare(b)
     }
 }

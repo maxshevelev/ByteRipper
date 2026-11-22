@@ -1,6 +1,7 @@
 import AgentKit
 import CodeAnalysis
 import Foundation
+import UEFIImage
 
 extension CodeReadings {
     /// The shared registry of GUID names (`GuidRegistry`): its entries, or one
@@ -34,6 +35,25 @@ extension CodeReadings {
         ) { call in
             .json(try await self.guids(call.arguments))
         }
+    }
+
+    /// The GUID registry of the store a call reads; empty when there is none.
+    func guidRegistry() async -> GuidRegistry {
+        let root = await store()
+        return await Task.detached(priority: .userInitiated) {
+            (try? ContentStore(root: root, create: false).guidRegistry()) ?? GuidRegistry()
+        }.value
+    }
+
+    /// The catalogue with the registry's names over its own: a GUID the
+    /// registry holds reads as every review names it.
+    nonisolated static func catalogue(_ catalogue: GuidsCatalogue, overlaidBy registry: GuidRegistry) -> GuidsCatalogue {
+        guard !registry.entries.isEmpty else { return catalogue }
+        var names = catalogue.names
+        for (key, entry) in registry.entries {
+            if let guid = EFIGUID(key) { names[guid] = entry.name }
+        }
+        return GuidsCatalogue(names: names)
     }
 
     private func guids(_ arguments: AgentArguments) async throws -> JSONValue {

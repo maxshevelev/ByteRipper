@@ -2685,10 +2685,18 @@ import ToolModuleKit
         didSet { if dependencies != oldValue { drawInterfaces() } }
     }
 
+    /// The GUID registry of the store the code comes from: the tab names
+    /// every GUID as it does, over what a review wrote and over the
+    /// catalogue's name in the dependency expression.
+    public var guidRegistry = GuidRegistry() {
+        didSet { if guidRegistry != oldValue { drawInterfaces() } }
+    }
+
     /// The record of the module's review, drawn in the tab.
     func drawInterfaces() {
         var unplaced = false
-        interfacesPanel.show(manifest.reading?.interfaces, dependencies: dependencies) { [weak self] recorded in
+        interfacesPanel.show(manifest.reading?.interfaces?.named(by: guidRegistry),
+                             dependencies: dependencies?.named(by: guidRegistry)) { [weak self] recorded in
             guard let self else { return nil }
             let address = self.interfaceInstruction(for: recorded)
             let place = self.model.indices(of: CodeLocation(address: address))

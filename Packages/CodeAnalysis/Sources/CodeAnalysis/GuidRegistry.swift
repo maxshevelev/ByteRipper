@@ -434,3 +434,43 @@ extension ContentStore {
         return GuidOfferResult(guid: guid, outcome: .conflict, entry: entry, offered: offer.name, why: why)
     }
 }
+
+extension ModuleInterfaces {
+    /// The record as it reads: each entry under the registry's name for its
+    /// GUID, where the registry holds one, whatever the review wrote then. A
+    /// name kept with the record never drifts from the registry's, and a
+    /// rename there needs no record rewritten.
+    public func named(by registry: GuidRegistry) -> ModuleInterfaces {
+        func renamed(_ list: [Interface]?) -> [Interface]? {
+            list?.map { entry in
+                var entry = entry
+                if let name = registry.name(of: entry.guid) { entry.name = name }
+                return entry
+            }
+        }
+        return ModuleInterfaces(installs: renamed(installs), locates: renamed(locates), notifies: renamed(notifies))
+    }
+
+    /// The entries whose name the registry does not give them, each with why:
+    /// a GUID it does not hold, or another name than its own. Empty when the
+    /// registry holds nothing — a store never seeded checks nothing.
+    public func misnamed(by registry: GuidRegistry) -> [(list: String, guid: String, name: String, why: String)] {
+        guard !registry.entries.isEmpty else { return [] }
+        var found: [(String, String, String, String)] = []
+        for (list, entries) in [("installs", installs), ("locates", locates), ("notifies", notifies)] {
+            for entry in entries ?? [] {
+                guard let guid = GuidName.canonicalGUID(entry.guid) else { continue }
+                if let held = registry.entries[guid] {
+                    if held.name != entry.name {
+                        found.append((list, guid, entry.name, "the GUID registry names it \(held.name)"))
+                    }
+                } else {
+                    found.append((list, guid, entry.name,
+                                  "the GUID registry does not hold it: add it with `ghidra_guid_add` at the place "
+                                  + "that shows what it is, then name it as the registry does"))
+                }
+            }
+        }
+        return found
+    }
+}

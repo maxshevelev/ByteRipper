@@ -206,7 +206,8 @@ extension GhidraHost: GhidraBackend {
 
     public func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data {
         let suffix = query.isEmpty ? "" : "?" + FormQuery.encode(query)
-        return await throughRegistry(try await read(module, "/v1/\(call)\(suffix)"), module: module, call: call)
+        let data = await throughRegistry(try await read(module, "/v1/\(call)\(suffix)"), module: module, call: call)
+        return call == "interfaces" ? await namedByGuidRegistry(data) : data
     }
 
     public func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {

@@ -149,7 +149,8 @@ public enum GhidraTools {
         matches and `ghidra_library_apply` links or declines one. A GUID has one name for every review, \
         the GUID registry's (`guid_registry`), in EDK2's form `g…Guid`: name a PPI, protocol, HOB, \
         variable GUID, event group or table as it says, and give one it does not hold its name with \
-        `ghidra_guid_add`, at the place in the code that shows what it is. `ghidra_publish` makes the review visible to the app — every \
+        `ghidra_guid_add`, at the place in the code that shows what it is; `ghidra_set_interfaces` and a \
+        name on an `EFI_GUID` datum are refused under any other name. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename; a publish keeps the module in work. `ghidra_done` publishes and gives the module \
         back; `ghidra_forget` lets a kept \
@@ -1327,7 +1328,9 @@ public enum GhidraTools {
                 return body
             },
             write("ghidra_set_data", "set/data", "Name or type a datum",
-                  "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes "
+                  "Names and/or types the datum at `address`, e.g. a GUID or a table. A name on an `EFI_GUID` "
+                  + "datum is the GUID registry's name for its bytes (`guid_registry`): any other is refused with "
+                  + "the registry's, and a GUID it does not hold is added first with `ghidra_guid_add`. An empty `name` removes "
                   + "the label there, a leftover under a type that now names the place. A type laid over decoded "
                   + "instructions is refused, naming them, unless `clear_code: true`: they go, the function "
                   + "holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as "
@@ -1413,8 +1416,11 @@ public enum GhidraTools {
                     `notifies`: NotifyPpi, RegisterProtocolNotify, a protocol notify event. One call that \
                     installs a descriptor list gives one entry per GUID, all with the call's address. The \
                     dependency expression is not written here: the UEFI parser reads it from the FFS file. \
-                    Each entry carries its `purpose`: why the module needs it and what it gives. Every entry is checked — the GUID's form, the address a call in a function or a typed \
-                    datum, a callback a function's entry — and one wrong entry refuses the whole call. The \
+                    Each entry carries its `purpose`: why the module needs it and what it gives. Every entry is checked — the GUID's form, its name the GUID registry's (a GUID the registry \
+                    does not hold is added first with `ghidra_guid_add`), the address a call in a function or a \
+                    typed datum, a callback a function's entry — and one wrong entry refuses the whole call. \
+                    Read back, each entry carries the registry's name, and `recorded_name` where an older record \
+                    wrote another. The \
                     answer is the record, as `ghidra_interfaces` reads it.
                     """,
                 inputSchema: AgentSchema.object([
@@ -1425,7 +1431,7 @@ public enum GhidraTools {
                     "type": "object",
                     "properties": [
                         "guid": AgentSchema.string("The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\"."),
-                        "name": AgentSchema.string("Its C name, as the code and the GUID table have it: \"EFI_PEI_MEMORY_DISCOVERED_PPI\"."),
+                        "name": AgentSchema.string("The GUID registry's name for it (`guid_registry`): \"gEfiPeiMemoryDiscoveredPpiGuid\"."),
                         "kind": AgentSchema.choice(["ppi", "protocol"], "A PPI or a protocol."),
                         "address": AgentSchema.string("Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it."),
                         "condition": AgentSchema.string("`always`, or when it happens: \"only on S3 resume\", \"only in recovery\"."),
@@ -1442,7 +1448,7 @@ public enum GhidraTools {
                     "type": "object",
                     "properties": [
                         "guid": AgentSchema.string("The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\"."),
-                        "name": AgentSchema.string("Its C name, as the code and the GUID table have it: \"EFI_PEI_MEMORY_DISCOVERED_PPI\"."),
+                        "name": AgentSchema.string("The GUID registry's name for it (`guid_registry`): \"gEfiPeiMemoryDiscoveredPpiGuid\"."),
                         "kind": AgentSchema.choice(["ppi", "protocol"], "A PPI or a protocol."),
                         "address": AgentSchema.string("Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it."),
                         "condition": AgentSchema.string("`always`, or when it happens: \"only on S3 resume\", \"only in recovery\"."),
@@ -1459,7 +1465,7 @@ public enum GhidraTools {
                     "type": "object",
                     "properties": [
                         "guid": AgentSchema.string("The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\"."),
-                        "name": AgentSchema.string("Its C name, as the code and the GUID table have it: \"EFI_PEI_MEMORY_DISCOVERED_PPI\"."),
+                        "name": AgentSchema.string("The GUID registry's name for it (`guid_registry`): \"gEfiPeiMemoryDiscoveredPpiGuid\"."),
                         "kind": AgentSchema.choice(["ppi", "protocol"], "A PPI or a protocol."),
                         "address": AgentSchema.string("Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it."),
                         "condition": AgentSchema.string("`always`, or when it happens: \"only on S3 resume\", \"only in recovery\"."),

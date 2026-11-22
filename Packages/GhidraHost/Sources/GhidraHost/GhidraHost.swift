@@ -417,6 +417,9 @@ public actor GhidraHost {
         defer { writesRunning[module, default: 1] -= 1 }
         let project = self.project(module)
         let record = try await owner(of: module)
+        if path == "/v1/set/interfaces" || path == "/v1/set/data" {
+            try await checkGuidNames(path, body: body, port: record.port)
+        }
         let held = leases[module] != nil
         if !held { await keepLeaseBaseline(module, record) }
         var token = try await lease(module, record)

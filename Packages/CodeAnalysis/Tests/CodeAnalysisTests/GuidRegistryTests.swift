@@ -162,6 +162,32 @@ final class GuidRegistryTests: XCTestCase {
         XCTAssertTrue(try store.guidRegistry().entries.isEmpty)
     }
 
+    // MARK: - Records against the registry
+
+    func testARecordReadsUnderTheRegistrysNamesAndAMisnamedEntryIsFound() throws {
+        let memory = "F894643D-C449-42D1-8EA8-85BDD8C65BDE"
+        let unknown = "11111111-2222-3333-4444-555555555555"
+        let record = ModuleInterfaces(installs: [interface(reset, "AMD_FACTORY_RESET_PPI")],
+                                      locates: [interface(memory, "gEfiPeiMemoryDiscoveredPpiGuid"),
+                                                interface(unknown, "gSomethingPpiGuid")],
+                                      notifies: nil)
+        XCTAssertTrue(record.misnamed(by: GuidRegistry()).isEmpty, "a store never seeded checks nothing")
+        _ = try store.offerGuids([
+            GuidOffer(guid: memory, name: "gEfiPeiMemoryDiscoveredPpiGuid", kind: .ppi,
+                      source: .edk2(tag: "t", file: "MdePkg/MdePkg.dec:1")),
+            offer("gAmdFactoryResetPpiGuid")
+        ], by: "seed")
+        let registry = try store.guidRegistry()
+        let named = record.named(by: registry)
+        XCTAssertEqual(named.installs?.first?.name, "gAmdFactoryResetPpiGuid")
+        XCTAssertEqual(named.locates?.map(\.name), ["gEfiPeiMemoryDiscoveredPpiGuid", "gSomethingPpiGuid"])
+        XCTAssertNil(named.notifies)
+        let wrong = record.misnamed(by: registry)
+        XCTAssertEqual(wrong.map(\.guid), [reset, unknown])
+        XCTAssertTrue(wrong[0].why.contains("gAmdFactoryResetPpiGuid"), wrong[0].why)
+        XCTAssertTrue(wrong[1].why.contains("ghidra_guid_add"), wrong[1].why)
+    }
+
     // MARK: - The seed
 
     private func record(_ module: SHA256Digest, _ entries: [ModuleInterfaces.Interface]) throws {

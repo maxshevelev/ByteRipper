@@ -343,6 +343,7 @@ public class Owner {
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
                 if (path.equals("/v1/interfaces")) { json(exchange, 200, interfaces()); return; }
+                if (path.equals("/v1/guid-at")) { json(exchange, 200, guidAt(query)); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
                 if (path.equals("/v1/types")) { json(exchange, 200, types(query)); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
@@ -1781,6 +1782,35 @@ public class Owner {
 
     private Instruction constantInRegister(Instruction call, Function function) {
         return ExportCode.constantInRegister(program, call, function);
+    }
+
+    /**
+     * The 16 bytes at `address` read as an EFI_GUID, `8-4-4-4-12`, and the
+     * type of the datum defined there, if any: what the host checks a name
+     * given to a GUID against the GUID registry with. `guid` is absent where
+     * the image has no 16 initialized bytes.
+     */
+    private JsonObject guidAt(Map<String, String> query) throws Failure {
+        Address at = address(query.getOrDefault("address", ""));
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(at));
+        Data datum = program.getListing().getDefinedDataAt(at);
+        if (datum != null) answer.addProperty("datum_type", datum.getDataType().getDisplayName());
+        byte[] raw = new byte[16];
+        try {
+            if (program.getMemory().getBytes(at, raw) != 16) return answer;
+        } catch (ghidra.program.model.mem.MemoryAccessException | ghidra.program.model.address.AddressOutOfBoundsException e) {
+            return answer;
+        }
+        java.nio.ByteBuffer bytes = java.nio.ByteBuffer.wrap(raw).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        StringBuilder text = new StringBuilder(String.format("%08X-%04X-%04X-", bytes.getInt(0),
+                bytes.getShort(4) & 0xFFFF, bytes.getShort(6) & 0xFFFF));
+        for (int i = 8; i < 16; i++) {
+            if (i == 10) text.append('-');
+            text.append(String.format("%02X", raw[i] & 0xFF));
+        }
+        answer.addProperty("guid", text.toString());
+        return answer;
     }
 
     private JsonObject data(Map<String, String> query, boolean strings) throws Failure {
@@ -4995,7 +5025,7 @@ public class Owner {
         }
         String name = string(given, "name", "").trim();
         if (name.isEmpty() || !name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            throw new Failure(400, where + ": name is the GUID's C name, as EFI_PEI_MEMORY_DISCOVERED_PPI");
+            throw new Failure(400, where + ": name is the GUID registry's name for it, as gEfiPeiMemoryDiscoveredPpiGuid");
         }
         String kind = string(given, "kind", "");
         if (!kind.equals("ppi") && !kind.equals("protocol")) throw new Failure(400, where + ": kind is ppi or protocol");

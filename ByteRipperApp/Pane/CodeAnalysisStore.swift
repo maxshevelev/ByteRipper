@@ -13,6 +13,15 @@ enum CodeAnalysisStore {
         UEFIToolModule.codeAnalysisRoot ?? CodeAnalysisPaths.defaultRoot
     }
 
+    /// The store's GUID registry, read off the main actor; empty when the
+    /// store holds none.
+    static func guidRegistry(root: URL? = nil) async -> GuidRegistry {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) {
+            (try? ContentStore(root: root, create: false).guidRegistry()) ?? GuidRegistry()
+        }.value
+    }
+
     /// The artifact a manifest names, decoded off the main actor.
     static func artifact(for manifest: AnalysisManifest, root: URL? = nil) async -> CodeArtifact? {
         try? await analysisCode(for: manifest, root: root).get()

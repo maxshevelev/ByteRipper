@@ -192,9 +192,47 @@ final class CodePaneViewTests: XCTestCase {
         ])
         XCTAssertEqual(panel.groups.first?.symbol, "flowchart")
 
+        // The GUID registry names a GUID over the catalogue, and one the
+        // catalogue lacks.
+        var registry = GuidRegistry()
+        registry.entries[a] = GuidEntry(name: "gEfiPeiMemoryDiscoveredPpiGuid", kind: .ppi,
+                                        source: .edk2(tag: "t", file: "MdePkg/MdePkg.dec:1"), at: "")
+        registry.entries[c] = GuidEntry(name: "gAmdFactoryResetPpiGuid", kind: .ppi,
+                                        source: .edk2(tag: "t", file: "x.dec:1"), at: "")
+        view.guidRegistry = registry
+        XCTAssertEqual(panel.linesForTests[5], "      gAmdFactoryResetPpiGuid \(c)")
+
         view.dependencies = DependencyOutline.none
         XCTAssertEqual(Array(panel.linesForTests.prefix(2)), ["Dependency expression", "Installs"],
                        "a file with no expression: the group says none")
+    }
+
+    /// An interface the review recorded under another name reads under the
+    /// GUID registry's: the record is not rewritten, the tab names it as
+    /// every review does.
+    func testARecordedInterfaceReadsUnderTheRegistrysName() throws {
+        let guid = "9C98130A-8921-45EB-86F3-16041C6BB7AD"
+        var reading = AnalysisReading(project: "p", rev: 1)
+        reading.interfaces = ModuleInterfaces(
+            installs: [.init(guid: guid, name: "AMD_PSP_FTPM_PPI", kind: .ppi, address: "0x1000",
+                             condition: "always", purpose: "test")],
+            locates: [], notifies: [])
+        var described = manifest()
+        described.reading = reading
+        let view = CodePaneView(manifest: described, artifact: try artifact(), moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.showInterfacesTab(true)
+        XCTAssertTrue(view.interfacesPanel.linesForTests.contains { $0.contains("AMD_PSP_FTPM_PPI") },
+                      "\(view.interfacesPanel.linesForTests)")
+        var registry = GuidRegistry()
+        registry.entries[guid] = GuidEntry(name: "gAmdPspFtpmFactoryResetPpiGuid", kind: .ppi,
+                                           source: .review(module: SHA256Digest(data: Data("m".utf8)), address: "0x1"),
+                                           at: "")
+        view.guidRegistry = registry
+        let lines = view.interfacesPanel.linesForTests
+        XCTAssertTrue(lines.contains { $0.contains("gAmdPspFtpmFactoryResetPpiGuid") }, "\(lines)")
+        XCTAssertFalse(lines.contains { $0.contains("AMD_PSP_FTPM_PPI") }, "\(lines)")
     }
 
     /// An interface's place opens the call that supplies it, selected in

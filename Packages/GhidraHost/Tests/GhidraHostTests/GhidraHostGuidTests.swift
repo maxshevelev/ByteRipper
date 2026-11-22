@@ -71,4 +71,53 @@ final class GhidraHostGuidTests: XCTestCase {
             XCTAssertTrue(error.message.contains("gAmdFactoryResetPpiGuid"), error.message)
         }
     }
+
+    private func seededHost() throws -> (GhidraHost, ContentStore) {
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        _ = try store.offerGuid(GuidOffer(guid: guid, name: "gAmdFactoryResetPpiGuid", kind: .ppi,
+                                          source: .review(module: module, address: "0x100")), by: "seed")
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   holder: "local MCP"), writer: store)
+        return (host, store)
+    }
+
+    private func entry(_ guid: String, _ name: String) -> [String: Any] {
+        ["guid": guid, "name": name, "kind": "ppi", "address": "0x100", "condition": "always", "purpose": "p"]
+    }
+
+    /// An interface record names each GUID as the registry does; one under
+    /// another name, or one the registry lacks, refuses the whole call with
+    /// the registry's name. A store never seeded checks nothing.
+    func testAnInterfaceRecordIsRefusedUnlessItNamesGUIDsAsTheRegistryDoes() async throws {
+        let (host, _) = try seededHost()
+        let good = try JSONSerialization.data(withJSONObject: ["installs": [entry(guid, "gAmdFactoryResetPpiGuid")]])
+        try await host.checkGuidNames("/v1/set/interfaces", body: good, port: 0)
+        let wrong = try JSONSerialization.data(withJSONObject: ["installs": [entry(guid, "AMD_FACTORY_RESET_PPI")],
+                                                                "locates": [entry("11111111-2222-3333-4444-555555555555",
+                                                                                  "gOtherPpiGuid")]])
+        do {
+            try await host.checkGuidNames("/v1/set/interfaces", body: wrong, port: 0)
+            XCTFail("a misnamed record")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409)
+            XCTAssertTrue(error.message.contains("gAmdFactoryResetPpiGuid"), error.message)
+            XCTAssertTrue(error.message.contains("ghidra_guid_add"), error.message)
+        }
+        let empty = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("p2")),
+                               writer: try ContentStore(root: directory.appendingPathComponent("store2")))
+        try await empty.checkGuidNames("/v1/set/interfaces", body: wrong, port: 0)
+    }
+
+    /// `ghidra_interfaces` reads each entry under the registry's name, and
+    /// keeps what the review wrote as `recorded_name`.
+    func testTheRecordReadsUnderTheRegistrysName() async throws {
+        let (host, _) = try seededHost()
+        let read = try JSONSerialization.data(withJSONObject: [
+            "installs": [entry(guid, "AMD_FACTORY_RESET_PPI")], "unanswered": [String]()])
+        let named = await host.namedByGuidRegistry(read)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: named) as? [String: Any])
+        let first = try XCTUnwrap((object["installs"] as? [[String: Any]])?.first)
+        XCTAssertEqual(first["name"] as? String, "gAmdFactoryResetPpiGuid")
+        XCTAssertEqual(first["recorded_name"] as? String, "AMD_FACTORY_RESET_PPI")
+    }
 }

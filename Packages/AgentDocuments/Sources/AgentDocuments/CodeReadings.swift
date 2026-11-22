@@ -582,13 +582,14 @@ public final class CodeReadings {
             return (key, page, items.count, Array(items.dropFirst(page.first).prefix(limit)))
         }
         var listed: (key: String, page: AgentPage, total: Int, items: [JSONValue])?
+        let guids = await guidRegistry()
         var body: [String: JSONValue] = [
             "what": .string(what),
             "module": .string(source.manifest.module.name),
             "sha256": .string(source.manifest.module.sha256.hex),
             "recipe": .string(source.manifest.recipe.id),
             "origin": originItem(source.manifest.reading?.origin),
-            "interfaces": interfacesItem(source.manifest.reading?.interfaces)
+            "interfaces": interfacesItem(source.manifest.reading?.interfaces, guids: guids)
         ]
         if let document = source.document { body["document"] = .string(document) }
         if let node = source.node { body["node"] = .string(node) }
@@ -947,7 +948,8 @@ public final class CodeReadings {
                 return Data(bytes)
             }
         }.value
-        let catalogue = await self.catalogue()
+        let guids = await guidRegistry()
+        let catalogue = Self.catalogue(await self.catalogue(), overlaidBy: guids)
         let rows: [JSONValue] = found.keys.sorted { $0.path.lexicographicallyPrecedes($1.path) }.map { id in
             let manifest = found[id]!
             let recipes = index.manifests(for: manifest.module.sha256)
@@ -959,7 +961,7 @@ public final class CodeReadings {
                 "recipes": .array(recipes.map { .string($0.recipe.id) }),
                 "functions": .int(Int64(manifest.stats.functions)),
                 "origin": originItem(manifest.reading?.origin),
-                "interfaces": interfacesItem(manifest.reading?.interfaces)
+                "interfaces": interfacesItem(manifest.reading?.interfaces, guids: guids)
             ]
             // The dependency expression is the FFS file's, beside the image:
             // read from the dump for every module, reviewed or not.
@@ -993,20 +995,24 @@ private func originItem(_ origin: ModuleOrigin?) -> JSONValue {
 
 /// What the module installs, locates and is notified of, as its review
 /// recorded it: null while it has recorded none of it; a list null while the
-/// review has not answered it, `unanswered` naming those.
-private func interfacesItem(_ interfaces: ModuleInterfaces?) -> JSONValue {
+/// review has not answered it, `unanswered` naming those. Each entry is named
+/// as the GUID registry names its GUID, `recorded_name` keeping what the
+/// review wrote when that differs.
+private func interfacesItem(_ interfaces: ModuleInterfaces?, guids: GuidRegistry) -> JSONValue {
     guard let interfaces else { return .null }
     func entries(_ list: [ModuleInterfaces.Interface]?) -> JSONValue {
         guard let list else { return .null }
         return .array(list.map { entry in
+            let name = guids.name(of: entry.guid) ?? entry.name
             var item: [String: JSONValue] = [
-                "guid": .string(entry.guid), "name": .string(entry.name), "kind": .string(entry.kind.rawValue),
+                "guid": .string(entry.guid), "name": .string(name), "kind": .string(entry.kind.rawValue),
                 "address": .string(entry.address), "condition": .string(entry.condition),
                 "purpose": .string(entry.purpose)
             ]
             if let method = entry.method { item["method"] = .string(method.rawValue) }
             if let required = entry.required { item["required"] = .bool(required) }
             if let callback = entry.callback { item["callback"] = .string(callback) }
+            if name != entry.name { item["recorded_name"] = .string(entry.name) }
             return .object(item)
         })
     }

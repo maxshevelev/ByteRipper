@@ -10,11 +10,13 @@ final class GhidraOwnerReadBackTests: XCTestCase {
     private var directory: URL!
     private var host: GhidraHost!
     private var module: SHA256Digest!
+    private var store: ContentStore!
 
     private func open(_ image: Data) async throws {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("GhidraOwnerReadBack-\(UUID().uuidString)", isDirectory: true)
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        self.store = store
         host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
                                                idle: 300, holder: "GhidraOwnerReadBackTests"),
                           writer: store)
@@ -1551,4 +1553,40 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         }
     }
 
+
+    /// A label on an `EFI_GUID` datum is the GUID registry's name for the
+    /// bytes there: another name is refused with the registry's, a GUID the
+    /// registry lacks is refused until it is added, the registry's name is
+    /// taken.
+    func testAGuidLabelIsCheckedAgainstTheRegistry() async throws {
+        try await open(try image())
+        let data = try await read("/v1/data?limit=5000")["data"] as? [[String: Any]] ?? []
+        let datum = try XCTUnwrap(data.first { ($0["type"] as? String) == "EFI_GUID" }, "no EFI_GUID datum")
+        let address = try XCTUnwrap(datum["address"] as? String)
+        let at = try await read("/v1/guid-at?address=\(address)")
+        let guid = try XCTUnwrap(at["guid"] as? String)
+        XCTAssertEqual(at["datum_type"] as? String, "EFI_GUID")
+
+        // A seeded registry that lacks this GUID.
+        _ = try store.offerGuid(GuidOffer(guid: "11111111-2222-3333-4444-555555555555", name: "gOtherPpiGuid",
+                                          kind: .ppi, source: .review(module: module, address: "0x1")), by: "seed")
+        do {
+            try await post("/v1/set/data", ["address": address, "name": "gTestPpiGuid"])
+            XCTFail("a GUID the registry lacks")
+        } catch let error as GhidraHostError {
+            XCTAssertTrue(error.message.contains("ghidra_guid_add"), error.message)
+        }
+        _ = try store.offerGuid(GuidOffer(guid: guid, name: "gTestPpiGuid", kind: .ppi,
+                                          source: .review(module: module, address: address)), by: "seed")
+        do {
+            try await post("/v1/set/data", ["address": address, "name": "gWrongPpiGuid", "type": "EFI_GUID"])
+            XCTFail("another name than the registry's")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409)
+            XCTAssertTrue(error.message.contains("gTestPpiGuid"), error.message)
+        }
+        try await post("/v1/set/data", ["address": address, "name": "gTestPpiGuid"])
+        let named = try await read("/v1/data?limit=5000")["data"] as? [[String: Any]] ?? []
+        XCTAssertEqual(named.first { ($0["address"] as? String) == address }?["name"] as? String, "gTestPpiGuid")
+    }
 }

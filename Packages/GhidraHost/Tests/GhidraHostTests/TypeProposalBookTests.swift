@@ -117,4 +117,17 @@ final class TypeProposalBookTests: XCTestCase {
         XCTAssertEqual(rejected.state, .rejected)
         await refused({ _ = try await book.force(other.id, agree: true, note: nil, by: "admin") }, "rejected already")
     }
+
+    /// An agreement is about the layout: a field comment written since the
+    /// vote leaves it standing, a changed field does not (issue 0e3e55f8).
+    func testAnAgreementIgnoresCommentsWrittenSinceTheVote() {
+        let voted = "typedef struct _P {\n    /* 0x00 */ UINT32 Unknown0;\n    /* 0x04 */ P_Read * Read;\n} /* size 0x8 */ P;"
+        let commented = "typedef struct _P {\n    /* 0x00 */ UINT32 Unknown0;\n    // the read slot\n"
+            + "    /* 0x04 */ P_Read * Read; // Read(This, Address, &Value). Proposal d8deb388.\n} /* size 0x8 */ P;"
+        let changed = voted.replacingOccurrences(of: "P_Read * Read", with: "UINT32 Unknown4")
+        XCTAssertTrue(GhidraHost.sameLayout(commented, voted))
+        XCTAssertFalse(GhidraHost.sameLayout(changed, voted))
+        XCTAssertTrue(GhidraHost.sameLayout(nil, nil))
+        XCTAssertFalse(GhidraHost.sameLayout(voted, nil))
+    }
 }

@@ -290,8 +290,9 @@ Names alone do not get there. Every review applies these rules:
    review found.
 8. **Its interfaces are recorded, not only described.** Every
    `InstallPpi`, `LocatePpi`, `NotifyPpi` and their protocol counterparts goes
-   into the interfaces record with `ghidra_set_interfaces`: the GUID, its name,
-   the address where the module supplies it, the condition, and its purpose —
+   into the interfaces record with `ghidra_set_interfaces`: the GUID, its name
+   as the GUID registry gives it (another name is refused; a GUID the registry
+   does not hold is added first with `ghidra_guid_add`), the address where the module supplies it, the condition, and its purpose —
    why the module needs it and what it gives. Each of the
    three lists is answered — an empty list when the module does none of it —
    and the review is not complete while one is unanswered. Find them all: the

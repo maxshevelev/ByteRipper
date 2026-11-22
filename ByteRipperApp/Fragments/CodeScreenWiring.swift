@@ -167,6 +167,12 @@ func wireCodeRevisions(_ codePane: CodePaneView,
                 revision, failure, onServer: CodeAnalysisLocation.shared.remote != nil) else { return }
         codePane?.showRevisionProblem(words)
     }
+    // The names every review gives a GUID, for the Interfaces tab.
+    Task { @MainActor in
+        let registry = await CodeAnalysisStore.guidRegistry()
+        guard codePane.readingGeneration == generation else { return }
+        codePane.guidRegistry = registry
+    }
     let history = Task { @MainActor in
         await codePane.whileWorking(L("Reading the module's revisions…")) {
             await CodeAnalysisStore.revisions(for: manifest)
