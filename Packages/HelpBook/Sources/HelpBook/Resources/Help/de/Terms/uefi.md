@@ -1,4 +1,4 @@
-@source-sha 501a1aabfdbcfae4ead982070aeea81bbec32ea35afd92c121b2faf645895f21
+@source-sha df69b1314b7cebd488456d6fe26317062f1ef1660080ddcc198f9914f33fa5c1
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -892,7 +892,7 @@ Der Rumpf ist ein Postfix-Ausdruck: `PUSH` einer GUID, dann verbinden `AND`, `OR
 
 Ein Modul installiert ein [[term:ppi|PPI]] mit `InstallPpi` und ersetzt ein früher installiertes mit `ReInstallPpi`; in DXE installiert es ein [[term:protocol|Protokoll]] mit `InstallProtocolInterface` oder `InstallMultipleProtocolInterfaces`. Ein installiertes Interface kann den [[term:depex|Abhängigkeitsausdruck]] der Module erfüllen, die darauf warten. Diese Liste zeigt daher, welchen Modulen dieses Modul den Start ermöglicht.
 
-Das Popover des Moduls nennt jedes Interface mit der Bedingung, unter der es installiert wird: **immer** oder ein besonderer Fall wie die Rückkehr aus S3 oder die Wiederherstellung. **installiert neu** kennzeichnet den Ersatz eines früher installierten Interfaces, **an den Kern übergeben** eine Liste, die dem Kern beim Start übergeben und nicht per Aufruf installiert wird. Startet ein Modul nicht, das starten sollte, ist zu prüfen, ob das Modul gelaufen ist, das das erwartete Interface installiert, und ob dessen Bedingung erfüllt war.
+Die Analyse erfasst zu jedem Interface die Bedingung, unter der es installiert wird: **immer** oder ein besonderer Fall wie die Rückkehr aus S3 oder die Wiederherstellung. **installiert neu** kennzeichnet den Ersatz eines früher installierten Interfaces, **an den Kern übergeben** eine Liste, die dem Kern beim Start übergeben und nicht per Aufruf installiert wird. Startet ein Modul nicht, das starten sollte, ist zu prüfen, ob das Modul gelaufen ist, das das erwartete Interface installiert, und ob dessen Bedingung erfüllt war.
 
 @see term:module-locates
 @see term:module-notified-of
@@ -904,7 +904,7 @@ Das Popover des Moduls nennt jedes Interface mit der Bedingung, unter der es ins
 
 Ein Modul fordert ein Interface mit `LocatePpi` an, in DXE mit `LocateProtocol` oder `HandleProtocol`. Ein Interface, das der [[term:depex|Abhängigkeitsausdruck]] verlangt, ist vor dem Start des Moduls installiert; ein Interface, das das Modul nur sucht, kann fehlen, und das Modul entscheidet dann selbst, wie es weitergeht.
 
-Das Popover des Moduls kennzeichnet eine Suche als **erforderlich**, wenn das Modul ohne das Interface anhält oder mit einem Fehler endet, und als **optional**, wenn es ohne das Interface weiterarbeitet. Eine fehlgeschlagene erforderliche Suche ist ein häufiger Grund dafür, dass ein Modul startet, aber kein sichtbares Ergebnis liefert.
+Die Analyse kennzeichnet eine Suche als **erforderlich**, wenn das Modul ohne das Interface anhält oder mit einem Fehler endet, und als **optional**, wenn es ohne das Interface weiterarbeitet. Eine fehlgeschlagene erforderliche Suche ist ein häufiger Grund dafür, dass ein Modul startet, aber kein sichtbares Ergebnis liefert.
 
 @see term:module-installs
 @see term:module-notified-of
@@ -916,7 +916,7 @@ Das Popover des Moduls kennzeichnet eine Suche als **erforderlich**, wenn das Mo
 
 Ein Modul registriert eine Rückruffunktion mit `NotifyPpi`, in DXE mit `RegisterProtocolNotify` oder einem Benachrichtigungsereignis, und der Kern ruft sie auf, sobald ein anderes Modul dieses Interface installiert. Ein Teil der Arbeit des Moduls geschieht daher nicht beim Start, sondern in dem Augenblick, in dem das Interface erscheint: nach dem Erkennen des Speichers, am Ende von PEI, wenn die Konsole bereit ist.
 
-Das Popover des Moduls nennt jedes Interface mit der Bedingung, unter der sich das Modul dafür registriert. Wird das Interface nie installiert, unterbleibt dieser Teil der Arbeit des Moduls.
+Die Analyse erfasst zu jedem Interface die Bedingung, unter der sich das Modul dafür registriert. Wird das Interface nie installiert, unterbleibt dieser Teil der Arbeit des Moduls.
 
 @see term:module-installs
 @see term:module-locates
