@@ -210,7 +210,7 @@ extension PaneToolHost: CodePartOpening {
     func openCode(named name: String, linkedTo source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
                   recipes: [AnalysisManifest], codec: any PartCodec,
-                  dependencies: String?, at location: CodeLocation?) {
+                  dependencies: DependencyOutline?, at location: CodeLocation?) {
         guard let pane, let owner else { return }
         owner.openCode(named: name, from: pane, source: source,
                        manifest: manifest, artifact: artifact,

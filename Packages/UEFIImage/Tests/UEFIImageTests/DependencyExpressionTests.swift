@@ -36,6 +36,21 @@ final class DependencyExpressionTests: XCTestCase {
         XCTAssertFalse(expression.isNever)
     }
 
+    /// The outline a reader takes in: a chain of ANDs is one list of
+    /// conditions, an OR under it a group of its own, flattened as well.
+    func testTheConditionsAreAListWithAChoiceAsAGroup() {
+        let d = EFIGUID("44444444-4444-4444-4444-444444444444")!
+        let expression = DependencyExpression(
+            kind: .pei, bytes: bytes([pushed(a), pushed(b), [and], pushed(c), pushed(d), [or],
+                                      pushed(a), [or], [and], [end]]))
+        XCTAssertEqual(expression.conditions, [.guid(a), .guid(b), .anyOf([.guid(c), .guid(d), .guid(a)])])
+        XCTAssertEqual(DependencyExpression(kind: .pei, bytes: [always, end]).conditions, [.always])
+        XCTAssertEqual(DependencyExpression(kind: .pei, bytes: bytes([pushed(a), [not], [end]])).conditions,
+                       [.not(.guid(a))])
+        XCTAssertNil(DependencyExpression(kind: .pei, bytes: bytes([pushed(a), [and], [end]])).conditions,
+                     "one that does not read has none")
+    }
+
     func testOrNeedsParenthesesUnderAnd() {
         let expression = DependencyExpression(
             kind: .pei, bytes: bytes([pushed(a), pushed(b), [or], pushed(c), [and], [end]]))

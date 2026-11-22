@@ -3,6 +3,7 @@ import CodeAnalysis
 import CodeView
 import Localization
 import PartCodec
+import ToolModuleKit
 
 /// The tab as a module's code screen (`Design/CODE_PANEL_PLAN.md`): opening
 /// one, drawing it in single-file mode, leaving it for a comparison or another
@@ -217,7 +218,7 @@ extension MainViewController {
     func openCode(named name: String, from pane: PaneViewModel, source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
                   recipes: [AnalysisManifest] = [], codec: any PartCodec,
-                  dependencies: String? = nil,
+                  dependencies: DependencyOutline? = nil,
                   at location: CodeLocation? = nil) -> FragmentDock.PanelID? {
         if let open = fragments.codePanel(module: manifest.module.sha256, over: pane) {
             fragments.expand(open)

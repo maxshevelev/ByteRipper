@@ -1,6 +1,7 @@
 import CodeAnalysis
 import CodeView
 import Foundation
+import ToolModuleKit
 
 /// What a fragment panel is, apart from the surface that draws it.
 ///
@@ -59,7 +60,7 @@ struct CodeScreen {
     /// The module's dependency expression, read from its firmware file when
     /// the panel was opened from the UEFI tree; nil when it was not. Not
     /// written to a workspace: a panel restored without it shows no DEPEX.
-    var dependencies: String?
+    var dependencies: DependencyOutline?
     /// The functions still marked New, each with what it is compared against.
     /// They are the panel's, as its place is, and go wherever it is shown.
     var newMarks: [CodePaneView.NewMark] = []

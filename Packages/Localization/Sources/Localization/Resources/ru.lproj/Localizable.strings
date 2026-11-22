@@ -1806,6 +1806,11 @@
 
 "Dependencies" = "Зависимости";
 "Dependency expression" = "Выражение зависимостей";
+"One of" = "Одно из";
+"All of" = "Все из";
+"TRUE: the module waits for nothing" = "TRUE: модуль ничего не ожидает";
+"FALSE: the module is never started" = "FALSE: модуль никогда не запускается";
+"The expression in the file cannot be read." = "Выражение в файле не читается.";
 "Dependency problem" = "Ошибка в выражении зависимостей";
 "Not a valid expression" = "Недопустимое выражение";
 "Unknown dependency operation %1$@ at %2$@." = "Неизвестная операция выражения зависимостей: %1$@, адрес %2$@.";

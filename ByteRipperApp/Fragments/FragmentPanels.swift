@@ -194,7 +194,7 @@ import ToolModuleKit
     @discardableResult
     func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  recipes: [AnalysisManifest] = [], dependencies: String? = nil,
+                  recipes: [AnalysisManifest] = [], dependencies: DependencyOutline? = nil,
                   at location: CodeLocation? = nil,
                   animated: Bool = true) -> FragmentDock.PanelID? {
         // A place to open at is the screen's first function and instruction,

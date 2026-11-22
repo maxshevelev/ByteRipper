@@ -2334,7 +2334,7 @@ private struct ChecksumPass: Sendable {
             return
         }
         let preferred = codeAnalysisManifests[nodeID]
-        let dependencies = Self.dependencyText(ofModule: nodeID, in: tree, names: guids)
+        let dependencies = Self.dependencyOutline(ofModule: nodeID, in: tree, names: guids)
         open(Task {
             try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: UEFIToolModule.codeAnalysisRoot,
                                               preferred: preferred)
@@ -2360,7 +2360,7 @@ private struct ChecksumPass: Sendable {
                 .map { $0.displayName(in: Localization.appLanguage) } ?? ""
             : manifest.module.name
         let popover = controller.showModuleSummary(name: name, beside: view)
-        let dependencies = Self.dependencyText(ofModule: nodeID, in: tree, names: guids)
+        let dependencies = Self.dependencyOutline(ofModule: nodeID, in: tree, names: guids)
         let index = codeAnalysisIndex
         Task { [weak self, weak popover] in
             let text = await Task.detached(priority: .userInitiated) { () -> String? in
@@ -2390,21 +2390,40 @@ private struct ChecksumPass: Sendable {
     /// The dependency expression of the FFS file holding image `nodeID`, as
     /// text with the GUIDs named; "" where the file has none, nil where the
     /// image sits in no file.
-    static func dependencyText(ofModule nodeID: NodeID, in tree: LazyUEFITree,
-                                           names: GuidsCatalogue) -> String? {
+    static func dependencyOutline(ofModule nodeID: NodeID, in tree: LazyUEFITree,
+                                  names: GuidsCatalogue) -> DependencyOutline? {
         let image = tree.image()
         guard let file = UEFITreeMarks.moduleFile(of: nodeID, in: image), let node = image.node(file) else { return nil }
         guard let section = UEFIAgentQueries.dependencySection(of: node), let type = section.subtype,
               let kind = DependencyExpression.Kind(sectionType: type),
               let reader = tree.spaceReaders.reader(for: section.space),
-              let bytes = reader.bytes(section.body) else { return "" }
-        return DependencyExpression(kind: kind, bytes: bytes).text(name: { names.name(of: $0) }) ?? ""
+              let bytes = reader.bytes(section.body) else { return DependencyOutline.none }
+        return outline(of: DependencyExpression(kind: kind, bytes: bytes), names: names)
+    }
+
+    /// The expression for the code panel: each GUID with its name, a choice
+    /// as a group of its own.
+    static func outline(of expression: DependencyExpression, names: GuidsCatalogue) -> DependencyOutline {
+        func convert(_ condition: DependencyExpression.Condition) -> DependencyOutline.Condition {
+            switch condition {
+            case .guid(let guid): .interface(guid: guid.description, name: names.name(of: guid))
+            case .not(let operand): .not(convert(operand))
+            case .allOf(let list): .allOf(list.map(convert))
+            case .anyOf(let list): .anyOf(list.map(convert))
+            case .always: .always
+            case .never: .never
+            }
+        }
+        guard let conditions = expression.conditions, !expression.isMalformed else {
+            return DependencyOutline(conditions: [], prefix: expression.dispatchPrefix?.name, unreadable: true)
+        }
+        return DependencyOutline(conditions: conditions.map(convert), prefix: expression.dispatchPrefix?.name)
     }
 
     /// Opens the code `opening` makes ready, busy until the panel opens: the
     /// bytes are quick, the artifact is not — a large DXE driver's is ten
     /// megabytes of JSON.
-    private func open(_ opening: Task<UEFICodeOpening, Error>, dependencies: String?, at location: CodeLocation?) {
+    private func open(_ opening: Task<UEFICodeOpening, Error>, dependencies: DependencyOutline?, at location: CodeLocation?) {
         controller.showBusy()
         Task { [weak self] in
             defer { self?.controller.endBusy() }
@@ -2424,7 +2443,7 @@ private struct ChecksumPass: Sendable {
     public var moduleSummaryPopover: ToolPanelModuleSummaryPopover? { controller.moduleSummaryPopover }
 
     /// Opens the code panel on `opening`, already loaded.
-    private func present(_ opening: UEFICodeOpening, dependencies: String?, at location: CodeLocation?) {
+    private func present(_ opening: UEFICodeOpening, dependencies: DependencyOutline?, at location: CodeLocation?) {
         guard let opener = host as? any CodePartOpening else {
             fail(L("The code panel is not available."))
             return

@@ -135,7 +135,8 @@ final class CodePaneViewTests: XCTestCase {
                                 moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
         view.layoutSubtreeIfNeeded()
-        view.dependencies = "gEfiPeiMemoryDiscoveredPpiGuid"
+        view.dependencies = DependencyOutline(conditions: [
+            .interface(guid: "F894643D-C449-42D1-8EA8-85BDD8C65BDE", name: "gEfiPeiMemoryDiscoveredPpiGuid")])
         view.showInterfacesTab(true)
         let showsC = view.showsDecompiledC
         let generation = view.readingGeneration
@@ -158,9 +159,10 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     /// The module's dependency expression, read from its firmware file, is
-    /// the tab's first group, before the review's lists, as the (i) in the
-    /// UEFI tree showed it; a file with none says so, and a panel not opened
-    /// from a firmware tree has no such group.
+    /// the tab's first group, before the review's lists: each condition a
+    /// row with the interface's name and GUID, a choice a level of its own
+    /// with its alternatives under it, open. A file with none says so, and a
+    /// panel not opened from a firmware tree has no such group.
     func testTheInterfacesTabShowsTheDependencyExpression() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
@@ -170,15 +172,27 @@ final class CodePaneViewTests: XCTestCase {
         let panel = view.interfacesPanel
         XCTAssertEqual(panel.linesForTests.first, "Installs", "no file, no expression")
 
-        view.dependencies = "gEfiPeiMemoryDiscoveredPpiGuid AND gEfiPeiReadOnlyVariable2PpiGuid"
-        XCTAssertEqual(Array(panel.linesForTests.prefix(3)), [
+        let a = "11111111-1111-1111-1111-111111111111", b = "22222222-2222-2222-2222-222222222222"
+        let c = "33333333-3333-3333-3333-333333333333", d = "44444444-4444-4444-4444-444444444444"
+        view.dependencies = DependencyOutline(conditions: [
+            .interface(guid: a, name: "gEfiPeiMemoryDiscoveredPpiGuid"),
+            .anyOf([.interface(guid: b, name: "gEfiPeiReadOnlyVariable2PpiGuid"),
+                    .allOf([.interface(guid: c, name: nil),
+                            .not(.interface(guid: d, name: "gEfiPeiBootInRecoveryModePpiGuid"))])])
+        ])
+        XCTAssertEqual(Array(panel.linesForTests.prefix(8)), [
             "Dependency expression",
-            "    gEfiPeiMemoryDiscoveredPpiGuid AND gEfiPeiReadOnlyVariable2PpiGuid",
+            "  gEfiPeiMemoryDiscoveredPpiGuid \(a)",
+            "  One of",
+            "    gEfiPeiReadOnlyVariable2PpiGuid \(b)",
+            "    All of",
+            "      \(c)",
+            "      NOT gEfiPeiBootInRecoveryModePpiGuid \(d)",
             "Installs"
         ])
         XCTAssertEqual(panel.groups.first?.symbol, "flowchart")
 
-        view.dependencies = ""
+        view.dependencies = DependencyOutline.none
         XCTAssertEqual(Array(panel.linesForTests.prefix(2)), ["Dependency expression", "Installs"],
                        "a file with no expression: the group says none")
     }

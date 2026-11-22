@@ -2681,7 +2681,7 @@ import ToolModuleKit
     /// dump, the GUIDs named: "" when the file has none, nil when the panel
     /// was not opened from a firmware tree. The tab shows it before the
     /// review's lists, as the module's (i) in the UEFI tree once did.
-    public var dependencies: String? {
+    public var dependencies: DependencyOutline? {
         didSet { if dependencies != oldValue { drawInterfaces() } }
     }
 

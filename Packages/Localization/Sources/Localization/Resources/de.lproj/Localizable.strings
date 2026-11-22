@@ -1806,6 +1806,11 @@
 
 "Dependencies" = "Abhängigkeiten";
 "Dependency expression" = "Abhängigkeitsausdruck";
+"One of" = "Eines von";
+"All of" = "Alle von";
+"TRUE: the module waits for nothing" = "TRUE: Das Modul wartet auf nichts";
+"FALSE: the module is never started" = "FALSE: Das Modul wird nie gestartet";
+"The expression in the file cannot be read." = "Der Ausdruck in der Datei kann nicht gelesen werden.";
 "Dependency problem" = "Fehler im Abhängigkeitsausdruck";
 "Not a valid expression" = "Kein gültiger Ausdruck";
 "Unknown dependency operation %1$@ at %2$@." = "Unbekannte Operation im Abhängigkeitsausdruck: %1$@ bei %2$@.";

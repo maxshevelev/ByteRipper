@@ -23,19 +23,33 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let help: HelpLink
         /// Nil while the review has not answered the list.
         let entries: [EntryItem]?
-        /// Text under the group itself, in place of interfaces: the
-        /// dependency expression. Nil for the review's lists.
-        let lines: [DetailItem]?
-        init(title: String, symbol: String, help: HelpLink, entries: [EntryItem]?, lines: [DetailItem]? = nil) {
+        /// The dependency expression's conditions, in place of interfaces.
+        /// Nil for the review's lists.
+        let conditions: [ConditionItem]?
+        init(title: String, symbol: String, help: HelpLink, entries: [EntryItem]?,
+             conditions: [ConditionItem]? = nil) {
             self.title = title
             self.symbol = symbol
             self.help = help
             self.entries = entries
-            self.lines = lines
+            self.conditions = conditions
         }
 
         /// Rows under it.
-        var children: [Any] { lines ?? entries ?? [] }
+        var children: [Any] { conditions ?? entries ?? [] }
+    }
+
+    /// A row of the dependency expression: one condition — an interface by
+    /// its name and GUID — or a group of them, a choice (`One of`) or what
+    /// must all hold inside one, with its conditions a level under it.
+    final class ConditionItem {
+        let text: NSAttributedString
+        let children: [ConditionItem]
+        init(text: NSAttributedString, children: [ConditionItem] = []) {
+            self.text = text
+            self.children = children
+        }
+        var isGroup: Bool { !children.isEmpty }
     }
 
     /// One interface: a row of the second level.
@@ -136,11 +150,15 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// Shows a module's record. `place` names the code an address is in —
     /// the function, and the offset into it — or nil where the artifact has
     /// no instruction there.
-    func show(_ interfaces: ModuleInterfaces?, dependencies: String? = nil, place: (CodeAddress) -> String?) {
+    func show(_ interfaces: ModuleInterfaces?, dependencies: DependencyOutline? = nil, place: (CodeAddress) -> String?) {
         groups = Self.groups(of: interfaces, dependencies: dependencies, place: place)
         outline.reloadData()
         // The kinds open; each interface closed, its name and marks a line.
         for group in groups { outline.expandItem(group) }
+        // The expression open whole, its choices too.
+        for condition in groups.flatMap({ $0.conditions ?? [] }) where condition.isGroup {
+            outline.expandItem(condition, expandChildren: true)
+        }
         summaryLabel.stringValue = Self.summary(of: interfaces)
     }
 
@@ -154,7 +172,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         return count == 1 ? L("1 interface") : L("%1$@ interfaces", String(count))
     }
 
-    static func groups(of interfaces: ModuleInterfaces?, dependencies: String? = nil,
+    static func groups(of interfaces: ModuleInterfaces?, dependencies: DependencyOutline? = nil,
                        place: (CodeAddress) -> String?) -> [GroupItem] {
         func entries(_ list: [ModuleInterfaces.Interface]?,
                      marks: (ModuleInterfaces.Interface) -> [String]) -> [EntryItem]? {
@@ -164,12 +182,9 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         // firmware file: the PPIs or protocols it waits for, by name.
         var depex: [GroupItem] = []
         if let dependencies {
-            let text = NSAttributedString(string: dependencies, attributes: [
-                .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
-            ])
             depex.append(GroupItem(title: L("Dependency expression"), symbol: "flowchart",
                                    help: .term(HelpTermID("depex")), entries: nil,
-                                   lines: dependencies.isEmpty ? [] : [DetailItem(text: text)]))
+                                   conditions: conditionItems(of: dependencies)))
         }
         return depex + [
             GroupItem(title: L("Installs"), symbol: "square.and.arrow.up",
@@ -190,6 +205,61 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
                       help: .term(HelpTermID("module-notified-of")),
                       entries: entries(interfaces?.notifies) { _ in [] })
         ]
+    }
+
+    /// The rows of a dependency expression: what must all hold, one row
+    /// each — the interface's name and its GUID — and a choice as a row of
+    /// its own with its alternatives under it.
+    static func conditionItems(of outline: DependencyOutline) -> [ConditionItem] {
+        let plain: [NSAttributedString.Key: Any] = [
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
+        ]
+        let quiet: [NSAttributedString.Key: Any] = [
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        let mono: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: CodePaneView.navigatorSize - 1, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        func line(_ words: String, _ attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+            NSAttributedString(string: words, attributes: attributes)
+        }
+        func interface(_ guid: String, _ name: String?, negated: Bool) -> NSAttributedString {
+            let text = NSMutableAttributedString()
+            // NOT and the opcodes are the format's words, as ASM and C are.
+            if negated { text.append(line("NOT ", quiet)) }
+            if let name {
+                text.append(line(name, plain))
+                text.append(line(" " + guid, mono))
+            } else {
+                text.append(line(guid, plain))
+            }
+            return text
+        }
+        func item(_ condition: DependencyOutline.Condition) -> ConditionItem {
+            switch condition {
+            case .interface(let guid, let name):
+                return ConditionItem(text: interface(guid, name, negated: false))
+            case .not(.interface(let guid, let name)):
+                return ConditionItem(text: interface(guid, name, negated: true))
+            case .not(let operand):
+                return ConditionItem(text: line("NOT", quiet), children: [item(operand)])
+            case .anyOf(let list):
+                return ConditionItem(text: line(L("One of"), quiet), children: list.map(item))
+            case .allOf(let list):
+                return ConditionItem(text: line(L("All of"), quiet), children: list.map(item))
+            case .always:
+                return ConditionItem(text: line(L("TRUE: the module waits for nothing"), plain))
+            case .never:
+                return ConditionItem(text: line(L("FALSE: the module is never started"), plain))
+            }
+        }
+        var rows: [ConditionItem] = []
+        if let prefix = outline.prefix { rows.append(ConditionItem(text: line(prefix, plain))) }
+        if outline.unreadable {
+            rows.append(ConditionItem(text: line(L("The expression in the file cannot be read."), quiet)))
+        }
+        return rows + outline.conditions.map(item)
     }
 
     /// The rows under an interface: why, when, what it is, and where.
@@ -237,17 +307,20 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         if item == nil { return groups.count }
         if let group = item as? GroupItem { return group.children.count }
+        if let condition = item as? ConditionItem { return condition.children.count }
         return (item as? EntryItem)?.details.count ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
         if item == nil { return groups[index] }
         if let group = item as? GroupItem { return group.children[index] }
+        if let condition = item as? ConditionItem { return condition.children[index] }
         return (item as! EntryItem).details[index]
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
         if let group = item as? GroupItem { return !group.children.isEmpty }
+        if let condition = item as? ConditionItem { return condition.isGroup }
         return item is EntryItem
     }
 
@@ -260,10 +333,20 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         let row = CodePaneView.navigatorRowHeight
-        guard let detail = item as? DetailItem else { return row }
+        let text: NSAttributedString
+        let inset: CGFloat
+        if let detail = item as? DetailItem {
+            text = detail.text
+            inset = Self.detailInset
+        } else if let condition = item as? ConditionItem, !condition.isGroup {
+            text = condition.text
+            inset = Self.conditionInset(level: outlineView.level(forItem: condition))
+        } else {
+            return row
+        }
         let column = outlineView.numberOfColumns > 0 ? outlineView.rect(ofColumn: 0).width : outlineView.bounds.width
-        let width = max(40, column - Self.detailInset - Self.detailTrailing - 4)
-        let measured = detail.text.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
+        let width = max(40, column - inset - Self.detailTrailing - 4)
+        let measured = text.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
                                                 options: [.usesLineFragmentOrigin, .usesFontLeading]).height
         return max(row - 4, ceil(measured) + 2 * Self.detailPadding)
     }
@@ -272,8 +355,41 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
                      item: Any) -> NSView? {
         if let group = item as? GroupItem { return groupCell(group, in: outlineView) }
         if let entry = item as? EntryItem { return entryCell(entry, in: outlineView) }
+        if let condition = item as? ConditionItem {
+            let level = outlineView.level(forItem: condition)
+            if condition.isGroup { return conditionGroupCell(condition, level: level, in: outlineView) }
+            return textCell(condition.text, inset: Self.conditionInset(level: level), in: outlineView)
+        }
         guard let detail = item as? DetailItem else { return nil }
-        let id = NSUserInterfaceItemIdentifier("detail-\(CodePaneView.navigatorSize)")
+        return textCell(detail.text, inset: Self.detailInset, in: outlineView)
+    }
+
+    /// Where a condition's text starts at `level` of the tree: under its
+    /// group's name, past the room of a triangle, a level further in for each
+    /// group it is in.
+    static func conditionInset(level: Int) -> CGFloat {
+        entryInset + CGFloat(max(0, level - 1)) * CodeNavigatorCell.disclosureRoom
+            + CodeNavigatorCell.disclosureRoom
+    }
+
+    /// A choice or a set of conditions: a row with a triangle, its conditions under it.
+    private func conditionGroupCell(_ condition: ConditionItem, level: Int, in outlineView: NSOutlineView) -> NSView {
+        let id = NSUserInterfaceItemIdentifier("condition-group")
+        let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? CodeNavigatorCell
+            ?? CodeNavigatorCell(identifier: id)
+        cell.showsDisclosure(true)
+        cell.showsCalls(expandable: true, expanded: outlineView.isItemExpanded(condition))
+        cell.onToggle = { [weak self] in self?.toggle(condition) }
+        cell.showsIcon(nil)
+        cell.indent = Self.entryInset + CGFloat(max(0, level - 1)) * CodeNavigatorCell.disclosureRoom
+        cell.textField?.attributedStringValue = condition.text
+        return cell
+    }
+
+    /// A row of text that wraps, starting `inset` in: a detail of an
+    /// interface, or one condition of the dependency expression.
+    private func textCell(_ text: NSAttributedString, inset: CGFloat, in outlineView: NSOutlineView) -> NSView {
+        let id = NSUserInterfaceItemIdentifier("detail-\(CodePaneView.navigatorSize)-\(inset)")
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? NSTableCellView ?? {
             let cell = NSTableCellView()
             cell.identifier = id
@@ -285,13 +401,13 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             cell.addSubview(text)
             cell.textField = text
             NSLayoutConstraint.activate([
-                text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: Self.detailInset),
+                text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: inset),
                 text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -Self.detailTrailing),
                 text.topAnchor.constraint(equalTo: cell.topAnchor, constant: Self.detailPadding)
             ])
             return cell
         }()
-        (cell.textField as? InterfacesDetailField)?.show(detail.text)
+        (cell.textField as? InterfacesDetailField)?.show(text)
         return cell
     }
 
@@ -307,7 +423,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let line = NSMutableAttributedString(string: group.title, attributes: [
             .font: CodePaneView.navigatorBoldFont(), .foregroundColor: NSColor.labelColor
         ])
-        let detail: String = if let lines = group.lines { lines.isEmpty ? L("None") : "" } else {
+        let detail: String = if let conditions = group.conditions { conditions.isEmpty ? L("None") : "" } else {
             switch group.entries {
             case nil: L("Not recorded yet")
             case let list? where list.isEmpty: L("None")
@@ -387,7 +503,14 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         }
     }
 
-    func outlineViewItemDidExpand(_ notification: Notification) { redrawChevron(notification) }
+    func outlineViewItemDidExpand(_ notification: Notification) {
+        redrawChevron(notification)
+        // The expression opens whole: a choice is part of the condition, not
+        // a detail behind a second click.
+        if let group = notification.userInfo?["NSObject"] as? GroupItem, let conditions = group.conditions {
+            for condition in conditions where condition.isGroup { outline.expandItem(condition, expandChildren: true) }
+        }
+    }
     func outlineViewItemDidCollapse(_ notification: Notification) { redrawChevron(notification) }
 
     private func redrawChevron(_ notification: Notification) {
@@ -442,6 +565,8 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             case let group as GroupItem: group.title
             case let entry as EntryItem: "  " + entry.interface.name
             case let detail as DetailItem: "    " + detail.text.string
+            case let condition as ConditionItem:
+                String(repeating: "  ", count: outline.level(forItem: condition)) + condition.text.string
             default: nil
             }
         }

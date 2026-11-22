@@ -215,7 +215,7 @@ public extension ToolReadHost {
     func openCode(named name: String, linkedTo source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
                   recipes: [AnalysisManifest], codec: any PartCodec,
-                  dependencies: String?, at location: CodeLocation?)
+                  dependencies: DependencyOutline?, at location: CodeLocation?)
 }
 
 /// Bytes that do not change under the reader, from any thread.

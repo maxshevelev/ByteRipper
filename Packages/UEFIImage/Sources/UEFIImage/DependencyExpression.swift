@@ -309,6 +309,53 @@ public struct DependencyExpression: Equatable, Sendable {
         return "\(prefix.name) \(body)"
     }
 
+    /// The expression as a reader takes it in: what must all hold, a choice
+    /// as a group of its own. A chain of the same operator is one list —
+    /// `A AND B AND C` is three conditions, not a nest of pairs.
+    public indirect enum Condition: Equatable, Sendable {
+        case guid(EFIGUID)
+        case not(Condition)
+        /// Every one of these holds.
+        case allOf([Condition])
+        /// One of these, at least, holds.
+        case anyOf([Condition])
+        case always
+        case never
+    }
+
+    /// The conditions that must all hold, in the order the expression gives
+    /// them; nil when it does not read to one value. `TRUE` is `[.always]`.
+    public var conditions: [Condition]? {
+        guard let root else { return nil }
+        let condition = Self.condition(root)
+        if case .allOf(let list) = condition { return list }
+        return [condition]
+    }
+
+    /// `BEFORE`, `AFTER` or `SOR` ahead of the expression, in a DXE or MM
+    /// module; nil when there is none.
+    public var dispatchPrefix: Operation? { prefix }
+
+    private static func condition(_ expression: Expression) -> Condition {
+        switch expression {
+        case .guid(let guid): return .guid(guid)
+        case .constant(let value): return value ? .always : .never
+        case .not(let operand): return .not(condition(operand))
+        case .and(let left, let right):
+            return .allOf(flattened(left, right) { if case .allOf(let list) = $0 { return list }; return nil })
+        case .or(let left, let right):
+            return .anyOf(flattened(left, right) { if case .anyOf(let list) = $0 { return list }; return nil })
+        }
+    }
+
+    private static func flattened(_ left: Expression, _ right: Expression,
+                                  same: (Condition) -> [Condition]?) -> [Condition] {
+        [left, right].flatMap { part -> [Condition] in
+            let made = condition(part)
+            return same(made) ?? [made]
+        }
+    }
+
     // MARK: - The tree
 
     private indirect enum Expression: Equatable, Sendable {
