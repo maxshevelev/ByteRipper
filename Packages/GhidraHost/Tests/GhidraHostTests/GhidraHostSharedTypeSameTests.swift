@@ -65,4 +65,54 @@ final class GhidraHostSharedTypeSameTests: XCTestCase {
         XCTAssertEqual(after["same"] as? Bool, true, "\(after)")
         _ = try await host.publish(reader, by: "agent")
     }
+
+    /// `take_shared` of a structure whose member points at a function type
+    /// the review named (IDS_HOOK_ENTRY's `IDS_HOOK_FUNCTION *Hook`) leaves the
+    /// program as the shared archive has it: the member's type is not renamed
+    /// after the structure and the field, which is only for the parser's
+    /// `_func_N`.
+    func testTakingASharedStructureKeepsItsNamedMemberFunctionType() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count >= 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set to two modules")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostSharedTypeSame-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 300,
+                                                   holder: "GhidraHostSharedTypeSameTests"),
+                              writer: store)
+        let first = try Data(contentsOf: URL(fileURLWithPath: String(paths[0])))
+        let second = try Data(contentsOf: URL(fileURLWithPath: String(paths[1])))
+        let writer = SHA256Digest(data: first), reader = SHA256Digest(data: second)
+        _ = try await host.createCached(module: first, name: "Writer")
+        _ = try await host.createCached(module: second, name: "Reader")
+        defer { Task { await host.stop(writer); await host.stop(reader) } }
+        func type(_ module: SHA256Digest, _ body: [String: Any]) async throws -> [String: Any] {
+            try await host.take(module)
+            return try json(await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: body)))
+        }
+
+        // The function type in a call of its own, as a review defines one: a
+        // function definition, not a typedef of one.
+        _ = try await type(writer, ["c": "typedef unsigned int (EFIAPI PROBE_HOOK_FUNCTION)(unsigned int HookId, unsigned int Reserved0);"])
+        _ = try await type(writer, ["c": """
+            typedef struct _PROBE_HOOK_ENTRY { unsigned int HookId; PROBE_HOOK_FUNCTION *Hook; } PROBE_HOOK_ENTRY;
+            """])
+        _ = try await host.publish(writer, by: "agent")
+        let written = try json(await host.read(writer, "/v1/type?name=PROBE_HOOK_ENTRY"))
+        let sharedC = (written["shared"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(sharedC.contains("PROBE_HOOK_FUNCTION * Hook"), "\(written)")
+        // The reader's own copy has an inline member, named after the field.
+        _ = try await type(reader, ["c": """
+            typedef struct _PROBE_HOOK_ENTRY { unsigned int HookId; unsigned int (*Hook)(unsigned int HookId, unsigned int Reserved0); } PROBE_HOOK_ENTRY;
+            """])
+        let taken = try await type(reader, ["name": "PROBE_HOOK_ENTRY", "take_shared": true])
+        XCTAssertEqual(taken["taken_from_shared"] as? Bool, true, "\(taken)")
+        let after = try json(await host.read(reader, "/v1/type?name=PROBE_HOOK_ENTRY"))
+        let program = (after["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(program.contains("PROBE_HOOK_FUNCTION * Hook"), "\(after)")
+        XCTAssertEqual(after["same"] as? Bool, true, "\(after)")
+    }
 }

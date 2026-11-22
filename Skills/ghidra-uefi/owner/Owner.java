@@ -2771,6 +2771,13 @@ public class Owner {
             if (field == null || field.isEmpty()) continue;
             String wanted = memberStem(type) + "_" + field;
             if (wanted.equals(definition.getName())) continue;
+            // Only a name the review did not give is replaced: the parser's
+            // `_func_N` and its `.conflict` copies, and this member's own name
+            // as an older owner made it (after the tag, or a `.conflict` of
+            // it). A function type the review named — IDS_HOOK_FUNCTION, used
+            // as `IDS_HOOK_FUNCTION *Hook` — keeps its name, or taking the
+            // shared copy of the structure undoes itself.
+            if (!madeUpMemberName(definition.getName(), wanted)) continue;
             try {
                 ghidra.program.model.data.DataTypeManager manager = composite.getDataTypeManager();
                 DataType copied = definition.copy(manager);
@@ -2816,6 +2823,11 @@ public class Owner {
             }
         }
         return changed;
+    }
+
+    /** A member function type's name no review gave it: see `nameFunctionPointerMembers`. */
+    static boolean madeUpMemberName(String name, String wanted) {
+        return madeUpTypeName(name) || ("_" + wanted).equals(name);
     }
 
     /**

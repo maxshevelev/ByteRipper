@@ -521,6 +521,27 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// A function type the review named keeps its name in a member: only the
+    /// parser's `_func_N` is named after the structure and the field. Taking
+    /// the shared copy of such a structure (`take_shared`) must leave it as
+    /// the shared archive has it, not rename its member's type back.
+    func testANamedFunctionTypeInAMemberKeepsItsName() async throws {
+        try await open(try image())
+        _ = try await post("/v1/type", ["c": "typedef UINT32 (EFIAPI PROBE_HOOK_FUNCTION)(UINT32 HookId, UINT32 Reserved0, UINT32 Reserved1);"])
+        _ = try await post("/v1/type", ["c": """
+            typedef struct _PROBE_HOOK_ENTRY {
+              UINT32 HookId;
+              PROBE_HOOK_FUNCTION *Hook;
+              UINT32 (*Inline)(UINT32 Value);
+            } PROBE_HOOK_ENTRY;
+            """])
+        let entry = try await read("/v1/type?name=PROBE_HOOK_ENTRY")
+        let c = (entry["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("PROBE_HOOK_FUNCTION * Hook"), "\(entry)")
+        XCTAssertTrue(c.contains("PROBE_HOOK_ENTRY_Inline * Inline"), "\(entry)")
+        _ = try await release()
+    }
+
     /// Issue bab008b6: an EDK2 prototype in a member — `VOID`, `IN`, `OUT`,
     /// `OPTIONAL`, `EFIAPI` — parses as the signatures do; a comment keeps
     /// the words as they were written.
