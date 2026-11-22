@@ -217,9 +217,11 @@ extension MainViewController {
     func openCode(named name: String, from pane: PaneViewModel, source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
                   recipes: [AnalysisManifest] = [], codec: any PartCodec,
+                  dependencies: String? = nil,
                   at location: CodeLocation? = nil) -> FragmentDock.PanelID? {
         if let open = fragments.codePanel(module: manifest.module.sha256, over: pane) {
             fragments.expand(open)
+            if let dependencies { fragments.codePane(open)?.dependencies = dependencies }
             if let location, !location.isEmpty { fragments.codePane(open)?.go(to: location) }
             return open
         }
@@ -236,7 +238,7 @@ extension MainViewController {
             else { return nil }
             return fragments.openCode(bytes, named: name, origin: origin,
                                       manifest: manifest, artifact: artifact,
-                                      recipes: recipes, at: location)
+                                      recipes: recipes, dependencies: dependencies, at: location)
         } catch {
             let refusal = error as? PartRefusal
             presentAlert(title: refusal?.title.text ?? L("Those bytes could not be read."),

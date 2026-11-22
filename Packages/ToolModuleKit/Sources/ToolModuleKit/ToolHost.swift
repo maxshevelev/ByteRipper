@@ -209,11 +209,13 @@ public extension ToolReadHost {
 @MainActor public protocol CodePartOpening: AnyObject {
     /// Opens the panel at `location` — a function, an instruction — or, when
     /// a Code panel of the same module is already open over the same dump,
-    /// raises that one and goes there.
+    /// raises that one and goes there. `dependencies` is the module's
+    /// dependency expression, read from its firmware file with the GUIDs
+    /// named: "" when the file has none, nil when no file holds the module.
     func openCode(named name: String, linkedTo source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
                   recipes: [AnalysisManifest], codec: any PartCodec,
-                  at location: CodeLocation?)
+                  dependencies: String?, at location: CodeLocation?)
 }
 
 /// Bytes that do not change under the reader, from any thread.

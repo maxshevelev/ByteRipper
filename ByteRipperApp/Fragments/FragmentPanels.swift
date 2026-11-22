@@ -179,6 +179,7 @@ import ToolModuleKit
                                               showsC: code.showsC,
                                               topLines: code.topLines,
                                               recipes: code.recipes,
+                                              dependencies: code.dependencies,
                                               newMarks: code.newMarks,
                                               comparisons: code.comparisons,
                                               openCalls: code.openCalls,
@@ -193,7 +194,8 @@ import ToolModuleKit
     @discardableResult
     func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  recipes: [AnalysisManifest] = [], at location: CodeLocation? = nil,
+                  recipes: [AnalysisManifest] = [], dependencies: String? = nil,
+                  at location: CodeLocation? = nil,
                   animated: Bool = true) -> FragmentDock.PanelID? {
         // A place to open at is the screen's first function and instruction,
         // as a restored screen's would be.
@@ -203,7 +205,8 @@ import ToolModuleKit
                                      selectedFunction: place?.function,
                                      selectedInstruction: place?.line,
                                      place: location,
-                                     recipes: recipes),
+                                     recipes: recipes,
+                                     dependencies: dependencies),
                     animated: animated)
     }
 
@@ -241,6 +244,7 @@ import ToolModuleKit
             codePane = CodePaneView(manifest: code.manifest, artifact: code.artifact,
                                     moduleBytes: code.bytes, hexView: paneView,
                                     recipes: code.recipes)
+            codePane?.dependencies = code.dependencies
         } else {
             codePane = nil
         }
@@ -489,58 +493,49 @@ import ToolModuleKit
                                   place: screen.place,
                                   showsC: screen.showsC,
                                   topLines: screen.topLines,
-                                  recipes: recipes ?? screen.recipes)
+                                  recipes: recipes ?? screen.recipes,
+                                  dependencies: screen.dependencies,
+                                  search: screen.search)
             self.replaceCodeScreen(id, with: next)
             self.entries[id]?.codePane?.adoptHistory(history)
         }
     }
 
-    /// Puts a different code reading in the panel's existing surface. The
-    /// pane, its bytes, the dock and the panel's place stay where they are.
+    /// Puts a different code reading in the panel's code pane. Only the data
+    /// changes: the pane, its tab, its search, the dump beside it, the dock
+    /// and the panel's place stay where they are.
     private func replaceCodeScreen(_ id: FragmentDock.PanelID, with next: CodeScreen) {
-        guard let entry = entries[id], entry.codePane != nil else { return }
+        guard let entry = entries[id], let codePane = entry.codePane else { return }
         // What the panel holds as it stands now, not as it stood when the store
         // was asked: the marks the reader has not opened yet stay with it, or a
         // redraw of a reading that did not move would take them.
         var screen = next
-        screen.newMarks = entry.codePane?.newMarks ?? next.newMarks
-        screen.comparisons = entry.codePane?.keptComparisons ?? next.comparisons
-        screen.openCalls = entry.codePane?.openCallEntries ?? next.openCalls
-        let dumpVisible = entry.codePane?.isHexDumpVisible ?? true
-        let previous = entry.codePane?.artifact
+        screen.newMarks = codePane.newMarks
+        screen.comparisons = codePane.keptComparisons
+        screen.openCalls = codePane.openCallEntries
+        let previous = codePane.artifact
         let shown = entry.screen
-        let pane = entry.pane
-        let view = entry.paneView
-        let codePane = CodePaneView(manifest: screen.manifest, artifact: screen.artifact,
-                                    moduleBytes: screen.bytes, hexView: view,
-                                    recipes: screen.recipes)
-        codePane.onChooseRecipe = { [weak self] manifest in
-            self?.chooseRecipe(id, manifest: manifest)
-        }
+        codePane.adoptReading(manifest: screen.manifest,
+                              model: CodeModel(artifact: screen.artifact, moduleBytes: screen.bytes),
+                              recipes: screen.recipes)
         codePane.loadModuleDescription()
         host?.applyCodeNotes()
         // A later revision of the same reading: the functions it changed wear
         // New until opened. Another recipe is a different reading.
         var previousRevision: (revision: Int, artifact: CodeArtifact)?
-        if case .code(let before) = shown, let previous,
+        if case .code(let before) = shown,
            before.manifest.recipe.id == screen.manifest.recipe.id,
            let was = before.manifest.reading?.rev,
            let now = screen.manifest.reading?.rev, now > was {
             codePane.markRevisionChange(from: previous, revision: was)
             previousRevision = (was, previous)
         }
-        wireCodeScreen(codePane, to: pane, owner: host,
-                       previous: previousRevision) { [weak pane, weak host] range in
-            guard let pane else { return }
-            host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
-        }
-        entry.surface.setContent(codePane)
-        entry.codePane = codePane
+        // The rest of the seam — the selection, the notes, the dump — is the
+        // pane's and stays joined; the store's half is the reading's.
+        wireCodeRevisions(codePane, previous: previousRevision)
         entry.screen = .code(screen)
         presentCodeScreen(screen, on: codePane)
-        codePane.setHexDumpVisible(dumpVisible, animated: false)
         codePane.focusSelectedFunction()
-        entry.surface.view.layoutSubtreeIfNeeded()
         refreshDock()
     }
 

@@ -56,6 +56,10 @@ struct CodeScreen {
     /// or one entry means there is nothing to choose; the panel still has the
     /// chosen manifest.
     var recipes: [AnalysisManifest] = []
+    /// The module's dependency expression, read from its firmware file when
+    /// the panel was opened from the UEFI tree; nil when it was not. Not
+    /// written to a workspace: a panel restored without it shows no DEPEX.
+    var dependencies: String?
     /// The functions still marked New, each with what it is compared against.
     /// They are the panel's, as its place is, and go wherever it is shown.
     var newMarks: [CodePaneView.NewMark] = []

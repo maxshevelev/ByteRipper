@@ -35,8 +35,11 @@ import ToolModuleKit
         var view = CodeViewPosition()
     }
 
-    public let manifest: AnalysisManifest
+    public private(set) var manifest: AnalysisManifest
     public private(set) var artifact: CodeArtifact
+    /// Raised each time the pane takes another reading (`adoptReading`): a
+    /// read begun for the reading before compares it and lets its answer go.
+    public private(set) var readingGeneration = 0
     private var state: CodeReaderState
     private var model: CodeModel { state.model }
     /// Reads functions' code from the store, by entry, or every function for
@@ -57,7 +60,7 @@ import ToolModuleKit
                                        otherwise: (@MainActor () -> Void)?)] = []
     /// The readable analyses of the same module, the chosen one first. One
     /// entry is the ordinary case; more makes the header offer the others.
-    private let recipes: [AnalysisManifest]
+    private var recipes: [AnalysisManifest]
 
     private let functionTable = NSTableView()
     var functionTableForTests: NSTableView { functionTable }
@@ -365,6 +368,8 @@ import ToolModuleKit
     private let originBadge = ToolPanelOriginBadge()
     private var readinessSize: [NSLayoutConstraint] = []
     private var moduleLine: NSStackView?
+    /// The module line over the versions line.
+    private var moduleBlock: NSStackView?
     private var moduleStatus: NSView?
     private var revisionLabel: NSTextField?
     private let functionLabel = CodeTitleField(labelWithString: "")
@@ -430,17 +435,7 @@ import ToolModuleKit
         }
         self.state.showOnlyOpenWay(Self.defaults.bool(forKey: Self.onlyOpenWayKey))
         self.moduleHexView = hexView
-        // Every analysis newest first, as the agent lists them — the recipe
-        // id breaking a tie. The one shown keeps its place: a line where it
-        // is not on top says at once that a newer analysis exists.
-        var seen: Set<String> = []
-        self.recipes = ([manifest] + recipes)
-            .filter { seen.insert($0.recipe.id).inserted }
-            .sorted {
-                $0.analyzedAt == $1.analyzedAt
-                    ? $0.recipe.id < $1.recipe.id
-                    : $0.analyzedAt > $1.analyzedAt
-            }
+        self.recipes = Self.ordered(manifest, recipes)
         // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(labels: ["ASM", "C"], trackingMode: .selectOne,
                                          target: nil, action: nil)
@@ -462,6 +457,138 @@ import ToolModuleKit
 
     deinit {
         if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
+    }
+
+    /// Every analysis newest first, as the agent lists them — the recipe id
+    /// breaking a tie. The one shown keeps its place: a line where it is not
+    /// on top says at once that a newer analysis exists.
+    private static func ordered(_ manifest: AnalysisManifest,
+                                _ recipes: [AnalysisManifest]) -> [AnalysisManifest] {
+        var seen: Set<String> = []
+        return ([manifest] + recipes)
+            .filter { seen.insert($0.recipe.id).inserted }
+            .sorted {
+                $0.analyzedAt == $1.analyzedAt
+                    ? $0.recipe.id < $1.recipe.id
+                    : $0.analyzedAt > $1.analyzedAt
+            }
+    }
+
+    /// Another reading of the same module — a later revision, another
+    /// analysis — drawn in this pane. Only the data changes: the tab in
+    /// front, the list's order and filter, ASM or C, the description open or
+    /// not, the dump shown or hidden stay as the reader left them. What
+    /// belonged to the reading before — its revisions, marks, comparisons,
+    /// reads in flight, the place by its numbering — is let go; the caller
+    /// puts the place, the marks and the history back by address, as it does
+    /// for a pane it has just made.
+    public func adoptReading(manifest: AnalysisManifest, model: CodeModel, recipes: [AnalysisManifest]) {
+        // What is open over the old code is about the old code.
+        explanationPopover?.close()
+        explanationPopover = nil
+        functionPopover?.close()
+        functionPopover = nil
+        callersPopover?.close()
+        callersPopover = nil
+        pendingFunctionPopover?.cancel()
+        pendingFunctionPopover = nil
+        highlight(nil)
+        searchAllTask?.cancel()
+        searchAllTask = nil
+        descriptionRead?.cancel()
+        descriptionRead = nil
+
+        readingGeneration += 1
+        self.manifest = manifest
+        self.recipes = Self.ordered(manifest, recipes)
+        state = state.carried(to: model)
+        artifact = model.artifact
+
+        // The reads of the code.
+        functionsBeingRead = []
+        functionsNotRead = []
+        lastFunctionAsked = nil
+        waitingForFunctions = []
+        // What was drawn, by the old numbering.
+        history = []
+        historyIndex = -1
+        cLinks = []
+        shownCTokens = []
+        shownCSymbols = nil
+        drawnC = nil
+        drawnFunction = nil
+        cShift = 0
+        // The revisions and what the code was compared with.
+        revisionBaseline = nil
+        baselineReadFor = nil
+        drawnDiff = nil
+        diffFunction = nil
+        diffBaselineModel = nil
+        diffBaselineIndex = nil
+        revisionHasChanges = false
+        revisionChoices = []
+        changedByCurrentRevision = nil
+        hasRevisionHistory = false
+        comparisonRevision = nil
+        functionComparisons = [:]
+        previousRevision = nil
+        picksBeingRead = [:]
+        barProblems = [:]
+        analysisProblem = nil
+        unreadableFunction = nil
+        readRevisions = [:]
+        readOrder = []
+        revisionsBeingRead = []
+        // The description's comparison and mark.
+        descriptionChoice = nil
+        descriptionMark = nil
+        descriptionBaseline = nil
+        descriptionReads = [:]
+        descriptionBeingRead = nil
+        descriptionChangedByCurrentRevision = nil
+        searchedDescription = nil
+        // New marks and what the reader has seen: the app gives them again.
+        marksWereCleared = false
+        unopenedChanges = [:]
+        seen = [:]
+        seenLoaded = false
+        unrecorded = []
+        revisionsToSettle = []
+        // Whatever was under way was for the reading before.
+        worksUnderWay = []
+        revisionDownloads = [:]
+        recipeWork = nil
+        recipeSpinner.stopAnimation(nil)
+        recipeSpinner.isHidden = true
+        recipeLine.isEnabled = true
+        updateWorkLine()
+
+        drawReadingHeader()
+        indexNotes()
+        drawNavigator()
+        drawSelection()
+        applyMode()
+        resetHistory()
+        rebuildRevisionMenu()
+        updateProblemLine()
+        drawDescriptionButton()
+        drawDescriptionBadge()
+        if showsInterfacesTab { drawInterfaces() }
+    }
+
+    /// The navigator's head over a reading: the module, its revision, its
+    /// marks and the versions line.
+    private func drawReadingHeader() {
+        nameLabel?.stringValue = manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name
+        revisionLabel?.stringValue = manifest.reading.map { "(r\($0.rev))" } ?? ""
+        revisionLabel?.isHidden = manifest.reading == nil
+        drawModuleMarks()
+        guard let moduleBlock, moduleBlock.arrangedSubviews.count > 1 else { return }
+        moduleBlock.arrangedSubviews[1].removeFromSuperview()
+        recipeLine.removeFromSuperview()
+        recipeSpinner.removeFromSuperview()
+        if recipes.count <= 1 { recipeLine.setChoices([], chosen: nil) }
+        moduleBlock.insertArrangedSubview(recipes.count > 1 ? recipeMenu() : recipeVersions(), at: 1)
     }
 
     @available(*, unavailable)
@@ -699,9 +826,11 @@ import ToolModuleKit
         if let replaced = picksBeingRead[function] { endWork(replaced) }
         let pick = beginRevisionWork(revision)
         picksBeingRead[function] = pick
+        let generation = readingGeneration
         return Task { @MainActor [weak self] in
             let artifact = await read()
-            guard let self, self.picksBeingRead[function] == pick else { return }
+            guard let self, self.readingGeneration == generation,
+                  self.picksBeingRead[function] == pick else { return }
             self.picksBeingRead[function] = nil
             self.endWork(pick)
             if let artifact {
@@ -1157,9 +1286,10 @@ import ToolModuleKit
         guard let onReadDescription else { return }
         descriptionBeingRead = revision
         let work = beginRevisionWork(revision)
+        let generation = readingGeneration
         descriptionRead = Task { @MainActor [weak self] in
             let text = await onReadDescription(revision)
-            guard let self else { return }
+            guard let self, self.readingGeneration == generation else { return }
             self.endWork(work)
             guard self.descriptionBeingRead == revision else { return }
             self.descriptionBeingRead = nil
@@ -1439,11 +1569,13 @@ import ToolModuleKit
         let wanted = RevisionRead(revision: revision, function: function)
         guard let onReadRevision, revisionsBeingRead.insert(wanted).inserted else { return }
         revisionReads += 1
+        let generation = readingGeneration
         Task { @MainActor [weak self] in
             guard let self else { return }
             let read = await self.whileReadingRevision(revision) {
                 await onReadRevision(revision, function)
             }
+            guard self.readingGeneration == generation else { return }
             self.revisionsBeingRead.remove(wanted)
             guard let read else { return }
             self.keepRead(read, wanted)
@@ -2370,10 +2502,13 @@ import ToolModuleKit
         let entries = functions == nil && toRead == model.pendingFunctions
             ? nil : Set(toRead.map { model.functions[$0].entry })
         let work = beginWork(entries == nil ? L("Reading all functions…") : L("Reading the function…"))
+        let generation = readingGeneration
         return Task { @MainActor [weak self] in
             let read = await onLoadFunctions(entries)
             guard let self else { return }
             self.endWork(work)
+            // Read for the artifact before: its functions are not this one's.
+            guard self.readingGeneration == generation else { return }
             self.functionsBeingRead.subtract(toRead)
             if let read {
                 self.state.load(read)
@@ -2542,10 +2677,18 @@ import ToolModuleKit
         drawListSwitch()
     }
 
+    /// The module's dependency expression, from its firmware file in the
+    /// dump, the GUIDs named: "" when the file has none, nil when the panel
+    /// was not opened from a firmware tree. The tab shows it before the
+    /// review's lists, as the module's (i) in the UEFI tree once did.
+    public var dependencies: String? {
+        didSet { if dependencies != oldValue { drawInterfaces() } }
+    }
+
     /// The record of the module's review, drawn in the tab.
     func drawInterfaces() {
         var unplaced = false
-        interfacesPanel.show(manifest.reading?.interfaces) { [weak self] recorded in
+        interfacesPanel.show(manifest.reading?.interfaces, dependencies: dependencies) { [weak self] recorded in
             guard let self else { return nil }
             let address = self.interfaceInstruction(for: recorded)
             let place = self.model.indices(of: CodeLocation(address: address))
@@ -3582,6 +3725,7 @@ import ToolModuleKit
         // same way.
         let versionsLine: NSView = recipes.count > 1 ? recipeMenu() : recipeVersions()
         let moduleBlock = NSStackView(views: [moduleLine, versionsLine])
+        self.moduleBlock = moduleBlock
         moduleBlock.orientation = .vertical
         moduleBlock.alignment = .leading
         moduleBlock.spacing = 1
@@ -3626,7 +3770,7 @@ import ToolModuleKit
                              forSegment: Self.searchSegment)
         listControl.setToolTip(L("Find in All Functions"), forSegment: Self.searchSegment)
         // help: panel.code.interfaces
-        listControl.setImage(NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
+        listControl.setImage(NSImage(systemSymbolName: "arrow.up.arrow.down",
                                      accessibilityDescription: L("Interfaces")),
                              forSegment: Self.interfacesSegment)
         listControl.setToolTip(L("Interfaces: what the module installs, looks up and is notified of"),

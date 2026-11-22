@@ -72,6 +72,23 @@ final class CodePaneLazyReadingTests: XCTestCase {
         XCTAssertNotNil(view.currentModelForTest.line(at: CodeAddress(0x220)))
     }
 
+    /// A read begun for the reading before lets its answer go when the pane
+    /// has taken another reading meanwhile: the old artifact's functions are
+    /// not the new one's.
+    func testAReadForTheReadingBeforeIsLetGo() async throws {
+        let loader = Loader()
+        let view = try pane(loader)
+        let later = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":9,"program":{"image_base":"0x0"},"functions":[\(json("0x220", "Gamma", code: true)),\(json("0x330", "Beta", code: true))]}
+        """.utf8))
+        view.adoptReading(manifest: manifest(), model: CodeModel(artifact: later, moduleBytes: nil), recipes: [])
+        await settle()
+        XCTAssertEqual(loader.asked, [[CodeAddress(0x220)]], "the read was asked for before")
+        XCTAssertEqual(view.currentModelForTest.functions.map(\.name), ["Gamma", "Beta"])
+        XCTAssertTrue(code(in: view).contains("void Gamma(void)"))
+        XCTAssertFalse(code(in: view).contains("void Alpha"), "the old answer is not drawn")
+    }
+
     /// What was not read says so, and is asked for again when the reader returns.
     func testAFailedReadSaysSoAndTriesAgainOnReturn() async throws {
         let loader = Loader()

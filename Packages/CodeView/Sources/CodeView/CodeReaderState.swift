@@ -155,6 +155,22 @@ public struct CodeReaderState: Sendable {
         selectFunction(0)
     }
 
+    /// The same reader over another artifact of the module — a later
+    /// revision, another analysis: the list in front, its order, its filter
+    /// and what was folded stay; the selection and the call tree's places
+    /// are numbered by the old artifact, so the caller puts them back.
+    public func carried(to model: CodeModel) -> CodeReaderState {
+        var next = CodeReaderState(model: model)
+        next.list = list
+        next.functionOrder = functionOrder
+        next.searchText = searchText
+        next.showsOnlyOpenWay = showsOnlyOpenWay
+        next.collapsedGroups = collapsedGroups
+        next.collapsedSections = collapsedSections
+        next.refilter()
+        return next
+    }
+
     private var artifact: CodeArtifact { model.artifact }
 
     // MARK: - The navigator

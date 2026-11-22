@@ -15,19 +15,27 @@ import ToolModuleKit
 /// It shows what it is given; the pane goes to an address it asks for.
 // help: panel.code.interfaces
 final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
-    /// One of the record's three lists: a row of the first level.
+    /// One of the record's three lists, or the dependency expression: a
+    /// row of the first level.
     final class GroupItem {
         let title: String
         let symbol: String
         let help: HelpLink
         /// Nil while the review has not answered the list.
         let entries: [EntryItem]?
-        init(title: String, symbol: String, help: HelpLink, entries: [EntryItem]?) {
+        /// Text under the group itself, in place of interfaces: the
+        /// dependency expression. Nil for the review's lists.
+        let lines: [DetailItem]?
+        init(title: String, symbol: String, help: HelpLink, entries: [EntryItem]?, lines: [DetailItem]? = nil) {
             self.title = title
             self.symbol = symbol
             self.help = help
             self.entries = entries
+            self.lines = lines
         }
+
+        /// Rows under it.
+        var children: [Any] { lines ?? entries ?? [] }
     }
 
     /// One interface: a row of the second level.
@@ -128,8 +136,8 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// Shows a module's record. `place` names the code an address is in —
     /// the function, and the offset into it — or nil where the artifact has
     /// no instruction there.
-    func show(_ interfaces: ModuleInterfaces?, place: (CodeAddress) -> String?) {
-        groups = Self.groups(of: interfaces, place: place)
+    func show(_ interfaces: ModuleInterfaces?, dependencies: String? = nil, place: (CodeAddress) -> String?) {
+        groups = Self.groups(of: interfaces, dependencies: dependencies, place: place)
         outline.reloadData()
         // The kinds open; each interface closed, its name and marks a line.
         for group in groups { outline.expandItem(group) }
@@ -146,12 +154,24 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         return count == 1 ? L("1 interface") : L("%1$@ interfaces", String(count))
     }
 
-    static func groups(of interfaces: ModuleInterfaces?, place: (CodeAddress) -> String?) -> [GroupItem] {
+    static func groups(of interfaces: ModuleInterfaces?, dependencies: String? = nil,
+                       place: (CodeAddress) -> String?) -> [GroupItem] {
         func entries(_ list: [ModuleInterfaces.Interface]?,
                      marks: (ModuleInterfaces.Interface) -> [String]) -> [EntryItem]? {
             list?.map { EntryItem(interface: $0, marks: marks($0), details: details(of: $0, place: place)) }
         }
-        return [
+        // The condition the dispatcher starts the module on, from its
+        // firmware file: the PPIs or protocols it waits for, by name.
+        var depex: [GroupItem] = []
+        if let dependencies {
+            let text = NSAttributedString(string: dependencies, attributes: [
+                .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
+            ])
+            depex.append(GroupItem(title: L("Dependency expression"), symbol: "flowchart",
+                                   help: .term(HelpTermID("depex")), entries: nil,
+                                   lines: dependencies.isEmpty ? [] : [DetailItem(text: text)]))
+        }
+        return depex + [
             GroupItem(title: L("Installs"), symbol: "square.and.arrow.up",
                       help: .term(HelpTermID("module-installs")),
                       entries: entries(interfaces?.installs) { entry in
@@ -216,18 +236,18 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         if item == nil { return groups.count }
-        if let group = item as? GroupItem { return group.entries?.count ?? 0 }
+        if let group = item as? GroupItem { return group.children.count }
         return (item as? EntryItem)?.details.count ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
         if item == nil { return groups[index] }
-        if let group = item as? GroupItem { return group.entries![index] }
+        if let group = item as? GroupItem { return group.children[index] }
         return (item as! EntryItem).details[index]
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        if let group = item as? GroupItem { return !(group.entries ?? []).isEmpty }
+        if let group = item as? GroupItem { return !group.children.isEmpty }
         return item is EntryItem
     }
 
@@ -279,7 +299,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let id = NSUserInterfaceItemIdentifier("group")
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? CodeNavigatorCell
             ?? CodeNavigatorCell(identifier: id)
-        let expandable = !(group.entries ?? []).isEmpty
+        let expandable = !group.children.isEmpty
         cell.showsDisclosure(true)
         cell.showsCalls(expandable: expandable, expanded: outlineView.isItemExpanded(group))
         cell.onToggle = { [weak self] in self?.toggle(group) }
@@ -287,10 +307,12 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let line = NSMutableAttributedString(string: group.title, attributes: [
             .font: CodePaneView.navigatorBoldFont(), .foregroundColor: NSColor.labelColor
         ])
-        let detail: String = switch group.entries {
-        case nil: L("Not recorded yet")
-        case let list? where list.isEmpty: L("None")
-        case let list?: String(list.count)
+        let detail: String = if let lines = group.lines { lines.isEmpty ? L("None") : "" } else {
+            switch group.entries {
+            case nil: L("Not recorded yet")
+            case let list? where list.isEmpty: L("None")
+            case let list?: String(list.count)
+            }
         }
         line.append(NSAttributedString(string: " " + detail, attributes: [
             .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor

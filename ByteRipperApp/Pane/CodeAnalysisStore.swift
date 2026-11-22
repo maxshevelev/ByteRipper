@@ -244,9 +244,11 @@ extension CodePaneView {
             opensOnDescription = true
         }
         let manifest = self.manifest
+        let generation = readingGeneration
         Task { @MainActor [weak self] in
             let text = await CodeAnalysisStore.moduleDescription(for: manifest)
-            self?.setModuleDescription(text)
+            guard let self, self.readingGeneration == generation else { return }
+            self.setModuleDescription(text)
         }
     }
 }

@@ -105,6 +105,9 @@ func wireCodeRevisions(_ codePane: CodePaneView,
     // revision is read from the store like any other.
     let previous = previous.flatMap { $0.artifact.functions.contains(where: \.codeIsPending) ? nil : $0 }
     let manifest = codePane.manifest
+    // The pane may take another reading while the store answers for this
+    // one: what comes for this one is let go then.
+    let generation = codePane.readingGeneration
     codePane.onLoadFunctions = { entries in
         await CodeAnalysisStore.functions(entries, of: manifest.artifact.sha256)
     }
@@ -187,6 +190,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
     }
     Task { @MainActor in
         let loaded = await history.value
+        guard codePane.readingGeneration == generation else { return }
         let options = loaded.options
         digests = Dictionary(options.map { ($0.choice.revision, $0.artifact) },
                              uniquingKeysWith: { first, _ in first })
@@ -231,6 +235,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             } else {
                 read = nil
             }
+            guard codePane.readingGeneration == generation else { return }
             codePane.settleUnrecorded(revision: revision, artifact: read)
         }
     }

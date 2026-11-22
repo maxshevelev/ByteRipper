@@ -2334,15 +2334,17 @@ private struct ChecksumPass: Sendable {
             return
         }
         let preferred = codeAnalysisManifests[nodeID]
+        let dependencies = Self.dependencyText(ofModule: nodeID, in: tree, names: guids)
         open(Task {
             try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: UEFIToolModule.codeAnalysisRoot,
                                               preferred: preferred)
-        }, at: location)
+        }, dependencies: dependencies, at: location)
     }
 
     // help: panel.uefi.module-summary
     /// A module file's (i): a popover beside `view`, at once, with the module's
-    /// name. The summary of image `nodeID`'s description and the code are
+    /// name. Its dependencies and interfaces are not here: they are the Code
+    /// panel's Interfaces tab. The summary of image `nodeID`'s description and the code are
     /// loaded together, each showing as progress until it comes; the code
     /// from the analysis and the index the tree already holds, so
     /// **Open with Code** opens what is loaded and reads nothing again.
@@ -2358,8 +2360,7 @@ private struct ChecksumPass: Sendable {
                 .map { $0.displayName(in: Localization.appLanguage) } ?? ""
             : manifest.module.name
         let popover = controller.showModuleSummary(name: name, beside: view)
-        popover.showDependencies(Self.dependencyGroups(
-            depex: Self.dependencyText(ofModule: nodeID, in: tree, names: guids), interfaces: manifest.reading?.interfaces))
+        let dependencies = Self.dependencyText(ofModule: nodeID, in: tree, names: guids)
         let index = codeAnalysisIndex
         Task { [weak self, weak popover] in
             let text = await Task.detached(priority: .userInitiated) { () -> String? in
@@ -2376,7 +2377,7 @@ private struct ChecksumPass: Sendable {
                 let opening = try await UEFICodeOpening.prepare(node: nodeID, in: tree, store: root,
                                                                 preferred: manifest, index: index)
                 guard let popover else { return }
-                popover.codeReady { [weak self] in self?.present(opening, at: nil) }
+                popover.codeReady { [weak self] in self?.present(opening, dependencies: dependencies, at: nil) }
             } catch let failure as UEFICodeOpening.Failure {
                 popover?.codeFailed(failure.message)
             } catch {
@@ -2400,39 +2401,16 @@ private struct ChecksumPass: Sendable {
         return DependencyExpression(kind: kind, bytes: bytes).text(name: { names.name(of: $0) }) ?? ""
     }
 
-    /// The groups a module's popover shows: the dependency expression from the
-    /// dump, then the review's three lists, each nil while unanswered.
-    nonisolated static func dependencyGroups(depex: String?,
-                                             interfaces: ModuleInterfaces?) -> [ToolPanelModuleSummaryPopover.DependencyGroup] {
-        typealias Group = ToolPanelModuleSummaryPopover.DependencyGroup
-        func line(_ entry: ModuleInterfaces.Interface, _ marks: [String]) -> String {
-            let condition = entry.condition == "always" ? L("always") : entry.condition
-            return ([entry.name] + marks).joined(separator: " · ") + " — " + condition
-        }
-        var groups: [Group] = []
-        if let depex { groups.append(Group(title: L("Dependency expression"), lines: depex.isEmpty ? [] : [depex],
-                                         symbol: "flowchart", help: .term(HelpTermID("depex")))) }
-        groups.append(Group(title: L("Installs"), lines: interfaces?.installs?.map { entry in
-            line(entry, entry.method == .reinstall ? [L("reinstalls")] : entry.method == .handoff ? [L("handed over")] : [])
-        }, symbol: "square.and.arrow.up", help: .term(HelpTermID("module-installs"))))
-        groups.append(Group(title: L("Locates"), lines: interfaces?.locates?.map { entry in
-            line(entry, entry.required == true ? [L("required")] : [L("optional")])
-        }, symbol: "magnifyingglass", help: .term(HelpTermID("module-locates"))))
-        groups.append(Group(title: L("Notified of"), lines: interfaces?.notifies?.map { line($0, []) },
-                            symbol: "bell", help: .term(HelpTermID("module-notified-of"))))
-        return groups
-    }
-
     /// Opens the code `opening` makes ready, busy until the panel opens: the
     /// bytes are quick, the artifact is not — a large DXE driver's is ten
     /// megabytes of JSON.
-    private func open(_ opening: Task<UEFICodeOpening, Error>, at location: CodeLocation?) {
+    private func open(_ opening: Task<UEFICodeOpening, Error>, dependencies: String?, at location: CodeLocation?) {
         controller.showBusy()
         Task { [weak self] in
             defer { self?.controller.endBusy() }
             do {
                 let opening = try await opening.value
-                self?.present(opening, at: location)
+                self?.present(opening, dependencies: dependencies, at: location)
             } catch let failure as UEFICodeOpening.Failure {
                 self?.fail(failure.message)
             } catch {
@@ -2446,14 +2424,15 @@ private struct ChecksumPass: Sendable {
     public var moduleSummaryPopover: ToolPanelModuleSummaryPopover? { controller.moduleSummaryPopover }
 
     /// Opens the code panel on `opening`, already loaded.
-    private func present(_ opening: UEFICodeOpening, at location: CodeLocation?) {
+    private func present(_ opening: UEFICodeOpening, dependencies: String?, at location: CodeLocation?) {
         guard let opener = host as? any CodePartOpening else {
             fail(L("The code panel is not available."))
             return
         }
         opener.openCode(named: opening.partName, linkedTo: opening.source,
                         manifest: opening.manifest, artifact: opening.artifact,
-                        recipes: opening.recipes, codec: opening.codec, at: location)
+                        recipes: opening.recipes, codec: opening.codec,
+                        dependencies: dependencies, at: location)
     }
 
     /// Opens a node of the tree — or its body alone — as a panel of its own, so

@@ -35,14 +35,14 @@ final class CodePaneViewTests: XCTestCase {
         return manifest
     }
 
-    private func artifact() throws -> CodeArtifact {
+    private func artifact(naming first: String = "FUN_00000220") throws -> CodeArtifact {
         try JSONDecoder().decode(CodeArtifact.self, from: Data("""
         {"script_version":2,"ghidra":"12.1.2","program":{"image_base":"0x0"},
          "strings":[{"address":"0x220","type":"string","value":"ABC"}],
          "post_codes":[{"address":"0x221","function":"0x220","port":"0x80","text":"OUT 0x80, AL"}],
          "status_code_calls":[{"address":"0x222","function":"0x220","text":"call [ebx+0x10]","context":["ReportStatusCode"]}],
          "functions":[
-          {"entry":"0x220","name":"FUN_00000220","callers":["0x355"],"callees":["0x355"],"instructions":[
+          {"entry":"0x220","name":"\(first)","callers":["0x355"],"callees":["0x355"],"instructions":[
             {"address":"0x220","bytes":"56","mnemonic":"PUSH","text":"PUSH ESI"},
             {"address":"0x221","bytes":"57","mnemonic":"PUSH","text":"PUSH EDI"}]},
           {"entry":"0x355","name":"entry","c":"return 0;","instructions":[
@@ -125,6 +125,62 @@ final class CodePaneViewTests: XCTestCase {
         view.showSearchTab(true)
         XCTAssertTrue(view.interfacesPanel.isHidden, "one tab at a time")
         XCTAssertEqual(view.navigatorListIndex, 5)
+    }
+
+    /// A later revision is drawn in the same pane: only the data changes. The
+    /// tab in front, the dependency expression and ASM or C stay; the header
+    /// names the new revision and the code is the new artifact's.
+    func testALaterRevisionIsDrawnInTheSamePane() throws {
+        let view = CodePaneView(manifest: manifest(revision: 1), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.dependencies = "gEfiPeiMemoryDiscoveredPpiGuid"
+        view.showInterfacesTab(true)
+        let showsC = view.showsDecompiledC
+        let generation = view.readingGeneration
+
+        let renamed = try artifact(naming: "ReadCpuId")
+        view.adoptReading(manifest: manifest(revision: 2),
+                          model: CodeModel(artifact: renamed, moduleBytes: moduleBytes), recipes: [])
+
+        XCTAssertEqual(view.readingGeneration, generation + 1)
+        XCTAssertTrue(view.showsInterfacesTab, "the tab in front stays")
+        XCTAssertEqual(view.navigatorListIndex, CodePaneView.interfacesSegment)
+        XCTAssertEqual(view.interfacesPanel.linesForTests.first, "Dependency expression")
+        XCTAssertEqual(view.showsDecompiledC, showsC)
+        XCTAssertEqual(view.manifest.reading?.rev, 2)
+        XCTAssertEqual(view.artifact.functions.map(\.name), ["ReadCpuId", "entry"])
+        func all(_ v: NSView) -> [NSView] { [v] + v.subviews.flatMap(all) }
+        let texts = all(view).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(texts.contains("(r2)"), "the header names the new revision")
+        XCTAssertFalse(texts.contains("(r1)"))
+    }
+
+    /// The module's dependency expression, read from its firmware file, is
+    /// the tab's first group, before the review's lists, as the (i) in the
+    /// UEFI tree showed it; a file with none says so, and a panel not opened
+    /// from a firmware tree has no such group.
+    func testTheInterfacesTabShowsTheDependencyExpression() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.showInterfacesTab(true)
+        let panel = view.interfacesPanel
+        XCTAssertEqual(panel.linesForTests.first, "Installs", "no file, no expression")
+
+        view.dependencies = "gEfiPeiMemoryDiscoveredPpiGuid AND gEfiPeiReadOnlyVariable2PpiGuid"
+        XCTAssertEqual(Array(panel.linesForTests.prefix(3)), [
+            "Dependency expression",
+            "    gEfiPeiMemoryDiscoveredPpiGuid AND gEfiPeiReadOnlyVariable2PpiGuid",
+            "Installs"
+        ])
+        XCTAssertEqual(panel.groups.first?.symbol, "flowchart")
+
+        view.dependencies = ""
+        XCTAssertEqual(Array(panel.linesForTests.prefix(2)), ["Dependency expression", "Installs"],
+                       "a file with no expression: the group says none")
     }
 
     /// An interface's place opens the call that supplies it, selected in
