@@ -161,6 +161,8 @@ public protocol AnalysisWriter: Sendable {
     func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]?
     /// The registry as the store holds it, for matching a module against it.
     func readLibraryIndex() async throws -> LibraryIndex
+    /// A review's name for a GUID, by the registry's rule (`ContentStore.offerGuid`).
+    func offerGuid(_ offer: GuidOffer, by: String?, dryRun: Bool) async throws -> GuidOfferResult
     func readLibraryHistory(id: String) async throws -> LibraryHistory?
     func readObject(_ digest: SHA256Digest) async throws -> Data
     /// Each module's newest analysis, for a question about all of them.
@@ -201,6 +203,10 @@ public struct PublishHold: Sendable {
 extension ContentStore: AnalysisWriter {
     public func writeObject(_ data: Data) async throws -> SHA256Digest {
         try putObject(data)
+    }
+
+    public func offerGuid(_ offer: GuidOffer, by: String?, dryRun: Bool) async throws -> GuidOfferResult {
+        try offerGuid(offer, by: by, dryRun: dryRun, now: Date())
     }
 
     public func writeProject(module: SHA256Digest, file: URL, rev: Int, artifact: SHA256Digest,
@@ -322,6 +328,11 @@ extension ContentStore: AnalysisWriter {
 extension RemoteStore: AnalysisWriter {
     public func writeObject(_ data: Data) async throws -> SHA256Digest {
         try await putObject(data)
+    }
+
+    /// Only the server writes the GUID registry, in its own process.
+    public func offerGuid(_ offer: GuidOffer, by: String?, dryRun: Bool) async throws -> GuidOfferResult {
+        throw GhidraHostError(.install, "the GUID registry is written by the analysis server, not through its store")
     }
 
     /// A served store keeps its projects to itself: the server keeps what its

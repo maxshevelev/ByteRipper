@@ -139,6 +139,12 @@ public struct CASService: Sendable {
             return .json(history)
         }
 
+        // The GUID registry (`GuidRegistry`): read whole. The server writes it
+        // in its own process; nothing reaches it from outside.
+        router.add("GET", "\(prefix)/guids", access: .rights([.casRead])) { _ in
+            .json(try Self.answer { try store.guidRegistry() })
+        }
+
         // The library registry (`Design/LIBRARY_REGISTRY_PLAN.md`): its index,
         // one entry's history, and a publish's offer.
         router.add("GET", "\(prefix)/library", access: .rights([.casRead])) { _ in

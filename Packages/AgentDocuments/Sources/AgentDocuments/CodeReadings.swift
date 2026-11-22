@@ -65,7 +65,7 @@ public final class CodeReadings {
     private let wording: Wording
     /// The store's root at the moment of a call: the app's follows its
     /// setting.
-    private let store: @MainActor () -> URL
+    let store: @MainActor () -> URL
     /// The GUID catalogue, for the name of a module's file.
     private let catalogue: @Sendable () async -> GuidsCatalogue
     /// A document that is itself a module's code — the app's Code panel —
@@ -83,8 +83,8 @@ public final class CodeReadings {
         self.screen = screen
     }
 
-    /// `code_query`, `code_modules`, then `library_registry`.
-    public nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, libraryTool] }
+    /// `code_query`, `code_modules`, `library_registry`, then `guid_registry`.
+    public nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, libraryTool, guidTool] }
 
     nonisolated static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references",
                                 "post_codes"]

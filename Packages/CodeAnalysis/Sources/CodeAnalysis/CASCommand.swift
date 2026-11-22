@@ -41,6 +41,8 @@ public enum CASCommand {
           relink-modules [--apply]
           recount-stats [--apply]
           drop-earlier-projects [--apply]
+          guids-seed --edk2 <checkout> --tag <edk2 tag> [--catalogue <guids.csv>] [--apply]
+          guid-replace <guid> --name <gName…Guid> --kind <kind> --reason <text> [--note <text>] [--by <who>]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
           put-object <file>
           has-object <sha256>
@@ -255,6 +257,54 @@ public enum CASCommand {
             }
             output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
                 .dropEarlierProjects(apply: apply))
+        case "guids-seed":
+            let apply = parser.flag("--apply")
+            guard let tree = parser.option("--edk2"), let tag = parser.option("--tag") else {
+                throw Usage(description: "guids-seed: --edk2 <checkout> and --tag <edk2 tag> are required")
+            }
+            let catalogue = parser.option("--catalogue")
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("guids-seed runs on a store directory, not on a server")
+            }
+            let content = try ContentStore(root: local.root, create: local.create)
+            let declared = try GuidSeed.declarations(checkout: URL(fileURLWithPath: tree, isDirectory: true))
+            guard !declared.isEmpty else {
+                throw CodeAnalysisError.io("\(tree): no .dec file declares a GUID, not an EDK2 checkout")
+            }
+            let names = try catalogue.map { path -> [String: String] in
+                guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else {
+                    throw CodeAnalysisError.io("\(path): cannot be read")
+                }
+                return GuidSeed.catalogue(text)
+            }
+            output.stdout = try encode(try GuidSeed.run(store: content, declared: declared,
+                                                        recorded: try GuidSeed.recorded(in: content), tag: tag,
+                                                        catalogue: names, apply: apply))
+        case "guid-replace":
+            guard let guid = parser.next(), let name = parser.option("--name"),
+                  let kindText = parser.option("--kind"), let reason = parser.option("--reason") else {
+                throw Usage(description: "guid-replace: <guid> --name --kind --reason are required")
+            }
+            let note = parser.option("--note")
+            let by = parser.option("--by") ?? "administrator"
+            try parser.end()
+            guard let kind = GuidKind(rawValue: kindText) else {
+                throw Usage(description: "--kind is one of \(GuidKind.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("guid-replace runs on a store directory, not on a server")
+            }
+            let content = try ContentStore(root: local.root, create: local.create)
+            let held = try content.guidRegistry().entries[GuidName.canonicalGUID(guid) ?? guid]
+            // The name's place stays the entry's: an administrator renames, the
+            // evidence is the review's that gave the GUID its meaning.
+            guard let source = held?.source else {
+                throw CodeAnalysisError.invalidName("the registry has no \(guid): a new GUID is a review's, not a replacement")
+            }
+            output.stdout = try encode(try content.offerGuid(
+                GuidOffer(guid: guid, name: name, kind: kind, source: source, note: note),
+                by: by, replace: true, reason: reason))
         case "library-source-rev":
             let apply = parser.flag("--apply")
             guard let text = parser.option("--module"), let module = SHA256Digest(hex: text),

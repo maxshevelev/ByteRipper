@@ -74,6 +74,9 @@ public actor StoreMirror {
         if changes.library == true {
             try store.mirrorLibrary(try await remote.libraryIndex())
         }
+        if changes.guids == true {
+            try store.mirrorGuids(try await remote.guidRegistry())
+        }
         seq = changes.seq
         return changes.modules
     }
@@ -132,6 +135,10 @@ public actor StoreMirror {
         // simply has no registry.
         if let index = try? await remote.libraryIndex() {
             try store.mirrorLibrary(index)
+        }
+        // Nor one before the GUID registry.
+        if let registry = try? await remote.guidRegistry() {
+            try store.mirrorGuids(registry)
         }
     }
 }

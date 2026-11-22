@@ -145,6 +145,34 @@ final class CodeReadingsTests: XCTestCase {
             catalogue: { .empty })
     }
 
+    /// The GUID registry is read from the store: a list narrowed by name,
+    /// kind and source, and one GUID in any spelling with its citations.
+    func testTheGUIDRegistryIsReadFromTheStore() async throws {
+        let store = try ContentStore(root: directory)
+        let module = SHA256Digest(data: Data("ChipsetSvcPei".utf8))
+        _ = try store.offerGuids([
+            GuidOffer(guid: "F894643D-C449-42D1-8EA8-85BDD8C65BDE", name: "gEfiPeiMemoryDiscoveredPpiGuid", kind: .ppi,
+                      source: .edk2(tag: "edk2-stable202608", file: "MdePkg/MdePkg.dec:512")),
+            GuidOffer(guid: "9C98130A-8921-45EB-86F3-16041C6BB7AD", name: "gAmdFactoryResetPpiGuid", kind: .ppi,
+                      source: .review(module: module, address: "0x100"))
+        ], by: "seed")
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "guid_registry" })
+        guard case .json(.object(let all)) = try await tool.run(AgentCall(tool: "guid_registry", arguments: AgentArguments([:]))),
+              case .array(let rows)? = all["entries"] else { return XCTFail("no entries") }
+        XCTAssertEqual(rows.compactMap { $0.objectValue?["name"] }, ["gAmdFactoryResetPpiGuid", "gEfiPeiMemoryDiscoveredPpiGuid"])
+        guard case .json(.object(let edk2)) = try await tool.run(AgentCall(tool: "guid_registry", arguments: AgentArguments([
+            "source": "edk2"]))) else { return XCTFail() }
+        XCTAssertEqual(edk2["total"], .int(1))
+        guard case .json(.object(let byStart)) = try await tool.run(AgentCall(tool: "guid_registry", arguments: AgentArguments([
+            "search": "9c98"]))) else { return XCTFail() }
+        XCTAssertEqual(byStart["total"], .int(1))
+        guard case .json(.object(let one)) = try await tool.run(AgentCall(tool: "guid_registry", arguments: AgentArguments([
+            "guid": "{9c98130a-8921-45eb-86f3-16041c6bb7ad}"]))) else { return XCTFail() }
+        XCTAssertEqual(one["name"], "gAmdFactoryResetPpiGuid")
+        XCTAssertEqual(one["guid"], "9C98130A-8921-45EB-86F3-16041C6BB7AD")
+        XCTAssertEqual(one["citations"]?.arrayValue?.count, 1)
+    }
+
     private func query(_ readings: CodeReadings) throws -> AgentTool {
         try XCTUnwrap(readings.tools().first { $0.name == "code_query" })
     }

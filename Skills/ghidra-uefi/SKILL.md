@@ -155,7 +155,14 @@ Names alone do not get there. Every review applies these rules:
    end-of-line comment: the register,
    the bits, and where the names come from (`reference/ghidra.md`, "I/O ports
    and other constants"). A signature or a magic size used once gets a named
-   global or an end-of-line comment that names it. A GUID gets its name from the GUID table or a label. Write the tag of
+   global or an end-of-line comment that names it. A GUID gets its name from the GUID registry
+   (`guid_registry`): one name for every review, in EDK2's form
+   `gEfiPeiMemoryDiscoveredPpiGuid`, for the label on its bytes, the interface
+   record and the comments alike. A GUID the registry does not hold is added
+   with `ghidra_guid_add` at the place the code shows what it is — the install
+   with its descriptor, the call that uses it; a role known with no name is a
+   placeholder, `gUnknownPpi9C98130AGuid`. A name the registry refuses is the
+   registry's to keep: a review that believes it wrong tells the person. Write the tag of
    a `typedef enum`/`struct` (`typedef enum _APOB_HALT_CODE { … }
    APOB_HALT_CODE;`); the owner adds one that is missing, because Ghidra names
    an untagged type by its place in the text and two of them collide.

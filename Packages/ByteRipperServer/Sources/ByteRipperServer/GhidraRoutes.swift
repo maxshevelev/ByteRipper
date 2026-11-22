@@ -92,6 +92,15 @@ enum GhidraRoutes {
                        published: @escaping @Sendable () async -> Void) -> HTTPRouter {
         var router = HTTPRouter()
 
+        // A review's name for a GUID, offered to the GUID registry by whoever
+        // the token is. The store changes, so the feed looks again.
+        router.add("POST", "\(prefix)/guids", maxBodyBytes: 64 << 10, access: .rights([.ghidraUse])) { request in
+            let offer = try request.json(GhidraHost.GuidAddRequest.self)
+            let data = try await answer { try await host.addGuid(offer, by: holder(request)) }
+            if offer.dryRun != true { await published() }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+
         // A report about a tool, by whoever the token is; an administrator
         // lists them and marks one resolved (`IssueBook`).
         router.add("POST", "\(prefix)/issues", maxBodyBytes: 256 << 10, access: .rights([.ghidraUse])) { request in

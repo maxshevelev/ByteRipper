@@ -240,6 +240,11 @@ public struct RemoteStore: Sendable {
         }
     }
 
+    /// The GUID registry on the server.
+    public func guidRegistry() async throws -> GuidRegistry {
+        try await json("GET", "guids")
+    }
+
     /// The library registry's index on the server.
     public func libraryIndex() async throws -> LibraryIndex {
         try await json("GET", "library")

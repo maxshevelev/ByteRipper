@@ -108,6 +108,9 @@ struct CurrentGhidraBackend: GhidraBackend {
     func typeUses(name: String, limit: Int) async throws -> Data {
         try await resolve().typeUses(name: name, limit: limit)
     }
+    func addGuid(_ request: GhidraHost.GuidAddRequest) async throws -> Data {
+        try await resolve().addGuid(request)
+    }
     func takeModule(_ module: SHA256Digest) async throws -> Data {
         try await resolve().takeModule(module)
     }

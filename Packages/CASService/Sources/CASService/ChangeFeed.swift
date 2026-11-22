@@ -18,10 +18,12 @@ public actor ChangeFeed {
     /// The library registry's index as the feed last saw it: a registry change
     /// may come without any module's, when a conflict is taken.
     private var libraryFingerprint: SHA256Digest?
+    /// The GUID registry as the feed last saw it.
+    private var guidsFingerprint: SHA256Digest?
     private(set) var seq = 0
     /// The modules of each step, and whether the registry changed with them,
     /// oldest first; at most `memory` steps.
-    private var steps: [(seq: Int, modules: Set<SHA256Digest>, library: Bool)] = []
+    private var steps: [(seq: Int, modules: Set<SHA256Digest>, library: Bool, guids: Bool)] = []
     private let memory: Int
     private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
@@ -30,6 +32,7 @@ public actor ChangeFeed {
         self.storeID = try store.identity()
         self.fingerprints = store.fingerprints()
         self.libraryFingerprint = Self.libraryFingerprint(store)
+        self.guidsFingerprint = Self.guidsFingerprint(store)
         self.memory = memory
     }
 
@@ -46,9 +49,12 @@ public actor ChangeFeed {
         let library = Self.libraryFingerprint(store)
         let libraryChanged = library != libraryFingerprint
         libraryFingerprint = library
-        guard !changed.isEmpty || libraryChanged else { return [] }
+        let guids = Self.guidsFingerprint(store)
+        let guidsChanged = guids != guidsFingerprint
+        guidsFingerprint = guids
+        guard !changed.isEmpty || libraryChanged || guidsChanged else { return [] }
         seq += 1
-        steps.append((seq, changed, libraryChanged))
+        steps.append((seq, changed, libraryChanged, guidsChanged))
         if steps.count > memory { steps.removeFirst(steps.count - memory) }
         let woken = waiters
         waiters.removeAll()
@@ -90,7 +96,12 @@ public actor ChangeFeed {
         let after = steps.filter { $0.seq > since }
         let modules = after.reduce(into: Set<SHA256Digest>()) { $0.formUnion($1.modules) }
         return .init(store: storeID, epoch: self.epoch, seq: seq, modules: modules.sorted(), resync: false,
-                     library: after.contains(where: \.library) ? true : nil)
+                     library: after.contains(where: \.library) ? true : nil,
+                     guids: after.contains(where: \.guids) ? true : nil)
+    }
+
+    private static func guidsFingerprint(_ store: ContentStore) -> SHA256Digest? {
+        (try? Data(contentsOf: store.guidsURL.appendingPathComponent("registry.json"))).map { SHA256Digest(data: $0) }
     }
 
     private static func libraryFingerprint(_ store: ContentStore) -> SHA256Digest? {

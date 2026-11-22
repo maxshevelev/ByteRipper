@@ -451,6 +451,34 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex(), try served.libraryIndex())
     }
 
+    // MARK: - The GUID registry
+
+    /// The server's own write of the GUID registry is served, found by a
+    /// rescan as a step of its own, and copied by a mirror — when it connects
+    /// and again when the feed says so.
+    func testTheGUIDRegistryIsServedAndAMirrorFollowsIt() async throws {
+        let guid = "9C98130A-8921-45EB-86F3-16041C6BB7AD"
+        let empty = try await remote.guidRegistry()
+        XCTAssertTrue(empty.entries.isEmpty, "a store never seeded serves an empty registry")
+        let mirror = StoreMirror(remote: remote, mirrorsRoot: directory.appendingPathComponent("mirrors"))
+        let store = try await mirror.connect()
+
+        let hello = try await remote.hello()
+        _ = try served.offerGuid(GuidOffer(guid: guid, name: "gAmdFactoryResetPpiGuid", kind: .ppi,
+                                           source: .review(module: module("rn").sha256, address: "0x100")),
+                                 by: "agent")
+        let found = await service.feed.rescan()
+        XCTAssertEqual(found, [], "the registry changed, no module did")
+        let changes = try await remote.changes(since: hello.seq, epoch: hello.epoch, wait: 0)
+        XCTAssertEqual(changes.guids, true)
+        XCTAssertNil(changes.library)
+        let served = try await remote.guidRegistry()
+        XCTAssertEqual(served.entries[guid]?.name, "gAmdFactoryResetPpiGuid")
+
+        _ = try await mirror.follow(wait: 0)
+        XCTAssertEqual(try store.guidRegistry().entries[guid]?.name, "gAmdFactoryResetPpiGuid")
+    }
+
     // MARK: - The mirror
 
     func testAMirrorCopiesManifestsAndFetchesObjectsOnRead() async throws {

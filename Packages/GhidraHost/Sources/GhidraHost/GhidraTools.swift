@@ -24,6 +24,7 @@ public enum GhidraTools {
         tools.append(confirmIssueTool(backend))
         tools += ticketTools(backend)
         tools += typeProposalTools(backend)
+        tools.append(guidAddTool(backend))
         // Compact by default, `verbose` for the owner's answer as it is.
         return tools.map { compacted($0) }
     }
@@ -145,7 +146,10 @@ public enum GhidraTools {
         `ghidra_library_candidate` proposes a reviewed function for it — `edk2`, `amd` (AGESA) or `intel` (FSP/RC), by the \
         criteria in the skill's "Library functions" — and `ghidra_publish` decides: the registry takes every candidate, or the publish is refused until that is resolved. A body the registry \
         holds links as a module is created — `library` in `ghidra_create`'s answer; `ghidra_library` lists the \
-        matches and `ghidra_library_apply` links or declines one. `ghidra_publish` makes the review visible to the app — every \
+        matches and `ghidra_library_apply` links or declines one. A GUID has one name for every review, \
+        the GUID registry's (`guid_registry`), in EDK2's form `g…Guid`: name a PPI, protocol, HOB, \
+        variable GUID, event group or table as it says, and give one it does not hold its name with \
+        `ghidra_guid_add`, at the place in the code that shows what it is. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename; a publish keeps the module in work. `ghidra_done` publishes and gives the module \
         back; `ghidra_forget` lets a kept \

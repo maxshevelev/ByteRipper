@@ -50,6 +50,8 @@ public protocol GhidraBackend: Sendable {
     func tickets(_ request: TicketBook.Request) async throws -> Data
     /// A call on the shared types' proposals (`TypeProposalBook`).
     func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data
+    /// A review's name for a GUID, offered to the GUID registry.
+    func addGuid(_ request: GhidraHost.GuidAddRequest) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -89,6 +91,9 @@ public extension GhidraBackendWithoutServer {
     }
     func typeProposals(_ request: TypeProposalBook.Request) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no type proposals: there is no analysis server to keep them.")
+    }
+    func addGuid(_ request: GhidraHost.GuidAddRequest) async throws -> Data {
+        throw GhidraHostError(.install, "this backend keeps no GUID registry: there is no analysis server to keep it.")
     }
 }
 
@@ -237,6 +242,11 @@ extension GhidraHost: GhidraBackend {
         try Self.encode(try await forget(module).answer)
     }
 
+    /// Offered by this host's own holder — the server's local MCP.
+    public func addGuid(_ request: GhidraHost.GuidAddRequest) async throws -> Data {
+        try await addGuid(request, by: configuration.holder)
+    }
+
     /// Reported by this host's own holder — the server's local MCP.
     public func reportIssue(_ report: IssueBook.Report) async throws -> Data {
         try await reportIssue(report, by: configuration.holder)
@@ -360,6 +370,10 @@ public struct GhidraRemote: GhidraBackend {
 
     public func reportIssue(_ report: IssueBook.Report) async throws -> Data {
         try await call("POST", "issues", body: try JSONEncoder().encode(report), timeout: 30)
+    }
+
+    public func addGuid(_ request: GhidraHost.GuidAddRequest) async throws -> Data {
+        try await call("POST", "guids", body: try JSONEncoder().encode(request), timeout: 30)
     }
 
     public func myIssues(limit: Int) async throws -> Data {
