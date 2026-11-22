@@ -45,9 +45,13 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     final class ConditionItem {
         let text: NSAttributedString
         let children: [ConditionItem]
-        init(text: NSAttributedString, children: [ConditionItem] = []) {
+        /// The GUID of a condition that names an interface: its row is one
+        /// line with the GUID's mark, the GUID in its tooltip.
+        let guid: String?
+        init(text: NSAttributedString, children: [ConditionItem] = [], guid: String? = nil) {
             self.text = text
             self.children = children
+            self.guid = guid
         }
         var isGroup: Bool { !children.isEmpty }
     }
@@ -217,10 +221,6 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let quiet: [NSAttributedString.Key: Any] = [
             .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
         ]
-        let mono: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: CodePaneView.navigatorSize - 1, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor
-        ]
         func line(_ words: String, _ attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
             NSAttributedString(string: words, attributes: attributes)
         }
@@ -228,20 +228,15 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             let text = NSMutableAttributedString()
             // NOT and the opcodes are the format's words, as ASM and C are.
             if negated { text.append(line("NOT ", quiet)) }
-            if let name {
-                text.append(line(name, plain))
-                text.append(line(" " + guid, mono))
-            } else {
-                text.append(line(guid, plain))
-            }
+            text.append(line(name ?? guid, plain))
             return text
         }
         func item(_ condition: DependencyOutline.Condition) -> ConditionItem {
             switch condition {
             case .interface(let guid, let name):
-                return ConditionItem(text: interface(guid, name, negated: false))
+                return ConditionItem(text: interface(guid, name, negated: false), guid: guid)
             case .not(.interface(let guid, let name)):
-                return ConditionItem(text: interface(guid, name, negated: true))
+                return ConditionItem(text: interface(guid, name, negated: true), guid: guid)
             case .not(let operand):
                 return ConditionItem(text: line("NOT", quiet), children: [item(operand)])
             case .anyOf(let list):
@@ -338,7 +333,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         if let detail = item as? DetailItem {
             text = detail.text
             inset = Self.detailInset
-        } else if let condition = item as? ConditionItem, !condition.isGroup {
+        } else if let condition = item as? ConditionItem, !condition.isGroup, condition.guid == nil {
             text = condition.text
             inset = Self.conditionInset(level: outlineView.level(forItem: condition))
         } else {
@@ -358,6 +353,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         if let condition = item as? ConditionItem {
             let level = outlineView.level(forItem: condition)
             if condition.isGroup { return conditionGroupCell(condition, level: level, in: outlineView) }
+            if let guid = condition.guid { return conditionCell(condition, guid: guid, level: level, in: outlineView) }
             return textCell(condition.text, inset: Self.conditionInset(level: level), in: outlineView)
         }
         guard let detail = item as? DetailItem else { return nil }
@@ -383,6 +379,24 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         cell.showsIcon(nil)
         cell.indent = Self.entryInset + CGFloat(max(0, level - 1)) * CodeNavigatorCell.disclosureRoom
         cell.textField?.attributedStringValue = condition.text
+        return cell
+    }
+
+    /// A condition that names an interface: one line, as an interface of the
+    /// review's lists — the GUID's mark and the name, the GUID in its
+    /// tooltip — its name under its group's.
+    private func conditionCell(_ condition: ConditionItem, guid: String, level: Int,
+                               in outlineView: NSOutlineView) -> NSView {
+        let id = NSUserInterfaceItemIdentifier("condition")
+        let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? CodeNavigatorCell
+            ?? CodeNavigatorCell(identifier: id)
+        cell.showsDisclosure(true)
+        cell.showsCalls(expandable: false, expanded: false)
+        cell.onToggle = nil
+        cell.showsMark(CodeNavigatorIcon.dependency, named: "guid")
+        cell.indent = Self.entryInset + CGFloat(max(0, level - 1)) * CodeNavigatorCell.disclosureRoom
+        cell.textField?.attributedStringValue = condition.text
+        cell.toolTip = guid
         return cell
     }
 

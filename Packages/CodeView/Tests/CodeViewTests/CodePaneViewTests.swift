@@ -185,15 +185,21 @@ final class CodePaneViewTests: XCTestCase {
         ])
         XCTAssertEqual(Array(panel.linesForTests.prefix(8)), [
             "Dependency expression",
-            "  gEfiPeiMemoryDiscoveredPpiGuid \(a)",
+            "  gEfiPeiMemoryDiscoveredPpiGuid",
             "  One of",
-            "    gEfiPeiReadOnlyVariable2PpiGuid \(b)",
+            "    gEfiPeiReadOnlyVariable2PpiGuid",
             "    All of",
             "      \(c)",
-            "      NOT gEfiPeiBootInRecoveryModePpiGuid \(d)",
+            "      NOT gEfiPeiBootInRecoveryModePpiGuid",
             "Installs"
         ])
         XCTAssertEqual(panel.groups.first?.symbol, "flowchart")
+        // A condition naming an interface is one line, as an interface is:
+        // the GUID's mark, the name, the GUID in its tooltip.
+        let first = try XCTUnwrap(panel.outline.view(atColumn: 0, row: 1, makeIfNecessary: true) as? CodeNavigatorCell)
+        XCTAssertEqual(first.iconName, "guid")
+        XCTAssertEqual(first.toolTip, a)
+        XCTAssertEqual(panel.outline.rect(ofRow: 1).height, CodePaneView.navigatorRowHeight)
 
         // The GUID registry names a GUID over the catalogue, and one the
         // catalogue lacks.
@@ -203,7 +209,7 @@ final class CodePaneViewTests: XCTestCase {
         registry.entries[c] = GuidEntry(name: "gAmdFactoryResetPpiGuid", kind: .ppi,
                                         source: .edk2(tag: "t", file: "x.dec:1"), at: "")
         view.guidRegistry = registry
-        XCTAssertEqual(panel.linesForTests[5], "      gAmdFactoryResetPpiGuid \(c)")
+        XCTAssertEqual(panel.linesForTests[5], "      gAmdFactoryResetPpiGuid")
 
         view.dependencies = DependencyOutline.none
         XCTAssertEqual(Array(panel.linesForTests.prefix(2)), ["Dependency expression", "Installs"],

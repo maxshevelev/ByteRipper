@@ -46,11 +46,14 @@ enum CodeNavigatorIcon {
         (.badge(name), .systemBlue)
     }
 
-    /// A PPI the module installs, locates or waits for: a piece that fits
-    /// into another, in the function names' colour.
-    static let ppi = (glyph: Glyph.symbol("puzzlepiece.extension.fill"), color: CodeColors.function)
-    /// A protocol: the same piece, in indigo.
-    static let protocolInterface = (glyph: Glyph.symbol("puzzlepiece.extension.fill"), color: NSColor.systemIndigo)
+    /// A PPI the module installs, locates or waits for: a `G` for its GUID,
+    /// in the function names' colour.
+    static let ppi = (glyph: Glyph.letter("G"), color: CodeColors.function)
+    /// A protocol: the same `G`, in indigo.
+    static let protocolInterface = (glyph: Glyph.letter("G"), color: NSColor.systemIndigo)
+    /// A GUID the dependency expression waits for — a PPI or a protocol, as
+    /// the module's phase has it: the `G` in the expression heading's purple.
+    static let dependency = (glyph: Glyph.letter("G"), color: NSColor.systemPurple)
 
     /// A heading of the Interfaces tab: its sign, on a square in a colour of
     /// its own.
