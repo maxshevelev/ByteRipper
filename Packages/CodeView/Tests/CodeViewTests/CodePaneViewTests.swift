@@ -175,6 +175,27 @@ final class CodePaneViewTests: XCTestCase {
 
         view.openInterfaceAddress(CodeAddress(0x355))
         XCTAssertEqual(view.selectedFunction?.name, "Setup", "a callback opens its function")
+
+        // With a comparison on screen the statement is selected and flashed
+        // in it, on the current revision's side.
+        var earlier = json
+        var functions = earlier["functions"] as! [[String: Any]]
+        functions[0]["c"] = c.replacingOccurrences(of: "  Setup();\n", with: "  Prepare();\n")
+        functions[0]["c_spans"] = [[list.location + 2, list.length, "global", "0x400"]]
+        earlier["functions"] = functions
+        let previous = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: earlier))
+        view.markRevisionChange(from: previous, revision: 1)
+        view.selectFunction(at: 0)
+        view.setComparisonRevision(1, artifact: previous)
+        XCTAssertTrue(view.showsRevisionDiff)
+        view.openInterfaceAddress(CodeAddress(0x221))
+        XCTAssertTrue(view.showsRevisionDiff, "the comparison stays")
+        let selected = view.diffSelectedRange
+        // Its second line carries the comparison's line numbers before it.
+        let inDiff = (view.diffText as NSString).substring(with: selected)
+        XCTAssertTrue(inDiff.hasPrefix("Status = (**(code **)(*PeiServices + 0x18))"), inDiff)
+        XCTAssertTrue(inDiff.hasSuffix("(PeiServices,&mPpiList);"), inDiff)
+        XCTAssertEqual(view.lastFlash, .c(selected))
     }
 
     /// The module's name in the header can be selected and copied.

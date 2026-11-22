@@ -324,6 +324,13 @@ struct CodeDiffCode {
         text.setSelectedRange(range)
         text.scrollRangeToVisible(range)
     }
+    /// The arrival's yellow flash over `range`, brought into view.
+    func flash(_ range: NSRange) {
+        guard range.location + range.length <= (text.string as NSString).length else { return }
+        text.scrollRangeToVisible(range)
+        if text.window != nil { text.showFindIndicator(for: range) }
+    }
+
     /// What the diff has selected, for a test.
     var selectedRange: NSRange { text.selectedRange() }
 

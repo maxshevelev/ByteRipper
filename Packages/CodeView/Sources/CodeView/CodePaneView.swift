@@ -2575,6 +2575,17 @@ import ToolModuleKit
             state.selectLine(line)
             drawSelection()
         }
+        // A comparison on screen in place of the C: the statement is
+        // selected and flashed in the current revision's side of it.
+        if showsRevisionDiff {
+            if let range = statementInC(supplying: address), let shown = diffRange(ofC: range) {
+                diffView.select(shown)
+                diffView.flash(shown)
+                lastFlash = .c(shown)
+            }
+            notifyInstruction()
+            return
+        }
         // The arrival's flash marks the statement too, not the function's
         // name, which it marks for an instruction the C does not place.
         var statement: NSRange?
@@ -2588,6 +2599,16 @@ import ToolModuleKit
         }
         notifyInstruction()
         flashArrival(cMark: statement)
+    }
+
+    /// A range of the current function's C where the comparison shows it:
+    /// from its first character's place to its last's. A statement over two
+    /// lines between which the comparison puts an old line takes that line in.
+    func diffRange(ofC range: NSRange) -> NSRange? {
+        guard let start = diffView.range(ofC: range.location, length: 0, currentSide: true),
+              let end = diffView.range(ofC: NSMaxRange(range), length: 0, currentSide: true),
+              end.location >= start.location else { return nil }
+        return NSRange(location: start.location, length: end.location - start.location)
     }
 
     /// Where in its function's C the module supplies an interface, as a
