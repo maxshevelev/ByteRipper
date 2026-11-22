@@ -114,8 +114,9 @@ a cut's offset and description.
 ## 4. Glyph buttons in rows and bars
 
 - **Something that opens something has a link's colour.** Examples: the
-  CPUID's (i) on a microcode, a module's (i), and the code panel's book while
-  a description is available. Use `NSColor.linkColor`, and on a selected row
+  CPUID's (i) on a microcode, a module's (i), a field's (i), every (?) in a
+  panel's chrome or a popover (`HelpButton.inline`, the detail pane's term
+  button), and the code panel's book while a description is available. Use `NSColor.linkColor`, and on a selected row
   use `alternateSelectedControlTextColor`, because blue on the accent colour
   cannot be seen.
 - **The (i)** is `ToolPanelInfoButton` (`Packages/ToolModuleKit`):

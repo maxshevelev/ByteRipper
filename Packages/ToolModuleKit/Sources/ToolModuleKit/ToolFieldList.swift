@@ -258,7 +258,7 @@ public struct FieldHelp: Sendable, Equatable {
         button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
         button.isBordered = false
         button.imagePosition = .imageOnly
-        button.contentTintColor = .secondaryLabelColor
+        button.contentTintColor = .linkColor  // it opens the field's help
         button.translatesAutoresizingMaskIntoConstraints = true
         ControlHelp.describe(button, name: help.buttonName, tooltip: help.buttonTooltip)
         return button

@@ -139,7 +139,7 @@ import Localization
                                                                      weight: .regular)
         termButton.isBordered = false
         termButton.imagePosition = .imageOnly
-        termButton.contentTintColor = .secondaryLabelColor
+        termButton.contentTintColor = .linkColor  // it opens the term's help
         termButton.target = self
         termButton.action = #selector(termClicked)
         termButton.isHidden = true

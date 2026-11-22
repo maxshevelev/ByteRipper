@@ -65,7 +65,8 @@ import Localization
         return button
     }
 
-    /// A quiet glyph, for a panel's own chrome.
+    /// A glyph for a panel's own chrome, in a link's colour: it opens the
+    /// help (Design/DESIGN_GUIDE.md §4).
     public static func inline(for link: HelpLink, tooltip: String? = nil,
                               pointSize: CGFloat = 12) -> HelpButton {
         let button = HelpButton(destination: link)
@@ -75,7 +76,7 @@ import Localization
                                                                  weight: .regular)
         button.isBordered = false
         button.imagePosition = .imageOnly
-        button.contentTintColor = .secondaryLabelColor
+        button.contentTintColor = .linkColor
         button.configure(tooltip: tooltip)
         return button
     }
