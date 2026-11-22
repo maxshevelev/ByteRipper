@@ -2739,7 +2739,7 @@ public class Owner {
             if (!(target instanceof ghidra.program.model.data.FunctionDefinition definition)) continue;
             String field = component.getFieldName();
             if (field == null || field.isEmpty()) continue;
-            String wanted = type.getName() + "_" + field;
+            String wanted = memberStem(type) + "_" + field;
             if (wanted.equals(definition.getName())) continue;
             try {
                 ghidra.program.model.data.DataTypeManager manager = composite.getDataTypeManager();
@@ -2786,6 +2786,52 @@ public class Owner {
             }
         }
         return changed;
+    }
+
+    /**
+     * What a structure's function members are named after: the typedef that
+     * names the structure, as a review names it, when the structure itself —
+     * its tag, `_CCX_VH_SMU_SERVICES_PPI` — is what the C defined. Without
+     * it the members of one structure came out under two names, the tag's
+     * and the typedef's, depending on which text defined it last.
+     */
+    private static String memberStem(DataType type) {
+        String name = type.getName();
+        if (type instanceof ghidra.program.model.data.TypeDef || !name.startsWith("_")) return name;
+        ghidra.program.model.data.DataTypeManager manager = type.getDataTypeManager();
+        if (manager == null) return name;
+        java.util.List<DataType> held = new java.util.ArrayList<>();
+        manager.findDataTypes(name.substring(1), held);
+        long id = manager.getID(type);
+        for (DataType candidate : held) {
+            if (candidate.getDataTypeManager() == manager
+                && candidate instanceof ghidra.program.model.data.TypeDef def
+                && def.getDataType() != null && manager.getID(def.getDataType()) == id) {
+                return candidate.getName();
+            }
+        }
+        return name;
+    }
+
+    /**
+     * The same type under its other name — the structure a typedef names, or
+     * the typedef that names a structure — recorded again where the review
+     * recorded it: a type defined, or taken from the shared types, under one
+     * name left the other's text as it was before, and the publish read that
+     * stale text.
+     */
+    private void recordOtherName(DataType type) {
+        DataType other = null;
+        if (type instanceof ghidra.program.model.data.TypeDef def) {
+            other = def.getDataType();
+        } else {
+            String stem = memberStem(type);
+            if (!stem.equals(type.getName())) other = find(program.getDataTypeManager(), stem);
+        }
+        if (other == null || other.getName().equals(type.getName())
+            || other.getDataTypeManager() != program.getDataTypeManager()
+            || !Harvest.reviewTypes(program).containsKey(other.getName())) return;
+        Harvest.recordType(program, other.getName(), ExportCode.typeC(other));
     }
 
     /** The same return, parameters and varargs; the convention is not the C's. */
@@ -8387,9 +8433,11 @@ public class Owner {
         // Its function types are EFIAPI before its C is recorded, not after.
         efiApiFunctionTypes(program);
         Harvest.recordType(program, resolved.getName(), ExportCode.typeC(resolved));
+        recordOtherName(resolved);
         JsonArray others = new JsonArray();
         for (DataType type : alsoDefined) {
             Harvest.recordType(program, type.getName(), ExportCode.typeC(type));
+            recordOtherName(type);
             others.add(type.getName());
         }
         answer.addProperty("name", resolved.getName());

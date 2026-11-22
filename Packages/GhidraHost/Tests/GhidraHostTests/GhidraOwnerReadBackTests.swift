@@ -453,6 +453,44 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// A structure defined again by its tag, whose function members the C
+    /// names by the typedefs the program holds, keeps those typedefs: the
+    /// members are not renamed after the tag (`_PROBE_SMU_PPI_SmnRead`). A
+    /// member written as an inline prototype is named through the
+    /// structure's typedef, as it is when the typedef is what the C defines.
+    func testAStructureDefinedByItsTagKeepsTheMemberTypesItNames() async throws {
+        try await open(try image())
+        _ = try await post("/v1/type", ["c": """
+            typedef EFI_STATUS (PROBE_SMU_PPI_SmnRead)(UINT32 Address, UINT32 *Value);
+            typedef struct _PROBE_SMU_PPI { PROBE_SMU_PPI_SmnRead *SmnRead; UINT32 Revision; } PROBE_SMU_PPI;
+            """])
+        _ = try await post("/v1/type", ["c": """
+            struct _PROBE_SMU_PPI { PROBE_SMU_PPI_SmnRead *SmnRead; \
+            EFI_STATUS (*SmnWrite)(UINT32 Address, UINT32 Value); UINT32 Revision; };
+            """])
+        let ppi = try await read("/v1/type?name=_PROBE_SMU_PPI")
+        let c = (ppi["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("PROBE_SMU_PPI_SmnRead * SmnRead"), "\(ppi)")
+        XCTAssertTrue(c.contains("PROBE_SMU_PPI_SmnWrite * SmnWrite"), "\(ppi)")
+        XCTAssertFalse(c.contains("_PROBE_SMU_PPI_Smn"), "\(ppi)")
+        let listed = try await read("/v1/types?contains=_PROBE_SMU_PPI_&kind=function&limit=50")
+        XCTAssertEqual((listed["types"] as? [[String: Any]] ?? []).count, 0, "\(listed)")
+        // A publish names the members again over what the review recorded:
+        // the named ones stay, and the typedef's recorded text is the
+        // structure as the tag defined it last.
+        _ = try await host.preview(module, "/v1/publish?dry_run=1", body: Data())
+        let review = try await read("/v1/review")
+        let types = review["types"] as? [[String: Any]] ?? []
+        let recorded = Dictionary(uniqueKeysWithValues: types.compactMap { item in
+            (item["name"] as? String).map { ($0, item["c"] as? String ?? "") } })
+        for name in ["PROBE_SMU_PPI", "_PROBE_SMU_PPI"] {
+            let text = try XCTUnwrap(recorded[name], "\(recorded.keys.sorted())")
+            XCTAssertTrue(text.contains("SmnWrite"), "\(name): \(text)")
+            XCTAssertFalse(text.contains("_PROBE_SMU_PPI_Smn"), "\(name): \(text)")
+        }
+        _ = try await release()
+    }
+
     /// Issue 7f2d75ae: one text defining a structure and the structure it
     /// holds an array of names the inline function members of both — not only
     /// of the type the text ends with. A member left `_func_N` reached the
