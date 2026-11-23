@@ -621,6 +621,30 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 4f6bb983: a function given its storage by hand takes off the
+    /// stack what its RET does. FirmwareAuthenticationPei's 0x47D, made by
+    /// hand where only its caller points, has an unknown purge until its
+    /// signature; a plain RET there purges nothing, and its caller reads its
+    /// own stack slots as they are.
+    func testExplicitStorageKeepsThePurgeOfAPlainReturn() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_PURGE_MODULE"] else {
+            throw XCTSkip("GHIDRA_PURGE_MODULE (FirmwareAuthenticationPei.efi) is not set")
+        }
+        try await open(try Data(contentsOf: URL(fileURLWithPath: path)))
+        try await post("/v1/create/function", ["address": "0x5D2", "by": "agent"])
+        try await post("/v1/create/function", ["address": "0x47D", "by": "agent"])
+        let answer = try await post("/v1/set/signature", [
+            "address": "0x47D",
+            "signature": "EFI_STATUS FindIflashSignatureBlocks(UINT8 *Image, UINTN ImageSize, UINTN *SignedOffset, UINTN *SignedLength, UINTN *SignatureOffset, UINTN *SignatureLength)",
+            "storage": ["ECX:4", "EDX:4", "Stack[0x4]:4", "Stack[0x8]:4", "Stack[0xc]:4", "Stack[0x10]:4"],
+            "return_storage": "EAX:4", "by": "agent", "reason": "test"])
+        let function = try await read("/v1/function/0x47D")
+        XCTAssertEqual(function["stack_purge"] as? Int ?? 0, 0, "\(answer)")
+        let caller = try await c("0x5D2")
+        XCTAssertFalse(caller.contains("in_stack_"), caller)
+        _ = try await release()
+    }
+
     /// Issue 25962cd2: an inline function-pointer parameter is not a type
     /// named after the parameter (`Table * * Table`): its function type is
     /// named after the function and the parameter, as a member's is after the

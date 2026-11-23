@@ -7978,14 +7978,47 @@ public class Owner {
      */
     private static Integer settlePurge(Function function) throws Exception {
         ghidra.program.model.lang.PrototypeModel model = function.getCallingConvention();
-        if (model == null) return null;
-        int extrapop = model.getExtrapop();
-        if (extrapop == ghidra.program.model.lang.PrototypeModel.UNKNOWN_EXTRAPOP) return null;
-        int purge = extrapop - model.getStackshift();
+        int purge;
+        if (model != null && model.getExtrapop() != ghidra.program.model.lang.PrototypeModel.UNKNOWN_EXTRAPOP) {
+            purge = model.getExtrapop() - model.getStackshift();
+        } else {
+            // A convention that leaves it to the function, or none — the
+            // default one a signature with its own storage takes: the RET
+            // says it (issue 4f6bb983). Left alone, a function made by hand
+            // keeps an unknown purge, and Ghidra counts every parameter in,
+            // the register ones too.
+            Integer returns = purgeOfReturns(function);
+            if (returns == null) return null;
+            purge = returns;
+        }
         int before = function.getStackPurgeSize();
         if (before == purge) return null;
         function.setStackPurgeSize(purge);
         return before;
+    }
+
+    /**
+     * What every RET of the function takes off the stack: 0 for a plain RET,
+     * n for RET n. Null when the body has none, or when they disagree.
+     */
+    static Integer purgeOfReturns(Function function) {
+        Integer found = null;
+        ghidra.program.model.listing.InstructionIterator instructions =
+            function.getProgram().getListing().getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            ghidra.program.model.listing.Instruction instruction = instructions.next();
+            String mnemonic = instruction.getMnemonicString().toUpperCase(java.util.Locale.ROOT);
+            if (!mnemonic.equals("RET") && !mnemonic.equals("RETN")) continue;
+            int popped = 0;
+            if (instruction.getNumOperands() > 0) {
+                ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(0);
+                if (scalar == null) return null;
+                popped = (int) scalar.getUnsignedValue();
+            }
+            if (found != null && found != popped) return null;
+            found = popped;
+        }
+        return found;
     }
 
     private static String placesOf(Function function) {
