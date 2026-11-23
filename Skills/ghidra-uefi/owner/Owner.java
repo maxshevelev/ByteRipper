@@ -4137,7 +4137,7 @@ public class Owner {
         }
         JsonArray list = new JsonArray();
         for (JsonElement element : items) list.add(answers.get(element.getAsJsonObject()));
-        System.out.println("OWNER LIBRARY APPLY " + leaseHolder + " " + list.size());
+        System.out.println("OWNER LIBRARY APPLY " + leaseHolder + " " + list.size() + (dryRun ? " dry run, rolled back" : ""));
         JsonObject answer = identity();
         answer.addProperty("dry_run", dryRun);
         answer.add("items", list);

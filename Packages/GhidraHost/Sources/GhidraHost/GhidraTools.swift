@@ -426,7 +426,7 @@ public enum GhidraTools {
                     nothing. With `take_text: true` the entry's text replaces what the project holds on the \
                     function: do this before adding to a function of the registry, so that an addition stands on \
                     the entry's text. \
-                    `dry_run: true` answers the same and writes nothing. `decline: true` refuses the entry \
+                    `dry_run: true` answers the same, with `dry_run: true` at its top, and writes nothing: its `renamed` and `marked` are what an apply would do. `decline: true` refuses the entry \
                     for the function (`id`, or the one matched), and it is not offered again; a function \
                     linked to that entry is unlinked (`unmarked`) and publishes as the module's own, its \
                     names and text as the review wrote them.

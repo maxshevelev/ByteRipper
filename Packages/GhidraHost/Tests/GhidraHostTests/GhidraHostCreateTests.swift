@@ -62,6 +62,53 @@ final class GhidraHostLibraryTests: XCTestCase {
         return try XCTUnwrap(published.library)
     }
 
+    /// Issue c6aea112: an apply with `dry_run` answers what it would link and
+    /// links nothing: the function keeps its name and stays to apply.
+    func testADryRunApplyLinksNothing() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDryApplyTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDryApplyTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
+        try await host.take(reviewed)
+        _ = try await host.createCached(module: images[1], name: "Other")
+        try await host.take(other)
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+
+        let copyGuid = try await function(of: 25, in: reviewed, host: host)
+        _ = try await host.write(reviewed, "/v1/set/signature", body: body([
+            "address": copyGuid, "signature": "EFI_GUID * CopyGuid(EFI_GUID * DestinationGuid, EFI_GUID * SourceGuid)",
+            "storage": ["ECX:4", "EDX:4"], "by": "agent", "reason": "EDK2 BaseLib CopyGuid"]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "plate", "text": "EDK2 BaseLib CopyGuid: the plate of the entry."]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
+        _ = try await moved(copyGuid, of: reviewed, host: host)
+
+        let theirs = try await function(of: 25, in: other, host: host)
+        let before = try json(await host.readCall(other, "function/\(theirs)", query: [:]))["name"] as? String
+        let dry = try json(await host.library(other, .init(action: .apply, dryRun: true)))
+        XCTAssertEqual(dry["dry_run"] as? Bool, true, "the answer says it wrote nothing")
+        let results = dry["results"] as? [[String: Any]] ?? []
+        XCTAssertTrue(results.contains { $0["address"] as? String == theirs }, "\(dry)")
+        let after = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertEqual(after["name"] as? String, before, "\(after.keys.sorted())")
+        XCTAssertNotEqual(after["name"] as? String, "CopyGuid")
+        XCTAssertNil(after["library_entry"], "\(after["library_entry"] ?? "")")
+        let plan = try json(await host.library(other, .init(action: .status)))
+        let toApply = (plan["to_apply"] as? [[String: Any]] ?? []).compactMap { $0["address"] as? String }
+        XCTAssertTrue(toApply.contains(theirs), "\(plan.keys.sorted())")
+    }
+
     /// With the registry reading through, `ghidra_function` and `ghidra_functions`
     /// answer a function at its entry with the entry's text, the same as the
     /// store does; an edit is the review's own; what is taken out is the module's.

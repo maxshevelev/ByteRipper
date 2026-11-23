@@ -437,6 +437,10 @@ extension GhidraHost {
                 steps = try Self.chosen(plan, address: address, id: request.id, reason: request.reason)
             }
             var answer = try Self.plain(plan) as? [String: Any] ?? [:]
+            // A dry run's results read like an apply's: the answer says it was
+            // one, or a reader takes the names and marks for written (issue
+            // c6aea112).
+            if request.dryRun == true { answer["dry_run"] = true }
             // What the registry gave back goes with a plain apply and an open.
             if request.address == nil, !plan.released.isEmpty, request.dryRun != true {
                 answer["released"] = try await releaseGivenBack(module, plan: plan, index: index)
