@@ -408,6 +408,10 @@ public class Owner {
         } catch (Failure failure) {
             error(exchange, failure.status, failure.getMessage());
         } catch (Exception error) {
+            // An unexpected failure is the owner's bug: its stack goes to the
+            // log, or a report of it can only be guessed at (issue f15e10c9).
+            System.out.println("OWNER FAILED " + method + " " + path + ": " + error);
+            for (StackTraceElement frame : error.getStackTrace()) System.out.println("    at " + frame);
             error(exchange, 500, error.toString());
         }
     }

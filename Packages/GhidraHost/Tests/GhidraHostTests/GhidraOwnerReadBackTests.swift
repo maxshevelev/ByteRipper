@@ -564,6 +564,30 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue f15e10c9: `comments` in the call that first defines a structure
+    /// with an inline function member are placed, not a NullPointerException.
+    func testCommentsInTheFirstDefinitionOfAStructureWithAFunctionMember() async throws {
+        try await open(try image())
+        let made = try await post("/v1/type", ["c": """
+            #pragma pack(1)
+            typedef struct _PROBE_ARI_SCAN_DATA {
+              UINT32 (*Callback)(UINT32 Device, void *ScanData);
+              void *StdHeader;
+              UINT8 AriFound;
+              UINT8 NextBus;
+              UINT8 Reserved[2];
+            } PROBE_ARI_SCAN_DATA;
+            """, "description": "Probe.", "comments": ["Callback": "Called per device.", "StdHeader": "Written 0.",
+                                                       "AriFound": "Set when found.", "NextBus": "Next bus.",
+                                                       "Reserved": "Padding, not written."]])
+        XCTAssertTrue((made["c"] as? String ?? "").contains("PROBE_ARI_SCAN_DATA_Callback * Callback"), "\(made)")
+        let read = try await read("/v1/type?name=PROBE_ARI_SCAN_DATA")
+        let c = (read["program"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("Called per device."), "\(read)")
+        XCTAssertTrue(c.contains("Set when found."), "\(read)")
+        _ = try await release()
+    }
+
     /// Issue bab008b6: an EDK2 prototype in a member — `VOID`, `IN`, `OUT`,
     /// `OPTIONAL`, `EFIAPI` — parses as the signatures do; a comment keeps
     /// the words as they were written.
