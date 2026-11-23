@@ -7536,6 +7536,42 @@ public class Owner {
         return type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
     }
 
+    /**
+     * An inline function-pointer parameter, `BOOLEAN (**Table)(void)`, comes
+     * out of Ghidra's parser as a function type named after the parameter —
+     * `Table * * Table`, and a program type `/functions/Table` that collides
+     * with any other `Table` (issue 25962cd2). Its function type is named
+     * after the function and the parameter instead, as a structure's member is
+     * after the structure and the field.
+     */
+    private void nameFunctionPointerParameters(FunctionDefinitionDataType signature, String function) {
+        ghidra.program.model.data.ParameterDefinition[] parameters = signature.getArguments();
+        boolean changed = false;
+        for (ghidra.program.model.data.ParameterDefinition parameter : parameters) {
+            int depth = 0;
+            DataType inner = parameter.getDataType();
+            while (inner instanceof ghidra.program.model.data.Pointer pointer && pointer.getDataType() != null) {
+                inner = pointer.getDataType();
+                depth++;
+            }
+            if (depth == 0 || !(inner instanceof ghidra.program.model.data.FunctionDefinition definition)
+                || parameter.getName() == null || !definition.getName().equals(parameter.getName())) continue;
+            DataType copy = definition.copy(program.getDataTypeManager());
+            try {
+                copy.setName(function + "_" + parameter.getName());
+            } catch (Exception error) {
+                continue;
+            }
+            DataType wrapped = program.getDataTypeManager().resolve(copy, DataTypeConflictHandler.REPLACE_HANDLER);
+            for (int level = 0; level < depth; level++) {
+                wrapped = new ghidra.program.model.data.PointerDataType(wrapped, program.getDataTypeManager());
+            }
+            parameter.setDataType(wrapped);
+            changed = true;
+        }
+        if (changed) signature.setArguments(parameters);
+    }
+
     private JsonObject setSignature(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
         String nameBefore = function.getName();
@@ -7566,6 +7602,7 @@ public class Owner {
         }
         if (signature == null) throw new Failure(400, "the signature does not parse");
         signature.setName(name);
+        nameFunctionPointerParameters(signature, name);
         // EDK2 defines EFIAPI as `__cdecl` on IA32 (ProcessorBind.h): the
         // caller takes the arguments off the stack. Erased as a macro, it left
         // the function with whatever convention analysis guessed — `__stdcall`

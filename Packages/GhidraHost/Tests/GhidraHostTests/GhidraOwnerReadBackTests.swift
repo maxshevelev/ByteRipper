@@ -588,6 +588,24 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 25962cd2: an inline function-pointer parameter is not a type
+    /// named after the parameter (`Table * * Table`): its function type is
+    /// named after the function and the parameter, as a member's is after the
+    /// structure and the field.
+    func testAnInlineFunctionPointerParameterIsNamedAfterTheFunction() async throws {
+        try await open(try image())
+        let first = try await entries().first
+        let entry = try XCTUnwrap(first)
+        let answer = try await post("/v1/set/signature", ["address": entry,
+                                    "signature": "BOOLEAN ProbeCallTable(BOOLEAN (**Table)(void))",
+                                    "by": "agent", "reason": "test"])
+        let signature = answer["signature"] as? String ?? ""
+        XCTAssertTrue(signature.contains("ProbeCallTable_Table * * Table"), "\(answer)")
+        let stray = try? await read("/v1/type?name=Table")
+        XCTAssertNil((stray?["program"] as? [String: Any])?["c"], "\(stray ?? [:])")
+        _ = try await release()
+    }
+
     /// Issue bab008b6: an EDK2 prototype in a member — `VOID`, `IN`, `OUT`,
     /// `OPTIONAL`, `EFIAPI` — parses as the signatures do; a comment keeps
     /// the words as they were written.
