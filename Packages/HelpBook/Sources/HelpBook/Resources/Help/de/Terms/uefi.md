@@ -1,4 +1,4 @@
-@source-sha df69b1314b7cebd488456d6fe26317062f1ef1660080ddcc198f9914f33fa5c1
+@source-sha 2978aafc766428f6a53ab31c562c02fd02c3627fb726f29d2ed5f253a8deefb7
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -878,7 +878,7 @@ Ein PPI wird mit `InstallPpi` installiert und mit `LocatePpi` gefunden; ein PEIM
 @name DEPEX
 @short Abhängigkeitsausdruck: der Bytecode, der die PPIs oder Protokolle nennt, die ein Modul zum Ausführen braucht.
 
-Der Rumpf ist ein Postfix-Ausdruck: `PUSH` einer GUID, dann verbinden `AND`, `OR` und `NOT` die Werte, `END` schließt ab; `TRUE` und `FALSE` sind Literale. Ein DXE-Ausdruck darf mit `BEFORE`, `AFTER` oder `SOR` beginnen; sie sagen, wann der Treiber ausgeführt wird. Der Section-Typ ist `0x1B` für PEI, `0x13` für DXE und `0x1C` für MM. Die Anzeige zeigt ihn unter **Abhängigkeiten**. Der Ausdruck nennt eine Schnittstelle: Das Modul, das die GUID installiert, steht nicht im Image, und es können mehrere sein. [[topic:pei-dxe]] erklärt, wie man einen Installierer sucht.
+Der Rumpf ist ein Postfix-Ausdruck: `PUSH` einer GUID, dann verbinden `AND`, `OR` und `NOT` die Werte, `END` schließt ab; `TRUE` und `FALSE` sind Literale. Ein DXE-Ausdruck darf mit `BEFORE`, `AFTER` oder `SOR` beginnen; sie sagen, wann der Treiber ausgeführt wird. Der Section-Typ ist `0x1B` für PEI, `0x13` für DXE und `0x1C` für MM. Der Tab „Interfaces“ des [[topic:code-panel|Code-Bereichs]] zeigt ihn unter **Abhängigkeitsausdruck**. Der Ausdruck nennt eine Schnittstelle: Das Modul, das die GUID installiert, steht nicht im Image, und es können mehrere sein. [[topic:pei-dxe]] erklärt, wie man einen Installierer sucht.
 
 @see term:pei
 @see term:dxe

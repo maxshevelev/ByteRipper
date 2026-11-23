@@ -1,4 +1,4 @@
-@source-sha f4d3220a88374384069602fc778daa53d84d652733415d6e16b470cfcbad16ca
+@source-sha a24990aba17337ef8b73622ac65a46d41020c95dec5120b0bbc710a27d4e57dd
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -21,7 +21,7 @@ Werden die Analysen auf einem Analyseserver geführt, zeigt die Titelzeile direk
 
 Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird. In einer Tabelle führt nur ein Link weiter, und nur ein Klick auf den Link selbst. Der Text der Details — die Felder eines Knotens ebenso wie die Tabellen — wird wie jeder Text markiert: durch Ziehen über die Zeilen, ein Wort per Doppelklick, eine Zeile per Dreifachklick, die ganze Feldliste oder die ganze Tabelle mit ⌘A. ⌘C kopiert die Markierung mit einem Tabulator zwischen dem Namen eines Felds und seinem Wert oder zwischen den Zellen und einer Zeile je Zeile, sodass eine Tabellenkalkulation eine Tabelle als Tabelle übernimmt. **Kopieren** im Kontextmenü einer Zeile kopiert die Markierung oder, wenn nichts markiert ist, den Namen, den Wert oder die Zelle unter dem Zeiger. Ein Feldname, der nicht in seine Spalte passt, wird in der nächsten Zeile fortgesetzt.
 
-Bei einem Modul, das einen Abhängigkeitsausdruck trägt — ein PEI-, DXE- oder MM-Modul —, steht er unter **Abhängigkeiten**: der Ausdruck als Formel über die genannten PPIs oder Protokolle, darunter eine Tabelle aller Operationen, ihrer Adresse und des GUID-Namens, wenn der Katalog einen hat. Die Details der Abhängigkeitssektion selbst lesen sich genauso. Ein Ausdruck, der sich nicht zerlegen lässt, nennt den Fehler, statt als ganzer gezeigt zu werden. Wie ein PEIM oder ein DXE-Treiber ausgeführt wird und was der Ausdruck bedeutet, steht unter [[topic:pei-dxe|PEIMs und DXE-Treiber]].
+Der Abhängigkeitsausdruck eines PEI-, DXE- oder MM-Moduls steht nicht in den Details, sondern im Tab „Interfaces“ des [[topic:code-panel|Code-Bereichs]]. Wie ein PEIM oder ein DXE-Treiber ausgeführt wird und was der Ausdruck bedeutet, steht unter [[topic:pei-dxe|PEIMs und DXE-Treiber]].
 
 ## Suche im Baum
 

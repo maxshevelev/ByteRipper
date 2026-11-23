@@ -1804,15 +1804,12 @@
 "Writing the project" = "Запись проекта";
 "Writing the workspace" = "Запись рабочей сессии";
 
-"Dependencies" = "Зависимости";
 "Dependency expression" = "Выражение зависимостей";
 "One of" = "Одно из";
 "All of" = "Все из";
 "TRUE: the module waits for nothing" = "TRUE: модуль ничего не ожидает";
 "FALSE: the module is never started" = "FALSE: модуль никогда не запускается";
 "The expression in the file cannot be read." = "Выражение в файле не читается.";
-"Dependency problem" = "Ошибка в выражении зависимостей";
-"Not a valid expression" = "Недопустимое выражение";
 "Unknown dependency operation %1$@ at %2$@." = "Неизвестная операция выражения зависимостей: %1$@, адрес %2$@.";
 "The dependency expression ends inside a GUID at %1$@." = "Выражение зависимостей обрывается внутри GUID по адресу %1$@.";
 "The dependency expression needs more operands at %1$@." = "В выражении зависимостей не хватает операндов: %1$@.";
@@ -1821,8 +1818,6 @@
 "The dependency expression has bytes after END (%1$@)." = "После END в выражении зависимостей остаются байты (%1$@).";
 "The dependency expression uses %1$@ at %2$@; it belongs only at its start." = "Выражение зависимостей использует %1$@ по адресу %2$@; эта операция допустима только в начале.";
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Выражение зависимостей PEI не может использовать %1$@ (адрес %2$@).";
-"PPI GUID" = "GUID PPI";
-"Protocol GUID" = "GUID протокола";
 "Open the code here" = "Открыть код в этом месте";
 "Opening the code…" = "Открытие кода…";
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Заметка показывается рядом с кодом и в окне «Заметки». Двойной клик по ней открывает код в этом месте.";

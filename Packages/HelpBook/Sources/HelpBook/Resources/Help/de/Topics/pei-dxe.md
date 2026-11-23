@@ -1,4 +1,4 @@
-@source-sha 46f5e3297873ef859ee867ea1f4a596b1ee709ca3a5fa7c4682d80c6d7e8dcbd
+@source-sha 4023f9be41d22bf1f0c83baa0db50d2c526009d3dab2f77433b7a4ace9821a7e
 # PEIMs und DXE-Treiber
 
 > PEIMs, DXE-Treiber, die Schnittstellen, die sie veröffentlichen und erwarten, und wie der Dispatcher entscheidet, wann ein Modul läuft.
@@ -29,17 +29,15 @@ Ein Ausdruck steht in Postfix-Form: `PUSH` einer GUID, dann verbinden `AND`, `OR
 
 Daraus folgt etwas Wichtiges: Ein Ausdruck nennt eine **Schnittstelle**, kein Modul. Jedes Modul kann ein PPI oder Protokoll installieren, mehrere können dasselbe installieren, und manche installiert der PEI Core selbst. Das Image speichert nicht „Modul A hängt von Modul B ab“.
 
-## Was die Anzeige zeigt
+## Wo der Ausdruck steht
 
-Wählen Sie ein PEIM oder einen DXE-Treiber in [[topic:tool-uefi|UEFI Structure]]: Die Details zeigen **Abhängigkeiten** — den Ausdruck als Formel über die GUIDs, mit dem Namen aus dem Katalog, sofern er einen kennt, und eine Tabelle aller Operationen mit Adresse und der GUID des PPIs oder Protokolls. Dieselben Zeilen stehen in den Details der Abhängigkeitssektion selbst — Typ `0x1B` für PEI, `0x13` für DXE, `0x1C` für MM. Ein Modul ohne Abhängigkeitssektion zeigt dieses Feld nicht.
-
-Eine GUID, die der Katalog nicht kennt, erscheint als GUID: Das Image enthält nur sechzehn Bytes. Die Namen stammen aus dem Katalog, mit dem der Baum die GUIDs von Dateien benennt (`common/guids.csv` von UEFITool), nicht aus der Firmware.
+Öffnen Sie den Code eines PEIMs oder eines DXE-Treibers: Der Tab „Interfaces“ des [[topic:code-panel|Code-Bereichs]] zeigt den Ausdruck unter **Abhängigkeitsausdruck**. Jede GUID steht unter dem Namen, den ihr die Analyse gegeben hat, oder als GUID, wenn noch keine Analyse sie benannt hat. Das Image enthält nur die sechzehn Bytes.
 
 ## Wie man den Installierer einer Schnittstelle findet
 
 Die Abhängigkeitssektionen, die eine GUID nennen, sind ihre Verbraucher. Ein Modul, das dieselbe GUID installiert, erwähnt sie meist im Code oder in den Daten. Suchen Sie im Inhalt des Images nach den sechzehn Bytes der GUID — die ersten drei Felder little-endian, die letzten acht wie gespeichert; — die Treffer enthalten beides: Abhängigkeitssektionen und Module, in deren Code oder Daten die GUID steht. Die Dekompilierung eines Kandidaten unterscheidet den Installierer, der einen Deskriptor an `InstallPpi` übergibt oder ein Protokoll installiert, vom Verbraucher, der `LocatePpi` oder `LocateProtocol` aufruft.
 
-Die Anzeige liest Struktur, nicht Code: Sie kann die Schnittstelle zeigen, die ein Modul anfordert, nicht das Modul, das sie bereitstellt. Für den letzten Schritt braucht es einen Disassembler; die Installiereranalyse ist ein eigener Durchlauf über den Code der Module.
+Der Ausdruck zeigt die Schnittstelle, die ein Modul anfordert, nicht das Modul, das sie bereitstellt. Die Schnittstellen, die ein Modul installiert, stehen in seinem Code-Bereich, sobald seine Analyse sie erfasst hat; bei einem Modul ohne Analyse ist sein dekompilierter Code zu lesen.
 
 ## Was das nicht sagen kann
 

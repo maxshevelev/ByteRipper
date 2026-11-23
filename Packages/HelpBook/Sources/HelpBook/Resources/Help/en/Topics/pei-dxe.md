@@ -28,17 +28,15 @@ An expression is postfix: `PUSH` a GUID, combine the values with `AND`, `OR` and
 
 The consequence matters: an expression names an **interface**, not a module. Any module may install a PPI or protocol, several may install the same one, and some are installed by the PEI Core itself. The image does not store "module A depends on module B".
 
-## What the panel shows
+## Where the expression is shown
 
-Select a PEIM or a DXE driver in [[topic:tool-uefi|UEFI Structure]]: the details show **Dependencies**, the expression as a formula over the GUIDs, with the catalogue's name for a GUID where the catalogue has one, and a table of every operation with its address and the GUID of the PPI or protocol. The same rows are in the details of the dependency section itself — type `0x1B` for PEI, `0x13` for DXE, `0x1C` for MM. A module with no dependency section shows no such field.
-
-A GUID the catalogue does not know is shown as the GUID: the image stores sixteen bytes and nothing else. The names come from the catalogue the tree uses for file GUIDs (`common/guids.csv`, UEFITool's), not from the firmware.
+Open the code of a PEIM or a DXE driver: the Interfaces tab of the [[topic:code-panel|Code panel]] shows its expression under **Dependency expression**, each GUID under the name the reviews gave it, or as the GUID where no review has named it. The image stores the sixteen bytes and nothing else.
 
 ## Finding who installs an interface
 
 The dependency sections that name a GUID are its consumers. A module that installs the same GUID usually mentions it in its code or data. Search the image contents for the GUID's sixteen bytes — the first three fields little-endian, the last eight as stored — and the matches will include both kinds: dependency sections, and modules whose code or data holds the GUID. Decompiling a candidate tells an installer, which passes a descriptor to `InstallPpi` or installs a protocol, from a consumer, which calls `LocatePpi` or `LocateProtocol`.
 
-The panel reads structure, not code: it can show the interface a module asks for, not the module that answers. That last step needs a disassembler, and an installer analysis is a separate pass over the modules' code.
+The expression shows the interface a module asks for, not the module that answers. The interfaces a module installs are listed in its Code panel once its review has recorded them; for a module not yet reviewed, read its decompiled code.
 
 ## What this cannot tell you
 

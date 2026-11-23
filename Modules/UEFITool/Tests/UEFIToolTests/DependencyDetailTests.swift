@@ -2,9 +2,8 @@ import UEFIImage
 import XCTest
 @testable import UEFITool
 
-/// The dependency expression in the details: a file answers with the section
-/// among its children, the section answers for itself, and a broken expression
-/// says what is wrong rather than showing half of it as if it were whole.
+/// The dependency expression is not in the details of a module or of its
+/// dependency section: the Code panel's Interfaces tab is where it is read.
 final class DependencyDetailTests: XCTestCase {
     private let first = EFIGUID("11111111-1111-1111-1111-111111111111")!
     private let second = EFIGUID("22222222-2222-2222-2222-222222222222")!
@@ -55,75 +54,13 @@ final class DependencyDetailTests: XCTestCase {
         [0x02] + first.bytes + [0x02] + second.bytes + [0x03, 0x08]
     }
 
-    func testAFileShowsTheExpressionItsSectionCarries() {
+    func testNeitherTheFileNorItsSectionShowsTheExpression() {
         let built = built(chain)
-        let (detail, fields) = fields(built, names: [first: "First PPI", second: "Second PPI"])
-        XCTAssertEqual(fields["Dependencies"]?.value, "First PPI AND Second PPI")
-        XCTAssertEqual(fields["Dependencies"]?.tone, .standard)
-
-        let table = detail.tables.first { $0.title == "Dependency expression" }
-        XCTAssertEqual(table?.columns, ["Offset", "Operation", "Name", "PPI GUID"])
-        XCTAssertEqual(table?.rows.map { $0.map(\.text) }, [
-            ["0x1C", "PUSH", "First PPI", first.description],
-            ["0x2D", "PUSH", "Second PPI", second.description],
-            ["0x3E", "AND", "", ""],
-            ["0x3F", "END", "", ""],
-        ])
-    }
-
-    func testTheSectionAnswersForItself() {
-        let built = built(chain)
-        let (_, fields) = fields(built, node: built.section,
-                                 names: [first: "First PPI", second: "Second PPI"])
-        XCTAssertEqual(fields["Dependencies"]?.value, "First PPI AND Second PPI")
-    }
-
-    func testADXEDriverShowsItsDependencies() {
-        let depex: [UInt8] = [0x00, 0x02] + first.bytes + [0x08]
-        let built = built(depex, fileType: 0x07, sectionType: 0x13)
-        let (detail, fields) = fields(built, names: [first: "EfiSomeProtocolGuid"])
-        XCTAssertEqual(fields["Dependencies"]?.value, "BEFORE EfiSomeProtocolGuid")
-
-        let table = detail.tables.first { $0.title == "Dependency expression" }
-        XCTAssertEqual(table?.columns, ["Offset", "Operation", "Name", "Protocol GUID"])
-        XCTAssertEqual(table?.rows.map { $0.map(\.text) }, [
-            ["0x1C", "BEFORE", "", ""],
-            ["0x1D", "PUSH", "EfiSomeProtocolGuid", first.description],
-            ["0x2E", "END", "", ""],
-        ])
-    }
-
-    func testAFilesWithoutADependencyHasNoDependencyRow() {
-        let built = built(chain)
-        let plain = UEFINode(
-            id: .root.child(1), kind: .file, subtype: 0x07, name: "A driver",
-            header: 0..<0x18, body: 0x18..<0x40)
-        let (detail, fields) = fields(built, node: plain)
-        XCTAssertNil(fields["Dependencies"])
-        XCTAssertTrue(detail.tables.isEmpty)
-    }
-
-    func testABrokenExpressionSaysWhatIsWrong() {
-        let built = built([0x03, 0x08])
-        let (_, fields) = fields(built)
-        XCTAssertEqual(fields["Dependencies"]?.value,
-                       "The dependency expression needs more operands at 0x1C.")
-        XCTAssertEqual(fields["Dependencies"]?.tone, .bad)
-    }
-
-    func testBytesAfterEndAreAWarningNotAVerdict() {
-        let built = built([0x02] + first.bytes + [0x08, 0xAA])
-        let (_, fields) = fields(built, names: [first: "First PPI"])
-        XCTAssertEqual(fields["Dependencies"]?.value, "First PPI")
-        XCTAssertEqual(fields["Dependency problem"]?.value,
-                       "The dependency expression has bytes after END (1).")
-        XCTAssertEqual(fields["Dependency problem"]?.tone, .caution)
-    }
-
-    func testAnEmptySectionIsAlways() {
-        let built = built([])
-        let (detail, fields) = fields(built)
-        XCTAssertEqual(fields["Dependencies"]?.value, "TRUE")
-        XCTAssertTrue(detail.tables.isEmpty)
+        for node in [built.file, built.section] {
+            let (detail, fields) = fields(built, node: node, names: [first: "First PPI", second: "Second PPI"])
+            XCTAssertNil(fields["Dependencies"], node.name)
+            XCTAssertNil(fields["Dependency problem"], node.name)
+            XCTAssertFalse(detail.tables.contains { $0.title == "Dependency expression" }, node.name)
+        }
     }
 }

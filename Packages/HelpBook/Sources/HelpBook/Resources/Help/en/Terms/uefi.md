@@ -877,7 +877,7 @@ A PPI is installed with `InstallPpi` and found with `LocatePpi`; a PEIM can subs
 @name DEPEX
 @short Dependency expression: the bytecode that names the PPIs or protocols a module needs before it may run.
 
-The body is a postfix expression: `PUSH` a GUID, combine the values with `AND`, `OR` and `NOT`, finish with `END`; `TRUE` and `FALSE` are literals. A DXE expression may begin with `BEFORE`, `AFTER` or `SOR`, which say when the driver is dispatched. The section type is `0x1B` for PEI, `0x13` for DXE and `0x1C` for MM. The panel shows it under **Dependencies**. The expression names an interface: the module that installs the GUID is not stored in the image, and several may install it. [[topic:pei-dxe]] explains how to look for an installer.
+The body is a postfix expression: `PUSH` a GUID, combine the values with `AND`, `OR` and `NOT`, finish with `END`; `TRUE` and `FALSE` are literals. A DXE expression may begin with `BEFORE`, `AFTER` or `SOR`, which say when the driver is dispatched. The section type is `0x1B` for PEI, `0x13` for DXE and `0x1C` for MM. The Interfaces tab of the [[topic:code-panel|Code panel]] shows it under **Dependency expression**. The expression names an interface: the module that installs the GUID is not stored in the image, and several may install it. [[topic:pei-dxe]] explains how to look for an installer.
 
 @see term:pei
 @see term:dxe

@@ -1804,15 +1804,12 @@
 "Writing the project" = "Projekt wird geschrieben";
 "Writing the workspace" = "Arbeitsbereich wird geschrieben";
 
-"Dependencies" = "Abhängigkeiten";
 "Dependency expression" = "Abhängigkeitsausdruck";
 "One of" = "Eines von";
 "All of" = "Alle von";
 "TRUE: the module waits for nothing" = "TRUE: Das Modul wartet auf nichts";
 "FALSE: the module is never started" = "FALSE: Das Modul wird nie gestartet";
 "The expression in the file cannot be read." = "Der Ausdruck in der Datei kann nicht gelesen werden.";
-"Dependency problem" = "Fehler im Abhängigkeitsausdruck";
-"Not a valid expression" = "Kein gültiger Ausdruck";
 "Unknown dependency operation %1$@ at %2$@." = "Unbekannte Operation im Abhängigkeitsausdruck: %1$@ bei %2$@.";
 "The dependency expression ends inside a GUID at %1$@." = "Der Abhängigkeitsausdruck endet innerhalb einer GUID bei %1$@.";
 "The dependency expression needs more operands at %1$@." = "Dem Abhängigkeitsausdruck fehlen Operanden bei %1$@.";
@@ -1821,8 +1818,6 @@
 "The dependency expression has bytes after END (%1$@)." = "Nach END folgen im Abhängigkeitsausdruck noch Bytes (%1$@).";
 "The dependency expression uses %1$@ at %2$@; it belongs only at its start." = "Der Abhängigkeitsausdruck verwendet %1$@ bei %2$@; die Operation ist nur am Anfang zulässig.";
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Ein PEI-Abhängigkeitsausdruck darf %1$@ nicht verwenden (bei %2$@).";
-"PPI GUID" = "PPI-GUID";
-"Protocol GUID" = "Protokoll-GUID";
 "Open the code here" = "Den Code an dieser Stelle öffnen";
 "Opening the code…" = "Code wird geöffnet…";
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Die Anmerkung erscheint neben dem Code und im Fenster „Anmerkungen“. Ein Doppelklick darauf öffnet den Code an dieser Stelle.";
