@@ -154,6 +154,11 @@ public struct GuidRegistry: Codable, Equatable, Sendable {
     }
 
     /// The registry's name for a GUID, in any spelling the GUID is written in.
+    /// The entry for `guid`, written in any case.
+    public func entry(of guid: String) -> GuidEntry? {
+        GuidName.canonicalGUID(guid).flatMap { entries[$0] }
+    }
+
     public func name(of guid: String) -> String? {
         GuidName.canonicalGUID(guid).flatMap { entries[$0]?.name }
     }

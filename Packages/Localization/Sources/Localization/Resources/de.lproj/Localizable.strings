@@ -2075,4 +2075,11 @@
 "When:" = "Wann:";
 "Protocol" = "Protokoll";
 "At:" = "Stelle:";
+"Installs:" = "Installiert:";
+"Locates:" = "Sucht:";
+"Notified of:" = "Benachrichtigung:";
+"Declared in:" = "Deklariert in:";
+"Named by a module review" = "Name aus der Analyse eines Moduls";
+"The module's code does not use it: only the dispatcher checks it." = "Der Code des Moduls verwendet es nicht; nur der Dispatcher prüft es.";
+"The review has not recorded whether the module's code uses it." = "Die Analyse hat noch nicht erfasst, ob der Code des Moduls es verwendet.";
 "Callback:" = "Rückruf:";

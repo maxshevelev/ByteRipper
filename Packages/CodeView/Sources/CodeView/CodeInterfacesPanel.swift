@@ -48,10 +48,15 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         /// The GUID of a condition that names an interface: its row is one
         /// line with the GUID's mark, the GUID in its tooltip.
         let guid: String?
-        init(text: NSAttributedString, children: [ConditionItem] = [], guid: String? = nil) {
+        /// What an interface's row opens to: what the GUID is, and where this
+        /// module's code uses it.
+        var details: [DetailItem]
+        init(text: NSAttributedString, children: [ConditionItem] = [], guid: String? = nil,
+             details: [DetailItem] = []) {
             self.text = text
             self.children = children
             self.guid = guid
+            self.details = details
         }
         var isGroup: Bool { !children.isEmpty }
     }
@@ -154,15 +159,15 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// Shows a module's record. `place` names the code an address is in —
     /// the function, and the offset into it — or nil where the artifact has
     /// no instruction there.
-    func show(_ interfaces: ModuleInterfaces?, dependencies: DependencyOutline? = nil, place: (CodeAddress) -> String?) {
-        groups = Self.groups(of: interfaces, dependencies: dependencies, place: place)
+    func show(_ interfaces: ModuleInterfaces?, dependencies: DependencyOutline? = nil,
+              registry: GuidRegistry = GuidRegistry(), place: (CodeAddress) -> String?) {
+        groups = Self.groups(of: interfaces, dependencies: dependencies, registry: registry, place: place)
         outline.reloadData()
         // The kinds open; each interface closed, its name and marks a line.
         for group in groups { outline.expandItem(group) }
-        // The expression open whole, its choices too.
-        for condition in groups.flatMap({ $0.conditions ?? [] }) where condition.isGroup {
-            outline.expandItem(condition, expandChildren: true)
-        }
+        // The expression open whole, its choices too; an interface in it
+        // closed, as in the review's lists.
+        openChoices(groups.flatMap { $0.conditions ?? [] })
         summaryLabel.stringValue = Self.summary(of: interfaces)
     }
 
@@ -177,6 +182,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     static func groups(of interfaces: ModuleInterfaces?, dependencies: DependencyOutline? = nil,
+                       registry: GuidRegistry = GuidRegistry(),
                        place: (CodeAddress) -> String?) -> [GroupItem] {
         func entries(_ list: [ModuleInterfaces.Interface]?,
                      marks: (ModuleInterfaces.Interface) -> [String]) -> [EntryItem]? {
@@ -188,7 +194,10 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         if let dependencies {
             depex.append(GroupItem(title: L("Dependency expression"), symbol: "flowchart",
                                    help: .term(HelpTermID("depex")), entries: nil,
-                                   conditions: conditionItems(of: dependencies)))
+                                   conditions: conditionItems(of: dependencies) { guid in
+                                       dependencyDetails(of: guid, registry: registry,
+                                                         interfaces: interfaces, place: place)
+                                   }))
         }
         return depex + [
             GroupItem(title: L("Installs"), symbol: "square.and.arrow.up",
@@ -214,7 +223,8 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// The rows of a dependency expression: what must all hold, one row
     /// each — the interface's name and its GUID — and a choice as a row of
     /// its own with its alternatives under it.
-    static func conditionItems(of outline: DependencyOutline) -> [ConditionItem] {
+    static func conditionItems(of outline: DependencyOutline,
+                               details: (String) -> [DetailItem] = { _ in [] }) -> [ConditionItem] {
         let plain: [NSAttributedString.Key: Any] = [
             .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
         ]
@@ -234,9 +244,9 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         func item(_ condition: DependencyOutline.Condition) -> ConditionItem {
             switch condition {
             case .interface(let guid, let name):
-                return ConditionItem(text: interface(guid, name, negated: false), guid: guid)
+                return ConditionItem(text: interface(guid, name, negated: false), guid: guid, details: details(guid))
             case .not(.interface(let guid, let name)):
-                return ConditionItem(text: interface(guid, name, negated: true), guid: guid)
+                return ConditionItem(text: interface(guid, name, negated: true), guid: guid, details: details(guid))
             case .not(let operand):
                 return ConditionItem(text: line("NOT", quiet), children: [item(operand)])
             case .anyOf(let list):
@@ -255,6 +265,79 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             rows.append(ConditionItem(text: line(L("The expression in the file cannot be read."), quiet)))
         }
         return rows + outline.conditions.map(item)
+    }
+
+    /// The rows under a condition of the dependency expression: what the
+    /// GUID is, as the GUID registry holds it, and each place this module's
+    /// review recorded it — installed, located or waited for — with its
+    /// purpose and the code. One the module never touches is said so: only
+    /// the dispatcher reads it.
+    static func dependencyDetails(of guid: String, registry: GuidRegistry, interfaces: ModuleInterfaces?,
+                                  place: (CodeAddress) -> String?) -> [DetailItem] {
+        let plain: [NSAttributedString.Key: Any] = [
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
+        ]
+        let quiet: [NSAttributedString.Key: Any] = [
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        let link: [NSAttributedString.Key: Any] = [
+            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.linkColor
+        ]
+        let mono: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: CodePaneView.navigatorSize - 1, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        func labelled(_ label: String, _ value: String, _ attributes: [NSAttributedString.Key: Any])
+            -> NSAttributedString {
+            let text = NSMutableAttributedString(string: label + " ", attributes: quiet)
+            text.append(NSAttributedString(string: value, attributes: attributes))
+            return text
+        }
+        let entry = registry.entry(of: guid)
+        let kind: String = switch entry?.kind {
+        case .ppi: "PPI"
+        case .protocol: L("Protocol")
+        default: "GUID"
+        }
+        var rows = [DetailItem(text: labelled(kind, guid, mono))]
+        if let note = entry?.note, !note.isEmpty {
+            rows.append(DetailItem(text: NSAttributedString(string: note, attributes: plain)))
+        }
+        if let source = entry?.source {
+            switch source.kind {
+            case .edk2:
+                // `MdePkg/MdePkg.dec:512`: the file says where; the line is the registry's.
+                let file = source.file.map { $0.replacingOccurrences(of: #":\d+$"#, with: "", options: .regularExpression) }
+                if let file { rows.append(DetailItem(text: labelled(L("Declared in:"), file, plain))) }
+            case .review:
+                rows.append(DetailItem(text: NSAttributedString(string: L("Named by a module review"),
+                                                                attributes: quiet)))
+            }
+        }
+        let lists: [(String, [ModuleInterfaces.Interface]?)] = [
+            (L("Installs:"), interfaces?.installs), (L("Locates:"), interfaces?.locates),
+            (L("Notified of:"), interfaces?.notifies)
+        ]
+        let canonical = GuidName.canonicalGUID(guid) ?? guid.uppercased()
+        var used = false
+        for (label, list) in lists {
+            for recorded in list ?? [] where (GuidName.canonicalGUID(recorded.guid) ?? recorded.guid.uppercased()) == canonical {
+                used = true
+                rows.append(DetailItem(text: labelled(label, recorded.purpose, plain)))
+                let address = CodeAddress(hex: recorded.address)
+                let at = address.flatMap(place)
+                rows.append(DetailItem(text: labelled(L("At:"), at ?? recorded.address, at == nil ? plain : link),
+                                       address: at == nil ? nil : address))
+            }
+        }
+        if !used {
+            let complete = interfaces?.isComplete ?? false
+            rows.append(DetailItem(text: NSAttributedString(
+                string: complete ? L("The module's code does not use it: only the dispatcher checks it.")
+                                 : L("The review has not recorded whether the module's code uses it."),
+                attributes: quiet)))
+        }
+        return rows
     }
 
     /// The rows under an interface: why, when, what it is, and where.
@@ -302,25 +385,34 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         if item == nil { return groups.count }
         if let group = item as? GroupItem { return group.children.count }
-        if let condition = item as? ConditionItem { return condition.children.count }
+        if let condition = item as? ConditionItem { return condition.isGroup ? condition.children.count : condition.details.count }
         return (item as? EntryItem)?.details.count ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
         if item == nil { return groups[index] }
         if let group = item as? GroupItem { return group.children[index] }
-        if let condition = item as? ConditionItem { return condition.children[index] }
+        if let condition = item as? ConditionItem {
+            return condition.isGroup ? condition.children[index] : condition.details[index]
+        }
         return (item as! EntryItem).details[index]
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
         if let group = item as? GroupItem { return !group.children.isEmpty }
-        if let condition = item as? ConditionItem { return condition.isGroup }
+        if let condition = item as? ConditionItem { return condition.isGroup || !condition.details.isEmpty }
         return item is EntryItem
     }
 
     /// Where a detail's text starts: under the interface's name.
-    static var detailInset: CGFloat { entryInset + CodeNavigatorCell.disclosureRoom + 4 }
+    static var detailInset: CGFloat { detailInset(level: 2) }
+    /// Where a detail at `level` of the tree starts: under the name of the
+    /// interface it belongs to — one of a review's lists, or a condition of
+    /// the expression however deep.
+    static func detailInset(level: Int) -> CGFloat {
+        entryInset + CGFloat(max(0, level - 2)) * CodeNavigatorCell.disclosureRoom
+            + CodeNavigatorCell.disclosureRoom + 4
+    }
     /// Where an interface's row starts: under its kind's name.
     static var entryInset: CGFloat { CodeNavigatorCell.disclosureRoom - 2 }
     static let detailTrailing: CGFloat = 6
@@ -332,7 +424,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let inset: CGFloat
         if let detail = item as? DetailItem {
             text = detail.text
-            inset = Self.detailInset
+            inset = Self.detailInset(level: outlineView.level(forItem: detail))
         } else if let condition = item as? ConditionItem, !condition.isGroup, condition.guid == nil {
             text = condition.text
             inset = Self.conditionInset(level: outlineView.level(forItem: condition))
@@ -357,7 +449,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             return textCell(condition.text, inset: Self.conditionInset(level: level), in: outlineView)
         }
         guard let detail = item as? DetailItem else { return nil }
-        return textCell(detail.text, inset: Self.detailInset, in: outlineView)
+        return textCell(detail.text, inset: Self.detailInset(level: outlineView.level(forItem: detail)), in: outlineView)
     }
 
     /// Where a condition's text starts at `level` of the tree: under its
@@ -391,8 +483,9 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? CodeNavigatorCell
             ?? CodeNavigatorCell(identifier: id)
         cell.showsDisclosure(true)
-        cell.showsCalls(expandable: false, expanded: false)
-        cell.onToggle = nil
+        let opens = !condition.details.isEmpty
+        cell.showsCalls(expandable: opens, expanded: opens && outlineView.isItemExpanded(condition))
+        cell.onToggle = opens ? { [weak self] in self?.toggle(condition) } : nil
         cell.showsMark(CodeNavigatorIcon.dependency, named: "guid")
         cell.indent = Self.entryInset + CGFloat(max(0, level - 1)) * CodeNavigatorCell.disclosureRoom
         cell.textField?.attributedStringValue = condition.text
@@ -519,12 +612,21 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         }
     }
 
+    /// Opens the choices and sets of conditions at any depth, leaving each
+    /// interface in them closed.
+    private func openChoices(_ conditions: [ConditionItem]) {
+        for condition in conditions where condition.isGroup {
+            outline.expandItem(condition)
+            openChoices(condition.children)
+        }
+    }
+
     func outlineViewItemDidExpand(_ notification: Notification) {
         redrawChevron(notification)
         // The expression opens whole: a choice is part of the condition, not
         // a detail behind a second click.
         if let group = notification.userInfo?["NSObject"] as? GroupItem, let conditions = group.conditions {
-            for condition in conditions where condition.isGroup { outline.expandItem(condition, expandChildren: true) }
+            openChoices(conditions)
         }
     }
     func outlineViewItemDidCollapse(_ notification: Notification) { redrawChevron(notification) }
@@ -553,6 +655,8 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     func choose(row: Int) {
         guard row >= 0, let item = outline.item(atRow: row) else { return }
         if let entry = item as? EntryItem, let address = entry.details.lazy.compactMap(\.address).first {
+            onChoose?(address)
+        } else if let condition = item as? ConditionItem, let address = condition.details.lazy.compactMap(\.address).first {
             onChoose?(address)
         } else if let detail = item as? DetailItem, let address = detail.address {
             onChoose?(address)

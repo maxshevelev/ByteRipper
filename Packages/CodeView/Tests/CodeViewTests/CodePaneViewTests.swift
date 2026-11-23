@@ -216,6 +216,50 @@ final class CodePaneViewTests: XCTestCase {
                        "a file with no expression: the group says none")
     }
 
+    /// A condition of the expression opens, as an interface does, to what
+    /// the GUID is — its kind, its declaration in the registry — and to each
+    /// place the review recorded the module using it, with its code a click
+    /// away; one the module never touches says only the dispatcher checks it.
+    func testADependencyGUIDOpensToWhatItIsAndWhereTheCodeUsesIt() throws {
+        let used = "0AE8CE5D-E448-4437-A8D7-EBF5F194F731", unused = "22222222-2222-2222-2222-222222222222"
+        var reviewed = manifest()
+        reviewed.reading = AnalysisReading(project: "p", rev: 2, interfaces: ModuleInterfaces(
+            installs: [], locates: [.init(guid: used, name: "gEfiPeiReadOnlyVariable2PpiGuid", kind: .ppi,
+                                          address: "0x221", condition: "always",
+                                          purpose: "Reads the setup variables.", required: true)],
+            notifies: []))
+        let view = CodePaneView(manifest: reviewed, artifact: try artifact(), moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.showInterfacesTab(true)
+        var registry = GuidRegistry()
+        registry.entries[used] = GuidEntry(name: "gEfiPeiReadOnlyVariable2PpiGuid", kind: .ppi,
+                                           source: .edk2(tag: "t", file: "MdePkg/MdePkg.dec:512"), at: "")
+        view.guidRegistry = registry
+        view.dependencies = DependencyOutline(conditions: [.interface(guid: used, name: nil),
+                                                           .interface(guid: unused, name: nil)])
+        let panel = view.interfacesPanel
+        XCTAssertEqual(Array(panel.linesForTests.prefix(3)),
+                       ["Dependency expression", "  gEfiPeiReadOnlyVariable2PpiGuid", "  \(unused)"],
+                       "closed, as an interface of the lists is")
+        let first = try XCTUnwrap(panel.outline.item(atRow: 1))
+        panel.outline.expandItem(first)
+        let lines = panel.linesForTests
+        XCTAssertEqual(Array(lines[2...4]), [
+            "    PPI \(used)",
+            "    Declared in: MdePkg/MdePkg.dec",
+            "    Locates: Reads the setup variables."
+        ], "\(lines)")
+        XCTAssertTrue(lines[5].hasPrefix("    At: "), "\(lines)")
+        var opened: CodeAddress?
+        panel.onChoose = { opened = $0 }
+        panel.choose(row: 5)
+        XCTAssertEqual(opened, CodeAddress(hex: "0x221"))
+        panel.outline.expandItem(try XCTUnwrap(panel.outline.item(atRow: 6)))
+        XCTAssertEqual(panel.linesForTests.last { $0.contains("dispatcher") || $0.contains("recorded whether") },
+                       "    The module's code does not use it: only the dispatcher checks it.")
+    }
+
     /// An interface the review recorded under another name reads under the
     /// GUID registry's: the record is not rewritten, the tab names it as
     /// every review does.

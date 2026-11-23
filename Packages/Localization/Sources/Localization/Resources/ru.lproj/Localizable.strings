@@ -2075,4 +2075,11 @@
 "When:" = "Когда:";
 "Protocol" = "Протокол";
 "At:" = "Где:";
+"Installs:" = "Устанавливает:";
+"Locates:" = "Ищет:";
+"Notified of:" = "Уведомление:";
+"Declared in:" = "Объявлен в:";
+"Named by a module review" = "Имя дано при разборе модуля";
+"The module's code does not use it: only the dispatcher checks it." = "Код модуля его не использует: его проверяет только диспетчер.";
+"The review has not recorded whether the module's code uses it." = "Разбор ещё не записал, использует ли его код модуля.";
 "Callback:" = "Обработчик:";

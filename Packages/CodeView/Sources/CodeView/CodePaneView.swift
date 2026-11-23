@@ -2696,7 +2696,8 @@ import ToolModuleKit
     func drawInterfaces() {
         var unplaced = false
         interfacesPanel.show(manifest.reading?.interfaces?.named(by: guidRegistry),
-                             dependencies: dependencies?.named(by: guidRegistry)) { [weak self] recorded in
+                             dependencies: dependencies?.named(by: guidRegistry),
+                             registry: guidRegistry) { [weak self] recorded in
             guard let self else { return nil }
             let address = self.interfaceInstruction(for: recorded)
             let place = self.model.indices(of: CodeLocation(address: address))
