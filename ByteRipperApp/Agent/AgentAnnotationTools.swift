@@ -1093,7 +1093,8 @@ final class AgentAnnotationTools {
                 }
                 controller.openCode(named: opening.partName, from: place.pane, source: opening.source,
                                     manifest: opening.manifest, artifact: opening.artifact,
-                                    recipes: opening.recipes, codec: opening.codec, at: code.location)
+                                    recipes: opening.recipes, codec: opening.codec,
+                                    dependencies: opening.dependencies, at: code.location)
             } catch let failure as UEFICodeOpening.Failure {
                 controller.presentAlert(title: failure.message, message: "", outcome: .problem)
             } catch {

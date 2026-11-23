@@ -1,4 +1,5 @@
 import XCTest
+import ToolModuleKit
 import UEFIImage
 @testable import UEFITool
 
@@ -130,5 +131,26 @@ final class DependencyAgentTests: XCTestCase {
         let tree = await tree()
         let driver = try XCTUnwrap(tree.image().allNodes.first { $0.kind == .file && $0.subtype == 0x07 })
         XCTAssertNil(UEFIAgentQueries.dependencyAnswer(for: driver, in: tree, catalogue: .empty))
+    }
+
+    /// Every route to a Code panel reads the expression the same way
+    /// (`UEFICodeOpening`): the image's file's conditions, by name where the
+    /// catalogue has one, and `.none` for a file without an expression.
+    func testTheCodePanelOutlineIsTheImagesFileExpression() async throws {
+        let depex = [0x02] + first.bytes + [0x02] + second.bytes + [0x03, 0x08]
+        let image = section(type: 0x10, body: [UInt8](repeating: 0xCC, count: 8))
+        let peim = file(guid: 0x33, type: 0x06, body: section(type: 0x1B, body: depex) + image)
+        let driver = file(guid: 0x44, type: 0x07, body: image)
+        let tree = LazyUEFITree(volume(length: 0x1000, files: [peim, driver]))
+        await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
+        await UEFIAgentQueries.openEverything(in: tree)
+        let images = tree.image().allNodes.filter { $0.kind == .section && $0.subtype == 0x10 }
+            .sorted { $0.id.path.lexicographicallyPrecedes($1.id.path) }
+        XCTAssertEqual(images.count, 2)
+        let names = GuidsCatalogue(names: [first: "First PPI"])
+        let outline = try XCTUnwrap(UEFICodeOpening.dependencyOutline(ofModule: images[0].id, in: tree, names: names))
+        XCTAssertEqual(outline.conditions, [.interface(guid: first.description, name: "First PPI"),
+                                            .interface(guid: second.description, name: nil)])
+        XCTAssertEqual(UEFICodeOpening.dependencyOutline(ofModule: images[1].id, in: tree, names: names), DependencyOutline.none)
     }
 }

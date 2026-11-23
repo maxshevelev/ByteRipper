@@ -486,28 +486,9 @@ public final class CodeReadings {
     }
 
     /// The image node in `tree` whose bytes are the module `manifest` was
-    /// made from: the node the analysis names first, when this is its file,
-    /// then every node the tree has open, then — the last resort — the tree
-    /// with every compressed section opened.
+    /// made from (`UEFICodeOpening.imageNode`).
     public func imageNode(of manifest: AnalysisManifest, in tree: LazyUEFITree, fileName: String) async -> NodeID? {
-        let index = CodeAnalysisIndex(manifests: [manifest])
-        for id in UEFICodeScan.sourceNodeIDs(in: index, document: fileName) {
-            _ = await UEFIAgentQueries.reachable(id, in: tree)
-        }
-        for pass in 0..<2 {
-            if pass == 1 { await UEFIContentSearch.openEverything(under: nil, in: tree) }
-            let image = tree.image()
-            let readers = tree.spaceReaders
-            let found = await Task.detached(priority: .userInitiated) {
-                UEFICodeScan.scan(in: image, index: index) { node in
-                    guard let reader = readers.reader(for: node.space), let bytes = reader.bytes(node.body)
-                    else { return nil }
-                    return Data(bytes)
-                }
-            }.value
-            if let id = found.keys.min(by: { $0.path.lexicographicallyPrecedes($1.path) }) { return id }
-        }
-        return nil
+        await UEFICodeOpening.imageNode(of: manifest, in: tree, fileName: fileName)
     }
 
     // MARK: - code_query

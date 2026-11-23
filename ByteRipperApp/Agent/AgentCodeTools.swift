@@ -164,7 +164,8 @@ final class AgentCodeTools {
         controller.view.window?.makeKeyAndOrderFront(nil)
         guard let panel = controller.openCode(named: opening.partName, from: place.pane, source: opening.source,
                                               manifest: opening.manifest, artifact: opening.artifact,
-                                              recipes: opening.recipes, codec: opening.codec, at: location),
+                                              recipes: opening.recipes, codec: opening.codec,
+                                              dependencies: opening.dependencies, at: location),
               let pane = controller.fragments.pane(panel),
               let opened = desk.places().first(where: { $0.pane === pane })
         else { throw AgentToolError("The Code panel could not be opened over \(place.named).") }

@@ -245,6 +245,9 @@ import ToolModuleKit
                                     moduleBytes: code.bytes, hexView: paneView,
                                     recipes: code.recipes)
             codePane?.dependencies = code.dependencies
+            if code.dependencies == nil, let codePane, let parent = pane.origin?.parent {
+                readDependencies(of: codePane, manifest: code.manifest, from: parent)
+            }
         } else {
             codePane = nil
         }
