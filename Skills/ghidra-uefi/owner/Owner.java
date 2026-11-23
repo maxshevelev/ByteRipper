@@ -8388,6 +8388,13 @@ public class Owner {
             if (resolved == null) {
                 resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             }
+            // A function typedef earlier in the same text is the definition as
+            // well, as it is when defined alone (issue ddb578ae): the parser
+            // stored it as `typedef X X;` over `/functions/X`, and the
+            // structure's member points at that wrapper.
+            for (DataType earlier : selfNamingFunctionTypedefs(c)) {
+                if (earlier != resolved) functionTypedef(earlier);
+            }
             resolved = keepCategories(resolved, previous);
             unsignedEnumMembers(resolved, c);
             restoreReferenced(referenced);
@@ -8744,6 +8751,24 @@ public class Owner {
             }
         }
         return target;
+    }
+
+    /** The program's typedefs `typedef X X;` over a function definition X, for an X the C names. */
+    private java.util.List<DataType> selfNamingFunctionTypedefs(String c) {
+        java.util.Set<String> words = new java.util.HashSet<>();
+        java.util.regex.Matcher word = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(c);
+        while (word.find()) words.add(word.group());
+        java.util.List<DataType> found = new java.util.ArrayList<>();
+        java.util.Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
+        while (all.hasNext()) {
+            DataType type = all.next();
+            if (type instanceof ghidra.program.model.data.TypeDef def
+                && def.getBaseDataType() instanceof ghidra.program.model.data.FunctionDefinition function
+                && def.getName().equals(function.getName()) && words.contains(def.getName())) {
+                found.add(type);
+            }
+        }
+        return found;
     }
 
     /**

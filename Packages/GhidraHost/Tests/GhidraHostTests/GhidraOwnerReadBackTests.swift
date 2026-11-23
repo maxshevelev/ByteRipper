@@ -542,6 +542,28 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue ddb578ae: a function typedef in the same text as the structure
+    /// that uses it is the function definition itself, as when it is defined
+    /// alone — not a root typedef `typedef X X;` over `/functions/X` that the
+    /// member then points at, which prints every call with a cast.
+    func testAFunctionTypedefBesideItsStructureIsTheDefinition() async throws {
+        try await open(try image())
+        _ = try await post("/v1/type", ["c": """
+            typedef UINT32 PROBE_SAME_TEXT_FUNCTION(UINT32 HookId, UINT32 Reserved0);
+            typedef struct _PROBE_SAME_TEXT_ENTRY {
+              UINT32 HookId;
+              PROBE_SAME_TEXT_FUNCTION *Hook;
+            } PROBE_SAME_TEXT_ENTRY;
+            """])
+        let function = try await read("/v1/type?name=PROBE_SAME_TEXT_FUNCTION")
+        let program = (function["program"] as? [String: Any]) ?? [:]
+        XCTAssertEqual(program["kind"] as? String, "function", "\(function)")
+        XCTAssertFalse((program["c"] as? String ?? "").contains("typedef PROBE_SAME_TEXT_FUNCTION PROBE_SAME_TEXT_FUNCTION"), "\(function)")
+        let entry = try await read("/v1/type?name=PROBE_SAME_TEXT_ENTRY")
+        XCTAssertTrue(((entry["program"] as? [String: Any])?["c"] as? String ?? "").contains("PROBE_SAME_TEXT_FUNCTION * Hook"), "\(entry)")
+        _ = try await release()
+    }
+
     /// Issue bab008b6: an EDK2 prototype in a member — `VOID`, `IN`, `OUT`,
     /// `OPTIONAL`, `EFIAPI` — parses as the signatures do; a comment keeps
     /// the words as they were written.
