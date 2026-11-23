@@ -8443,14 +8443,29 @@ public class Owner {
             restoreDescriptions(resolved, keptDescriptions);
             // Ghidra's C parser drops comments: one written beside a member
             // in the C is that member's comment, as `comments` would give it.
-            DataType commented = resolved instanceof ghidra.program.model.data.TypeDef def
-                && def.getBaseDataType() != null ? def.getBaseDataType() : resolved;
+            // Each body's comments go to the type that body defines, not all
+            // to the last one: two structures may share member names (issue
+            // ef6db511).
             JsonArray unplaced = new JsonArray();
-            for (java.util.Map.Entry<String, String> member : memberComments(edk2C(c)).entrySet()) {
-                if (member.getKey().startsWith("\u0000") || !comment(commented, member.getKey(), member.getValue())) {
-                    unplaced.add(member.getValue());
-                } else {
-                    cComments++;
+            for (String declaration : topLevelDeclarations(edk2C(c))) {
+                java.util.LinkedHashMap<String, String> comments = memberComments(declaration);
+                if (comments.isEmpty()) continue;
+                DataType commented = null;
+                java.util.List<String> names = declaredNames(declaration);
+                for (int n = names.size() - 1; n >= 0 && commented == null; n--) {
+                    DataType named = find(program.getDataTypeManager(), names.get(n));
+                    if (named != null && named.getDataTypeManager() == program.getDataTypeManager()) commented = named;
+                }
+                if (commented == null) commented = resolved;
+                if (commented instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
+                    commented = def.getBaseDataType();
+                }
+                for (java.util.Map.Entry<String, String> member : comments.entrySet()) {
+                    if (member.getKey().startsWith("\u0000") || !comment(commented, member.getKey(), member.getValue())) {
+                        unplaced.add(member.getValue());
+                    } else {
+                        cComments++;
+                    }
                 }
             }
             if (unplaced.size() > 0) cUnplaced = unplaced;
@@ -8677,6 +8692,35 @@ public class Owner {
             .compile("([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*\\(?\\s*-").matcher(c);
         while (matcher.find()) names.add(matcher.group(1));
         return names;
+    }
+
+    /**
+     * The C split at the semicolons outside any body: one declaration each, a
+     * structure with its typedef name together. Comments and preprocessor
+     * lines are carried along; a brace or a semicolon inside a comment does
+     * not count.
+     */
+    static java.util.List<String> topLevelDeclarations(String c) {
+        java.util.List<String> declarations = new java.util.ArrayList<>();
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < c.length(); i++) {
+            char ch = c.charAt(i);
+            if (ch == '/' && i + 1 < c.length() && (c.charAt(i + 1) == '*' || c.charAt(i + 1) == '/')) {
+                int end = c.charAt(i + 1) == '*' ? c.indexOf("*/", i + 2) : c.indexOf('\n', i + 2);
+                if (end < 0) end = c.length();
+                i = c.charAt(i + 1) == '*' ? end + 1 : end - 1;
+                continue;
+            }
+            if (ch == '{') depth++;
+            else if (ch == '}') depth = Math.max(0, depth - 1);
+            else if (ch == ';' && depth == 0) {
+                declarations.add(c.substring(start, i + 1));
+                start = i + 1;
+            }
+        }
+        if (start < c.length() && !c.substring(start).isBlank()) declarations.add(c.substring(start));
+        return declarations;
     }
 
     static java.util.LinkedHashMap<String, String> memberComments(String c) {

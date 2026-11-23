@@ -588,6 +588,39 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue ef6db511: two structures in one text with members of the same
+    /// name each keep their own inline comments; none is merged into the
+    /// other's or left unplaced.
+    func testInlineCommentsStayWithTheStructureThatWritesThem() async throws {
+        try await open(try image())
+        let made = try await post("/v1/type", ["c": """
+            #pragma pack(1)
+            typedef struct _PROBE_OUTER_RECORD {
+              UINT32 Signature; /* outer signature */
+              LIST_ENTRY Link; /* outer link */
+              UINT64 Signalled; /* outer only */
+            } PROBE_OUTER_RECORD;
+            typedef struct _PROBE_INNER_RECORD {
+              UINT32 Signature; /* inner signature */
+              LIST_ENTRY Link; /* inner link */
+              VOID *Function; /* inner only */
+            } PROBE_INNER_RECORD;
+            #pragma pack()
+            """])
+        XCTAssertNil(made["comments_not_placed"], "\(made)")
+        let outer = ((try await read("/v1/type?name=PROBE_OUTER_RECORD"))["program"] as? [String: Any])?["c"] as? String ?? ""
+        let inner = ((try await read("/v1/type?name=PROBE_INNER_RECORD"))["program"] as? [String: Any])?["c"] as? String ?? ""
+        for text in ["outer signature", "outer link", "outer only"] {
+            XCTAssertTrue(outer.contains(text), outer)
+            XCTAssertFalse(inner.contains(text), inner)
+        }
+        for text in ["inner signature", "inner link", "inner only"] {
+            XCTAssertTrue(inner.contains(text), inner)
+            XCTAssertFalse(outer.contains(text), outer)
+        }
+        _ = try await release()
+    }
+
     /// Issue 25962cd2: an inline function-pointer parameter is not a type
     /// named after the parameter (`Table * * Table`): its function type is
     /// named after the function and the parameter, as a member's is after the
