@@ -2777,7 +2777,7 @@ public class Owner {
             // it). A function type the review named — IDS_HOOK_FUNCTION, used
             // as `IDS_HOOK_FUNCTION *Hook` — keeps its name, or taking the
             // shared copy of the structure undoes itself.
-            if (!madeUpMemberName(definition.getName(), wanted)) continue;
+            if (!madeUpMemberName(definition.getName(), wanted, field)) continue;
             try {
                 ghidra.program.model.data.DataTypeManager manager = composite.getDataTypeManager();
                 DataType copied = definition.copy(manager);
@@ -2825,9 +2825,14 @@ public class Owner {
         return changed;
     }
 
-    /** A member function type's name no review gave it: see `nameFunctionPointerMembers`. */
-    static boolean madeUpMemberName(String name, String wanted) {
-        return madeUpTypeName(name) || ("_" + wanted).equals(name);
+    /**
+     * A member function type's name no review gave it: the parser's, or one
+     * made after a structure and this field — this structure's under its tag,
+     * or another structure's whose member the review reused
+     * (`PROBE_PPI_Run *Run` in PROBE2_PPI). See `nameFunctionPointerMembers`.
+     */
+    static boolean madeUpMemberName(String name, String wanted, String field) {
+        return madeUpTypeName(name) || ("_" + wanted).equals(name) || (name != null && name.endsWith("_" + field));
     }
 
     /**
