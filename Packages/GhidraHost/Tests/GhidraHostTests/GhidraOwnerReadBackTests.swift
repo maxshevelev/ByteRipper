@@ -645,6 +645,31 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue 60431b90: Ghidra holds one variable per register at a first use,
+    /// so naming the pair EDX:EAX would drop the name already on its EDX piece
+    /// there. The rename is refused, and the first name stays.
+    func testNamingARegisterPairDoesNotDropItsNamedPiece() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_PURGE_MODULE"] else {
+            throw XCTSkip("GHIDRA_PURGE_MODULE (FirmwareAuthenticationPei.efi) is not set")
+        }
+        try await open(try Data(contentsOf: URL(fileURLWithPath: path)))
+        let piece = try await post("/v1/rename/variable", ["function": "0xB671", "storage": "EDX:4",
+                                                            "first_use": "0xB791", "name": "PHHHigh"])
+        XCTAssertEqual(piece["name"] as? String, "PHHHigh", "\(piece)")
+        let body = try JSONSerialization.data(withJSONObject: ["function": "0xB671", "storage": "EDX:4,EAX:4",
+                                                               "first_use": "0xB791", "name": "PHH"])
+        try await host.take(module)
+        do {
+            let answer = try await host.write(module, "/v1/rename/variable", body: body)
+            XCTFail("the pair was named over its piece: \(String(data: answer, encoding: .utf8) ?? "")")
+        } catch {
+            XCTAssertTrue("\(error)".contains("PHHHigh"), "\(error)")
+        }
+        let locals = try await read("/v1/function/0xB671")["locals"] as? [[String: Any]] ?? []
+        XCTAssertTrue(locals.contains { $0["name"] as? String == "PHHHigh" }, "\(locals.map { $0["name"] ?? "" })")
+        _ = try await release()
+    }
+
     /// Issue 25962cd2: an inline function-pointer parameter is not a type
     /// named after the parameter (`Table * * Table`): its function type is
     /// named after the function and the parameter, as a member's is after the

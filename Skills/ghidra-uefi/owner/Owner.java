@@ -7100,6 +7100,16 @@ public class Owner {
      * decompiler, which commits it to the program. Ghidra's own names for
      * unnamed locals renumber, so they are never accepted as an address.
      */
+    /** The locals a review named, with where each is: `storage @ first use`. */
+    private java.util.Map<String, String> userNamedLocals(Function function) {
+        java.util.Map<String, String> named = new java.util.LinkedHashMap<>();
+        for (ghidra.program.model.listing.Variable variable : function.getLocalVariables()) {
+            if (variable.getSource() != SourceType.USER_DEFINED) continue;
+            named.put(variable.getName(), variable.getVariableStorage() + " @ " + firstUseOf(function, variable));
+        }
+        return named;
+    }
+
     private JsonObject renameVariable(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "function"));
         refuseThunkVariables(function, "named");
@@ -7365,10 +7375,27 @@ public class Owner {
         Address askedFirstUse = match.getPCAddress();
         boolean byPlace = askedFirstUse != null && !match.isNameLocked();
         int unnamedBefore = byPlace ? unnamedAt(high, askedStorage, askedFirstUse, applied) : 0;
+        java.util.Map<String, String> namedBefore = userNamedLocals(function);
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
             throw new Failure(400, error.getMessage() + holderOf(applied, function));
+        }
+        // Ghidra holds one variable per register at a first use: naming a
+        // pair (EDX:4,EAX:4) drops a name on its piece (EDX:4) there, and the
+        // other way round (issue 60431b90). A name the write took away is
+        // refused, and the transaction rolls back.
+        java.util.Map<String, String> namedAfter = userNamedLocals(function);
+        java.util.List<String> dropped = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, String> before : namedBefore.entrySet()) {
+            if (before.getKey().equals(asked) || before.getKey().equals(applied)) continue;
+            if (!namedAfter.containsKey(before.getKey())) dropped.add(before.getKey() + " (" + before.getValue() + ")");
+        }
+        if (!dropped.isEmpty()) {
+            throw new Failure(409, "naming " + askedStorage + (askedFirstUse == null ? "" : " at " + hex(askedFirstUse))
+                + " would drop " + String.join(", ", dropped) + ": Ghidra holds one variable per register at a"
+                + " first use, so a register pair and its piece there cannot both be named. Nothing was changed;"
+                + " name one of them and say what the other is in an eol comment");
         }
         if (type != null) requireTypeTaken(function, applied, type);
         // The storage as it is now: a decompiler temporary becomes HASH:… once
