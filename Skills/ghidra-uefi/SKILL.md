@@ -340,6 +340,10 @@ Names alone do not get there. Every review applies these rules:
   Why: a value used once has no local to rename or retype. An `eol` comment on the call does not print.
 - **N6.** Where a BOOLEAN-typed expression prints `& TRUE`, read it as the bit mask 1: retype the expression, or comment it at its place.
   Why: with BOOLEAN as an enum, the decompiler's enum path prints mask 1 as `TRUE` and ignores equates.
+- **N7.** Decode a 4-character CPM or AGESA table tag pushed as a dword byte by byte, low byte first, before naming it in a plate, comment, type or interfaces purpose: 0x30334124 is the bytes 24 41 33 30, "$A30", not "$A03".
+  Why: three modules had their tags reversed.
+- **N8.** Name a constant (an equate, a plate) from what this module's own call shows, including a callee in a sibling module read at its instructions: a helper that writes to Port+4 makes 0x60/0x64 the KBC pair. A sibling's plate text alone is not evidence.
+  Why: the callee's instructions are a fact; another review's words are a claim (K8).
 
 **Rule 2, structures, not pointer arithmetic.**
 
@@ -517,6 +521,8 @@ intermediate state and is reported as one.
 
 - **X1.** Before `ghidra_done`, publish, then run `code_query {what: "c", pattern: "code_r0x|[a-zA-Z]+Var\\d|param_|local_|in_|unaff_|FUN_|LAB_|DAT_|undefined|WARNING|\\(code \\*\\*\\)", summary: true}` and clear or plate every hit in the module's own functions.
   Why: `full` ignores `DAT_` globals, `LAB_` labels, temporaries and calls by raw offset. Modules with `partial 0` were reopened with dozens of hits, and five were closed with `InstallPpi` printing as `+0x18`.
+- **X1a.** On a follow-up task to a closed module (a `take_shared`, a remark fix) that changes only some bodies, X1 must be clean in the bodies the task changed; leftovers in bodies it did not touch stay as they are. A new review is clean everywhere.
+  Why: a narrow task is not a reopened review, and widening it costs a review pass nobody asked for.
 - **X2.** Put a regex in `code_query`'s `pattern`, never in `search`.
   Why: `search` is a plain substring, so `A|B` answers a false 0 and a close check passes on nothing.
 - **X3.** Leave a `(code **)` call only where the structure behind it is truly unknown, and name that table in the plate.
