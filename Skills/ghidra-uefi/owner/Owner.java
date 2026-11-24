@@ -8908,6 +8908,19 @@ public class Owner {
                 manager.replaceDataType(type, target, false);
             }
         }
+        // A wrapper an archive brought in can outlive the replace (issue
+        // 78ba6eb8): what still stands under the name, beside the definition,
+        // goes, its uses already moved to the definition.
+        java.util.List<DataType> left = new java.util.ArrayList<>();
+        manager.findDataTypes(def.getName(), left);
+        for (DataType type : left) {
+            if (type != target && type.getDataTypeManager() == manager
+                && type instanceof ghidra.program.model.data.TypeDef shadow
+                && shadow.getBaseDataType() instanceof ghidra.program.model.data.FunctionDefinition) {
+                manager.replaceDataType(type, target, false);
+                if (manager.contains(type)) manager.remove(type);
+            }
+        }
         return target;
     }
 

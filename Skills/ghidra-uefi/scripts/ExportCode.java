@@ -1258,6 +1258,12 @@ public class ExportCode extends GhidraScript {
     static String typeC(DataType type) {
         if (type instanceof TypeDef def) {
             DataType base = def.getDataType();
+            // `typedef X X;` over the function definition X is the parser's
+            // wrapper for `typedef RET X(args);` (issue 78ba6eb8): it reads as
+            // the prototype it stands for, as the definition itself does.
+            if (base instanceof FunctionDefinition function && function.getName().equals(def.getName())) {
+                return function.getPrototypeString() + ";";
+            }
             if (base instanceof Composite || base instanceof Enum) {
                 return "typedef " + typeBody(base) + " " + def.getName() + ";";
             }
