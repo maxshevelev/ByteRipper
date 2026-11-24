@@ -129,7 +129,9 @@ public final class CodeReadings {
             title: "List a dump's analyzed modules",
             description: wording.modules,
             inputSchema: AgentSchema.object([
-                "document": AgentSchema.string(wording.modulesDocument)
+                "document": AgentSchema.string(wording.modulesDocument),
+                "limit": AgentSchema.limit(default: Self.modulesPage, maximum: Self.modulesPageMaximum),
+                "after": AgentSchema.after
             ])
         ) { call in
             try await self.modules(call.arguments)
@@ -905,6 +907,26 @@ public final class CodeReadings {
 
     // MARK: - code_modules
 
+    /// How many modules one answer lists, and at most: a large dump's rows
+    /// overran the answer's bound in one (issue 5b7aac4f).
+    nonisolated static let modulesPage = 40
+    nonisolated static let modulesPageMaximum = 150
+
+    /// One page of the modules `ids` names, in that order: at most `limit`
+    /// rows, cut sooner where the answer would pass its bound, with `next`
+    /// and `total`. Only the rows a page can hold are built.
+    nonisolated static func modulesPage(_ envelope: [String: JSONValue], ids: [String], arguments: AgentArguments,
+                            row: (String) -> JSONValue) throws -> JSONValue {
+        let limit = try arguments.limit(default: modulesPage, maximum: modulesPageMaximum)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(ids.map { $0 as AnyHashable? }),
+                                   changed: "The dump's analyzed modules changed since that page; ask again without `after`.")
+        let first = min(paging.first, ids.count)
+        let rows = ids[first..<min(ids.count, first + limit)].map(row)
+        var envelope = envelope
+        envelope["total"] = .int(Int64(ids.count))
+        return try paging.answer(envelope, key: "modules", items: rows, total: ids.count, bound: arguments.answerBound)
+    }
+
     func modules(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let document = try documents.resolve(arguments.optionalString("document"))
         let tree = try await UEFIAgentQueries.readyTree(document.readHost())
@@ -931,7 +953,18 @@ public final class CodeReadings {
         }.value
         let guids = await guidRegistry()
         let catalogue = Self.catalogue(await self.catalogue(), overlaidBy: guids)
-        let rows: [JSONValue] = found.keys.sorted { $0.path.lexicographicallyPrecedes($1.path) }.map { id in
+        let ordered = found.keys.sorted { $0.path.lexicographicallyPrecedes($1.path) }
+        let byText = Dictionary(uniqueKeysWithValues: ordered.map { ($0.description, $0) })
+        if ordered.isEmpty {
+            body["modules"] = .array([])
+            body["total"] = .int(0)
+            body["next"] = .null
+            body["note"] = .string("No PE32/TE module of this dump matches a stored analysis. "
+                + "The ghidra-uefi skill makes one.")
+            return ToolQueryTools.stamped(.json(.object(body)), with: document)
+        }
+        let answer = try Self.modulesPage(body, ids: ordered.map(\.description), arguments: arguments) { text in
+            let id = byText[text]!
             let manifest = found[id]!
             let recipes = index.manifests(for: manifest.module.sha256)
                 .sorted { $0.analyzedAt > $1.analyzedAt }
@@ -956,12 +989,7 @@ public final class CodeReadings {
             if let node = image.node(id), node.space != .file { row["in_compressed"] = .bool(true) }
             return .object(row)
         }
-        body["modules"] = .array(rows)
-        if rows.isEmpty {
-            body["note"] = .string("No PE32/TE module of this dump matches a stored analysis. "
-                + "The ghidra-uefi skill makes one.")
-        }
-        return ToolQueryTools.stamped(.json(.object(body)), with: document)
+        return ToolQueryTools.stamped(.json(answer), with: document)
     }
 }
 

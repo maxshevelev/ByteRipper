@@ -86,7 +86,7 @@ public enum ServerTools {
             the analyses (`recipes`, newest first), how many functions the newest found, and `origin`, whose code the module is as its review set it (`category`, `confidence`, `vendor`; null while unset); `interfaces`, what the module installs, locates and is notified of as its review recorded it (`ghidra_set_interfaces`: `installs`, `locates`, `notifies`, each null while unanswered, and `unanswered`; null while it has recorded none); and `depex`, the dependency expression of the FFS file that holds the image, read from the dump (`expression`, `guids`; null where the file has none). The modules \
             are found by their bytes — the same module in another dump has the same analysis — including \
             those inside compressed sections, which are opened for it: seconds on a large image the first \
-            time. Read one with `code_query`.
+            time. Read one with `code_query`. The list comes in pages, in tree order, `total` modules in all: at most `limit` on a page, fewer when the answer would pass its size bound; pass `next` back as `after` until it is null.
             """,
         queryDocument: ServerDocuments.documentHelp,
         modulesDocument: ServerDocuments.documentHelp,

@@ -709,3 +709,34 @@ private struct NoGhidra: GhidraBackendWithoutServer {
     func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data { Data() }
     func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data { Data() }
 }
+
+/// Issue 5b7aac4f: `code_modules` on a large dump overran the answer's bound
+/// in one; it comes in pages that each fit, and `next` walks them all.
+final class CodeModulesPageTests: XCTestCase {
+    private let bound = 98_304
+
+    private func row(_ id: String) -> JSONValue {
+        .object(["node": .string(id), "interfaces": .string(String(repeating: "x", count: 2_500))])
+    }
+
+    func testPagesFitTheBoundAndWalkTheListOnce() throws {
+        let ids = (0..<160).map { "0.6.4.0.0.\($0).2" }
+        var seen: [String] = []
+        var after: JSONValue = .null
+        var pages = 0
+        repeat {
+            var raw: [String: JSONValue] = ["document": "d3"]
+            if case .string = after { raw["after"] = after }
+            let arguments = AgentArguments(raw, answerBound: bound)
+            let answer = try CodeReadings.modulesPage(["document": "d3"], ids: ids, arguments: arguments, row: row)
+            XCTAssertLessThanOrEqual(answer.encoded().count, bound)
+            guard case .object(let body) = answer, case .array(let rows) = body["modules"] else { return XCTFail() }
+            XCTAssertEqual(body["total"], .int(160))
+            for case .object(let r) in rows { if case .string(let n) = r["node"] { seen.append(n) } }
+            after = body["next"] ?? .null
+            pages += 1
+        } while after != .null && pages < 20
+        XCTAssertEqual(seen, ids)
+        XCTAssertGreaterThan(pages, 1)
+    }
+}
