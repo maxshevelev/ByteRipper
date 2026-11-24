@@ -304,6 +304,8 @@ the v2 one; the v2 analysis stays readable.
 
 ## Reading it
 
+How reviews read the store before closing — the close sweep, `pattern` versus `search`, the store as the last publish — is in `SKILL.md`, rules X1–X8 and Q1–Q2.
+
 A module with a kept project is exported by a publish:
 
 ```

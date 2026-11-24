@@ -175,6 +175,8 @@ before it is imported.
 
 ## What the tree tells an agent
 
+Rules for searching a dump (`find_bytes` with `node: "root"`, the APRIORI order, GUIDs from tool answers) are in `SKILL.md`, F1–F5.
+
 - `uefi_find` matches `name` (part of the label), `guid` (a file's GUID) and
   `type` (`"Section"`, `"File"`, `"Volume"`, …). A module section's label is
   `PE32 image` or `TE image`; the label after "in" is the file's name.

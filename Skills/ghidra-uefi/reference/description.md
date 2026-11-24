@@ -37,6 +37,8 @@ newline. Up to 256 KiB.
 
 ## Writing it
 
+The rules a review learned about `ghidra_describe`, the origin and the interfaces record (D1–D6, I1–I3) are in `SKILL.md`, "Rules learned in review: the rules above in practice".
+
 `ghidra_describe` takes the whole document, or one section: with `section`,
 `text` replaces the body of that `## ` heading (without the heading) — the
 section is added at the end if it is missing. Empty `text` is refused; `delete: true`

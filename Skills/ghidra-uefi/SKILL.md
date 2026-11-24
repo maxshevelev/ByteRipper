@@ -74,6 +74,19 @@ uefi_find(document: d1, name: "PE32 image", type: "Section", limit: 10)
      compressed: LZMA, in_compressed: true
 ```
 
+### Rules learned in review: finding the module
+
+- **F1.** Make every "only here" or "no other module holds it" claim from a `find_bytes` with `node: "root"` (or `"0"`), never from a search without a node.
+  Why: a search without a node reads only the raw image and cannot see compressed modules, so zero matches proves nothing.
+- **F2.** Read the PEI APRIORI order from the APRIORI file's Raw section with `uefi_node_data` (`part: "body"`), as 16-byte GUIDs in dispatch order.
+  Why: the file usually sits in a compressed section that `read` and `find_bytes` on the document cannot reach. The order is a fact of the image, so a description states it only as a condition.
+- **F3.** Take a GUID string from a tool answer (`ghidra_set_data` with type `EFI_GUID`, whose refusal prints the GUID, or `find_bytes`, or `uefi_node`), never decode it from hex by hand, and run `ghidra_guid_add` with `dry_run` first.
+  Why: Data4 is a byte array and is never byte-swapped. A hand-decoded GUID got into the shared registry, and only an administrator can remove a registry entry.
+- **F4.** Copy a module's full SHA-256 from a tool answer (`ghidra_modules`, `code_query`'s `sha256`), never rebuild it from a shortened form.
+  Why: ticket tools accept an unknown SHA and create a stray ticket. An answer with no `name` and no `reviewer` means the SHA was wrong.
+- **F5.** Search a body against a sibling module with `find_bytes {node: "root", hex}` or with `code_query {module, what: "instructions", function}` on the sibling's stored analysis.
+  Why: a compressed module cannot be found by a document-wide search. Reading the store needs no lease, so a sibling held by another reviewer can still be compared.
+
 ## 2. Get it into Ghidra
 
 A review — reading the decompiler, renaming, typing, commenting — goes through
@@ -136,6 +149,17 @@ on the module says so — take it again to go on.
 Never review in a Ghidra window of your own: what it holds is not in the store,
 no other Mac sees it, and Ghidra's project lock keeps the owner off a project a
 window has open.
+
+#### Rules learned in review: lease, publish, done
+
+- **G1.** Publish before a pause, a server update or the end of a session, and treat writes since the last publish as possibly lost.
+  Why: unpublished renames have vanished after an owner restart or idle stop. `unpublished_writes` can read `false` after an owner reopens, so check it only right after a publish on the same owner.
+- **G2.** Prefer a plain `ghidra_publish` or `ghidra_done` over `ghidra_done {discard: true}`. After a discard, check that names, types and links came back (row counts, a C sample) before writing again.
+  Why: a discard can move the kept project to the Trash. The next open rebuilds it from the store, so only published work survives.
+- **G3.** Do not expect a `ghidra_done` with no writes to make a revision or refresh the stored C. When a module's stored recipe differs from its siblings', say so rather than reading its stored C as current.
+  Why: a publish with nothing written is skipped by design, so the store keeps the older exporter's C.
+- **G4.** Read and write a module only through the MCP tools. Never open store objects or project files on disk, and never delete them to force a rebuild.
+  Why: a kept project is review data and a delete cannot be undone. A read from disk bypasses the store's own checks. If the tools are missing, ask for a reconnect.
 
 ### What a review makes of the code
 
@@ -300,6 +324,133 @@ Names alone do not get there. Every review applies these rules:
    one call installs, a list handed over at entry. The `Interactions` section
    says in prose what the record lists.
 
+#### Rules learned in review: the rules above in practice
+
+**Rule 1, names, not constants.**
+
+- **N1.** Before naming a GUID in a description, a depex line or a plate, look it up in the GUID registry or grep the EDK2 tag's `.dec` files with leading zeros stripped from each field (`1f34d25`, not `01f34d25`).
+  Why: names recalled from memory were wrong (the PCD PPI was called "memory discovered"), and a grep for the padded form wrongly called an EDK2 GUID vendor-added.
+- **N2.** When a depex GUID is not in the module's own INF, write "added by a linked library" (for example PcdLib adds the PCD PPI), and name the library only when it is established.
+  Why: a GUID missing from the INF is usually a library's, not a vendor addition.
+- **N3.** Expect no equate where no operand holds the value: a constant built by `XOR`/`INC`, an address-typed operand (refused with `applied: 0`, `skipped: 0` and no reason), or a char-typed call argument (the C still prints `'a'`). Say the meaning in the plate or a `pre` comment.
+  Why: these are limits of the decompiler and the tool. An empty answer here is not a tool failure.
+- **N4.** Give enum names only to the values the module itself gives a meaning to, or that a cited source names. Never invent member names for a bare range check.
+  Why: eight `CMP AL,n` instructions prove a range, not names, and an invented name is worse than the number.
+- **N5.** For a value the decompiler folds into one expression, name the displacement with an equate and put the member's name in a `pre` comment at the start of the block, rather than promising a local.
+  Why: a value used once has no local to rename or retype. An `eol` comment on the call does not print.
+- **N6.** Where a BOOLEAN-typed expression prints `& TRUE`, read it as the bit mask 1: retype the expression, or comment it at its place.
+  Why: with BOOLEAN as an enum, the decompiler's enum path prints mask 1 as `TRUE` and ignores equates.
+
+**Rule 2, structures, not pointer arithmetic.**
+
+- **S1.** In an IA32 PEIM, type the local that holds `InterruptDescriptorTableBase()` as `EFI_PEI_SERVICES ***` first, then read the C back.
+  Why: one retype turns every `(**(code **)(*(int *)(IdtBase - 4) + 0x34))` into `(*(*IdtBase[-1])->CreateHob)(…)`. Also check the entry point, where the base can print as the field `Idtr.Base`.
+- **S2.** Write `#pragma pack(1)` before and `#pragma pack()` after any record whose fields are not naturally aligned, and check the answer's `size` and offsets.
+  Why: without it a `UINT8` before a `UINT32` pads, and every later offset shifts (a 0x68-byte record became 0x6C).
+- **S3.** Before `ghidra_type` with a new name, call `ghidra_type_definition` on that name. If the shared archive holds a different type under it, choose another name.
+  Why: a clash on a shared name is refused at the dry run. `ghidra_types` lists only what the program holds, so its silence proves nothing. A name held twice (a program copy and an archive copy) makes every type write fail as "Unrecognized data type". Delete the duplicate; do not add a third.
+- **S4.** Declare a structure's function-pointer members inline (`EFI_STATUS (*GetSocInfo)(…);`), never through named function-pointer typedefs.
+  Why: a named pointer typedef never round-trips through the exporter and leaves conflicts that do not converge.
+- **S5.** Type a function-pointer local through a function typedef (`typedef VOID NAME(args);`, local typed `NAME *`), and send each function typedef in its own `ghidra_type` call, apart from any struct.
+  Why: an inline `void (*)(…)` type is refused, a pointer typedef comes out self-referential, and a function typedef sent with its struct makes a root wrapper that prints `(code *)` and spoils proposals.
+- **S6.** Define one struct per `ghidra_type` call, and never redeclare a shared member's typedef.
+  Why: two structs in one text can rewrite an existing program `_func_N`. A redeclared shared typedef becomes a type conflict.
+- **S7.** Map a PPI or protocol table from its descriptor: type the descriptors (`EFI_PEI_PPI_DESCRIPTOR[n]`), take the table base from the `Ppi` field, count the slots by the type the module builds, check that the next datum starts where the table ends, and match each slot to its body.
+  Why: tables and descriptors sit back to back in `.data`. A table read from the wrong base (an 18-slot header over a 31-slot table) made invented contradictions in plates and the description.
+- **S8.** Before writing what a PPI call means, match the GUID loaded at the locate to its header and the call's offset to that structure's member.
+  Why: a "board check" taken from the module's file name stood through five revisions while the code called `gEfiGetPcdInfoPpiGuid`'s `GetSku`. A file name is not evidence of what a body does.
+- **S9.** Read a PCD's start value from PcdPeim's Raw section (header, ExMap, LocalTokenNumberTable) with `uefi_node_data`. An offset at or past the header's `Length` is in the uninitialised area, which starts at 0.
+  Why: a branch that "cannot run" because of a PCD must rest on the value in the bytes.
+- **S10.** Find code Ghidra left outside any function through `ghidra_xrefs {to}` call sites that have no `function` field, and create the function at the prologue.
+  Why: the function list and the "unfinished" filter cover only functions Ghidra created. `ghidra_gaps` finds most of these, and a call site with no owner is the quick sign.
+- **S11.** Merge a stack frame split into many byte locals by typing the first slot as the whole buffer (`UINT8[N]`, or the record type), then state offsets from it.
+  Why: 35 `local_NN` bytes hid a wrong plate. One typed slot made the offsets checkable.
+
+**Rule 3, names for everything that stays.**
+
+- **V1.** After each `ghidra_rename_variable`, compare the storage and `first_use` in the answer with the ones sent, treat `stale: true` or an unexpected `parameter: true` as a miss, and read the locals and their types back.
+  Why: `ok` has landed on another local, renamed parameter 0, and kept `ulonglong` over a requested `UINT64`. The skill's rule 5 says such reports were never explained; these are the observed cases.
+- **V2.** Try a rename with `storage` and `first_use` before writing that the tool refuses a local, including `HASH:00000000` locals, and quote the answer.
+  Why: the tool's text says such storage is refused, yet the write was accepted. Plates claimed "the tool refused a name" without a call.
+- **V3.** Name a chain of zero-hash temporaries (each built from the one before) in descending `first_use` order, last link first, and re-read the locals after each write.
+  Why: in ascending order 13 of 14 names were refused with "landed on another variable". In descending order all of them took.
+- **V4.** After typing a HASH local, read `temporaries` and the locals again.
+  Why: one listed local can stand for two occurrences, and typing the first can reveal the second. Naming a fragment can bring up new default names on other registers. Repeat until none are left.
+- **V5.** When two locals share both storage and `first_use`, retry once, then name every other local and say in the plate what the two mean.
+  Why: Ghidra keeps one variable per storage, so the API cannot tell them apart. Further retries only renumber the temporaries.
+- **V6.** Name either a 64-bit register pair (`EDX:4,EAX:4`) or its 32-bit half at the same `first_use`, not both: name the one the code uses and describe the pair in the plate.
+  Why: the two share one variable. A rename that would drop the other's name is refused with 409 and names it; before v0.10-832 it answered `ok` and dropped it silently, and the row still read `full`.
+- **V7.** When a refusal says a name is "already held by" a storage that the locals list does not show, rename that storage to a marker name first, then use the wanted name.
+  Why: a stale symbol invisible in the C can hold a name across sessions.
+- **V8.** When `ghidra_signature` answers "Parameter name conflict, likely due to concurrent operation", rename the local that holds that name, then sign again.
+  Why: the message names no concurrency. A local already held the name.
+- **V9.** For a 64-bit argument on a 32-bit stack, pass `storage` for every parameter and `return_storage`, and compare each storage with the instructions. Type a 64-bit stack local by its 4-byte storage (`Stack[-0x18]:4`, type `UINT64`).
+  Why: a `UINT64` parameter was aligned to 8 and moved the next one a slot, with an `ok` answer. The same local with `:8` answers 404.
+- **V10.** After signing a tail-jump stub, read the jump target's signature and a few callers' locals before publishing.
+  Why: signing a stub rewrote its target's signature and its sibling stubs, and the answer named only the stub.
+- **V11.** When a `locals` gap remains with every local named, give each local still typed `undefined…` a real type before calling it a tool problem.
+  Why: the gap counts untyped locals, not unnamed ones. `void **` is an honest type for a pointer whose target is not established.
+- **V12.** Accept unnamed locals on a thunk (a JMP stub; `ghidra_function` shows `thunk_of`), name them in the target, and explain them in the stub's plate. Never run a locals reset on a thunk.
+  Why: a thunk shares its target's locals, and the store keeps no C for it (`no_body`).
+- **V13.** Before a `ghidra_function_locals_reset` on a function whose C is null, read its names from an older recipe's stored C (`code_query {what: "c", recipe}`). Then restore them in this order: stack slots, then registers by `first_use`, then HASH, re-reading between batches.
+  Why: the reset wipes every name. An older recipe can still hold the C with every name. A 409 inside a batch can pass when sent alone.
+
+**Rule 4, comments.**
+
+- **C1.** In a plate or comment, refer to an unnamed temporary by its storage and first-use address ("the EAX value first set at 0x…"), never by a default name such as `uVar4`.
+  Why: Ghidra renumbers default names after any rename in the function, so the comment goes wrong at once.
+- **C2.** Give every claim in a plate an instruction address or a source-tree line, or mark it "inference".
+  Why: claims without an anchor were where the real errors were. A marked inference tells the next reader what to check.
+- **C3.** State in plates and comments only facts from the module's own bytes, as the description does, and write anything about the rest of the image as a condition. After a publish, a search of the stored C for "this board" should find nothing.
+  Why: plates are keyed by the module's hash, like the description, and show in every firmware with the same bytes.
+- **C4.** Before `ghidra_comment`, list the function's `comments` at that address.
+  Why: a comment replaces the one of the same kind at that address. A caller's comment was overwritten this way. (Rule 4 says this; the point is to list them first.)
+
+**Rules 5 and 6, read it again and findings.**
+
+- **K1.** Before writing a finding, open every helper it depends on, read the exact bytes at the cited address, decode attribute and bit values against the header, and trace each register back to its load.
+  Why: a re-read withdrew about eight accepted claims: a GUID one table entry off, a helper never opened, a leftover RCX taken for an argument, and a global never read.
+- **K2.** Read a global's initial value from the image bytes before writing what code that tests it does.
+  Why: a guard byte assumed to be 0 is 1 in the image, and the plate said the opposite of the code.
+- **K3.** Check that a name matches what its instruction does (sizes, flag polarity, pointer or index) when reading C back.
+  Why: `full` rows held two swapped size names, a `NameEmpty` that meant not-empty, and an index typed as a pointer.
+- **K4.** Never use a callee list to show that a callback does not run: read the registration (`CreateEvent`, `RegisterProtocolNotify`, `NotifyPpi`) and the signal at the instructions.
+  Why: static callee lists show direct calls only. A "dead" notify callback ran for consoles already present.
+- **K5.** Decode an attribute word, a mask or a format's output from its value and the source, never from the words a plate uses for it.
+  Why: "Attributes 6 (NV | BS)" was accepted twice. 6 is BS | RT, and NV is exactly the bit that is not set.
+- **K6.** Before writing that a module consumes a protocol it does not implement, search for its install in this module and read any table of the module's own function pointers.
+  Why: a module can install a protocol and then locate it for itself. A "service table" typed from four slots was a slice of the module's own table.
+- **K7.** Before calling a block "dead" or "never reached", look for data that holds its address as well as code references.
+  Why: a record in data named the entry of a block called dead.
+- **K8.** Treat a plate from an earlier review as a claim, not evidence: read the body at the instructions before repeating it in another module or relying on it.
+  Why: an early bulk plate had a boot-mode test inverted and a HOB type wrong. The module's name made it sound right.
+- **K9.** Name a status from its numeric value decoded against `Base.h` and from the function's `return` lines, not from its `@retval` doc comment.
+  Why: an EDK2 header comment says RETURN_INVALID_PARAMETER where the code returns RETURN_UNSUPPORTED, and the registry plate copied the comment.
+
+**Rule 7, the description.**
+
+- **D1.** Always pass `section` to `ghidra_describe` unless you mean to replace the whole document, and check the answer's `sections` list and `bytes` after every call.
+  Why: `text` with no `section` replaced the whole description and left one section. The summary above the first `##` has no section name: resend the whole document to change it.
+- **D2.** To change a `###` subsection, resend its whole parent `## ` section with the subsection fixed inside, or use `old_text`/`new_text` within the parent.
+  Why: `section` addresses `## ` headings only. Naming a `###` title appends a duplicate top-level section.
+- **D3.** In `Execution flow` and `Failures`, mark each branch that cannot run with the module's own build values ("cannot happen: the PCD is folded to 0 in this build") and give the reason from the bytes.
+  Why: a technician should not chase paths that never run. `description.md` allows "cannot happen" only when the reason is in the module's own bytes, and this rule asks for it to be said wherever it applies.
+- **D4.** Set the origin (`ghidra_describe` with `origin: {category, confidence, vendor}`) before `ghidra_done`, and confirm it in the answer.
+  Why: a module without an origin category is not closed, and modules have been handed back without one.
+- **D5.** Write the origin `vendor` as a bare name (or leave it empty), and put any doubt in `confidence: inferred`, never in the vendor text.
+  Why: the app draws `inferred` as a dashed outline, so "Insyde (not confirmed)" repeats it and clutters the label.
+- **D6.** Do not take AMD MSRs, AMD register access or any other platform fact as evidence of an AMD (or Intel) origin. Only the vendor's own code, texts or libraries in the module count.
+  Why: a core EDK2 module touched AMD MSRs and is `edk2_modified`, not `amd`.
+
+**Rule 8, interfaces.**
+
+- **I1.** Write a record entry's purpose without naming a single installing module. Where the provider matters, write it as a condition or list every installer the closed records show. Call a PPI or protocol "vendor" only when its GUID is in no EDK2 `.dec`.
+  Why: a purpose named one transport installer when two install it, and called an EDK2 PPI (`gEdkiiIoMmuPpiGuid`) vendor. Which module installs a GUID is a fact of the image, not of these bytes.
+- **I2.** Record each entry's `address` as the service CALL instruction (`CALL [reg+0x18]` InstallPpi, `+0x20` LocatePpi, `+0x24` NotifyPpi, or the helper's CALL), never as the PUSH of the GUID or descriptor or a descriptor-fill MOV before it; read it in `ghidra_disassembly`.
+  Why: three reviews in a row recorded the last PUSH or the GUID push; the address is meant to land a reader on the call.
+- **I3.** Read the module's dependency section (`uefi_node` on the FFS file's PEI/DXE dependency child) before writing interfaces and Known problems. A PPI the depex requires always exists when the module runs, so a failed locate of it is a branch that cannot occur; say so instead of listing it as a hang or crash.
+  Why: a review listed "stale pointer if the PCD PPI is missing" for a module whose depex is exactly that PPI.
+
 ### What a finished function looks like
 
 The bar is the same for every function of a reviewed module, whether or not it
@@ -361,6 +512,25 @@ EFI_STATUS PeCoffLoaderGetPeHeader (PE_COFF_LOADER_IMAGE_CONTEXT *ImageContext,
 
 A review that stops at names, or at a plate with an unmarked body, is an
 intermediate state and is reported as one.
+
+#### Rules learned in review: before `ghidra_done`
+
+- **X1.** Before `ghidra_done`, publish, then run `code_query {what: "c", pattern: "code_r0x|[a-zA-Z]+Var\\d|param_|local_|in_|unaff_|FUN_|LAB_|DAT_|undefined|WARNING|\\(code \\*\\*\\)", summary: true}` and clear or plate every hit in the module's own functions.
+  Why: `full` ignores `DAT_` globals, `LAB_` labels, temporaries and calls by raw offset. Modules with `partial 0` were reopened with dozens of hits, and five were closed with `InstallPpi` printing as `+0x18`.
+- **X2.** Put a regex in `code_query`'s `pattern`, never in `search`.
+  Why: `search` is a plain substring, so `A|B` answers a false 0 and a close check passes on nothing.
+- **X3.** Leave a `(code **)` call only where the structure behind it is truly unknown, and name that table in the plate.
+  Why: PEI and DXE services and known PPI or protocol slots have types. An untyped `PeiServices` local prints `InstallPpi` as an offset.
+- **X4.** Before `ghidra_done`, check that `code_query` level `partial` and level `decompiled` both list nothing; `ghidra_functions {filter: "unfinished"}` is not enough.
+  Why: the filter checks names and plates only. A module went to done with 19 bodies missing their step comments.
+- **X5.** Report a body as done only when its `code_query` row, read after the publish, says `review_level: full` with empty `review_gaps`. Otherwise say "read, not closed", and say how each body was read (whole instructions, part, C only).
+  Why: "done" has meant "read and plated" while the row still had gaps, and `full` shows that fields are filled, not that they are right.
+- **X6.** While editing, judge progress from `ghidra_function`'s `leftovers` (live), not from the store's `review_gaps`, and quote store numbers only after a publish.
+  Why: `review_gaps` is one publish behind, in both directions. Register inputs such as `in_R8` count as fragments, not gaps: mention them in the plate.
+- **X7.** Run `ghidra_gaps`, create every `body` target, and run it again until only `unclaimed` spans remain, then report both the span count and the bytes.
+  Why: spans split when a function is created, and new targets appear inside them. A prologue scan missed 20 of 42 bodies. Do not invent a body for a span nothing points at.
+- **X8.** Before closing, check that every function with an EDK2, AMD or Intel library name is either a registry link or plated "Not a registry function: <reason>", and that no signature still contains `undefined`.
+  Why: a module was closed with seven library bodies never proposed. Neither "full" counts nor a clean pattern search show that.
 
 ### Library functions
 
@@ -694,6 +864,23 @@ match is by body: the same code, with the addresses a relocation moves masked.
   `ghidra_library_apply`, `address` and a `reason` only when the values are shown
   to make no difference, or refuse it with `decline: true`.
 
+#### Rules learned in review: library functions
+
+- **L1.** Before the first publish that adds an entry, read each new candidate's instructions and C after its plate is written, and describe what this build does, not what the source says.
+  Why: the publish makes the plate an entry at once, for every module with that body. A `CompareMem` plate copied the source's zero-length test, which the build had dropped.
+- **L2.** After a publish answers `library.added`, read `ghidra_function` on the source function and quote its `library_entry` (`id`, `state`).
+  Why: entries were "added" while their source functions stayed unlinked, and row counts did not show it.
+- **L3.** Name a library function that differs from its EDK2 routine by the EDK2 name plus a suffix for the difference (`PeiServicesAllocatePages_BootServicesData`, `AllocatePool_RegArg`), never by a new base name.
+  Why: a base name the tree does not have cannot be grepped or cited.
+- **L4.** Keep an entry's plate and comments free of any one module's addresses and callers: say what the body does, give a cause such as "probably folded because callers check" as an inference, and put caller facts in the calling module's own function.
+  Why: the entry text shows in every module that links the body. One module's call site is false or meaningless in the others.
+- **L5.** When a library-looking body's id differs from an entry's only in the length prefix, compare the bytes, check the xref type on its tail `JMP`, and clear a `call_return` override there with `ghidra_flow_override` `none`.
+  Why: the override changes how the body is cut, so identical bytes stop matching the entry.
+- **L6.** After a `ghidra_signature` on a registry-linked function, read back its plate, step comments and locals before any dry run. If the entry's text is gone, restore it with `ghidra_library_apply {address, take_text: true}`.
+  Why: a signature on a link has stripped the entry's plate, comments and local names. A proposal built on that body would offer an empty entry.
+- **L7.** When verifying an EDK2 `Evidence:` line, check the cited file and function in the tag tree, not only that the line parses.
+  Why: 12 of 69 plates written from memory named the wrong library or claimed checks the source has. The publish's `evidence` check proves the line, not the library or the logic described.
+
 ### Changing a shared definition
 
 This is the rule for a change to a shared definition — a shared type, or an entry of the
@@ -753,6 +940,19 @@ Tickets**, "Shared-definition proposals"), whatever the votes; that is the only 
 shared definition is replaced without the votes. **Activity** shows a module in work's
 live proposal beside its lease and opens it. The author
 `withdraw`s its own proposal.
+
+#### Rules learned in review: after a proposal is applied
+
+- **T1.** After a proposal is applied, open each module that uses the type (`ghidra_type_uses`) and run `ghidra_type_definition` on the type there. Send a remark by hand to any that reads `same: false`, including modules whose C never prints the type.
+  Why: nothing re-exports the modules that use the type. Each keeps its old copy, its next publish then conflicts, and the server's automatic remark misses modules whose stored C does not name the type.
+- **T2.** Take a changed shared type only on an owner that started after the change was applied. If `take_shared` brings back the old layout while answering `taken_from_shared: true`, publish or give the module back and take it again.
+  Why: a running owner reads the shared types from its start-time copy and never reloads it.
+- **T3.** Take shared types in this order: member function typedefs whose arguments do not name the struct, then the struct, then members that take `This *`. Take every `STRUCT_Member` typedef the proposal names, not only the struct, and check `same: true` after each take.
+  Why: a struct take leaves the program's own member prototypes, so calls keep the old arguments. A member taken before its struct gets `This` typed `X.conflict *`.
+- **T4.** When a take still reads `same: false`, redefine the program's copy in place: one `ghidra_type` with `c` (no `/* 0xNN */` offset markers, packed as the shared text), `description` and the shared `comments`. Never delete the copy, and read back the C of every use.
+  Why: a delete can strip the type from signatures, locals and data. Pasting the shared C as it is folds the offset markers into member comments, and `same` stays false.
+- **T5.** Before proposing, gather every change to the shared types and entries the module needs, since a module has one live proposal, and send each type complete the first time.
+  Why: piecemeal extensions mean withdrawn proposals and extra vote rounds.
 
 ### On an analysis server
 
@@ -869,6 +1069,13 @@ status-code call at `0x535` with `PUSH 0x80000002`, `PUSH 0x11004`, the core id
 and the descriptor — the call the manual analysis found. The Code panel in the
 app reads the same artifact.
 
+### Rules learned in review: the code store
+
+- **Q1.** Treat `code_query` as the last publish, even when it answers `live: true`. Read the live program with `ghidra_function`, and repeat a `code_query` read after the module's last publish before reporting a finding from it.
+  Why: a "read-back" through `code_query` between writes reads the previous revision. A finding was reported from a plate that a newer registry version had already replaced.
+- **Q2.** To find bodies with no C, run `code_query {what: "c", search: "{", limit: 1}` and compare `functions_matched` with `total`.
+  Why: a function with no C is never `full`, and this finds them in one call.
+
 ## What Ghidra will and will not tell you
 
 - **The loaded base is the header's ImageBase.** PEI modules often carry the
@@ -887,6 +1094,21 @@ app reads the same artifact.
 - **TE relocation semantics are preserved by the conversion, not invented.**
   Section data keeps the offsets the TE table names; see
   `reference/ghidra.md` for the exact mapping.
+
+### Rules learned in review: what the decompiler gets wrong
+
+- **W1.** Read the conditional jump in the disassembly before writing which side of a test runs (return on success, which bit selects which behaviour, "stops at the first X").
+  Why: the C printed `if (~EFI_SUCCESS < Status) return Status;` for a `JNS` that returns on success. Locals merged across two shifts carried each other's bit names.
+- **W2.** When the C's names are wrong but its uses are right, say so in the plate rather than renaming a merged variable blindly.
+  Why: a rename of a merged variable can re-render the whole body.
+- **W3.** On x64, read the arguments of a variadic call, or of a call through an untyped pointer, from the stores before the `CALL`. Fix them with `ghidra_signature` on a known callee, or say in the plate that the decompiler lost them.
+  Why: Ghidra drops stack arguments five and later when it does not know the callee's arity. The C shows a four-argument call to a six-slot format.
+- **W4.** Before writing that a loop bound or count is overwritten by a callee, find which register or stack slot the compare actually reads.
+  Why: the decompiler merged a register copy with an out-parameter's slot, and a plate recorded a defect that does not exist.
+- **W5.** Before calling a pushed register a constant, look for a back-edge to the push site, and check against the callee's own `[EBP+n]` reads.
+  Why: a register zeroed before a loop was the loop index, and reading only the first pass nearly forced a wrong change to a shared prototype.
+- **W6.** Do not trust `ghidra_xrefs` or the store's callees to list every call: read the instructions for `MOV EAX,imm; CALL EAX` before calling a plate's "calls X" false.
+  Why: an indirect call through a loaded constant is missing from both lists.
 
 ## Check
 

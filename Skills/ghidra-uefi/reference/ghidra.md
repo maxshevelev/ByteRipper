@@ -228,6 +228,8 @@ open:
 
 ## Pitfalls
 
+The pitfalls reviews have met with names, types and the decompiler are kept as rules in `SKILL.md` (V1–V13, S1–S11, W1–W6, under "Rules learned in review").
+
 - **A converted TE keeps its RVAs.** The section data is at the offsets the TE
   table gives; the conversion restores the header size, not the section
   layout. Do not "fix" a section pointer because the headers grew — the delta
