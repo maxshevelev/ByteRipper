@@ -138,6 +138,29 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
         throw XCTSkip("no datum takes a UINT8[8]")
     }
 
+    /// Issue ed532d1b: an empty `type` removes the datum at the address, or
+    /// the one it sits inside, so the bytes are free to decode as code.
+    func testAnEmptyTypeRemovesTheDatumAndLeavesNoByteDefined() async throws {
+        let data = try await read("/v1/data")
+        let rows = data["data"] as? [[String: Any]] ?? data["items"] as? [[String: Any]] ?? []
+        for row in rows {
+            guard let text = row["address"] as? String, let at = UInt64(text.dropFirst(2), radix: 16),
+                  (try? await post("/v1/set/data", ["address": text, "type": "UINT32"])) != nil else { continue }
+            let inner = String(format: "0x%llX", at + 1)
+            let answer = try await post("/v1/set/data", ["address": inner, "type": ""])
+            let cleared = answer["data_cleared"] as? [[String: Any]] ?? []
+            XCTAssertEqual(cleared.first?["address"] as? String, text, "\(answer)")
+            XCTAssertNil(answer["type"], "\(answer)")
+            for offset in 0..<4 {
+                let place = String(format: "0x%llX", at + UInt64(offset))
+                let again = try await post("/v1/set/data", ["address": place, "type": ""])
+                XCTAssertEqual((again["data_cleared"] as? [Any])?.count ?? 0, 0, "\(place) still defined: \(again)")
+            }
+            return
+        }
+        throw XCTSkip("no datum takes a UINT32")
+    }
+
     /// Issue 0718ba54: an enum defined again keeps its category, and a
     /// comment written beside a member in the C is that member's comment.
     func testATypeDefinedAgainKeepsItsCategoryAndTheCommentsInItsC() async throws {

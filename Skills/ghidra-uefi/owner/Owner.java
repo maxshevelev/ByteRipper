@@ -8266,7 +8266,20 @@ public class Owner {
         JsonArray dataCleared = new JsonArray();
         String replacedType = null;
         Address address = address(required(body, "address"));
-        if (body.has("type") && !body.get("type").isJsonNull()) {
+        if (body.has("type") && !body.get("type").isJsonNull() && body.get("type").getAsString().isEmpty()) {
+            // An empty type removes the datum at the address, or the one it
+            // sits inside, leaving its bytes undefined, so they can be decoded
+            // as code (issue ed532d1b). `undefined1` is a datum of its own.
+            Data datum = program.getListing().getDefinedDataContaining(address);
+            if (datum != null) {
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(datum.getMinAddress()));
+                item.addProperty("type", datum.getDataType().getDisplayName());
+                item.addProperty("size", datum.getLength());
+                dataCleared.add(item);
+                program.getListing().clearCodeUnits(datum.getMinAddress(), datum.getMaxAddress(), false);
+            }
+        } else if (body.has("type") && !body.get("type").isJsonNull()) {
             // A datum needs bytes: outside the image there are none, so an
             // MMIO register takes a name only (issue 71557325), and its type
             // is said in a comment where the code reads it.

@@ -1331,7 +1331,9 @@ public enum GhidraTools {
                   "Names and/or types the datum at `address`, e.g. a GUID or a table. A name on an `EFI_GUID` "
                   + "datum is the GUID registry's name for its bytes (`guid_registry`): any other is refused with "
                   + "the registry's, and a GUID it does not hold is added first with `ghidra_guid_add`. An empty `name` removes "
-                  + "the label there, a leftover under a type that now names the place. A type laid over decoded "
+                  + "the label there, a leftover under a type that now names the place. An empty `type` removes the datum at "
+                  + "`address`, or the one it sits inside, and lists it in `data_cleared`: its bytes are left undefined, "
+                  + "free for `ghidra_redecode` or `ghidra_function_create` (`undefined1` is a datum of its own). A type laid over decoded "
                   + "instructions is refused, naming them, unless `clear_code: true`: they go, the function "
                   + "holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as "
                   + "an MMIO register, takes a name without `type` (there are no bytes to type, and a type is refused) "
@@ -1345,7 +1347,7 @@ public enum GhidraTools {
                   ["address": AgentSchema.string("The address."),
                    "clear_code": AgentSchema.boolean("Remove instructions the type covers and shorten the body."),
                    "name": AgentSchema.string("Its name; empty removes the label."),
-                   "type": AgentSchema.string("Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".")],
+                   "type": AgentSchema.string("Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\"; empty removes the datum.")],
                   required: ["address"]) { arguments in
                 var body = try optional(arguments, ["address", "name", "type"])
                 // A boolean, as the schema says: read as a string it was refused every time.
