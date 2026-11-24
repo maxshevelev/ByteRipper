@@ -715,11 +715,18 @@ public enum GhidraTools {
                     `suspects`: the parameters, locals and referenced data whose applied type is a \
                     pointer to something that is not a structure — where `PTRSUB off of non \
                     structured pointer type` comes from — so the offending symbol is named rather \
-                    than bisected for.
+                    than bisected for. A large function reads within the answer bound in parts: \
+                    `c_from` and `c_limit` give lines of the C (`c_lines` says which, of how many, and \
+                    the `next` line to ask for), and `omit` leaves out lists not needed this time.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
                     "address": AgentSchema.string("The function's entry address, e.g. \"0x68A\"."),
+                    "c_from": AgentSchema.integer("The first line of the C to answer, from 1. Default: 1."),
+                    "c_limit": AgentSchema.integer("How many lines of the C to answer. Default: all."),
+                    "omit": AgentSchema.strings(
+                        "Lists to leave out of the answer — locals, leftovers, comments, equates, parameters, "
+                        + "data_comments — e.g. [\"locals\", \"leftovers\"] for a body with hundreds of temporaries."),
                     "summary": AgentSchema.boolean(
                         "Leave out the decompiled C and the equates: signature, parameters, locals, "
                         + "plate, leftovers."),
@@ -735,7 +742,16 @@ public enum GhidraTools {
                 var query: [String: String] = [:]
                 if try call.arguments.bool("summary", default: false) { query["summary"] = "1" }
                 if try call.arguments.bool("explain", default: false) { query["explain"] = "1" }
-                return try await answer { try await backend.readCall(module, "function/\(address)", query: query) }
+                let from = call.arguments.has("c_from") ? Int(try call.arguments.integer("c_from")) : nil
+                let limit = call.arguments.has("c_limit") ? Int(try call.arguments.integer("c_limit")) : nil
+                let omit = Set(call.arguments.has("omit") ? try call.arguments.strings("omit") : [])
+                let unknown = omit.subtracting(functionOmittable)
+                if !unknown.isEmpty {
+                    throw AgentToolError("`omit` takes \(functionOmittable.sorted().joined(separator: ", ")); not \(unknown.sorted().joined(separator: ", ")).")
+                }
+                let read = try await answer { try await backend.readCall(module, "function/\(address)", query: query) }
+                guard case .json(let value) = read else { return read }
+                return .json(functionPart(value, cFrom: from, cLimit: limit, omit: omit))
             },
             AgentTool(
                 name: "ghidra_disassembly",
@@ -1762,6 +1778,30 @@ public enum GhidraTools {
 
     /// The backend's JSON as the tool's answer; its refusal as a tool error
     /// the model reads.
+    /// The lists `ghidra_function`'s `omit` may leave out.
+    static let functionOmittable: Set<String> = ["locals", "leftovers", "comments", "equates", "parameters", "data_comments"]
+
+    /// A function's answer cut to what was asked (issue e52b0972): lines of
+    /// its C, and without the lists in `omit`, so a body with hundreds of
+    /// temporaries reads within the answer bound.
+    static func functionPart(_ value: JSONValue, cFrom: Int?, cLimit: Int?, omit: Set<String>) -> JSONValue {
+        guard case .object(var body) = value else { return value }
+        for key in omit { body.removeValue(forKey: key) }
+        if cFrom != nil || cLimit != nil, case .string(let c)? = body["c"] {
+            let lines = c.components(separatedBy: "\n")
+            let first = max(1, cFrom ?? 1)
+            let start = min(lines.count, first - 1)
+            let end = min(lines.count, start + max(1, cLimit ?? lines.count))
+            body["c"] = .string(lines[start..<end].joined(separator: "\n"))
+            body["c_lines"] = .object([
+                "from": .int(Int64(start + 1)), "count": .int(Int64(end - start)),
+                "total": .int(Int64(lines.count)),
+                "next": end < lines.count ? .int(Int64(end + 1)) : .null
+            ])
+        }
+        return .object(body)
+    }
+
     public static func answer(_ body: () async throws -> Data) async throws -> AgentAnswer {
         do {
             let data = try await body()
