@@ -104,6 +104,23 @@ final class GuidRegistryTests: XCTestCase {
         XCTAssertEqual(replaced.entry.history?.first?.by, "First")
     }
 
+    func testAnAdministratorReplacesTheNoteAloneUnderTheSameName() throws {
+        var first = offer("gAmdPspFtpmPpiGuid")
+        first.note = "the opposite of the code"
+        _ = try store.offerGuid(first, by: "First")
+        var plain = offer("gAmdPspFtpmPpiGuid", module: ccx)
+        plain.note = "another review's text"
+        XCTAssertEqual(try store.offerGuid(plain, by: "Second").entry.note, "the opposite of the code")
+        var fixed = offer("gAmdPspFtpmPpiGuid", module: ccx)
+        fixed.note = "what the code does"
+        let replaced = try store.offerGuid(fixed, by: "admin", replace: true, reason: "the note was wrong")
+        XCTAssertEqual(replaced.outcome, .replaced)
+        XCTAssertEqual(try store.guidRegistry().entries[reset]?.note, "what the code does")
+        XCTAssertEqual(replaced.entry.version, 2)
+        XCTAssertEqual(replaced.entry.history?.first?.note, "the opposite of the code")
+        XCTAssertEqual(replaced.entry.source.module, rn)
+    }
+
     func testAPlainGUIDGivenItsKindIsAnAdditionThatKeepsItsSource() throws {
         _ = try store.offerGuids([GuidOffer(guid: reset, name: "gFooHobGuid", kind: .guid,
                                             source: .edk2(tag: "edk2-stable202608", file: "MdePkg/MdePkg.dec:9"))],

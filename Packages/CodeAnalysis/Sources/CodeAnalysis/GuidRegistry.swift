@@ -510,6 +510,13 @@ extension ContentStore {
                 registry.entries[guid] = entry
                 return GuidOfferResult(guid: guid, outcome: .addition, entry: entry)
             }
+            // An administrator's replacement of the note alone: a new version.
+            if replace, let note = offer.note, note != entry.note {
+                nextVersion(reason: reason, keepsSource: true)
+                cite()
+                registry.entries[guid] = entry
+                return GuidOfferResult(guid: guid, outcome: .replaced, entry: entry)
+            }
             if entry.note == nil, let note = offer.note { entry.note = note }
             cite()
             registry.entries[guid] = entry
