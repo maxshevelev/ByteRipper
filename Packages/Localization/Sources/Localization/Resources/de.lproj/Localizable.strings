@@ -115,7 +115,6 @@
 "The review is not finished" = "Die Analyse ist nicht abgeschlossen";
 "Every function reviewed and the module described" = "Alle Funktionen analysiert, das Modul beschrieben";
 "Code analysis stored. Open with Code opens it" = "Codeanalyse gespeichert. „Mit Code öffnen“ öffnet sie.";
-"This module has a stored code analysis; Open with Code on its image opens it" = "Für dieses Modul ist eine Codeanalyse gespeichert; „Mit Code öffnen“ auf seinem Image öffnet sie.";
 "Show how far a module's review has got" = "Analysestand der Module anzeigen";
 "In the UEFI tree, a circle after an analysed module: empty, half filled or filled as its review progresses" = "Im UEFI-Baum ein Kreis hinter einem analysierten Modul: leer, halb oder ganz gefüllt, je nach Stand der Analyse";
 "Mark what a new revision changed as New" = "Änderungen einer neuen Revision als „Neu“ kennzeichnen";

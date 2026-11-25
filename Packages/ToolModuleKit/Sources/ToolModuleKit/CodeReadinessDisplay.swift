@@ -1,8 +1,10 @@
 import Foundation
 
-/// Whether a tree row with a stored code analysis wears the readiness circle
-/// (empty, half filled, filled: how far the module's review has got) or the
-/// plain code-analysis mark every such row wore before the review was graded.
+/// Whether the readiness circle (empty, half filled, filled: how far the
+/// module's review has got) is drawn — on a tree row with a stored code
+/// analysis and in the Code panel's title. Switched off, an image row wears
+/// the plain code-analysis mark it wore before the review was graded, and a
+/// module's row wears no code mark at all.
 ///
 /// The switch is in Settings ▸ Code Analysis. A tool-module never links the
 /// app, so — as with `ToolPanelFont` — the key and the notification are spelled
@@ -16,8 +18,8 @@ public enum CodeReadinessDisplay {
     /// Posted after the switch moves, so a panel on screen redraws its rows.
     public static let didChange = Notification.Name("CodeReadinessDisplayDidChange")
 
-    /// The plain mark a row wears with the circle switched off: the curly
-    /// braces the badge was before the review had a grade.
+    /// The plain mark an image row wears with the circle switched off: the
+    /// curly braces the badge was before the review had a grade.
     public static let plainSymbol = "ellipsis.curlybraces"
 
     /// Whether the circle is drawn. On with nothing stored: `object(forKey:)`

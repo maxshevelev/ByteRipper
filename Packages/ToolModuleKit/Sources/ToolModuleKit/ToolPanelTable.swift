@@ -273,7 +273,9 @@ import Localization
 
     private static func setCodeBadge(_ role: ToolRowMarks.Role?, on cell: NSTableCellView) {
         guard let badge = cell.viewWithTag(codeBadgeTag) as? NSImageView else { return }
-        guard let role else {
+        // With the readiness circle switched off a module's row wears no code
+        // mark: only its image does (`codeBadgeSymbol`).
+        guard let role, let symbol = role.codeBadgeSymbol else {
             badge.isHidden = true
             badge.image = nil
             ControlHelp.describe(badge, nil)
@@ -281,7 +283,6 @@ import Localization
         }
         let mark = ToolRowMark.codeAnalysis
         let toolTip = role.toolTip
-        let symbol = role.codeBadgeSymbol ?? mark.symbol ?? ""
         // A dot beside the name rather than a glyph of the text's size: the
         // circle says how far a review got, and at full size it outweighed
         // the name it belongs to.

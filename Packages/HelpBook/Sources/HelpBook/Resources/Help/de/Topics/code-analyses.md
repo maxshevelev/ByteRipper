@@ -1,4 +1,4 @@
-@source-sha 9f05e3cd458c47486d06f347c3f44616b3b12b4166261f12e6c5244dfc05d3ac
+@source-sha afbe85e1a76cae754ce1361923fa644b4b7b066301af5309cabdf00c4f90a95a
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -24,7 +24,7 @@ Die Einstellung legt nur fest, woher die Analysen gelesen werden. Beim Umstellen
 
 Zwei Optionen am Ende von **Einstellungen ▸ Codeanalyse** legen fest, wie Analysen auf dem Bildschirm gekennzeichnet werden. An den Analysen selbst ändern sie nichts; sie wirken sofort, auch in bereits geöffneten Bereichen.
 
-- **Analysestand der Module anzeigen** — eingeschaltet zeigt der UEFI-Baum den oben beschriebenen Kreis. Ausgeschaltet trägt ein Modul mit gespeicherter Analyse ein einfaches Code-Zeichen, das für jeden Analysestand gleich ist; das Herkunftswort und **(i)** bleiben erhalten.
+- **Analysestand der Module anzeigen** — eingeschaltet zeigt der UEFI-Baum den oben beschriebenen Kreis. Ausgeschaltet erscheint der Kreis nirgends, weder im Baum noch in der Titelzeile des Code-Bereichs. Die Datei des Moduls trägt dann kein Code-Zeichen; der Abschnitt mit dem Image des Moduls trägt ein einfaches Code-Zeichen, das für jeden Analysestand gleich ist. Das Herkunftswort und **(i)** bleiben erhalten.
 - **Änderungen einer neuen Revision als „Neu“ kennzeichnen** — eingeschaltet kennzeichnet der Code-Bereich die Funktionen und die Beschreibung, die eine neuere Revision geändert hat (siehe [[topic:code-panel|Code-Bereich]]). Ausgeschaltet wird nichts gekennzeichnet, und über dem Code erscheint keine Erläuterung einer Änderung: Jede Änderung gilt als gelesen, sobald sie angezeigt wird, und bereits gesetzte Kennzeichnungen werden entfernt. Nach dem Wiedereinschalten werden nur Änderungen gekennzeichnet, die danach eintreffen; Revisionen, die bei ausgeschalteter Option eingetroffen sind, werden nicht nachträglich gekennzeichnet.
 
 ## Verbindung mit einem Server

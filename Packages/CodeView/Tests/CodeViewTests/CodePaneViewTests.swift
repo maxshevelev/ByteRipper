@@ -707,6 +707,29 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(plain.moduleMarks.origin)
     }
 
+    /// Settings ▸ Code Analysis switching the readiness circle off takes it
+    /// from the title too, at once; switched on, it is back. The origin stays.
+    func testTheTitleCircleFollowsTheSetting() throws {
+        defer { CodeReadinessDisplay.set(showsReadiness: true) }
+        var reviewed = manifest()
+        reviewed.reading = AnalysisReading(project: "p", rev: 3,
+                                           origin: ModuleOrigin(category: .amd, confidence: .inferred))
+        let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        let words = ToolRowMarks.CodeReadiness(reviewed.reviewProgress).words
+        XCTAssertEqual(view.moduleMarks.readiness, words)
+
+        CodeReadinessDisplay.set(showsReadiness: false)
+        XCTAssertNil(view.moduleMarks.readiness, "no circle in the title")
+        XCTAssertEqual(view.moduleMarks.origin, "AMD")
+        let opened = CodePaneView(manifest: reviewed, artifact: try artifact(),
+                                  moduleBytes: moduleBytes, hexView: NSView())
+        XCTAssertNil(opened.moduleMarks.readiness, "nor in a panel opened while it is off")
+
+        CodeReadinessDisplay.set(showsReadiness: true)
+        XCTAssertEqual(view.moduleMarks.readiness, words)
+    }
+
     /// The header reads where the reader is: Back and Forward first, then
     /// the module, its review's revision, ▸ and the function; the versions
     /// are the small grey line under them, ASM/C/Description at the right.

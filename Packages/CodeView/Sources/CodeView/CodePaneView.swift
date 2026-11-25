@@ -387,6 +387,8 @@ import ToolModuleKit
     private var zoomObserver: NSObjectProtocol?
     /// Settings ▸ Code Analysis switching the New marks on or off.
     private var newMarkTrackingObserver: NSObjectProtocol?
+    /// Settings ▸ Code Analysis switching the readiness circle on or off.
+    private var readinessObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
     private var syncingSelection = false
@@ -458,11 +460,13 @@ import ToolModuleKit
         newMarkTrackingObserver = CodeRevisionSeen.observeTracking { [weak self] in
             self?.newMarkTrackingChanged()
         }
+        readinessObserver = CodeReadinessDisplay.observe { [weak self] in self?.drawModuleMarks() }
     }
 
     deinit {
         if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
         if let newMarkTrackingObserver { NotificationCenter.default.removeObserver(newMarkTrackingObserver) }
+        if let readinessObserver { NotificationCenter.default.removeObserver(readinessObserver) }
     }
 
     /// Every analysis newest first, as the agent lists them — the recipe id
@@ -3714,13 +3718,15 @@ import ToolModuleKit
         readinessMark.setContentHuggingPriority(.required, for: .horizontal)
         readinessMark.setContentCompressionResistancePriority(.required, for: .horizontal)
         ControlHelp.describe(readinessMark, readiness.words)
+        // Settings ▸ Code Analysis can switch the circle off, here as in the tree.
+        readinessMark.isHidden = !CodeReadinessDisplay.showsReadiness
         originBadge.pointSize = (ToolPanelFont.titleSize * 0.75).rounded()
         originBadge.show(manifest.reading?.origin)
     }
 
     /// What the title's marks show, for the tests.
     var moduleMarks: (readiness: String?, origin: String?) {
-        (readinessMark.image?.accessibilityDescription, originBadge.isHidden ? nil : originBadge.word)
+        (readinessMark.isHidden ? nil : readinessMark.image?.accessibilityDescription, originBadge.isHidden ? nil : originBadge.word)
     }
 
     private func build(hexView: NSView) {

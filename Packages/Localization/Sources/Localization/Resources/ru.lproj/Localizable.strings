@@ -115,7 +115,6 @@
 "The review is not finished" = "Разбор не завершён";
 "Every function reviewed and the module described" = "Все функции разобраны, модуль описан";
 "Code analysis stored. Open with Code opens it" = "Сохранён разбор кода. «Открыть с кодом» открывает его.";
-"This module has a stored code analysis; Open with Code on its image opens it" = "Для этого модуля сохранён разбор кода; его открывает «Открыть с кодом» на образе модуля.";
 "Show how far a module's review has got" = "Показывать степень готовности разбора модуля";
 "In the UEFI tree, a circle after an analysed module: empty, half filled or filled as its review progresses" = "В дереве UEFI после модуля с разбором стоит круг: пустой, наполовину или полностью залитый — по мере готовности разбора";
 "Mark what a new revision changed as New" = "Отмечать изменения новой ревизии как «Новое»";

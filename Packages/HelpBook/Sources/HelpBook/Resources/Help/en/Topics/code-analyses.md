@@ -32,7 +32,7 @@ The setting changes only where analyses are read from. Nothing is copied or dele
 
 Two switches at the bottom of **Settings ▸ Code Analysis** change how analyses are marked on screen. They change nothing in the analyses themselves and take effect at once, in the panels already open.
 
-- **Show how far a module's review has got** — on, the UEFI tree shows the readiness circle described above. Off, a module with a stored analysis carries a plain code mark, the same for every review state; the origin word and **(i)** stay.
+- **Show how far a module's review has got** — on, the UEFI tree shows the readiness circle described above. Off, no readiness circle is shown anywhere, neither in the tree nor in the Code panel's title. The module's file then carries no code badge; the section with the module's image carries a plain code mark, the same for every review state. The origin word and **(i)** stay.
 - **Mark what a new revision changed as New** — on, the Code panel marks the functions and the description that a newer revision changed, as described on [[topic:code-panel|Code Panel]]. Off, nothing is marked and no explanation of a change is shown above the code: every change counts as read as soon as it is on screen, and the marks already shown are removed. When the switch is turned on again, only changes that arrive after that are marked; the revisions received while it was off are not marked afterwards.
 
 ## Connecting to a server
