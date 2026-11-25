@@ -7295,6 +7295,32 @@ public class Owner {
         return named;
     }
 
+    /**
+     * The parameters as they stand: `Type (ECX:4)`, in order. A local named
+     * on a register a parameter also holds, from the entry on — RCX:8 over a
+     * custom ECX:4 — is a conflict Ghidra settles by deleting the parameter
+     * (issue 6d64f49d); comparing this before and after a write finds that.
+     */
+    private static java.util.List<String> parameterPlaces(Function function) {
+        java.util.List<String> places = new java.util.ArrayList<>();
+        for (Parameter parameter : function.getParameters()) {
+            places.add(parameter.getName() + " (" + parameter.getVariableStorage() + ")");
+        }
+        return places;
+    }
+
+    /** Refuses a write that took a parameter away; the transaction rolls back. */
+    private static void requireParametersKept(Function function, java.util.List<String> before, String what)
+            throws Failure {
+        java.util.List<String> lost = new java.util.ArrayList<>(before);
+        lost.removeAll(parameterPlaces(function));
+        if (lost.isEmpty() || function.getParameterCount() >= before.size()) return;
+        throw new Failure(409, what + " would delete the parameter " + String.join(", ", lost)
+            + ": Ghidra keeps no local on a register a parameter holds from the entry, and settles the overlap by"
+            + " dropping the parameter. Nothing was changed; name the parameter by ordinal, or name the local"
+            + " at a later first use, and say what the register holds after that in an eol comment");
+    }
+
     private JsonObject renameVariable(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "function"));
         refuseThunkVariables(function, "named");
@@ -7381,12 +7407,14 @@ public class Owner {
                     }
                 }
                 if (goal == null) break;
+                java.util.List<String> parametersBefore = parameterPlaces(function);
                 try {
                     HighFunctionDBUtil.updateDBVariable(goal, applied, type, SourceType.USER_DEFINED);
                 } catch (Exception error) {
                     throw new Failure(409, "the storage cannot be named as one: " + error.getMessage()
                         + " — nothing was changed");
                 }
+                requireParametersKept(function, parametersBefore, "naming " + storage);
                 decompiled.remove(function.getEntryPoint());
                 HighFunction after = decompile(function).getHighFunction();
                 if (after != null) {
@@ -7561,11 +7589,14 @@ public class Owner {
         boolean byPlace = askedFirstUse != null && !match.isNameLocked();
         int unnamedBefore = byPlace ? unnamedAt(high, askedStorage, askedFirstUse, applied) : 0;
         java.util.Map<String, String> namedBefore = userNamedLocals(function);
+        java.util.List<String> parametersBefore = parameterPlaces(function);
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
             throw new Failure(400, error.getMessage() + holderOf(applied, function));
         }
+        requireParametersKept(function, parametersBefore,
+            "naming " + askedStorage + (askedFirstUse == null ? "" : " at " + hex(askedFirstUse)));
         // Ghidra holds one variable per register at a first use: naming a
         // pair (EDX:4,EAX:4) drops a name on its piece (EDX:4) there, and the
         // other way round (issue 60431b90). A name the write took away is
