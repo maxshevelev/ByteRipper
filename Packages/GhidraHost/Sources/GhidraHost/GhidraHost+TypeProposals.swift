@@ -132,7 +132,8 @@ extension GhidraHost {
         }
         let language = ((try? JSONSerialization.jsonObject(with: try await read(module, "/v1/hello", holder: holder)))
             as? [String: Any])?["language"] as? String ?? ""
-        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: raw)
+        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: raw,
+                                         guids: try? await writer.readGuidRegistry())
         let entries = try await libraryReplacements(module, raw: raw, offer: offer.proposals,
                                                     reviewed: headers["x-owner-reviewed"] == "true")
         return TypeProposalBook.Draft(module: module.hex, name: try? project(module).state().module.name,

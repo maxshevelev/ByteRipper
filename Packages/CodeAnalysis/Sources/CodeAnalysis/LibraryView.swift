@@ -86,7 +86,8 @@ public enum LibraryView {
         return rows.compactMap { row in
             (row["offset"] as? String).map {
                 LibraryGlobal(offset: $0, name: row["name"] as? String, type: row["type"] as? String,
-                              shared: row["shared"] as? Bool)
+                              shared: row["shared"] as? Bool, address: row["address"] as? String,
+                              guid: row["guid"] as? String)
             }
         }
     }

@@ -195,7 +195,9 @@ extension LibraryProposal {
             return .init(address: address, name: name, body: body.key, why: "dependency", callees: forbidden.map(\.name))
         }
         if let data = dataReferences, !data.isEmpty, index.sources?[body.key] == nil {
-            return .init(address: address, name: name, body: body.key, why: "data", data: data)
+            let described = (globals ?? []).filter { data.contains($0.offset) }
+            return .init(address: address, name: name, body: body.key, why: "data", data: data,
+                         globals: described.isEmpty ? nil : described)
         }
         return nil
     }

@@ -730,16 +730,24 @@ is in the module's scope: it is not offered here and conflicts with nothing else
 functions that call nothing first, then their callers.
 - It refers to no data, or only to a constant defined in its own library's source
   file. Compare the bytes with that source and cite the file and line with
-  `ghidra_library_cite`, one citation per constant. A GUID never qualifies: its value lives in a package `.dec`
-  and the variable is each module's. Code without sources in the tree cannot qualify
-  through a constant.
+  `ghidra_library_cite`, one citation per constant. Code without sources in the tree
+  cannot qualify through a constant.
+- A GUID global is no obstacle when it carries the GUID registry's name for its value
+  (person's ruling 2026-11-25, issue d92d6b88): `gEfiPcdProtocolGuid` typed `EFI_GUID`
+  is a known constant — EDK2's AutoGen gives each module its own copy of the value the
+  package `.dec` fixes — and a body that passes its address does the same in every
+  module. The entry records the global's registry name and value; in another module the
+  body is the entry's only where the global there has the same name and value. A GUID
+  global under another name, or of a value the registry does not hold, is still the
+  module's data: the refusal says what the registry calls it, or to add it with
+  `ghidra_guid_add` first.
 - A module global of a shared type is no obstacle: `gBS` typed `EFI_BOOT_SERVICES *`,
   `gST`, `gImageHandle`, a PCD protocol pointer, a boot-script table pointer — a global
   a review named and typed with a type the EDK2 archive or the shared review archive
   holds under that name, with the same shape. The entry keeps the type it reads at each
   such instruction (and the name, for a reader), never an address; in another module the
   body is the entry's only where its own global there has the same type. Untyped data, a
-  raw `undefined8`, a type only the program has, a GUID, or an unnamed global (its C
+  raw `undefined8`, a type only the program has, or an unnamed global (its C
   would print the module's address) is still the module's data: type and name the global
   first. `ghidra_library` lists what a candidate reads under `globals`, each with
   `shared`.
@@ -747,7 +755,8 @@ functions that call nothing first, then their callers.
 - A doubt keeps it in the module.
 
 A publish refuses a new body that fails this, under `library.not_library`, with `why`:
-`data` (the offsets, no citation), `callee` (the names), `global` (a held body whose
+`data` (each datum by address, name and type, and the offset of the instruction that
+reads it: `0x8F50 mHobList (void *) at +0x4`; no citation), `callee` (the names), `global` (a held body whose
 global here is not of the type the entry reads: the reason names the global and the
 type), or `taken_out`. Bodies of one
 publish enter together when each one's callees are held or among them, so a pair that

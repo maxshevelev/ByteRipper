@@ -487,7 +487,11 @@ public enum GhidraTools {
                     says, a global not of the type the entry reads there — and nothing is stored. A module \
                     global a review named and typed with a type of the EDK2 or the shared archive (`gBS` as \
                     `EFI_BOOT_SERVICES *`) is no data: the entry keeps its type, and binds another module's \
-                    body only where that module's global has the same; type and name such a global first. `ghidra_publish` with `dry_run: true` asks the registry without publishing. \
+                    body only where that module's global has the same; type and name such a global first. \
+                    So is a global typed `EFI_GUID` under the GUID registry's name for its value \
+                    (`gEfiPcdProtocolGuid`): the entry keeps that name and value, and binds another module's \
+                    body only where its global has both. A `data` refusal names each datum by address, name \
+                    and type, and the offset of the instruction that reads it. `ghidra_publish` with `dry_run: true` asks the registry without publishing. \
                     A refusal is resolved by bringing the function to the bar, renaming, or `remove`: a \
                     function the registry cannot hold is the module's. A function the registry already holds \
                     is refused here: a change to it offers itself at a publish. A new function under a name \

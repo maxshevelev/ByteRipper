@@ -239,4 +239,98 @@ final class GhidraHostSharedGlobalTests: XCTestCase {
         XCTAssertEqual((offered["globals"] as? [[String: Any]])?.first?["shared"] as? Bool, false, "\(offered)")
         // A data reference left: the registry refuses a new body for it, as before.
     }
+
+    // MARK: GUID globals (issue d92d6b88)
+
+    /// The global retyped `EFI_GUID` under `name` in `module`, and its value.
+    private func guid(_ pair: Pair, _ module: SHA256Digest, _ global: String, _ name: String) async throws -> String {
+        _ = try await pair.host.write(module, "/v1/set/data", body: body([
+            "address": global, "name": name, "type": "EFI_GUID"]))
+        let at = try json(await pair.host.read(module, "/v1/guid-at?address=\(global)"))
+        return try XCTUnwrap(at["guid"] as? String, "\(at)")
+    }
+
+    private func seed(_ pair: Pair, _ names: [String: String]) throws {
+        var registry = GuidRegistry()
+        for (guid, name) in names {
+            registry.entries[guid] = GuidEntry(name: name, kind: .protocol,
+                                               source: .edk2(tag: "test", file: "Test.dec"), at: "2026-11-25")
+        }
+        try pair.store.mirrorGuids(registry)
+    }
+
+    /// Typed `EFI_GUID` and named as the GUID registry names its value in both
+    /// modules: the GUID is no data reference, the entry records its registry
+    /// name and value, and the second module's function is the entry's.
+    func testAGUIDGlobalUnderTheRegistrysNameEntersAndLinksInTheSecondModule() async throws {
+        let pair = try await setUp("guid")
+        defer { try? FileManager.default.removeItem(at: pair.directory) }
+        defer { Task { for module in pair.modules { await pair.host.stop(module) } } }
+        let found = try await reader(pair)
+        var values: [String] = []
+        for (module, global) in zip(pair.modules, found.globals) {
+            values.append(try await guid(pair, module, global, "gProbePcdProtocolGuid"))
+        }
+        guard values[0] == values[1] else { throw XCTSkip("the two globals hold other bytes: \(values)") }
+        try seed(pair, [values[0]: "gProbePcdProtocolGuid"])
+        try await review(pair, pair.modules[0], found.functions[0])
+        let offered = try await library(pair, pair.modules[0], found.functions[0])
+        let globals = try XCTUnwrap(offered["globals"] as? [[String: Any]], "\(offered)")
+        XCTAssertEqual(globals.first?["guid"] as? String, values[0], "\(globals)")
+        XCTAssertEqual(globals.first?["address"] as? String, found.globals[0], "\(globals)")
+
+        let published = try await pair.host.publish(pair.modules[0], by: "agent")
+        let added = try XCTUnwrap(published.library?.added.first, "\(String(describing: published.library))")
+        let held = try XCTUnwrap(try pair.store.libraryIndex().entries[added.id])
+        XCTAssertEqual(held.variants.first?.globals,
+                       [LibraryGlobal(offset: found.offset, name: "gProbePcdProtocolGuid", type: "EFI_GUID", guid: values[0])])
+
+        let (plan, _) = try await pair.host.libraryPlan(pair.modules[1])
+        XCTAssertTrue(plan.toApply.contains { $0.address == found.functions[1] && $0.id == added.id }, "\(plan)")
+        _ = try await pair.host.library(pair.modules[1], .init(action: .apply))
+        _ = try await pair.host.publish(pair.modules[1], by: "agent")
+        let manifest = try XCTUnwrap(try pair.store.analysis(module: pair.modules[1]))
+        let list = try json(try pair.store.object(manifest.artifact.sha256))["functions"] as? [[String: Any]] ?? []
+        XCTAssertEqual(list.first { $0["entry"] as? String == found.functions[1] }?["registry"] as? String, added.id)
+    }
+
+    /// The second module's GUID global under another name than the entry's:
+    /// no link, and its own review is refused naming the datum and the
+    /// registry's name — not the instruction's offset alone.
+    func testAGUIDGlobalUnderAnotherNameKeepsTheEntryFromTheSecondModule() async throws {
+        let pair = try await setUp("guid-other")
+        defer { try? FileManager.default.removeItem(at: pair.directory) }
+        defer { Task { for module in pair.modules { await pair.host.stop(module) } } }
+        let found = try await reader(pair)
+        let value = try await guid(pair, pair.modules[0], found.globals[0], "gProbePcdProtocolGuid")
+        // Named before the registry holds the value: a name check would refuse it after.
+        let other = try await guid(pair, pair.modules[1], found.globals[1], "gProbeOtherProtocolGuid")
+        guard value == other else { throw XCTSkip("the two globals hold other bytes: \(value), \(other)") }
+        try seed(pair, [value: "gProbePcdProtocolGuid"])
+        try await review(pair, pair.modules[0], found.functions[0])
+        _ = try await library(pair, pair.modules[0], found.functions[0])
+        let published = try await pair.host.publish(pair.modules[0], by: "agent")
+        let added = try XCTUnwrap(published.library?.added.first, "\(String(describing: published.library))")
+
+        let (plan, _) = try await pair.host.libraryPlan(pair.modules[1])
+        XCTAssertFalse(plan.toApply.contains { $0.address == found.functions[1] }, "\(plan)")
+        let refused = try XCTUnwrap(plan.candidates.first { $0.address == found.functions[1] && $0.id == added.id },
+                                    "\(plan)")
+        XCTAssertEqual(refused.state, "global")
+        let why = refused.why ?? ""
+        XCTAssertTrue(why.contains("reads GUID gProbePcdProtocolGuid") && why.contains("gProbeOtherProtocolGuid"), why)
+
+        try await review(pair, pair.modules[1], found.functions[1])
+        let offered = try await library(pair, pair.modules[1], found.functions[1])
+        XCTAssertEqual(offered["data_references"] as? [String], [found.offset], "\(offered)")
+        let said = "\(found.globals[1]) gProbeOtherProtocolGuid (EFI_GUID) at +\(found.offset)"
+        do {
+            let second = try await pair.host.publish(pair.modules[1], by: "agent")
+            let rows = LibraryRefusal.rows(of: try XCTUnwrap(second.library))
+            XCTAssertTrue(rows.contains { $0.why.contains("gProbeOtherProtocolGuid") }, "\(rows)")
+        } catch {
+            let text = "\(error)"
+            XCTAssertTrue(text.contains("gProbeOtherProtocolGuid") || text.contains(said), text)
+        }
+    }
 }

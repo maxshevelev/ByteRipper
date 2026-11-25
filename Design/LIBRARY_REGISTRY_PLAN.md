@@ -40,7 +40,10 @@
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to
 > no data, or only to a constant defined in its own library's source file, cited by
-> file and line by an agent who compared the bytes; a GUID never qualifies. A module
+> file and line by an agent who compared the bytes. A GUID global qualifies only under
+> the GUID registry's name for its value (2026-11-25, issue d92d6b88): the variant
+> keeps that name and value (`LibraryGlobal.guid`, `LibraryProposal.admittingGuids`),
+> and another module's body is the entry's only where its global has both. A module
 > global of a shared type (2026-11-25, issue 5b6ade08) — named, and typed with a type
 > the EDK2 or the shared review archive holds with the same shape — is no obstacle: the
 > variant keeps the type per instruction (`LibraryGlobal`), and a body in another

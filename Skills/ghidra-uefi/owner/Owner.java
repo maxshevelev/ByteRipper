@@ -1801,20 +1801,8 @@ public class Owner {
         answer.addProperty("address", hex(at));
         Data datum = program.getListing().getDefinedDataAt(at);
         if (datum != null) answer.addProperty("datum_type", datum.getDataType().getDisplayName());
-        byte[] raw = new byte[16];
-        try {
-            if (program.getMemory().getBytes(at, raw) != 16) return answer;
-        } catch (ghidra.program.model.mem.MemoryAccessException | ghidra.program.model.address.AddressOutOfBoundsException e) {
-            return answer;
-        }
-        java.nio.ByteBuffer bytes = java.nio.ByteBuffer.wrap(raw).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-        StringBuilder text = new StringBuilder(String.format("%08X-%04X-%04X-", bytes.getInt(0),
-                bytes.getShort(4) & 0xFFFF, bytes.getShort(6) & 0xFFFF));
-        for (int i = 8; i < 16; i++) {
-            if (i == 10) text.append('-');
-            text.append(String.format("%02X", raw[i] & 0xFF));
-        }
-        answer.addProperty("guid", text.toString());
+        String guid = ExportCode.guidText(program, at);
+        if (guid != null) answer.addProperty("guid", guid);
         return answer;
     }
 
@@ -3784,9 +3772,11 @@ public class Owner {
      * Whether a library function may read the global at `to`: it is data of
      * a type the EDK2 archive or the shared review archive holds under its
      * name, with the same shape there, and a review named it — so the entry's
-     * C prints a name, never this module's address. A GUID never is: a GUID
-     * variable is the module's own. Untyped data, a raw `undefined8`, or a type
-     * only this program has keeps the function in its module.
+     * C prints a name, never this module's address. A GUID is not decided
+     * here: it is a known constant under the GUID registry's name for its
+     * value, which only the host holds (`LibraryProposal.admittingGuids`, issue
+     * d92d6b88). Untyped data, a raw `undefined8`, or a type only this program
+     * has keeps the function in its module.
      */
     private boolean sharedGlobal(Address to) {
         Data datum = program.getListing().getDefinedDataAt(to);
@@ -3826,6 +3816,8 @@ public class Owner {
             item.addProperty("offset", each.getKey());
             if (global != null && global[1] != null) item.addProperty("name", global[1]);
             if (global != null && global[2] != null) item.addProperty("type", global[2]);
+            if (global != null && global[3] != null) item.addProperty("guid", global[3]);
+            item.addProperty("address", hex(each.getValue()));
             item.addProperty("shared", global != null && global[2] != null && sharedGlobal(each.getValue()));
             list.add(item);
         }

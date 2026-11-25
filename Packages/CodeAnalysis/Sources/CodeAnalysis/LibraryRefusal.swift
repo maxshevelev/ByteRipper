@@ -31,6 +31,15 @@ public enum LibraryRefusal {
             + ". Nothing was stored."
     }
 
+    /// What a reviewer does about a GUID global that did not pass.
+    static func guidHint(_ global: LibraryGlobal) -> String {
+        guard let guid = global.guid else { return "" }
+        if let held = global.registryName {
+            return ": the GUID registry names \(guid) \(held), name the global so"
+        }
+        return ": the GUID registry does not hold \(guid), add it with `ghidra_guid_add`, then name the global as the registry does"
+    }
+
     /// The functions a registry answer does not take.
     public static func rows(of result: LibraryWriteResult) -> [Row] {
         var rows: [Row] = (result.notLibrary ?? []).map { row in
@@ -38,8 +47,14 @@ public enum LibraryRefusal {
             switch row.why {
             case "data":
                 why = "the registry refused it, it reads data no citation covers: "
-                    + (row.data ?? []).joined(separator: ", ")
-                    + " (a global a review named and typed with a shared type is no obstacle)"
+                    + (row.data ?? []).map { offset in
+                        guard let global = row.globals?.first(where: { $0.offset == offset }) else {
+                            return "a datum at +\(offset)"
+                        }
+                        return global.said + Self.guidHint(global)
+                    }.joined(separator: ", ")
+                    + " (a global a review named and typed with a shared type is no obstacle, nor a GUID "
+                    + "under the GUID registry's name for its value)"
             case "callee":
                 why = "the registry refused it, it calls what the registry does not hold: "
                     + (row.callees ?? []).joined(separator: ", ")

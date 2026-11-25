@@ -270,6 +270,73 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertNil(bound(nil), "a function that says nothing of its globals is in doubt")
     }
 
+    func testAGUIDGlobalUnderTheRegistrysNameEntersAndBindsOnlyUnderThatName() throws {
+        let pcd = "11B34006-D85B-4D0A-A290-D5A571310EF7"
+        let registry = GuidRegistry(entries: [
+            pcd: GuidEntry(name: "gEfiPcdProtocolGuid", kind: .protocol,
+                           source: .edk2(tag: "edk2-stable202405", file: "MdePkg/MdePkg.dec"), at: "2026-11-25"),
+            "D2B2B828-0826-48A7-B3DF-983C006024F0": GuidEntry(
+                name: "gEfiStatusCodeRuntimeProtocolGuid", kind: .protocol,
+                source: .edk2(tag: "edk2-stable202405", file: "MdePkg/MdePkg.dec"), at: "2026-11-25"),
+        ])
+        func reading(_ name: String, guid: String = pcd, address: String = "0x7850") -> LibraryProposal {
+            var made = proposal("GetPiPcdProtocol")
+            made.dataReferences = ["0x20"]
+            made.callees = []
+            made.globals = [LibraryGlobal(offset: "0x20", name: name, type: "EFI_GUID", shared: false,
+                                          address: address, guid: guid)]
+            return made.admittingGuids(registry)
+        }
+        // Another name than the registry's: still a data reference, and the
+        // refusal names the datum and what the registry calls it.
+        let misnamed = try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                                   proposals: [reading("PcdProtocolGuid")])
+        XCTAssertEqual(misnamed.notLibrary?.map(\.why), ["data"])
+        let said = try XCTUnwrap(LibraryRefusal.rows(of: misnamed).first?.why)
+        XCTAssertTrue(said.contains("0x7850 PcdProtocolGuid (EFI_GUID) at +0x20"), said)
+        XCTAssertTrue(said.contains("names \(pcd) gEfiPcdProtocolGuid"), said)
+        XCTAssertFalse(said.contains(": 0x20"), said)
+
+        let added = try store.putLibraryEntries(module: first, rev: 2, by: "agent",
+                                                proposals: [reading("gEfiPcdProtocolGuid")])
+        XCTAssertEqual(added.added.map(\.name), ["GetPiPcdProtocol"])
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entries[body.key]?.variants.first?.globals,
+                       [LibraryGlobal(offset: "0x20", name: "gEfiPcdProtocolGuid", type: "EFI_GUID", guid: pcd)])
+
+        // The same GUID elsewhere in another module links.
+        let same = try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                               proposals: [reading("gEfiPcdProtocolGuid", address: "0x9990")])
+        XCTAssertEqual(same.unchanged.map(\.name), ["GetPiPcdProtocol"])
+
+        // Another GUID under its own registry name is another function.
+        let other = try store.putLibraryEntries(module: second, rev: 2, by: "agent", proposals: [
+            reading("gEfiStatusCodeRuntimeProtocolGuid", guid: "D2B2B828-0826-48A7-B3DF-983C006024F0")])
+        XCTAssertEqual(other.notLibrary?.map(\.why), ["global"])
+        let why = try XCTUnwrap(LibraryRefusal.rows(of: other).first?.why)
+        XCTAssertTrue(why.contains("reads GUID gEfiPcdProtocolGuid (\(pcd)) at +0x20")
+                      && why.contains("gEfiStatusCodeRuntimeProtocolGuid"), why)
+
+        func bound(_ globals: [LibraryGlobal]?) -> String? {
+            LibraryView.entryID(body: body.key, mark: nil, external: false, thunk: false, referenceBytes: nil,
+                                globals: globals, in: index)
+        }
+        XCTAssertEqual(bound([LibraryGlobal(offset: "0x20", name: "gEfiPcdProtocolGuid", type: "EFI_GUID", guid: pcd)]),
+                       body.key)
+        XCTAssertNil(bound([LibraryGlobal(offset: "0x20", name: "gOtherGuid", type: "EFI_GUID", guid: pcd)]))
+        XCTAssertNil(bound([LibraryGlobal(offset: "0x20", name: "gEfiPcdProtocolGuid", type: "EFI_GUID",
+                                          guid: "D2B2B828-0826-48A7-B3DF-983C006024F0")]))
+    }
+
+    func testADataRefusalNamesTheDatumNotTheInstructionOffset() {
+        var result = LibraryWriteResult()
+        result.notLibrary = [.init(
+            address: "0x1D98", name: "GetHobList", body: "k", why: "data", data: ["0x4", "0x30"],
+            globals: [LibraryGlobal(offset: "0x4", name: "mHobList", type: "void *", shared: false, address: "0x8F50")])]
+        let why = LibraryRefusal.rows(of: result).first?.why ?? ""
+        XCTAssertTrue(why.contains("0x8F50 mHobList (void *) at +0x4, a datum at +0x30"), why)
+    }
+
     func testTheEntryReasonsCrossTheServedStore() throws {
         let sent = ServedStoreProtocol.PutLibrary(module: first, rev: 1, by: "agent", proposals: [],
                                                   entryReasons: ["a": "why a"])

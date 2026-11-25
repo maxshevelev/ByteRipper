@@ -612,7 +612,8 @@ public actor GhidraHost {
         if let refusal = Self.languagePatchRefusal(publishing: recipe.id, over: last?.recipe) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
-        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: exported)
+        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: exported,
+                                         guids: try? await writer.readGuidRegistry())
 
         // From the registry's decision to the last write, this publish is the
         // only one on the store.
@@ -903,7 +904,10 @@ public actor GhidraHost {
         return LibraryRefusal.refusal(below + (would.map(LibraryRefusal.rows(of:)) ?? []))
     }
 
-    static func libraryOffer(_ data: Data, artifact: Data? = nil) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
+    /// `guids` is the GUID registry: a GUID global under its name for the
+    /// value is no data reference (`LibraryProposal.admittingGuids`).
+    static func libraryOffer(_ data: Data, artifact: Data? = nil,
+                             guids: GuidRegistry? = nil) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
         guard let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw GhidraHostError(.owner, "the owner's library answer is not a JSON object")
         }
@@ -943,7 +947,7 @@ public actor GhidraHost {
                                                  LibraryCallee(name: $0["name"] as? String ?? "", body: $0["body"] as? String)
                                              },
                                              referenceBytes: item["reference_bytes"] as? String,
-                                             globals: LibraryView.globals(item["globals"])))
+                                             globals: LibraryView.globals(item["globals"])).admittingGuids(guids))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)
@@ -1092,7 +1096,7 @@ public actor GhidraHost {
         var links = Set(stored.functions.compactMap(Self.addressValue))
         do {
             let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
-                                              artifact: raw)
+                                              artifact: raw, guids: try? await writer.readGuidRegistry())
             // An agreed proposal is the publish's decision: the preview answers
             // what that publish would do.
             var takeLibrary = LibraryTake.none.with(entryReasons: entryReasons)

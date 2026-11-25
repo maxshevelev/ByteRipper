@@ -87,21 +87,73 @@ public struct LibraryGlobal: Codable, Equatable, Sendable {
     public var name: String?
     public var type: String?
     public var shared: Bool?
+    /// Where the global is in the module that offers the body: what a refusal
+    /// shows. Never kept on an entry, since another module's is elsewhere.
+    public var address: String?
+    /// For a global typed `EFI_GUID`: its value, `8-4-4-4-12`. A GUID global
+    /// is a known constant, so it reads like a shared global only under the
+    /// GUID registry's name for that value (`admittingGuids`).
+    public var guid: String?
+    /// The GUID registry's name for `guid`, where it is not the global's own
+    /// name: what the refusal tells the reviewer to name it. Never kept.
+    public var registryName: String?
 
-    public init(offset: String, name: String? = nil, type: String? = nil, shared: Bool? = nil) {
+    public init(offset: String, name: String? = nil, type: String? = nil, shared: Bool? = nil,
+                address: String? = nil, guid: String? = nil, registryName: String? = nil) {
         self.offset = offset
         self.name = name
         self.type = type
         self.shared = shared
+        self.address = address
+        self.guid = guid
+        self.registryName = registryName
     }
 
     /// What a variant keeps of the globals a proposal reads: those of a shared
     /// type, without the verdict. Nil when there are none.
     static func kept(_ globals: [LibraryGlobal]?) -> [LibraryGlobal]? {
         let kept = (globals ?? []).filter { $0.shared == true }.map {
-            LibraryGlobal(offset: $0.offset, name: $0.name, type: $0.type)
+            LibraryGlobal(offset: $0.offset, name: $0.name, type: $0.type, guid: $0.guid)
         }
         return kept.isEmpty ? nil : kept
+    }
+
+    /// A global the owner reported as a GUID (`guid` set).
+    public var isGuid: Bool { guid != nil }
+
+    /// How a refusal names the datum: `0x7850 gEfiPcdProtocolGuid (EFI_GUID) at +0x20`.
+    public var said: String {
+        "\(address ?? "a datum") \(name ?? "unnamed") (\(type ?? "untyped")) at +\(offset)"
+    }
+}
+
+extension LibraryProposal {
+    /// The person's rule for GUID globals (issue d92d6b88): a GUID global is
+    /// a known constant — EDK2's AutoGen gives every module its own copy of a
+    /// value the package `.dec` fixes — so a body that reads one does the same
+    /// in every module, provided the global carries the GUID registry's name
+    /// for its value. Such a global becomes a shared one and leaves
+    /// `dataReferences`; one under another name, or of a value the registry
+    /// does not hold, stays a data reference and says what the registry calls it.
+    public func admittingGuids(_ registry: GuidRegistry?) -> LibraryProposal {
+        guard let registry, let globals, globals.contains(where: \.isGuid) else { return self }
+        var proposal = self
+        var admitted: Set<String> = []
+        proposal.globals = globals.map { global in
+            guard let guid = global.guid else { return global }
+            var global = global
+            let held = registry.name(of: guid)
+            if let held, held == global.name {
+                global.shared = true
+                admitted.insert(global.offset)
+            } else {
+                global.shared = false
+                global.registryName = held
+            }
+            return global
+        }
+        proposal.dataReferences = dataReferences?.filter { !admitted.contains($0) }
+        return proposal
     }
 }
 
@@ -251,6 +303,24 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
         guard let held = entries[id]?.variants.first(where: { $0.body.key == body })?.globals, !held.isEmpty
         else { return nil }
         for expected in held {
+            // A GUID is the same constant only under the same registry name
+            // and value: its type says nothing (issue d92d6b88).
+            if let guid = expected.guid {
+                let name = expected.name ?? "?"
+                let reads = "the entry reads GUID \(name) (\(guid)) at +\(expected.offset)"
+                guard let globals else { return reads + ", and this function's globals are not known: publish its module again" }
+                guard let here = globals.first(where: { $0.offset == expected.offset }) else {
+                    return reads + ", and this function reads no global there"
+                }
+                let otherValue = here.guid.map { GuidName.canonicalGUID($0) != GuidName.canonicalGUID(guid) } ?? false
+                if here.name != expected.name || otherValue {
+                    return reads + ": here it reads \(here.name ?? "an unnamed global")"
+                        + (here.guid.map { " (\($0))" } ?? " (\(here.type ?? "untyped"))")
+                        + ", another GUID or not the registry's name for it. Only a global of the same GUID under "
+                        + "the GUID registry's name is the entry's"
+                }
+                continue
+            }
             let type = expected.type ?? "?"
             let reads = "the entry reads a global of type \(type) at +\(expected.offset)"
                 + (expected.name.map { " (\($0) where it was reviewed)" } ?? "")
@@ -583,10 +653,16 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         /// be the module now offering the body.
         public var reasonOf: LibrarySource?
         public var data: [String]?
+        /// With `data`: the globals at those offsets as the owner described
+        /// them (`LibraryGlobal`), so a refusal names each datum by address,
+        /// name and type. Nil where the owner said nothing of them.
+        public var globals: [LibraryGlobal]?
         public var callees: [String]?
 
         public init(address: String, name: String, body: String, why: String, reason: String? = nil,
-                    reasonOf: LibrarySource? = nil, data: [String]? = nil, callees: [String]? = nil) {
+                    reasonOf: LibrarySource? = nil, data: [String]? = nil, callees: [String]? = nil,
+                    globals: [LibraryGlobal]? = nil) {
+            self.globals = globals
             self.address = address
             self.name = name
             self.body = body

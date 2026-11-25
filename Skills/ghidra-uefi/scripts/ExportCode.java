@@ -938,7 +938,8 @@ public class ExportCode extends GhidraScript {
 
     /**
      * The globals a body reads, by the offset of the instruction that names
-     * each: the name a review gave it, and its type — null when it has none.
+     * each: the name a review gave it, its type — null when it has none — and,
+     * for a GUID, its value.
      * What lets a library function read a module's global of a shared type:
      * the registry keeps the type, and another module's function is the
      * entry's only where its global there has the same.
@@ -956,9 +957,42 @@ public class ExportCode extends GhidraScript {
                 each.getKey(),
                 symbol == null ? null : symbol.getName(),
                 type == null || ghidra.program.model.data.Undefined.isUndefined(type) ? null : type.getDisplayName(),
+                isGuidType(type) ? guidText(function.getProgram(), each.getValue()) : null,
             });
         }
         return found;
+    }
+
+    /**
+     * Whether a datum's type is a GUID itself — not a pointer to one, nor an
+     * array: a GUID global reads like a shared global under the GUID registry's
+     * name for its value (issue d92d6b88).
+     */
+    static boolean isGuidType(DataType type) {
+        if (type == null) return false;
+        String name = type.getName();
+        return name.equals("EFI_GUID") || name.equals("GUID") || name.equals("_EFI_GUID") || name.equals("_GUID");
+    }
+
+    /**
+     * The 16 bytes at `at` read as an EFI_GUID, `8-4-4-4-12` in capitals; null
+     * where the image has no 16 initialized bytes.
+     */
+    static String guidText(ghidra.program.model.listing.Program program, Address at) {
+        byte[] raw = new byte[16];
+        try {
+            if (program.getMemory().getBytes(at, raw) != 16) return null;
+        } catch (ghidra.program.model.mem.MemoryAccessException | ghidra.program.model.address.AddressOutOfBoundsException e) {
+            return null;
+        }
+        java.nio.ByteBuffer bytes = java.nio.ByteBuffer.wrap(raw).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        StringBuilder text = new StringBuilder(String.format("%08X-%04X-%04X-", bytes.getInt(0),
+                bytes.getShort(4) & 0xFFFF, bytes.getShort(6) & 0xFFFF));
+        for (int i = 8; i < 16; i++) {
+            if (i == 10) text.append('-');
+            text.append(String.format("%02X", raw[i] & 0xFF));
+        }
+        return text.toString();
     }
 
     /** How many of the bytes count: a string's up to its terminator, else all of them. */
@@ -1169,7 +1203,8 @@ public class ExportCode extends GhidraScript {
             for (String[] global : globals(function)) {
                 globals.add("{\"offset\": " + quote(global[0])
                     + (global[1] == null ? "" : ", \"name\": " + quote(global[1]))
-                    + (global[2] == null ? "" : ", \"type\": " + quote(global[2])) + "}");
+                    + (global[2] == null ? "" : ", \"type\": " + quote(global[2]))
+                    + (global[3] == null ? "" : ", \"guid\": " + quote(global[3])) + "}");
             }
             // Left out when empty, so a body that reads no global exports as
             // it did before the field existed.
