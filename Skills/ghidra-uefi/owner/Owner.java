@@ -7695,11 +7695,12 @@ public class Owner {
         DecompileResults results = decompile(function);
         HighFunction high = results == null ? null : results.getHighFunction();
         DataType now = null;
+        HighSymbol held = null;
         if (high != null) {
             Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
             while (symbols.hasNext()) {
                 HighSymbol symbol = symbols.next();
-                if (symbol.getName().equals(name)) { now = symbol.getDataType(); break; }
+                if (symbol.getName().equals(name)) { now = symbol.getDataType(); held = symbol; break; }
             }
         }
         // The symbol can report the type it was given while the decompiler
@@ -7715,7 +7716,51 @@ public class Owner {
             throw new Failure(409, "the decompiler did not take the type " + type.getDisplayName() + " for " + name
                 + (warned ? ": its C says \"WARNING: Unable to use type for symbol " + name + "\" and keeps a placeholder type"
                     : now == null ? "" : ": it still reads as " + now.getDisplayName())
-                + " — nothing was changed; type the value it comes from, or say in a comment what it is");
+                + " — nothing was changed; " + typeSourceHint(held, name));
+        }
+    }
+
+    /**
+     * Where a value whose own type the decompiler refuses comes from, said as
+     * what to type instead (issue c223d7e0). The warning is the decompiler's
+     * late mapping of a hash symbol: the temporary it names only exists after
+     * the types are settled, so a type on its hash can never take, and the
+     * type has to sit on the value that defines it.
+     */
+    static String typeSourceHint(HighSymbol symbol, String name) {
+        String fallback = "type the value it comes from, or say in a comment what it is";
+        if (symbol == null) return fallback;
+        ghidra.program.model.pcode.HighVariable variable = symbol.getHighVariable();
+        ghidra.program.model.pcode.Varnode rep = variable == null ? null : variable.getRepresentative();
+        ghidra.program.model.pcode.PcodeOp def = rep == null ? null : rep.getDef();
+        if (def == null) return fallback;
+        String at = def.getSeqnum() == null ? "" : " at " + hex(def.getSeqnum().getTarget());
+        String prefix = "the decompiler only finds " + name + " after its types are settled, so a type on it cannot take. ";
+        switch (def.getOpcode()) {
+            case ghidra.program.model.pcode.PcodeOp.CALL: {
+                ghidra.program.model.pcode.Varnode target = def.getInput(0);
+                String callee = target == null ? "the callee" : hex(target.getAddress());
+                return prefix + "It is the return value of the call" + at + " to " + callee
+                    + ": type that function's return instead";
+            }
+            case ghidra.program.model.pcode.PcodeOp.CALLIND:
+                return prefix + "It is the return value of the indirect call" + at
+                    + ": type the return of the function pointer called there instead";
+            case ghidra.program.model.pcode.PcodeOp.LOAD:
+                return prefix + "It is read from memory" + at
+                    + ": type the pointer it is read through (or the field it is read from) instead";
+            case ghidra.program.model.pcode.PcodeOp.COPY:
+            case ghidra.program.model.pcode.PcodeOp.CAST:
+            case ghidra.program.model.pcode.PcodeOp.INT_ZEXT:
+            case ghidra.program.model.pcode.PcodeOp.INT_SEXT:
+            case ghidra.program.model.pcode.PcodeOp.SUBPIECE: {
+                ghidra.program.model.pcode.HighVariable source = def.getInput(0) == null ? null : def.getInput(0).getHigh();
+                String from = source == null || source.getName() == null ? "its source" : source.getName();
+                return prefix + "It is " + def.getMnemonic() + " of " + from + at + ": type " + from + " instead";
+            }
+            default:
+                return prefix + "It is computed" + at + " (" + def.getMnemonic()
+                    + "), with no variable or call of its own to type: say in a comment what it is";
         }
     }
 

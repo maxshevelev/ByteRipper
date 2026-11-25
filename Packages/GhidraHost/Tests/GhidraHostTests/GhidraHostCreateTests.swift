@@ -1928,6 +1928,8 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
         var answered = 0, refused = 0
         var silent: [String] = []
+        var warned = 0
+        var unguided: [String] = []
         for function in functions {
             let entry = try XCTUnwrap(function["entry"] as? String)
             let before = try json(await host.read(module, "/v1/function/\(entry)"))
@@ -1945,11 +1947,19 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
                     if c.contains("Unable to use type for symbol \(name)") { silent.append("\(entry) \(storage) \(type)") }
                 } catch {
                     refused += 1
+                    // A late-mapped temporary names what to type instead
+                    // (issue c223d7e0), never only "the value it comes from".
+                    let text = "\(error)"
+                    if text.contains("Unable to use type for symbol") {
+                        warned += 1
+                        if !text.contains("after its types are settled") { unguided.append("\(entry) \(storage): \(text)") }
+                    }
                 }
             }
         }
         await host.stop(module)
-        print("USED answered=\(answered) refused=\(refused) silent=\(silent.count) \(silent.prefix(5))")
+        print("USED answered=\(answered) refused=\(refused) silent=\(silent.count) \(silent.prefix(5)) warned=\(warned)")
+        XCTAssertEqual(unguided, [], "a refusal for a late-mapped temporary that does not say what to type")
         XCTAssertGreaterThan(answered, 0)
         XCTAssertEqual(silent, [], "a type answered as taken that the decompiler does not use")
     }
