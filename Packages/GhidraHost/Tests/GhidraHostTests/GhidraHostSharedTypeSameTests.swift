@@ -115,4 +115,54 @@ final class GhidraHostSharedTypeSameTests: XCTestCase {
         XCTAssertTrue(program.contains("PROBE_HOOK_FUNCTION * Hook"), "\(after)")
         XCTAssertEqual(after["same"] as? Bool, true, "\(after)")
     }
+
+    /// Issue 764c15b7: the shared archive holds a structure's function members
+    /// under its tag, `_TAG_PPI_Get`, as an older owner named them; a module
+    /// that takes it and names the typedef has them renamed after the typedef
+    /// at its publish. That is the archive's names normalised, not a conflict:
+    /// the publish goes through, and the archive then reads the typedef's names
+    /// with no `.conflict` copy.
+    func testTakenMembersNamedAfterTheTagPublishUnderTheTypedefsNames() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count >= 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set to two modules")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostSharedTypeSame-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 300,
+                                                   holder: "GhidraHostSharedTypeSameTests"),
+                              writer: store)
+        let first = try Data(contentsOf: URL(fileURLWithPath: String(paths[0])))
+        let second = try Data(contentsOf: URL(fileURLWithPath: String(paths[1])))
+        let writer = SHA256Digest(data: first), reader = SHA256Digest(data: second)
+        _ = try await host.createCached(module: first, name: "Writer")
+        _ = try await host.createCached(module: second, name: "Reader")
+        defer { Task { await host.stop(writer); await host.stop(reader) } }
+        func type(_ module: SHA256Digest, _ body: [String: Any]) async throws -> [String: Any] {
+            try await host.take(module)
+            return try json(await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: body)))
+        }
+
+        // No typedef names the structure: its members are named after the tag.
+        _ = try await type(writer, ["c": "struct _TAGSTEM_PPI { unsigned int (*Get)(void *This, unsigned int Index); };"])
+        _ = try await host.publish(writer, by: "agent")
+        let written = try json(await host.read(writer, "/v1/type?name=_TAGSTEM_PPI"))
+        let sharedBefore = (written["shared"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(sharedBefore.contains("_TAGSTEM_PPI_Get"), "\(written)")
+
+        let taken = try await type(reader, ["name": "_TAGSTEM_PPI", "take_shared": true])
+        XCTAssertEqual(taken["taken_from_shared"] as? Bool, true, "\(taken)")
+        _ = try await type(reader, ["c": "typedef struct _TAGSTEM_PPI TAGSTEM_PPI;"])
+        _ = try await host.publish(reader, by: "agent")
+
+        let after = try json(await host.read(reader, "/v1/type?name=_TAGSTEM_PPI"))
+        let program = (after["program"] as? [String: Any])?["c"] as? String ?? ""
+        let shared = (after["shared"] as? [String: Any])?["c"] as? String ?? ""
+        XCTAssertTrue(program.contains("TAGSTEM_PPI_Get") && !program.contains("_TAGSTEM_PPI_Get"), "\(after)")
+        XCTAssertTrue(shared.contains("TAGSTEM_PPI_Get") && !shared.contains("_TAGSTEM_PPI_Get"), "\(after)")
+        XCTAssertFalse(shared.contains("conflict"), "\(after)")
+        XCTAssertEqual(after["same"] as? Bool, true, "\(after)")
+    }
 }

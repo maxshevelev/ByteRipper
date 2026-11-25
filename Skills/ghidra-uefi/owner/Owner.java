@@ -2495,6 +2495,22 @@ public class Owner {
         return namesOnlyGiven(ours, theirs, seen, given) && given[0];
     }
 
+    /**
+     * A member function type the shared archive holds under an older owner's
+     * name for it — after the structure's tag, `_AMD_CPM_TABLE_PROTOCOL_IoRead8`
+     * — where the module's is named after the typedef, as `memberStem` names it
+     * now. Every publish renames the program's copy to the typedef's name, so
+     * without this the two never met again: `take_shared` brought the tag's
+     * names in, the publish renamed them, and the merge refused its own
+     * normalisation as a conflict (issue 764c15b7). The same function under
+     * the name the archive should have: an amendment.
+     */
+    static boolean tagStemmedMember(DataType ours, DataType theirs) {
+        if (!(ours instanceof ghidra.program.model.data.FunctionDefinition)
+            || !(theirs instanceof ghidra.program.model.data.FunctionDefinition)) return false;
+        return ("_" + withoutConflictCopy(ours.getName())).equals(withoutConflictCopy(theirs.getName()));
+    }
+
     private static boolean namesOnlyGiven(DataType a, DataType b, java.util.Set<String> seen, boolean[] given) {
         if (a == null || b == null) return a == b;
         if (!seen.add(a.getPathName() + "|" + b.getPathName())) return true;
@@ -2505,7 +2521,7 @@ public class Owner {
             return namesOnlyGiven(a, ((ghidra.program.model.data.TypeDef) b).getBaseDataType(), seen, given);
         }
         if (!withoutConflictCopy(a.getName()).equals(withoutConflictCopy(b.getName()))) {
-            if (!(madeUpTypeName(b.getName()) && !madeUpTypeName(a.getName()))) {
+            if (!(madeUpTypeName(b.getName()) && !madeUpTypeName(a.getName())) && !tagStemmedMember(a, b)) {
                 // Pointers and arrays carry their target's name: compared below.
                 if (!(a instanceof ghidra.program.model.data.Pointer) && !(a instanceof ghidra.program.model.data.Array)) {
                     return false;
