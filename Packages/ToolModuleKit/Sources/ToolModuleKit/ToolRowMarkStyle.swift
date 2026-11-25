@@ -71,9 +71,23 @@ extension ToolRowMarks.Role {
         }
     }
 
+    /// The SF Symbol a code badge is drawn with: the readiness circle, or the
+    /// plain mark when Settings has the circle switched off
+    /// (`CodeReadinessDisplay`). Nil for a badge that is not a code badge.
+    var codeBadgeSymbol: String? {
+        guard let readiness = codeReadiness else { return nil }
+        return CodeReadinessDisplay.showsReadiness ? readiness.symbol : CodeReadinessDisplay.plainSymbol
+    }
+
     /// What the pointer reads on the badge.
     var toolTip: String {
         switch self {
+        // Without the circle the words say nothing of the review either: a
+        // grade nobody can see on the row is not the badge's to name.
+        case .codeAnalysis where !CodeReadinessDisplay.showsReadiness:
+            return L("Code analysis stored. Open with Code opens it")
+        case .codeAnalysisModule where !CodeReadinessDisplay.showsReadiness:
+            return L("This module has a stored code analysis; Open with Code on its image opens it")
         case .codeAnalysis(let readiness):
             switch readiness {
             case .mechanical: return L("Code analysis stored: Ghidra's analysis only, not reviewed. Open with Code opens it")

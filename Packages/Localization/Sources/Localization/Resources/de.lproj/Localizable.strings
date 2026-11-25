@@ -114,6 +114,12 @@
 "Ghidra's analysis only: the module is not reviewed" = "Nur die Analyse von Ghidra: Das Modul ist nicht durchgesehen";
 "The review is not finished" = "Die Analyse ist nicht abgeschlossen";
 "Every function reviewed and the module described" = "Alle Funktionen analysiert, das Modul beschrieben";
+"Code analysis stored. Open with Code opens it" = "Codeanalyse gespeichert. „Mit Code öffnen“ öffnet sie.";
+"This module has a stored code analysis; Open with Code on its image opens it" = "Für dieses Modul ist eine Codeanalyse gespeichert; „Mit Code öffnen“ auf seinem Image öffnet sie.";
+"Show how far a module's review has got" = "Analysestand der Module anzeigen";
+"In the UEFI tree, a module with a stored code analysis wears a circle after its name: empty while only Ghidra's analysis is stored, half filled while the review is not finished, filled once every function is reviewed and the module is described. Off, the row wears a plain code mark instead." = "Im UEFI-Baum steht hinter dem Namen eines Moduls mit gespeicherter Codeanalyse ein Kreis: leer, solange nur die automatische Analyse von Ghidra vorliegt, halb gefüllt, solange die Analyse nicht abgeschlossen ist, gefüllt, sobald alle Funktionen analysiert sind und das Modul beschrieben ist. Ist die Option ausgeschaltet, trägt die Zeile stattdessen ein einfaches Code-Zeichen.";
+"Mark what a new revision changed as New" = "Änderungen einer neuen Revision als „Neu“ kennzeichnen";
+"The Code panel marks a function or a description that a newer revision of the analysis changed as New until it is opened. Off, nothing is marked: every change counts as read as soon as it is shown, and switching back on marks only the changes that come after." = "Der Code-Bereich kennzeichnet eine Funktion oder eine Beschreibung, die eine neuere Revision der Analyse geändert hat, als „Neu“, bis sie geöffnet wird. Ist die Option ausgeschaltet, wird nichts gekennzeichnet: Jede Änderung gilt als gelesen, sobald sie angezeigt wird, und nach dem Wiedereinschalten werden nur die danach folgenden Änderungen gekennzeichnet.";
 "EDK2: the code matches EDK2" = "EDK2: Der Code stimmt mit EDK2 überein";
 "EDK2 with changes: an EDK2 module changed by %1$@" = "EDK2 mit Änderungen: ein EDK2-Modul, von %1$@ geändert";
 "EDK2 with changes: an EDK2 module changed by the firmware vendor" = "EDK2 mit Änderungen: ein EDK2-Modul, vom Firmware-Hersteller geändert";

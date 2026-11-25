@@ -2815,6 +2815,68 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(CodeRevisionSeen.records(module: module, recipe: "code-v2").isEmpty)
     }
 
+    /// Settings switching the New marks off takes the marks on screen, puts no
+    /// new ones up — not from a revision, not carried, not from the records —
+    /// and keeps writing the records as seen. Switching them off forgets the
+    /// records of every reading, so a module not opened meanwhile is a first
+    /// open when they are back on. Back on, the next revision marks again.
+    func testSwitchingTheNewMarksOffMarksNothingAndKeepsTheRecords() throws {
+        let suiteName = "CodePaneViewTests.tracking"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        XCTAssertTrue(CodeRevisionSeen.tracksNewMarks, "on with nothing stored")
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let after = try oneFunction(name: "F2", signature: "void F2(void)", c: "{\n  B();\n}")
+        let stale = ["0x220": SeenRecord(revision: 53, fingerprint: "the code as it read")]
+        let other = SHA256Digest(data: Data("another module".utf8))
+        CodeRevisionSeen.save(stale, module: other, recipe: "code-v2")
+
+        let view = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        var kept: [String: SeenRecord] = [:]
+        view.onSeenChanged = { kept = $0 }
+        view.restoreSeen(stale, baselines: [53: before])
+        view.selectFunction(at: 0)
+        XCTAssertFalse(view.newMarks.isEmpty)
+        XCTAssertTrue(view.newBannerIsShown)
+
+        CodeRevisionSeen.set(tracksNewMarks: false)
+        XCTAssertTrue(view.newMarks.isEmpty, "the marks on screen go")
+        XCTAssertFalse(view.newBannerIsShown)
+        XCTAssertEqual(kept["0x220"]?.revision, 54, "and what they were about counts as read")
+        XCTAssertTrue(CodeRevisionSeen.records(module: other, recipe: "code-v2").isEmpty,
+                      "a module not on screen is forgotten: its next open is a first open")
+
+        // While off: nothing is put up, and the records still follow the screen.
+        let off = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                               moduleBytes: teModule(), hexView: NSView())
+        var offKept: [String: SeenRecord] = [:]
+        off.onSeenChanged = { offKept = $0 }
+        off.restoreSeen(stale, baselines: [53: before])
+        XCTAssertTrue(off.newMarks.isEmpty)
+        XCTAssertEqual(offKept["0x220"]?.revision, 54, "recorded as seen at the revision on screen")
+        off.setNewMarks([.init(entry: after.functions[0].entry, baseline: .init(revision: 53, artifact: before))])
+        XCTAssertTrue(off.newMarks.isEmpty, "a carried mark is not put up")
+        off.markRevisionChange(from: before, revision: 53)
+        XCTAssertTrue(off.newMarks.isEmpty, "nor one a revision would")
+
+        // Back on: nothing floods in from the time it was off.
+        CodeRevisionSeen.set(tracksNewMarks: true)
+        let on = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                              moduleBytes: teModule(), hexView: NSView())
+        on.restoreSeen(offKept, baselines: [:])
+        XCTAssertTrue(on.newMarks.isEmpty)
+        on.markRevisionChange(from: before, revision: 53)
+        XCTAssertEqual(on.newMarks.map(\.entry), [after.functions[0].entry], "the next change is New again")
+    }
+
     /// A comparison a New mark puts up belongs to that function: moving to a
     /// function the revision did not change takes it away, and only a
     /// revision the reader picks in the bar holds for every function.

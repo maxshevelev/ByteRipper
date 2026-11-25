@@ -1,4 +1,4 @@
-@source-sha d200a6a065658be9bd4f29ec6ae623b3ef9dfb2d258557c8594ea400f25398a9
+@source-sha 7d5f1e3905c4ec06cb3d6e7a437f731ead22b704d6876b1210e2583d49e5e3ae
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -19,6 +19,13 @@ Der Speicher wird unter **Einstellungen ▸ Codeanalyse** gewählt.
 - **Auf einem Analyseserver** — die Analysen werden von `byteripper-server` gelesen, einem Programm auf einem Rechner im Netzwerk. Alle Macs, die denselben Server angeben, lesen dieselben Analysen; ein einmal analysiertes oder durchgesehenes Modul steht damit allen zur Verfügung.
 
 Die Einstellung legt nur fest, woher die Analysen gelesen werden. Beim Umstellen wird nichts kopiert oder gelöscht: Der Ordner auf diesem Mac bleibt unverändert, und mit **Auf diesem Mac** sind seine Analysen wieder sichtbar.
+
+## Analysestand und Neu-Kennzeichnung
+
+Zwei Optionen am Ende von **Einstellungen ▸ Codeanalyse** legen fest, wie Analysen auf dem Bildschirm gekennzeichnet werden. An den Analysen selbst ändern sie nichts; sie wirken sofort, auch in bereits geöffneten Bereichen.
+
+- **Analysestand der Module anzeigen** — eingeschaltet zeigt der UEFI-Baum den oben beschriebenen Kreis. Ausgeschaltet trägt ein Modul mit gespeicherter Analyse ein einfaches Code-Zeichen, das für jeden Analysestand gleich ist; das Herkunftswort und **(i)** bleiben erhalten.
+- **Änderungen einer neuen Revision als „Neu“ kennzeichnen** — eingeschaltet kennzeichnet der Code-Bereich die Funktionen und die Beschreibung, die eine neuere Revision geändert hat (siehe [[topic:code-panel|Code-Bereich]]). Ausgeschaltet wird nichts gekennzeichnet, und über dem Code erscheint keine Erläuterung einer Änderung: Jede Änderung gilt als gelesen, sobald sie angezeigt wird, und bereits gesetzte Kennzeichnungen werden entfernt. Nach dem Wiedereinschalten werden nur Änderungen gekennzeichnet, die danach eintreffen; Revisionen, die bei ausgeschalteter Option eingetroffen sind, werden nicht nachträglich gekennzeichnet.
 
 ## Verbindung mit einem Server
 

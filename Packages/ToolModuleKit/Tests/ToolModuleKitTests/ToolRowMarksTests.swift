@@ -157,6 +157,39 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertNil(code.toolTip)
     }
 
+    /// With the readiness circle switched off in Settings the row keeps its
+    /// plain code mark, whatever the review's grade, and the words leave the
+    /// grade out; switched on again, the circle is back. The switch is read as
+    /// the cell is dressed, and moving it says so.
+    func testTheReadinessCircleFollowsTheSetting() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"), warning: true, badges: true)
+        let code = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
+        XCTAssertTrue(CodeReadinessDisplay.showsReadiness, "on with nothing stored")
+
+        var told = 0
+        let observer = CodeReadinessDisplay.observe { told += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        CodeReadinessDisplay.set(showsReadiness: false)
+        XCTAssertEqual(told, 1)
+        for role in [ToolRowMarks.Role.codeAnalysis(.mechanical), .codeAnalysis(.complete),
+                     .codeAnalysisModule(.partial)] {
+            XCTAssertEqual(role.codeBadgeSymbol, CodeReadinessDisplay.plainSymbol)
+            ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [role]))
+            XCTAssertFalse(code.isHidden, "the row still says an analysis is stored")
+            XCTAssertFalse(try XCTUnwrap(code.toolTip).contains("review"), "no grade in the words")
+        }
+        XCTAssertNotEqual(ToolRowMarks.Role.codeAnalysis(.mechanical).toolTip,
+                          ToolRowMarks.Role.codeAnalysisModule(.mechanical).toolTip)
+
+        CodeReadinessDisplay.set(showsReadiness: true)
+        for readiness in ToolRowMarks.CodeReadiness.allCases {
+            XCTAssertEqual(ToolRowMarks.Role.codeAnalysis(readiness).codeBadgeSymbol, readiness.symbol)
+        }
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis(.partial)]))
+        XCTAssertTrue(try XCTUnwrap(code.toolTip).contains("review"))
+        XCTAssertNil(ToolRowMarks.Role.partlyProtected.codeBadgeSymbol)
+    }
+
     /// The origin stands after the code badge: a framed word, dashed when the
     /// review only inferred it, none for `unknown`, and gone with the marks.
     func testTheOriginIsAFramedWordAfterTheCodeBadge() throws {

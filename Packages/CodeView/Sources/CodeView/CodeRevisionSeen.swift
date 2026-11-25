@@ -57,6 +57,50 @@ public enum CodeRevisionSeen {
         }
     }
 
+    // MARK: - Whether the marks are kept at all
+
+    /// The `UserDefaults` key Settings ▸ Code Analysis writes.
+    public static let tracksNewMarksKey = "TracksNewCodeMarks"
+
+    /// Posted after the switch moves, so a pane on screen follows it.
+    public static let trackingDidChange = Notification.Name("CodeNewMarkTrackingDidChange")
+
+    /// Whether a function or a description a revision changed is put up as
+    /// New. On with nothing stored: `object(forKey:)` tells "never set" from
+    /// "set to false".
+    ///
+    /// Off means every change counts as read the moment it is on screen: no
+    /// mark, no banner, and the records go on being written — each pane drawn
+    /// records what it shows as seen at its revision. Switching the marks off
+    /// forgets every reading's records: a reading with none is a first open,
+    /// which is seeded as seen and marks nothing. So a module not opened while
+    /// the marks were off is not, once they are on again, marked for every
+    /// change it took in that time; a module opened then is as far along as
+    /// what was on screen. With the marks back on, the next revision that
+    /// changes a function marks it, as before.
+    public static var tracksNewMarks: Bool {
+        CodePaneView.defaults.object(forKey: tracksNewMarksKey) as? Bool ?? true
+    }
+
+    public static func set(tracksNewMarks: Bool) {
+        let was = self.tracksNewMarks
+        CodePaneView.defaults.set(tracksNewMarks, forKey: tracksNewMarksKey)
+        // Forgotten before the panes hear of it: each then records its own
+        // reading as seen, and that record stays.
+        if was, !tracksNewMarks { clear() }
+        NotificationCenter.default.post(name: trackingDidChange, object: nil)
+    }
+
+    /// Calls `handler` on the main queue whenever the switch moves; the caller
+    /// keeps the token.
+    public static func observeTracking(
+        _ handler: @escaping @Sendable @MainActor () -> Void
+    ) -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(forName: trackingDidChange, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { handler() }
+        }
+    }
+
     /// For a test: forget everything kept.
     static func clear() {
         CodePaneView.defaults.removeObject(forKey: key)

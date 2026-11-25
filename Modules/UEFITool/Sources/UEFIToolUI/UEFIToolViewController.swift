@@ -382,6 +382,8 @@ import UEFITool
     /// The panel draws at the app's zoom (`ToolPanelFont`); this is what tells
     /// it the zoom moved.
     private var zoomObserver: NSObjectProtocol?
+    /// Settings ▸ Code Analysis switching the readiness circle on or off.
+    private var readinessObserver: NSObjectProtocol?
 
     private enum Column {
         static let name = NSUserInterfaceItemIdentifier("name")
@@ -666,9 +668,17 @@ import UEFITool
         zoomObserver = ToolPanelFont.observeZoom { [weak self] in
             self?.applyPanelFont()
         }
+        // The cells read the switch as they are drawn: the rows only have to
+        // be drawn again.
+        readinessObserver = CodeReadinessDisplay.observe { [weak self] in
+            self?.outline.reloadData()
+        }
     }
 
     deinit {
+        if let readinessObserver {
+            NotificationCenter.default.removeObserver(readinessObserver)
+        }
         if let zoomObserver {
             NotificationCenter.default.removeObserver(zoomObserver)
         }

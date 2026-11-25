@@ -114,6 +114,12 @@
 "Ghidra's analysis only: the module is not reviewed" = "Только анализ Ghidra: модуль не разобран";
 "The review is not finished" = "Разбор не завершён";
 "Every function reviewed and the module described" = "Все функции разобраны, модуль описан";
+"Code analysis stored. Open with Code opens it" = "Сохранён разбор кода. «Открыть с кодом» открывает его.";
+"This module has a stored code analysis; Open with Code on its image opens it" = "Для этого модуля сохранён разбор кода; его открывает «Открыть с кодом» на образе модуля.";
+"Show how far a module's review has got" = "Показывать степень готовности разбора модуля";
+"In the UEFI tree, a module with a stored code analysis wears a circle after its name: empty while only Ghidra's analysis is stored, half filled while the review is not finished, filled once every function is reviewed and the module is described. Off, the row wears a plain code mark instead." = "В дереве UEFI после имени модуля, для которого сохранён разбор кода, стоит круг: пустой, если есть только автоматический анализ Ghidra, наполовину залитый, если разбор не завершён, залитый, если все функции разобраны и модуль описан. Если флажок снят, вместо круга стоит обычный значок кода.";
+"Mark what a new revision changed as New" = "Отмечать изменения новой ревизии как «Новое»";
+"The Code panel marks a function or a description that a newer revision of the analysis changed as New until it is opened. Off, nothing is marked: every change counts as read as soon as it is shown, and switching back on marks only the changes that come after." = "Панель кода отмечает функцию или описание, изменённые более новой ревизией разбора, как «Новое», пока пользователь их не откроет. Если флажок снят, отметок нет: любое изменение считается прочитанным, как только оно показано, а после повторного включения отмечаются только последующие изменения.";
 "EDK2: the code matches EDK2" = "EDK2: код совпадает с EDK2";
 "EDK2 with changes: an EDK2 module changed by %1$@" = "EDK2 с изменениями: модуль EDK2 с изменениями от %1$@";
 "EDK2 with changes: an EDK2 module changed by the firmware vendor" = "EDK2 с изменениями: модуль EDK2, изменённый производителем прошивки";

@@ -281,7 +281,7 @@ import Localization
         }
         let mark = ToolRowMark.codeAnalysis
         let toolTip = role.toolTip
-        let symbol = role.codeReadiness?.symbol ?? mark.symbol ?? ""
+        let symbol = role.codeBadgeSymbol ?? mark.symbol ?? ""
         // A dot beside the name rather than a glyph of the text's size: the
         // circle says how far a review got, and at full size it outweighed
         // the name it belongs to.

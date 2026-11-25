@@ -385,6 +385,8 @@ import ToolModuleKit
     /// navigator draws it, with what the library registry says of it.
     let functionMark = CodeBaselineImageView()
     private var zoomObserver: NSObjectProtocol?
+    /// Settings ▸ Code Analysis switching the New marks on or off.
+    private var newMarkTrackingObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
     private var syncingSelection = false
@@ -453,10 +455,14 @@ import ToolModuleKit
         // The code is read at the size of the dump beside it: View ▸ Zoom In
         // and Zoom Out move both.
         zoomObserver = ToolPanelFont.observeZoom { [weak self] in self?.zoomChanged() }
+        newMarkTrackingObserver = CodeRevisionSeen.observeTracking { [weak self] in
+            self?.newMarkTrackingChanged()
+        }
     }
 
     deinit {
         if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
+        if let newMarkTrackingObserver { NotificationCenter.default.removeObserver(newMarkTrackingObserver) }
     }
 
     /// Every analysis newest first, as the agent lists them — the recipe id
@@ -2004,7 +2010,9 @@ import ToolModuleKit
                 changed.insert(index)
             }
         }
-        for index in changed where unopenedChanges[index] == nil {
+        // With the marks switched off a revision marks nothing; the pane drawn
+        // for it records everything as seen (`restoreSeen`).
+        for index in changed where unopenedChanges[index] == nil && CodeRevisionSeen.tracksNewMarks {
             unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: code)
             // New again: the comparison it was left with is about an older change.
             functionComparisons[artifact.functions[index].entry] = nil
@@ -2155,6 +2163,8 @@ import ToolModuleKit
     /// mark is about, even when the revisions after it changed the function
     /// again.
     public func setNewMarks(_ marks: [NewMark]) {
+        // Switched off, a mark carried from before is not put up.
+        guard CodeRevisionSeen.tracksNewMarks else { return }
         var byEntry: [CodeAddress: Int] = [:]
         for (index, function) in model.functions.enumerated() where byEntry[function.entry] == nil {
             byEntry[function.entry] = index
@@ -2227,6 +2237,26 @@ import ToolModuleKit
     /// Whether the reader has cleared the marks in this pane.
     private var marksWereCleared = false
 
+    /// Settings switched the New marks on or off. Off takes every mark in the
+    /// pane as the bar's button does — what they were about counts as read —
+    /// and records every function and the description as seen at the revision
+    /// on screen, so nothing is left to put up when the marks come back. On
+    /// puts nothing up: the marks start from the next revision that changes
+    /// something.
+    private func newMarkTrackingChanged() {
+        guard !CodeRevisionSeen.tracksNewMarks else { return }
+        unrecorded = []
+        revisionsToSettle = []
+        if !unopenedChanges.isEmpty || descriptionMark != nil {
+            clearNewMarks()
+        } else if let revision = manifest.reading?.rev {
+            seen = allSeenRecords(revision: revision)
+            marksWereCleared = true
+            if seenLoaded { onSeenChanged?(seen) }
+        }
+        updateNewMarkBanner()
+    }
+
     /// The functions a revision the panel received changed that the reader has
     /// not yet left: they read bold, with a **New** badge, while they are open
     /// and until the reader moves to another function. Each keeps the revision
@@ -2274,7 +2304,10 @@ import ToolModuleKit
                             available: Set<Int>? = nil) {
         guard let revision = manifest.reading?.rev else { return }
         seenLoaded = true
-        guard !records.isEmpty, !marksWereCleared else {
+        // Switched off, the pane is read as a first open: everything on screen
+        // counts as seen at this revision, and is recorded so — the marks start
+        // again from here when they are switched back on.
+        guard !records.isEmpty, !marksWereCleared, CodeRevisionSeen.tracksNewMarks else {
             seen = allSeenRecords(revision: revision)
             onSeenChanged?(seen)
             return

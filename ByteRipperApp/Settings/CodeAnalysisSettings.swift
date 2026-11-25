@@ -1,10 +1,12 @@
 import Cocoa
 import AppPalette
 import CodeAnalysis
+import CodeView
 import GhidraHost
 import HelpBook
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// The Code Analysis tab of the Settings window: where the code analyses are
 /// kept — on this Mac, or on an analysis server in the person's network — the
@@ -33,6 +35,10 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     /// How to start the review pair's sessions: shown while the server is
     /// connected and gives this token the review kit.
     let reviewAgents = NSStackView()
+    /// Whether the UEFI tree draws how far a module's review has got.
+    private let readinessCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    /// Whether the Code panel marks what a new revision changed as New.
+    private let newMarksCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private var reviewCheck: Task<Void, Never>?
     private var observer: NSObjectProtocol?
 
@@ -79,8 +85,22 @@ final class CodeAnalysisSettingsViewController: NSViewController {
 
         let help = HelpButton.standard(for: .topic(.codeAnalyses))
 
+        // Both switches are read where they are drawn — the tree's badge and
+        // the Code panel's marks — and both are told when they move, so a
+        // panel on screen follows at once.
+        // help: settings.code-analysis.readiness
+        readinessCheckbox.title = L("Show how far a module's review has got")
+        readinessCheckbox.target = self
+        readinessCheckbox.action = #selector(readinessChanged(_:))
+        let readinessCaption = small(L("In the UEFI tree, a module with a stored code analysis wears a circle after its name: empty while only Ghidra's analysis is stored, half filled while the review is not finished, filled once every function is reviewed and the module is described. Off, the row wears a plain code mark instead."))
+        // help: settings.code-analysis.new-marks
+        newMarksCheckbox.title = L("Mark what a new revision changed as New")
+        newMarksCheckbox.target = self
+        newMarksCheckbox.action = #selector(newMarksChanged(_:))
+        let newMarksCaption = small(L("The Code panel marks a function or a description that a newer revision of the analysis changed as New until it is opened. Off, nothing is marked: every change counts as read as soon as it is shown, and switching back on marks only the changes that come after."))
+
         for subview in [keptLabel, thisMacButton, serverButton, caption, grid, connectButton, serverCaption,
-                        tail, help] {
+                        tail, readinessCheckbox, readinessCaption, newMarksCheckbox, newMarksCaption, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
@@ -112,7 +132,19 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             tail.topAnchor.constraint(equalTo: serverCaption.bottomAnchor, constant: 8),
             tail.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
             tail.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            tail.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+
+            readinessCheckbox.topAnchor.constraint(equalTo: tail.bottomAnchor, constant: 20),
+            readinessCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            readinessCaption.topAnchor.constraint(equalTo: readinessCheckbox.bottomAnchor, constant: 8),
+            readinessCaption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
+            readinessCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+
+            newMarksCheckbox.topAnchor.constraint(equalTo: readinessCaption.bottomAnchor, constant: 16),
+            newMarksCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            newMarksCaption.topAnchor.constraint(equalTo: newMarksCheckbox.bottomAnchor, constant: 8),
+            newMarksCaption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
+            newMarksCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            newMarksCaption.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -245,6 +277,8 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         addressField.isEnabled = server
         tokenField.isEnabled = server
         connectButton.isEnabled = server
+        readinessCheckbox.state = CodeReadinessDisplay.showsReadiness ? .on : .off
+        newMarksCheckbox.state = CodeRevisionSeen.tracksNewMarks ? .on : .off
         tokenField.placeholderString = (try? location.readToken()) != nil
             ? L("Kept on this Mac") : L("None")
         statusLabel.stringValue = Self.statusText(of: location.state)
@@ -291,6 +325,20 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         }
         refresh()
     }
+
+    @objc private func readinessChanged(_ sender: NSButton) {
+        CodeReadinessDisplay.set(showsReadiness: sender.state == .on)
+    }
+
+    @objc private func newMarksChanged(_ sender: NSButton) {
+        CodeRevisionSeen.set(tracksNewMarks: sender.state == .on)
+    }
+
+    /// The two display switches, and a click on each, for a test.
+    var showsReadinessShown: Bool { readinessCheckbox.state == .on }
+    var tracksNewMarksShown: Bool { newMarksCheckbox.state == .on }
+    func toggleReadinessForTesting() { readinessCheckbox.performClick(nil) }
+    func toggleNewMarksForTesting() { newMarksCheckbox.performClick(nil) }
 
     @objc private func connect() {
         do {

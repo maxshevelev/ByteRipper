@@ -6,6 +6,8 @@
 @covers settings.code-analysis.server
 @covers agent.review-kit
 @covers settings.code-analysis.review-agents
+@covers settings.code-analysis.readiness
+@covers settings.code-analysis.new-marks
 @covers panel.uefi.module-origin
 @covers panel.uefi.module-summary
 
@@ -25,6 +27,13 @@ A module whose review wrote a description carries a third mark after the word: *
 - **On an analysis server** — the analyses are read from `byteripper-server`, a program running on a machine in the network. Every Mac that names the same server reads the same analyses, so a module analysed or reviewed once is available to all of them.
 
 The setting changes only where analyses are read from. Nothing is copied or deleted when it is changed: the folder on this Mac stays as it is, and choosing **On this Mac** again shows its analyses again.
+
+## Readiness circle and New marks
+
+Two switches at the bottom of **Settings ▸ Code Analysis** change how analyses are marked on screen. They change nothing in the analyses themselves and take effect at once, in the panels already open.
+
+- **Show how far a module's review has got** — on, the UEFI tree shows the readiness circle described above. Off, a module with a stored analysis carries a plain code mark, the same for every review state; the origin word and **(i)** stay.
+- **Mark what a new revision changed as New** — on, the Code panel marks the functions and the description that a newer revision changed, as described on [[topic:code-panel|Code Panel]]. Off, nothing is marked and no explanation of a change is shown above the code: every change counts as read as soon as it is on screen, and the marks already shown are removed. When the switch is turned on again, only changes that arrive after that are marked; the revisions received while it was off are not marked afterwards.
 
 ## Connecting to a server
 

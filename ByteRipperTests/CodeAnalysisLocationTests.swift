@@ -1,9 +1,11 @@
 import AppPalette
 import CASService
 import CodeAnalysis
+import CodeView
 import GhidraHost
 import HTTPService
 import Localization
+import ToolModuleKit
 import UEFIToolUI
 import XCTest
 @testable import ByteRipper
@@ -185,6 +187,43 @@ final class CodeAnalysisLocationTests: XCTestCase {
                                                             height: .greatestFiniteMagnitude)).height
         XCTAssertGreaterThan(needed, label.font!.pointSize * 2, "the line is longer than the tab: \(label.stringValue)")
         XCTAssertGreaterThanOrEqual(label.frame.height + 1, needed, "the label is as tall as its lines")
+    }
+
+    /// The two display switches start on, write the setting the tree's badge
+    /// and the Code panel read, and say so to the panels on screen.
+    func testTheDisplaySwitchesWriteTheSettingsThePanelsRead() {
+        defer {
+            ToolPanelFont.defaults.removeObject(forKey: CodeReadinessDisplay.showsReadinessKey)
+            CodePaneView.defaults.removeObject(forKey: CodeRevisionSeen.tracksNewMarksKey)
+        }
+        let settings = CodeAnalysisSettingsViewController()
+        settings.location = location
+        let window = NSWindow(contentViewController: settings)
+        defer { window.close() }
+        settings.refresh()
+        XCTAssertTrue(settings.showsReadinessShown)
+        XCTAssertTrue(settings.tracksNewMarksShown)
+
+        var readinessTold = 0, marksTold = 0
+        let readiness = CodeReadinessDisplay.observe { readinessTold += 1 }
+        let marks = CodeRevisionSeen.observeTracking { marksTold += 1 }
+        defer {
+            NotificationCenter.default.removeObserver(readiness)
+            NotificationCenter.default.removeObserver(marks)
+        }
+        settings.toggleReadinessForTesting()
+        settings.toggleNewMarksForTesting()
+        XCTAssertFalse(CodeReadinessDisplay.showsReadiness)
+        XCTAssertFalse(CodeRevisionSeen.tracksNewMarks)
+        XCTAssertEqual(AppDefaults.store.object(forKey: CodeReadinessDisplay.showsReadinessKey) as? Bool, false,
+                       "kept where the app keeps its settings")
+        XCTAssertEqual(readinessTold, 1)
+        XCTAssertEqual(marksTold, 1)
+
+        settings.toggleReadinessForTesting()
+        settings.toggleNewMarksForTesting()
+        XCTAssertTrue(CodeReadinessDisplay.showsReadiness)
+        XCTAssertTrue(CodeRevisionSeen.tracksNewMarks)
     }
 
     /// The commands that start a review pair show while the server is
