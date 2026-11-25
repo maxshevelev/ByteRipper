@@ -2601,7 +2601,7 @@
           "type" : "boolean"
         },
         "full" : {
-          "description" : "Answer with the functions already carrying their entry; by default only a count.",
+          "description" : "Answer with the functions already carrying their entry before this call (`applied`); by default only their count, `already_applied`. What this call applied is `results`.",
           "type" : "boolean"
         },
         "id" : {

@@ -21,6 +21,46 @@ final class GhidraToolsCompactTests: XCTestCase {
         XCTAssertEqual(GhidraTools.compact(proposal, tool: "ghidra_rename", arguments: [:]), proposal)
     }
 
+    /// A batch of renames, comments or equates repeats the call's identity in
+    /// every item; compact, it is in none, and what each item did stays.
+    func testBatchItemsLoseTheIdentityTheyRepeat() throws {
+        let answer = try value("""
+            {\(identity),"items":[{\(identity),"address":"0x10","ok":true},
+                                   {\(identity),"address":"0x20","ok":true,"variable":{\(identity),"name":"v"}},
+                                   {"ok":false,"error":"no"}]}
+            """)
+        let rows = """
+            [{"address":"0x10","ok":true},{"address":"0x20","ok":true,"variable":{"name":"v"}},{"ok":false,"error":"no"}]
+            """
+        for tool in ["ghidra_rename_variable", "ghidra_comment", "ghidra_equate"] {
+            let compact = GhidraTools.compact(answer, tool: tool, arguments: [:])
+            XCTAssertEqual(compact, try value("{\"items\":\(rows)}"), tool)
+            let single = try value("{\(identity),\"address\":\"0x10\",\"equate\":{\(identity),\"name\":\"N\"}}")
+            XCTAssertEqual(GhidraTools.compact(single, tool: tool, arguments: [:]),
+                           try value(#"{"address":"0x10","equate":{"name":"N"}}"#), tool)
+        }
+        // Other tools' rows are left as they are: there a row's identity can be its content.
+        let rowsKept = GhidraTools.compact(answer, tool: "ghidra_rename", arguments: [:])
+        XCTAssertEqual(rowsKept.objectValue?["items"]?.arrayValue?.first?.objectValue?["project"], .string("p"))
+    }
+
+    /// `verbose: true` answers as the owner did: every item keeps its identity.
+    func testVerboseBatchKeepsEveryIdentity() async throws {
+        let owner = try value("{\(identity),\"items\":[{\(identity),\"ok\":true}]}")
+        let tool = GhidraTools.compacted(AgentTool(name: "ghidra_comment", title: "t", description: "d",
+                                                   inputSchema: AgentSchema.object([:]),
+                                                   annotations: .init(readOnly: false, destructive: false, idempotent: false)) { _ in
+            .json(owner)
+        })
+        let verbose = try await tool.run(AgentCall(tool: "ghidra_comment",
+                                                   arguments: AgentArguments(["verbose": .bool(true)])))
+        guard case .json(let full) = verbose else { return XCTFail("not JSON") }
+        XCTAssertEqual(full, owner)
+        let compact = try await tool.run(AgentCall(tool: "ghidra_comment", arguments: AgentArguments([:])))
+        guard case .json(let short) = compact else { return XCTFail("not JSON") }
+        XCTAssertEqual(short, try value(#"{"items":[{"ok":true}]}"#))
+    }
+
     func testSettledProposalsAreLeftOutOrShort() throws {
         let list = try value("""
             [{"id":"1","state":"open","names":["A"],"reason":"long","votes":[]},

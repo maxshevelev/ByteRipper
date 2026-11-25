@@ -639,7 +639,8 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
     }
 
     /// An apply answers what it did: the functions already carrying their
-    /// entry are a count, and the rest of the plan is kept.
+    /// entry are a count named as such, apart from the one `results` item an
+    /// apply at one address made, and the rest of the plan is kept.
     func testAnApplyAnswerCountsWhatWasAlreadyApplied() throws {
         let answer = AgentAnswer.json([
             "entries": 69, "hashed": 88,
@@ -651,7 +652,8 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
             return XCTFail("not an object")
         }
         XCTAssertNil(compact["applied"])
-        XCTAssertEqual(compact["applied_count"], .int(3))
+        XCTAssertNil(compact["applied_count"])
+        XCTAssertEqual(compact["already_applied"], .int(3))
         XCTAssertEqual(compact["to_apply"]?.arrayValue?.count, 1)
         XCTAssertEqual(compact["results"]?.arrayValue?.count, 1)
         XCTAssertEqual(compact["entries"], .int(69))

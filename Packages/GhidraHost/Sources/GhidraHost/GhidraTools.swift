@@ -442,7 +442,7 @@ public enum GhidraTools {
                     "decline": AgentSchema.boolean("Refuse the entry for the function at `address`."),
                     "take_text": AgentSchema.boolean("Replace what the project holds on the function at `address` with the entry's text."),
                     "full": AgentSchema.boolean(
-                        "Answer with the functions already carrying their entry; by default only a count.")
+                        "Answer with the functions already carrying their entry before this call (`applied`); by default only their count, `already_applied`. What this call applied is `results`.")
                 ], required: ["module"]),
                 annotations: .edit
             ) { call in
@@ -537,11 +537,15 @@ public enum GhidraTools {
 
     /// A registry answer without the list of what was already current: the
     /// entries applied from before are noise beside what this call did.
-    /// `full: true` asks for the list too.
+    /// `full: true` asks for the list too. The count is `already_applied`, as
+    /// an open's summary says it: it is the module's functions carrying their
+    /// entry before this call, never what this call applied — that is
+    /// `results`, one item per function, so an apply at one `address`
+    /// answers one result beside however many were current already.
     static func compactPlan(_ answer: AgentAnswer) -> AgentAnswer {
         guard case .json(let value) = answer, case .object(var plan) = value else { return answer }
         if let applied = plan.removeValue(forKey: "applied")?.arrayValue {
-            plan["applied_count"] = .count(applied.count)
+            plan["already_applied"] = .count(applied.count)
         }
         return .json(.object(plan))
     }

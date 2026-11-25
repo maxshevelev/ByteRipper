@@ -15,6 +15,10 @@ extension GhidraTools {
     static let languageTools: Set<String> = ["ghidra_open", "ghidra_create"]
     /// Proposal states nobody votes on any more.
     static let settledProposalStates: Set<String> = ["applied", "withdrawn", "rejected"]
+    /// The write tools whose answer nests the owner's answer per change (an
+    /// item of a batch, the equate set at each address): the identity there
+    /// is the call's own again, once per item.
+    static let nestedIdentityTools: Set<String> = ["ghidra_rename_variable", "ghidra_comment", "ghidra_equate"]
 
     /// `tool` taking `verbose`, and answering compactly without it.
     static func compacted(_ tool: AgentTool) -> AgentTool {
@@ -72,7 +76,20 @@ extension GhidraTools {
         default:
             break
         }
+        if nestedIdentityTools.contains(tool) { value = withoutNestedIdentity(value) }
         return withoutIdentity(value, keepLanguage: languageTools.contains(tool))
+    }
+
+    /// Every object below the top without the identity it repeats: the top
+    /// level is where the verbose answer keeps it, once.
+    static func withoutNestedIdentity(_ value: JSONValue) -> JSONValue {
+        func strip(_ value: JSONValue) -> JSONValue {
+            if let list = value.arrayValue { return .array(list.map(strip)) }
+            guard let object = value.objectValue else { return value }
+            return withoutIdentity(.object(object.mapValues(strip)), keepLanguage: false)
+        }
+        guard let object = value.objectValue else { return strip(value) }
+        return .object(object.mapValues(strip))
     }
 
     /// An owner's answer without its identity: only an object that carries
