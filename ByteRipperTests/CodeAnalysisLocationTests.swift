@@ -251,6 +251,7 @@ final class CodeAnalysisLocationTests: XCTestCase {
 
         settings.reviewKit = cache(refused: false)
         await wait("the commands") { !settings.reviewAgents.isHidden }
+        if !settings.reviewAgentsExpanded { settings.toggleReviewAgentsForTesting() }
         let texts = Self.labels(in: settings.reviewAgents).map(\.stringValue)
         for role in ["Reviewer", "Verifier"] {
             let start = CodeAnalysisSettingsViewController.startCommand(role: role, mac: AgentService.macName)
@@ -279,6 +280,47 @@ final class CodeAnalysisLocationTests: XCTestCase {
         try location.choose(.thisMac, server: address, token: nil)
         settings.refresh()
         XCTAssertTrue(settings.reviewAgents.isHidden, "no review pair with the analyses on this Mac")
+    }
+
+    /// The tab fits a laptop's screen in its fullest state — a connected
+    /// server that gives the review kit, with the commands unfolded — and
+    /// the commands start folded, open with a click and stay as left.
+    func testTheTabFitsTheScreenWithTheReviewAgentsUnfolded() async throws {
+        let key = CodeAnalysisSettingsViewController.reviewAgentsExpandedKey
+        AppDefaults.store.removeObject(forKey: key)
+        defer { AppDefaults.store.removeObject(forKey: key) }
+        try location.choose(.server, server: address, token: "secret")
+        await wait("the connection") { if case .connected = location.state { return true } else { return false } }
+        let kit = ReviewKit(texts: ["review-roles/roles/reviewer.md": "Reviewer · {{mac}}",
+                                    "review-roles/roles/verifier.md": "Verifier · {{mac}}",
+                                    "ghidra-uefi/SKILL.md": "# Rules"])
+        let manifest = try JSONEncoder().encode(kit.manifest)
+        let settings = CodeAnalysisSettingsViewController()
+        settings.location = location
+        let window = NSWindow(contentViewController: settings)
+        defer { window.close() }
+        settings.reviewKit = ReviewKitCache(folder: directory.appendingPathComponent("kit-fit"), source: {
+            ReviewKitCache.Source(manifest: { manifest }, file: { Data((kit.texts[$0] ?? "").utf8) })
+        })
+        await wait("the block") { !settings.reviewAgents.isHidden }
+        XCTAssertFalse(settings.reviewAgentsExpanded, "the commands start folded")
+        let folded = settings.view.fittingSize.height
+
+        settings.toggleReviewAgentsForTesting()
+        XCTAssertTrue(settings.reviewAgentsExpanded)
+        XCTAssertEqual(AppDefaults.store.object(forKey: key) as? Bool, true, "the choice is kept")
+        let full = settings.view.fittingSize.height
+        XCTAssertGreaterThan(full, folded + 60, "unfolded, the commands take room")
+        XCTAssertLessThanOrEqual(full, 560, "the fullest tab fits a laptop's screen: \(full)")
+        if let path = ProcessInfo.processInfo.environment["BR_MEASURE_FILE"] {
+            try? "folded \(folded) full \(full)".write(toFile: path, atomically: true, encoding: .utf8)
+        }
+
+        let again = CodeAnalysisSettingsViewController()
+        _ = again.view
+        XCTAssertTrue(again.reviewAgentsExpanded, "a new tab opens as the last one was left")
+        settings.toggleReviewAgentsForTesting()
+        XCTAssertFalse(settings.reviewAgentsExpanded)
     }
 
     /// The pair finds each other by session name, which only the start sets:

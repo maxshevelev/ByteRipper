@@ -117,9 +117,9 @@
 "Code analysis stored. Open with Code opens it" = "Сохранён разбор кода. «Открыть с кодом» открывает его.";
 "This module has a stored code analysis; Open with Code on its image opens it" = "Для этого модуля сохранён разбор кода; его открывает «Открыть с кодом» на образе модуля.";
 "Show how far a module's review has got" = "Показывать степень готовности разбора модуля";
-"In the UEFI tree, a module with a stored code analysis wears a circle after its name: empty while only Ghidra's analysis is stored, half filled while the review is not finished, filled once every function is reviewed and the module is described. Off, the row wears a plain code mark instead." = "В дереве UEFI после имени модуля, для которого сохранён разбор кода, стоит круг: пустой, если есть только автоматический анализ Ghidra, наполовину залитый, если разбор не завершён, залитый, если все функции разобраны и модуль описан. Если флажок снят, вместо круга стоит обычный значок кода.";
+"In the UEFI tree, a circle after an analysed module: empty, half filled or filled as its review progresses" = "В дереве UEFI после модуля с разбором стоит круг: пустой, наполовину или полностью залитый — по мере готовности разбора";
 "Mark what a new revision changed as New" = "Отмечать изменения новой ревизии как «Новое»";
-"The Code panel marks a function or a description that a newer revision of the analysis changed as New until it is opened. Off, nothing is marked: every change counts as read as soon as it is shown, and switching back on marks only the changes that come after." = "Панель кода отмечает функцию или описание, изменённые более новой ревизией разбора, как «Новое», пока пользователь их не откроет. Если флажок снят, отметок нет: любое изменение считается прочитанным, как только оно показано, а после повторного включения отмечаются только последующие изменения.";
+"The Code panel marks the functions and descriptions a newer revision changed until they are opened" = "Панель кода отмечает функции и описания, изменённые новой ревизией, пока их не откроют";
 "EDK2: the code matches EDK2" = "EDK2: код совпадает с EDK2";
 "EDK2 with changes: an EDK2 module changed by %1$@" = "EDK2 с изменениями: модуль EDK2 с изменениями от %1$@";
 "EDK2 with changes: an EDK2 module changed by the firmware vendor" = "EDK2 с изменениями: модуль EDK2, изменённый производителем прошивки";
@@ -1880,14 +1880,14 @@
 "Code analyses are kept:" = "Разборы кода хранятся:";
 "On this Mac" = "На этом Mac";
 "On an analysis server" = "На сервере разборов";
-"On this Mac, the analyses the Ghidra skill makes are read from this Mac's own folder. On an analysis server — byteripper-server on a machine in your network — every Mac that names the server reads the same analyses, and a module analysed once is there for all of them. What this Mac has read stays readable when the server cannot be reached." = "Вариант «На этом Mac»: разборы, созданные скиллом Ghidra, читаются из собственной папки этого Mac. Вариант «На сервере разборов»: все Mac, в которых указан сервер byteripper-server на одной из машин сети, читают одни и те же разборы, и модуль, разобранный один раз, доступен на каждом из них. Уже прочитанное остаётся доступным, когда сервер недоступен.";
+"A server is shared: every Mac that names it reads the same analyses." = "Сервер общий: все Mac, в которых он указан, читают одни и те же разборы.";
 "Server:" = "Сервер:";
 "The analysis server's address, as http://host:port" = "Адрес сервера разборов в виде http://host:port";
 "Token:" = "Токен:";
 "The token made on the server by byteripper-server token add" = "Токен, который на сервере создала команда byteripper-server token add";
 "Connect" = "Подключить";
 "Keep the analyses on this server and read them from it" = "Хранить разборы на этом сервере и читать их с него";
-"The token is kept in a file only you may read. Leave the field empty to keep the token already there." = "Токен хранится в файле, который можете читать только вы. Чтобы оставить уже сохранённый токен, не заполняйте поле.";
+"An empty token field keeps the token already stored." = "Если поле токена пустое, остаётся уже сохранённый токен.";
 "Kept on this Mac" = "Сохранён на этом Mac";
 "Analyses are read from this Mac." = "Разборы читаются с этого Mac.";
 "Connecting to the analysis server…" = "Подключение к серверу разборов…";
@@ -1942,14 +1942,12 @@
 "The code of this analysis on the server is damaged." = "Код этого разбора на сервере повреждён.";
 "The code of this analysis in the analysis store on this Mac is damaged." = "Код этого разбора в хранилище разборов на этом Mac повреждён.";
 "Review agents" = "Агенты разбора";
-"This server gives agents the roles of a review pair. Start each in its own Terminal window." = "Сервер выдаёт агентам роли пары разбора. Каждую роль запустите в отдельном окне Терминала.";
 "1. Start Claude Code in Terminal, one window for each role, under the role's name:" = "1. Запустите Claude Code в Терминале, по окну на каждую роль, под именем роли:";
 "2. In each session, type the command of its role:" = "2. В каждой сессии введите команду её роли:";
-"The two sessions find each other by these names; a session cannot name itself once it runs." = "Сессии находят друг друга по этим именам. Запущенная сессия сама себя переименовать не может.";
-"Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown." = "Команды ByteRipper становятся известны Claude Code только после подключения к нему. Поэтому команду вводят в открытой сессии: переданная в claude при запуске, она не распознаётся.";
+"Display" = "Отображение";
+"Show or hide how to start the review agents" = "Показать или скрыть порядок запуска агентов разбора";
 "Reviewer: reviews modules and publishes them." = "Reviewer: разбирает модули и публикует их.";
 "Verifier: checks the Reviewer's results and changes nothing." = "Verifier: проверяет результаты Reviewer и ничего не изменяет.";
-"Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows." = "Обеим ролям нужны включённая служба агентов и ByteRipper, добавленный в Claude Code, — как показано в «Настройки ▸ Агент».";
 /* ME Analyzer: конец производства, Boot Guard и ключ OEM (Skills/me-eom-structures). */
 "Boot Guard" = "Boot Guard";
 "No profile record in this image" = "В этом дампе записи о профиле нет";

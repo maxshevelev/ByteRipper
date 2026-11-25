@@ -35,6 +35,12 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     /// How to start the review pair's sessions: shown while the server is
     /// connected and gives this token the review kit.
     let reviewAgents = NSStackView()
+    /// The commands and what each role is, under the block's disclosure
+    /// triangle: folded away unless the person opened it before.
+    let reviewAgentsBody = NSStackView()
+    private let reviewAgentsDisclosure = NSButton(title: "", target: nil, action: nil)
+    /// Where the disclosure's state is kept between launches.
+    static let reviewAgentsExpandedKey = "CodeAnalysisReviewAgentsExpanded"
     /// Whether the UEFI tree draws how far a module's review has got.
     private let readinessCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     /// Whether the Code panel marks what a new revision changed as New.
@@ -53,7 +59,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         serverButton.title = L("On an analysis server")
         serverButton.target = self
         serverButton.action = #selector(modeChanged(_:))
-        let caption = small(L("On this Mac, the analyses the Ghidra skill makes are read from this Mac's own folder. On an analysis server — byteripper-server on a machine in your network — every Mac that names the server reads the same analyses, and a module analysed once is there for all of them. What this Mac has read stays readable when the server cannot be reached."))
+        let caption = small(L("A server is shared: every Mac that names it reads the same analyses."))
 
         // help: settings.code-analysis.server
         let addressLabel = NSTextField(labelWithString: L("Server:"))
@@ -72,14 +78,14 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         grid.column(at: 0).xPlacement = .trailing
         addressField.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
         tokenField.widthAnchor.constraint(equalTo: addressField.widthAnchor).isActive = true
-        let serverCaption = small(L("The token is kept in a file only you may read. Leave the field empty to keep the token already there."))
+        let serverCaption = small(L("An empty token field keeps the token already stored."))
 
         statusLabel.font = .systemFont(ofSize: 11)
         buildReviewAgents()
         let tail = NSStackView(views: [statusLabel, reviewAgents])
         tail.orientation = .vertical
         tail.alignment = .leading
-        tail.spacing = 16
+        tail.spacing = 8
         statusLabel.widthAnchor.constraint(equalTo: tail.widthAnchor).isActive = true
         reviewAgents.widthAnchor.constraint(equalTo: tail.widthAnchor).isActive = true
 
@@ -92,15 +98,17 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         readinessCheckbox.title = L("Show how far a module's review has got")
         readinessCheckbox.target = self
         readinessCheckbox.action = #selector(readinessChanged(_:))
-        let readinessCaption = small(L("In the UEFI tree, a module with a stored code analysis wears a circle after its name: empty while only Ghidra's analysis is stored, half filled while the review is not finished, filled once every function is reviewed and the module is described. Off, the row wears a plain code mark instead."))
+        ControlHelp.describe(readinessCheckbox, L("In the UEFI tree, a circle after an analysed module: empty, half filled or filled as its review progresses"))
         // help: settings.code-analysis.new-marks
         newMarksCheckbox.title = L("Mark what a new revision changed as New")
         newMarksCheckbox.target = self
         newMarksCheckbox.action = #selector(newMarksChanged(_:))
-        let newMarksCaption = small(L("The Code panel marks a function or a description that a newer revision of the analysis changed as New until it is opened. Off, nothing is marked: every change counts as read as soon as it is shown, and switching back on marks only the changes that come after."))
+        ControlHelp.describe(newMarksCheckbox, L("The Code panel marks the functions and descriptions a newer revision changed until they are opened"))
+        let displayLabel = NSTextField(labelWithString: L("Display"))
+        displayLabel.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
 
         for subview in [keptLabel, thisMacButton, serverButton, caption, grid, connectButton, serverCaption,
-                        tail, readinessCheckbox, readinessCaption, newMarksCheckbox, newMarksCaption, help] {
+                        tail, displayLabel, readinessCheckbox, newMarksCheckbox, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
@@ -119,7 +127,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             caption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
             caption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            grid.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 16),
+            grid.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 12),
             grid.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
             connectButton.firstBaselineAnchor.constraint(equalTo: tokenField.firstBaselineAnchor),
             connectButton.leadingAnchor.constraint(equalTo: grid.trailingAnchor, constant: 8),
@@ -133,18 +141,15 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             tail.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
             tail.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            readinessCheckbox.topAnchor.constraint(equalTo: tail.bottomAnchor, constant: 20),
-            readinessCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            readinessCaption.topAnchor.constraint(equalTo: readinessCheckbox.bottomAnchor, constant: 8),
-            readinessCaption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
-            readinessCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-
-            newMarksCheckbox.topAnchor.constraint(equalTo: readinessCaption.bottomAnchor, constant: 16),
-            newMarksCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            newMarksCaption.topAnchor.constraint(equalTo: newMarksCheckbox.bottomAnchor, constant: 8),
-            newMarksCaption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
-            newMarksCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            newMarksCaption.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            displayLabel.topAnchor.constraint(equalTo: tail.bottomAnchor, constant: 16),
+            displayLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            readinessCheckbox.topAnchor.constraint(equalTo: displayLabel.bottomAnchor, constant: 8),
+            readinessCheckbox.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
+            readinessCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
+            newMarksCheckbox.topAnchor.constraint(equalTo: readinessCheckbox.bottomAnchor, constant: 6),
+            newMarksCheckbox.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
+            newMarksCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
+            newMarksCheckbox.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -163,12 +168,24 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         reviewCheck?.cancel()
     }
 
-    /// The two commands that start the review pair, and what each session is.
+    /// The two commands that start the review pair, and what each session
+    /// is, under a disclosure triangle. What the roles are for, what they
+    /// need, why a session is named at the start and why its command is typed
+    /// in it is the help page's to say.
     // help: settings.code-analysis.review-agents
     private func buildReviewAgents() {
+        reviewAgentsDisclosure.bezelStyle = .disclosure
+        reviewAgentsDisclosure.setButtonType(.pushOnPushOff)
+        reviewAgentsDisclosure.title = ""
+        reviewAgentsDisclosure.target = self
+        reviewAgentsDisclosure.action = #selector(reviewAgentsToggled(_:))
+        ControlHelp.describe(reviewAgentsDisclosure, L("Show or hide how to start the review agents"))
         let title = NSTextField(labelWithString: L("Review agents"))
         title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
-        let intro = small(L("This server gives agents the roles of a review pair. Start each in its own Terminal window."))
+        title.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(reviewAgentsTitleClicked)))
+        let header = NSStackView(views: [reviewAgentsDisclosure, title])
+        header.orientation = .horizontal
+        header.spacing = 4
         func copyable(_ text: String) -> CopyableTextView {
             CopyableTextView(text: text, copyHelp: L("Copy to the clipboard"))
         }
@@ -187,24 +204,43 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         let mac = AgentService.macName
         let claude = copyable(Self.startCommand(role: "Reviewer", mac: mac))
         let claudeVerifier = copyable(Self.startCommand(role: "Verifier", mac: mac))
-        let named = small(L("The two sessions find each other by these names; a session cannot name itself once it runs."))
         let then = small(L("2. In each session, type the command of its role:"))
         let reviewer = command(Self.reviewerCommand, L("Reviewer: reviews modules and publishes them."))
         let verifier = command(Self.verifierCommand,
                                L("Verifier: checks the Reviewer's results and changes nothing."))
-        let why = small(L("Claude Code knows ByteRipper's commands only once it has connected to it, so a command is typed in the session: given to claude as it starts, it is unknown."))
-        let needs = small(L("Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows."))
-        let body = [intro, start, claude, claudeVerifier, named, then, reviewer, verifier, why, needs]
-        reviewAgents.addArrangedSubview(title)
+        let body = [start, claude, claudeVerifier, then, reviewer, verifier]
         for view in body {
-            reviewAgents.addArrangedSubview(view)
-            view.widthAnchor.constraint(equalTo: reviewAgents.widthAnchor).isActive = true
+            reviewAgentsBody.addArrangedSubview(view)
+            view.widthAnchor.constraint(equalTo: reviewAgentsBody.widthAnchor).isActive = true
         }
+        reviewAgentsBody.orientation = .vertical
+        reviewAgentsBody.alignment = .leading
+        reviewAgentsBody.spacing = 6
+        reviewAgents.addArrangedSubview(header)
+        reviewAgents.addArrangedSubview(reviewAgentsBody)
+        reviewAgentsBody.widthAnchor.constraint(equalTo: reviewAgents.widthAnchor).isActive = true
         reviewAgents.orientation = .vertical
         reviewAgents.alignment = .leading
         reviewAgents.spacing = 8
-        reviewAgents.setCustomSpacing(4, after: title)
         reviewAgents.isHidden = true
+        let expanded = AppDefaults.store.bool(forKey: Self.reviewAgentsExpandedKey)
+        reviewAgentsDisclosure.state = expanded ? .on : .off
+        reviewAgentsBody.isHidden = !expanded
+    }
+
+    /// Whether the commands are shown under the block's title.
+    var reviewAgentsExpanded: Bool { !reviewAgentsBody.isHidden }
+
+    /// Opens or folds the commands, as a click on the triangle does.
+    func toggleReviewAgentsForTesting() { reviewAgentsDisclosure.performClick(nil) }
+
+    @objc private func reviewAgentsTitleClicked() { reviewAgentsDisclosure.performClick(nil) }
+
+    @objc private func reviewAgentsToggled(_ sender: NSButton) {
+        let expanded = sender.state == .on
+        AppDefaults.store.set(expanded, forKey: Self.reviewAgentsExpandedKey)
+        reviewAgentsBody.isHidden = !expanded
+        (view.window?.windowController as? SettingsWindowController)?.fitToCurrentTab()
     }
 
     /// Started in Terminal under the role's session name; the role's prompt
