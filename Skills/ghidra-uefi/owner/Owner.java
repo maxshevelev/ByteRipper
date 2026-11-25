@@ -2336,7 +2336,11 @@ public class Owner {
     /** The merge itself: into the archive for a publish, into a copy of it for a preview. */
     private boolean mergeInto(FileDataTypeManager shared, java.util.TreeMap<String, String> mine, Merge merge,
                               boolean take, JsonObject origins) throws Exception {
-        boolean changed = false;
+        // Repaired first, not only last: the server merges into a copy of its
+        // stored archive version, which can still hold a wrapper an older
+        // build wrote, and comparing against that wrapper reads as a
+        // replacement (issue a80f7518, third case).
+        boolean changed = repairConflictNames(shared);
         String module = options.get("module");
         java.util.TreeMap<String, DataType> ours = new java.util.TreeMap<>();
         for (String name : mine.keySet()) {
