@@ -189,6 +189,7 @@ public class Owner {
         if (options.containsKey("review-types")) {
             String bits = program.getDefaultPointerSize() == 8 ? "X64" : "Ia32";
             reviewTypes = new File(options.get("review-types"), "review-types-" + bits + ".gdt");
+            repairSharedArchive();
             refreshReviewArchive();
         }
         // What the program held before anyone reviewed it — the loader's
@@ -3008,6 +3009,36 @@ public class Owner {
      * the same as its own copy once the member is the twin. The passes go on
      * until one finds nothing, so a publish leaves nothing for the next.
      */
+    /**
+     * The repair a merge ends with, run when an owner starts: a publish that
+     * changes nothing never merges, so a wrapper or a lone `.conflict` copy an
+     * older build left would stay until some module changed a type (issue
+     * a80f7518). Saved only when it found something.
+     */
+    private void repairSharedArchive() {
+        if (reviewTypes == null || !reviewTypes.isFile()) return;
+        try (FileChannel channel = lockChannel(reviewTypes); FileLock lock = channel.lock()) {
+            FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, true);
+            try {
+                boolean changed;
+                int transaction = shared.startTransaction("repair at start");
+                try {
+                    changed = repairConflictNames(shared);
+                } finally {
+                    shared.endTransaction(transaction, true);
+                }
+                if (changed) {
+                    shared.save();
+                    System.out.println("OWNER TYPE repaired the shared archive at start");
+                }
+            } finally {
+                shared.close();
+            }
+        } catch (Exception error) {
+            System.out.println("OWNER TYPE repair at start: " + error.getMessage());
+        }
+    }
+
     private static boolean repairConflictNames(FileDataTypeManager shared) {
         boolean changed = false;
         for (int pass = 0; pass < 16 && repairConflictNamesOnce(shared); pass++) changed = true;
