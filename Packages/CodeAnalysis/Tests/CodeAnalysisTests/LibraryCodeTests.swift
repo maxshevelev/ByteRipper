@@ -107,6 +107,48 @@ final class LibraryCodeTests: XCTestCase {
         XCTAssertEqual(ModuleFormat.stored(stored.artifact, index: known, code: code).artifact, stored.artifact)
     }
 
+    /// A datum reference one module's Ghidra keeps and another's does not —
+    /// a stack reference of a review, or one on an immediate
+    /// an equate made a value — is not what makes the body another function:
+    /// the bytes decide (issue 5cf32795: SaveLockBox's code labelled
+    /// `MOV RAX,0x8000000000000013` `data_43`, DxePlatform's had no reference
+    /// there, and it and three callers stayed the module's).
+    func testADatumReferenceTheModuleDoesNotKeepIsNoObstacle() throws {
+        func withConstant(_ row: [String: Any], reference: Bool) throws -> [String: Any] {
+            var row = row
+            let base = try XCTUnwrap(LibraryCode.address(row["entry"]))
+            var list = try XCTUnwrap(row["instructions"] as? [[String: Any]])
+            list.append(instruction(String(format: "0x%llX", base + 16), "B8 00 10 00 00", "MOV", "MOV EAX,0x1000",
+                                    reference ? [["to": "0x1000", "type": "WRITE"]] : []))
+            row["instructions"] = list
+            return row
+        }
+        let source = try artifact([try withConstant(function(at: 0x2000, target: 0x5000, table: 0x7000), reference: true),
+                                   calleeRow(at: 0x5000)])
+        let (known, code) = taught(source, index())
+        let digest = try XCTUnwrap(known.entries[caller]?.variants[0].code)
+        let listing = try XCTUnwrap(LibraryCode.listing(code: try XCTUnwrap(code[digest])) { _ in nil })
+        XCTAssertEqual(listing[4]["text"] as? String, "MOV EAX,data_10", "the code took the constant for a datum")
+
+        let theirs = try withConstant(function(at: 0x93000, target: 0x90000, table: 0x98000), reference: false)
+        let stored = ModuleFormat.stored(try artifact([theirs, calleeRow(at: 0x90000)]), index: known, code: code)
+        XCTAssertEqual(stored.functions, ["0x93000", "0x90000"], "the same bytes: a link")
+        let rows = try XCTUnwrap(decoded(stored.artifact)["functions"] as? [[String: Any]])
+        let targets = try XCTUnwrap(rows[0]["targets"] as? [String: String])
+        let made = try XCTUnwrap(LibraryCode.instructions(code: try XCTUnwrap(code[digest]), entry: 0x93000, targets: targets))
+        let real = try XCTUnwrap(theirs["instructions"] as? [[String: Any]])
+        XCTAssertEqual(made.map { $0["bytes"] as? String }, real.map { $0["bytes"] as? String })
+        XCTAssertEqual(made.map { $0["text"] as? String }, real.map { $0["text"] as? String })
+
+        // A real datum the module has elsewhere and no reference to: other bytes, no link.
+        var moved = function(at: 0x93000, target: 0x90000, table: 0x98000)
+        var list = try XCTUnwrap(moved["instructions"] as? [[String: Any]])
+        list[2]["references"] = []
+        moved["instructions"] = list
+        let other = ModuleFormat.stored(try artifact([moved, calleeRow(at: 0x90000)]), index: known, code: code)
+        XCTAssertEqual(other.functions, ["0x90000"], "the table is elsewhere, so the bytes differ")
+    }
+
     /// The registry shows what a function calls by name, the name it has now.
     func testTheListingNamesTheCalleeAndNoAddressOfAModule() throws {
         let source = try artifact([function(at: 0x2000, target: 0x5000, table: 0x7000), calleeRow(at: 0x5000)])

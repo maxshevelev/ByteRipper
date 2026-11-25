@@ -73,6 +73,14 @@ public enum LibraryCode {
     public static func targets(code: Data, instructions real: [[String: Any]]) -> [String: String]? {
         guard let source = read(code), real.count == source.instructions.count else { return nil }
         var targets: [String: String] = [:]
+        // A datum the module's instruction has no reference to at all: Ghidra
+        // keeps references by the state of the project, not by the bytes — a
+        // stack reference of a review, or one on an immediate an equate later
+        // made a value (issue 5cf32795: `MOV RAX,0x8000000000000013` labelled
+        // `data_43` in the entry's code, plain in DxePlatform). It stays where
+        // the code has it, and `bind`'s byte comparison decides: a real datum
+        // elsewhere in this module gives other bytes, and no link.
+        var absent: [String: String] = [:]
         for (theirs, ours) in zip(source.instructions, real) {
             let mine = Dictionary(grouping: ours["references"] as? [[String: Any]] ?? [], by: { $0["type"] as? String ?? "" })
             var used: [String: Int] = [:]
@@ -81,12 +89,18 @@ public enum LibraryCode {
                 let position = used[type, default: 0]
                 used[type] = position + 1
                 guard let key = (reference["entry"] ?? reference["label"]) as? String else { continue }
-                guard let row = mine[type], position < row.count, let to = address(row[position]["to"]) else { return nil }
+                guard let row = mine[type], position < row.count else {
+                    // What the function calls must be there; only a datum may be missing.
+                    guard reference["entry"] == nil, let was = address(reference["to"]) else { return nil }
+                    absent[key] = absent[key] ?? hex(was)
+                    continue
+                }
+                guard let to = address(row[position]["to"]) else { return nil }
                 if let held = targets[key], held != hex(to) { return nil }
                 targets[key] = hex(to)
             }
         }
-        return targets
+        return targets.merging(absent) { here, _ in here }
     }
 
     /// The registry numbers the code calls: what a function of this body
