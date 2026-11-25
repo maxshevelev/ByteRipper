@@ -23,7 +23,7 @@ CAS, and its project lock keeps the owner off the project.
 | who refers to an address | `ghidra_xrefs` with `to`; `held_by` lists instructions holding it with no reference |
 | what a function calls | `ghidra_xrefs` with `function`; an empty `calls` means it calls nothing |
 | where every module names a type | `ghidra_type_uses` — reads each module's last published analysis |
-| a shared type whose name turned out false | `ghidra_type` with `delete`, `shared` and a `reason`, then walk `ghidra_type_uses`: modules keep their copy, new ones do not get it, and a publish cannot bring it back |
+| a shared type whose name turned out false | `ghidra_type` with `delete`, `shared` and a `reason` (types that point at each other go together: `names` lists the set), then walk `ghidra_type_uses`: modules keep their copy, new ones do not get it, and a publish cannot bring it back |
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
 | name a branch label (`LAB_<address>` in the C) | `ghidra_label` — `ghidra_rename` would name the function around it |

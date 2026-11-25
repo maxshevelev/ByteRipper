@@ -3327,12 +3327,28 @@ public class Owner {
      * Takes a type out of the shared archive: a name that turned out false. A
      * typedef and the structure it names are one type and go together; another
      * archive type using either refuses it, since Ghidra would rewrite that type
-     * around the gap. Who and why go in a sidecar with the type's C, which is
+     * around the gap. `names` withdraws several as one set, refused only when a
+     * type outside the set uses a member: types that point at each other go so. Who and why go in a sidecar with the type's C, which is
      * also what keeps a module holding a copy from publishing the name back. A
      * module's own copy stays: `ghidra_type_uses` lists what still names it.
      */
     private JsonObject withdrawShared(JsonObject body) throws Exception {
-        String name = required(body, "name").trim();
+        // Several names go as one set: types that use only each other — a
+        // cycle of pointers among them — can never be withdrawn one by one,
+        // and the set is refused only when a type outside it uses a member.
+        java.util.List<String> names = new java.util.ArrayList<>();
+        if (body.has("names") && body.get("names").isJsonArray()) {
+            for (JsonElement each : body.getAsJsonArray("names")) {
+                String trimmed = each.getAsString().trim();
+                if (!trimmed.isEmpty() && !names.contains(trimmed)) names.add(trimmed);
+            }
+        }
+        if (body.has("name")) {
+            String trimmed = body.get("name").getAsString().trim();
+            if (!trimmed.isEmpty() && !names.contains(trimmed)) names.add(0, trimmed);
+        }
+        if (names.isEmpty()) throw new Failure(400, "name is required");
+        String name = names.get(0);
         String reason = string(body, "reason", "").trim();
         if (reason.isEmpty()) throw new Failure(400, "taking a type out of the shared archive needs a reason");
         // The archive the server names — its copy of the current version, kept
@@ -3345,18 +3361,25 @@ public class Owner {
             JsonObject withdrawn = readWithdrawn(target);
             FileDataTypeManager shared = FileDataTypeManager.openFileArchive(target, true);
             try {
-                DataType found = findAny(shared, name, alternate);
-                if (found == null) {
-                    throw new Failure(404, withdrawn.has(name) || withdrawn.has(alternate)
-                        ? name + " is already withdrawn from the shared archive"
-                        : "no type " + name + " in the shared archive");
-                }
                 java.util.Map<String, DataType> group = new java.util.LinkedHashMap<>();
-                group.put(found.getPathName(), found);
-                if (found instanceof ghidra.program.model.data.TypeDef def
-                    && def.getBaseDataType().getDataTypeManager() == shared
-                    && !(def.getBaseDataType() instanceof ghidra.program.model.data.Pointer)) {
-                    group.put(def.getBaseDataType().getPathName(), def.getBaseDataType());
+                java.util.List<String> asked = new java.util.ArrayList<>();
+                DataType found = null;
+                for (String each : names) {
+                    String other = each.startsWith("_") ? each.substring(1) : "_" + each;
+                    DataType one = findAny(shared, each, other);
+                    if (one == null) {
+                        throw new Failure(404, withdrawn.has(each) || withdrawn.has(other)
+                            ? each + " is already withdrawn from the shared archive"
+                            : "no type " + each + " in the shared archive");
+                    }
+                    if (found == null) found = one;
+                    asked.add(one.getName());
+                    group.put(one.getPathName(), one);
+                    if (one instanceof ghidra.program.model.data.TypeDef def
+                        && def.getBaseDataType().getDataTypeManager() == shared
+                        && !(def.getBaseDataType() instanceof ghidra.program.model.data.Pointer)) {
+                        group.put(def.getBaseDataType().getPathName(), def.getBaseDataType());
+                    }
                 }
                 java.util.List<DataType> all = new java.util.ArrayList<>();
                 shared.getAllDataTypes(all);
@@ -3375,28 +3398,47 @@ public class Owner {
                     }
                 }
                 if (!users.isEmpty()) {
-                    throw new Failure(409, found.getName() + " is used by other types of the shared archive: "
-                                      + String.join(", ", users) + ". Withdraw or correct those first.");
+                    throw new Failure(409, (asked.size() == 1 ? asked.get(0) + " is"
+                                            : String.join(", ", asked) + " are")
+                                      + " used by other types of the shared archive: "
+                                      + String.join(", ", users) + ". Withdraw or correct those first"
+                                      + " — or withdraw them together, `names` listing every type of the set.");
                 }
                 java.util.List<DataType> order = new java.util.ArrayList<>(group.values());
                 order.sort(java.util.Comparator.comparingInt(type -> type instanceof ghidra.program.model.data.TypeDef ? 0 : 1));
                 JsonObject origins = readOrigins(target);
                 String at = java.time.Instant.now().toString();
-                int transaction = shared.startTransaction("withdraw " + found.getName());
+                int transaction = shared.startTransaction("withdraw " + String.join(", ", asked));
                 boolean done = false;
                 try {
+                    // Every record's C is read before anything goes: a member
+                    // removed first would show in its partner's C as bytes.
+                    java.util.Map<String, JsonObject> records = new java.util.LinkedHashMap<>();
                     for (DataType type : order) {
-                        String typeName = type.getName();
                         JsonObject record = new JsonObject();
                         record.addProperty("by", leaseHolder);
                         record.addProperty("reason", reason);
                         record.addProperty("module", options.get("module"));
                         record.addProperty("at", at);
                         record.addProperty("c", ExportCode.typeC(type));
-                        if (!shared.remove(type)) {
+                        records.put(type.getPathName(), record);
+                    }
+                    java.util.List<ghidra.program.model.data.DataTypePath> paths = new java.util.ArrayList<>();
+                    java.util.List<String> typeNames = new java.util.ArrayList<>();
+                    for (DataType type : order) {
+                        paths.add(type.getDataTypePath());
+                        typeNames.add(type.getName());
+                    }
+                    // Within the one transaction, a member removed turns its
+                    // partners' references into bytes; each partner is looked
+                    // up again by its path before it goes in turn.
+                    for (int index = 0; index < paths.size(); index++) {
+                        String typeName = typeNames.get(index);
+                        DataType still = shared.getDataType(paths.get(index));
+                        if (still != null && !shared.remove(still)) {
                             throw new Failure(409, typeName + " could not be taken out of the shared archive");
                         }
-                        withdrawn.add(typeName, record);
+                        withdrawn.add(typeName, records.get(paths.get(index).getPath()));
                         origins.remove(typeName);
                         gone.add(typeName);
                     }
