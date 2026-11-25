@@ -17,7 +17,7 @@ import Foundation
 public enum ModuleFormat {
     /// The fields of a link.
     private static let linkFields: Set<String> = [
-        "entry", "size", "callers", "callees", "targets", "body", "reference_bytes", "registry"
+        "entry", "size", "callers", "callees", "targets", "body", "reference_bytes", "globals", "registry"
     ]
     /// Words of an older form, or of the working export of a project: none is stored.
     private static let notStored = ["library_kind", "library_entry", "library_candidate", "copy_free"]
@@ -103,7 +103,8 @@ public enum ModuleFormat {
         return LibraryView.entryID(body: function["body"] as? String, mark: mark,
                                    external: function["external"] as? Bool ?? false,
                                    thunk: function["thunk"] as? Bool ?? false,
-                                   referenceBytes: function["reference_bytes"] as? String, in: index)
+                                   referenceBytes: function["reference_bytes"] as? String,
+                                   globals: LibraryView.globals(function["globals"]), in: index)
     }
 
     /// For a function no mark names, of a body several entries hold — the

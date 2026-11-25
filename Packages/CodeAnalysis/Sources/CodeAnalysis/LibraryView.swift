@@ -55,15 +55,18 @@ public enum LibraryView {
     public static func entryID(of function: CodeArtifact.Function, in index: LibraryIndex) -> String? {
         guard let number = function.registryNumber else { return nil }
         return entryID(body: function.body, mark: number, external: function.external,
-                       thunk: function.thunk, referenceBytes: function.referenceBytes, in: index)
+                       thunk: function.thunk, referenceBytes: function.referenceBytes,
+                       globals: function.globals, in: index)
     }
 
     /// The same, from what decides it. A body whose data references point at
     /// other bytes than the entry's is another function, whatever its key: the
     /// key masks the operand, so `PeiServicesLocatePpi` of one GUID and of
     /// another have one. Either side not knowing its bytes decides nothing.
+    /// So is one whose global is not of the shared type the entry reads there
+    /// (`LibraryIndex.globalsDiffer`).
     static func entryID(body: String?, mark: String?, external: Bool, thunk: Bool,
-                        referenceBytes: String?, in index: LibraryIndex) -> String? {
+                        referenceBytes: String?, globals: [LibraryGlobal]? = nil, in index: LibraryIndex) -> String? {
         guard !external, !thunk else { return nil }
         if let body, index.takenOut?[body] != nil { return nil }
         // Of the entries holding the body, the one its mark names: the same
@@ -73,7 +76,19 @@ public enum LibraryView {
             ?? mark.flatMap { index.entries[$0] == nil ? nil : $0 }
         guard let id else { return nil }
         if let body, index.bytesDiffer(id: id, body: body, referenceBytes: referenceBytes) { return nil }
+        if let body, index.globalsDiffer(id: id, body: body, globals: globals) != nil { return nil }
         return id
+    }
+
+    /// The globals an artifact's function row lists, nil when it lists none.
+    public static func globals(_ value: Any?) -> [LibraryGlobal]? {
+        guard let rows = value as? [[String: Any]] else { return nil }
+        return rows.compactMap { row in
+            (row["offset"] as? String).map {
+                LibraryGlobal(offset: $0, name: row["name"] as? String, type: row["type"] as? String,
+                              shared: row["shared"] as? Bool)
+            }
+        }
     }
 
     /// The function as a reader sees it. `name` is this module's name for an

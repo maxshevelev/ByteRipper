@@ -361,7 +361,9 @@ public enum GhidraTools {
                     calls another function where the entry's calls its callee — the body's hash leaves call \
                     targets out, so a ZeroMem wrapper has SetMem's — or whose other constant is in a call (another \
                     EFI_PEI_SERVICES slot, another service) is another function: no apply links \
-                    it, and `why` names the call. `declined`: entries a review refused \
+                    it, and `why` names the call. `state: global`: the entry reads a global of a shared type \
+                    where this function's global is untyped or of another type: `why` names both; type the \
+                    global and the function links. `declined`: entries a review refused \
                     for the function. With `id`: one entry — its index row, its review, its history and \
                     `gaps`, what its review lacks, read from the review itself; `library_registry` reads the \
                     `function_parts` left out of the review. A match's `gaps` are the \
@@ -482,7 +484,10 @@ public enum GhidraTools {
                     links to the new entries, one revision; or it is refused whole, naming each function and \
                     why — short of the bar of a finished function, no body (a thunk or an external), data or \
                     a callee the registry does not hold, a name another entry holds, a change to what an entry \
-                    says — and nothing is stored. `ghidra_publish` with `dry_run: true` asks the registry without publishing. \
+                    says, a global not of the type the entry reads there — and nothing is stored. A module \
+                    global a review named and typed with a type of the EDK2 or the shared archive (`gBS` as \
+                    `EFI_BOOT_SERVICES *`) is no data: the entry keeps its type, and binds another module's \
+                    body only where that module's global has the same; type and name such a global first. `ghidra_publish` with `dry_run: true` asks the registry without publishing. \
                     A refusal is resolved by bringing the function to the bar, renaming, or `remove`: a \
                     function the registry cannot hold is the module's. A function the registry already holds \
                     is refused here: a change to it offers itself at a publish. A new function under a name \

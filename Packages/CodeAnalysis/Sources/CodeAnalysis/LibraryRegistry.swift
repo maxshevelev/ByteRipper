@@ -75,6 +75,36 @@ public struct LibrarySource: Codable, Equatable, Sendable {
     }
 }
 
+/// A module global a body reads, by the offset of the instruction that names
+/// it from the function's entry: the name a review gave it, for a reader, and
+/// its type. A library function may read a global of a shared type — one the
+/// EDK2 archive or the shared review archive holds, of the same shape — and the
+/// type is what it reads there: in another module, the function is the entry's
+/// only where its global at that instruction has the same type (issue 5b6ade08).
+/// `shared` is the owner's verdict on the type; an artifact does not give it.
+public struct LibraryGlobal: Codable, Equatable, Sendable {
+    public var offset: String
+    public var name: String?
+    public var type: String?
+    public var shared: Bool?
+
+    public init(offset: String, name: String? = nil, type: String? = nil, shared: Bool? = nil) {
+        self.offset = offset
+        self.name = name
+        self.type = type
+        self.shared = shared
+    }
+
+    /// What a variant keeps of the globals a proposal reads: those of a shared
+    /// type, without the verdict. Nil when there are none.
+    static func kept(_ globals: [LibraryGlobal]?) -> [LibraryGlobal]? {
+        let kept = (globals ?? []).filter { $0.shared == true }.map {
+            LibraryGlobal(offset: $0.offset, name: $0.name, type: $0.type)
+        }
+        return kept.isEmpty ? nil : kept
+    }
+}
+
 /// One body an entry covers. An entry starts with one; bodies that differ
 /// from it only in assert codes are added as variants, each with the codes
 /// it carries.
@@ -95,9 +125,13 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     /// another function are another function. Nil from before this was
     /// recorded; the code says it then, where the registry has the code.
     public var callees: [String]?
+    /// The module globals of a shared type the body reads (`LibraryGlobal`).
+    /// Nil for a body that reads none, and for one recorded before this was.
+    public var globals: [LibraryGlobal]?
 
     public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil, referenceBytes: String? = nil,
-                code: SHA256Digest? = nil, callees: [String]? = nil) {
+                code: SHA256Digest? = nil, callees: [String]? = nil, globals: [LibraryGlobal]? = nil) {
+        self.globals = globals
         self.code = code
         self.callees = callees
         self.body = body
@@ -107,7 +141,7 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case body, module, codes, code, callees
+        case body, module, codes, code, callees, globals
         case referenceBytes = "reference_bytes"
     }
 }
@@ -206,6 +240,35 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
         // function that says none is in doubt, and doubt stays the module's.
         guard let held = entries[id]?.variants.first(where: { $0.body.key == body })?.referenceBytes else { return false }
         return held != referenceBytes
+    }
+
+    /// Why a function's globals are not the ones the entry's body reads, nil
+    /// when they are: each global of a shared type the entry reads must be,
+    /// in this module, a global of the same type at the same instruction. An
+    /// entry that records none decides nothing; once it does, a function that
+    /// says nothing of its globals is in doubt, and doubt stays the module's.
+    public func globalsDiffer(id: String, body: String, globals: [LibraryGlobal]?) -> String? {
+        guard let held = entries[id]?.variants.first(where: { $0.body.key == body })?.globals, !held.isEmpty
+        else { return nil }
+        for expected in held {
+            let type = expected.type ?? "?"
+            let reads = "the entry reads a global of type \(type) at +\(expected.offset)"
+                + (expected.name.map { " (\($0) where it was reviewed)" } ?? "")
+            guard let globals else { return reads + ", and this function's globals are not known: publish its module again" }
+            guard let here = globals.first(where: { $0.offset == expected.offset }) else {
+                return reads + ", and this function reads no global there"
+            }
+            let named = here.name ?? "the global"
+            if here.type == nil {
+                return reads + ": \(named) here is untyped. Type \(named) as \(type) first"
+            }
+            if here.type != expected.type || here.shared == false {
+                return reads + ": \(named) here is \(here.type ?? "untyped")"
+                    + (here.type == expected.type ? ", not the shared archive's type of that name" : "")
+                    + ". Type \(named) as \(type) first"
+            }
+        }
+        return nil
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -394,12 +457,18 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     /// does not say. Beside the review, not part of it.
     public var dataReferences: [String]?
     public var callees: [LibraryCallee]?
+    /// The module globals the body reads (`LibraryGlobal`), each with the
+    /// owner's verdict on its type. Those of a shared type are no data
+    /// reference: they stay out of `dataReferences`. Nil from an owner that
+    /// does not say.
+    public var globals: [LibraryGlobal]?
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
                 basedOn: String? = nil, base: Int? = nil,
                 linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil,
-                referenceBytes: String? = nil, teachesBytesOnly: Bool? = nil) {
+                referenceBytes: String? = nil, teachesBytesOnly: Bool? = nil, globals: [LibraryGlobal]? = nil) {
+        self.globals = globals
         self.teachesBytesOnly = teachesBytesOnly
         self.linked = linked
         self.referenceBytes = referenceBytes
@@ -506,6 +575,7 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         public var body: String
         /// `data`: a data reference no citation covers. `callee`: a call to a
         /// function the registry does not hold. `taken_out`: taken out before.
+        /// `global`: a global of the entry's shared type is not of that type here.
         public var why: String
         public var reason: String?
         /// With `taken_out`: the review the reason was written about — the
@@ -1149,7 +1219,8 @@ extension ContentStore {
                        LibraryProposal.sameReview(try object(held.entry), proposal.entry) {
                         held.variants.append(LibraryVariant(body: proposal.body, module: module,
                                                             codes: proposal.codes,
-                                                            referenceBytes: proposal.referenceBytes, callees: calls))
+                                                            referenceBytes: proposal.referenceBytes, callees: calls,
+                                                            globals: LibraryGlobal.kept(proposal.globals)))
                         index.entries[id] = held
                         index.hold(proposal.body.key, by: id)
                         let joined = "the body \(proposal.body.key) joins the entry as a variant"
@@ -1173,7 +1244,8 @@ extension ContentStore {
                         let heldObject = try object(held.entry)
                         for old in held.variants { index.release(old.body.key, from: id) }
                         held.variants = [LibraryVariant(body: proposal.body, module: module,
-                                                        referenceBytes: proposal.referenceBytes, callees: calls)]
+                                                        referenceBytes: proposal.referenceBytes, callees: calls,
+                                                        globals: LibraryGlobal.kept(proposal.globals))]
                         index.hold(proposal.body.key, by: id)
                         held.version += 1
                         held.entry = digest
@@ -1225,7 +1297,8 @@ extension ContentStore {
                     index.entries[id] = LibraryIndexEntry(
                         version: 1, entry: digest, name: proposal.name, kind: proposal.kind, source: source,
                         variants: [LibraryVariant(body: proposal.body, module: module,
-                                                  referenceBytes: proposal.referenceBytes, callees: calls)],
+                                                  referenceBytes: proposal.referenceBytes, callees: calls,
+                                                  globals: LibraryGlobal.kept(proposal.globals))],
                         role: proposal.role)
                     index.hold(proposal.body.key, by: id)
                     histories[id] = LibraryHistory(id: id, versions: [
@@ -1242,6 +1315,16 @@ extension ContentStore {
                         address: proposal.address, name: proposal.name, body: proposal.body.key, why: "reference_bytes",
                         reason: "its data references point at other bytes than the entry \(id) holds for this body")]
                     settled[id] = "this function's data references point at other bytes, so it is not this entry's"
+                    continue
+                }
+                // The entry reads a global of a shared type that this module's
+                // global is not: the function is the entry's once it is.
+                if proposal.globals != nil,
+                   let why = index.globalsDiffer(id: id, body: proposal.body.key, globals: proposal.globals) {
+                    result.notLibrary = (result.notLibrary ?? []) + [.init(
+                        address: proposal.address, name: proposal.name, body: proposal.body.key, why: "global",
+                        reason: "entry \(id): " + why)]
+                    settled[id] = "this function's global is not of the type the entry reads, so it is not this entry's yet"
                     continue
                 }
                 // The module the body came from says what its bytes are: an entry

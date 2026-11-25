@@ -40,7 +40,11 @@
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to
 > no data, or only to a constant defined in its own library's source file, cited by
-> file and line by an agent who compared the bytes; a GUID never qualifies. It calls
+> file and line by an agent who compared the bytes; a GUID never qualifies. A module
+> global of a shared type (2026-11-25, issue 5b6ade08) — named, and typed with a type
+> the EDK2 or the shared review archive holds with the same shape — is no obstacle: the
+> variant keeps the type per instruction (`LibraryGlobal`), and a body in another
+> module is the entry's only where its global has that type (`globalsDiffer`). It calls
 > only library functions, so classification runs bottom-up, from functions that call
 > nothing. A doubt goes to the module. A publish refuses a new body that fails
 > (`not_library`); `taken_out` in the index holds what was given back, with its last
@@ -319,7 +323,7 @@ document above this section that speaks of a tag, an offer at a publish, `replac
 
 - **The stored form.** A function row is either a module's own function (name, text, no
   library field) or a link (`registry` and the module's own facts:
-  `entry,size,callers,callees,targets,body,reference_bytes`).
+  `entry,size,callers,callees,targets,body,reference_bytes,globals`).
   `ModuleFormat.stored` is the only way into the store, and it is not a check that can
   refuse: what a registry holds becomes a link, whatever the writer sent. The decoder reads
   nothing descriptive from a link. `library_kind`, `library_entry` and the review level

@@ -884,6 +884,83 @@ public class ExportCode extends GhidraScript {
         return hex.toString();
     }
 
+    /**
+     * What the body names outside itself and the stack: a reference to memory
+     * that is not a call or a jump, or a constant that lands in the image — a
+     * `PUSH imm32` of a GUID's address, or `MOV EAX,imm; CALL EAX`, carries no
+     * reference until something makes one. An address where an instruction
+     * starts is code, an indirect callee; any other is data, by the offset of
+     * the instruction that names it. A small constant in an image based at zero
+     * is not taken for an address. It errs towards naming: a doubt keeps a
+     * function in its module.
+     */
+    static void outside(Function function, Map<String, Address> data, Set<Address> code) {
+        ghidra.program.model.listing.Program program = function.getProgram();
+        Address entry = function.getEntryPoint();
+        boolean baseIsReal = program.getImageBase().getOffset() >= 0x10000;
+        Listing listing = program.getListing();
+        InstructionIterator instructions = listing.getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            List<Address> named = new ArrayList<>();
+            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
+                if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
+                if (throughBaseRegister(instruction, reference.getOperandIndex())) continue;
+                if (!namedByOperands(instruction, reference.getToAddress())) continue;
+                // An immediate in an image based at zero is a constant, not an
+                // address: GetApicId's `MOV R8D,0x400` is the x2APIC enable
+                // bit, and Ghidra's PARAM reference to 0x400 made AsmReadCr2
+                // its callee (issue 787b26b6). Such an image reaches its data
+                // RIP-relative, through a memory operand.
+                if (!baseIsReal && !instruction.getDefaultOperandRepresentation(
+                        Math.max(0, reference.getOperandIndex())).contains("[")) continue;
+                named.add(reference.getToAddress());
+            }
+            if (baseIsReal) {
+                for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                    for (Object part : instruction.getOpObjects(operand)) {
+                        if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
+                        try {
+                            named.add(entry.getNewAddress(scalar.getUnsignedValue()));
+                        } catch (Exception error) {
+                            // Not an address of this space.
+                        }
+                    }
+                }
+            }
+            for (Address to : named) {
+                if (!to.isMemoryAddress() || !program.getMemory().contains(to) || function.getBody().contains(to)) continue;
+                if (listing.getInstructionAt(to) != null) code.add(to);
+                else data.putIfAbsent(String.format("0x%X", instruction.getAddress().subtract(entry)), to);
+            }
+        }
+    }
+
+    /**
+     * The globals a body reads, by the offset of the instruction that names
+     * each: the name a review gave it, and its type — null when it has none.
+     * What lets a library function read a module's global of a shared type:
+     * the registry keeps the type, and another module's function is the
+     * entry's only where its global there has the same.
+     */
+    static List<String[]> globals(Function function) {
+        Map<String, Address> data = new java.util.LinkedHashMap<>();
+        outside(function, data, new HashSet<>());
+        List<String[]> found = new ArrayList<>();
+        Listing listing = function.getProgram().getListing();
+        for (Map.Entry<String, Address> each : data.entrySet()) {
+            Data datum = listing.getDefinedDataAt(each.getValue());
+            DataType type = datum == null ? null : datum.getDataType();
+            ghidra.program.model.symbol.Symbol symbol = function.getProgram().getSymbolTable().getPrimarySymbol(each.getValue());
+            found.add(new String[] {
+                each.getKey(),
+                symbol == null ? null : symbol.getName(),
+                type == null || ghidra.program.model.data.Undefined.isUndefined(type) ? null : type.getDisplayName(),
+            });
+        }
+        return found;
+    }
+
     /** How many of the bytes count: a string's up to its terminator, else all of them. */
     static int textLength(byte[] bytes, int read) {
         int narrow = 0;
@@ -1084,6 +1161,22 @@ public class ExportCode extends GhidraScript {
         if (body != null) json.append("      \"body\": ").append(quote(body)).append(",\n");
         String bytes = body == null ? null : referenceBytes(function);
         if (bytes != null) json.append("      \"reference_bytes\": ").append(quote(bytes)).append(",\n");
+        if (body != null) {
+            // The globals it reads and their types: a registry entry that reads
+            // a global of a shared type is this function's only where its own
+            // global has that type (`LibraryIndex.globalsDiffer`).
+            List<String> globals = new ArrayList<>();
+            for (String[] global : globals(function)) {
+                globals.add("{\"offset\": " + quote(global[0])
+                    + (global[1] == null ? "" : ", \"name\": " + quote(global[1]))
+                    + (global[2] == null ? "" : ", \"type\": " + quote(global[2])) + "}");
+            }
+            // Left out when empty, so a body that reads no global exports as
+            // it did before the field existed.
+            if (!globals.isEmpty()) {
+                json.append("      \"globals\": [").append(String.join(", ", globals)).append("],\n");
+            }
+        }
         List<String> quoted = new ArrayList<>();
         for (String gap : gaps) quoted.add(quote(gap));
         json.append("      \"review_gaps\": [").append(String.join(", ", quoted)).append("],\n");

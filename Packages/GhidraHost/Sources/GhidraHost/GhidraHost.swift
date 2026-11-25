@@ -942,7 +942,8 @@ public actor GhidraHost {
                                              callees: (item["callees"] as? [[String: Any]])?.map {
                                                  LibraryCallee(name: $0["name"] as? String ?? "", body: $0["body"] as? String)
                                              },
-                                             referenceBytes: item["reference_bytes"] as? String))
+                                             referenceBytes: item["reference_bytes"] as? String,
+                                             globals: LibraryView.globals(item["globals"])))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)

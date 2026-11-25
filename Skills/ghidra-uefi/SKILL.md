@@ -733,11 +733,23 @@ functions that call nothing first, then their callers.
   `ghidra_library_cite`, one citation per constant. A GUID never qualifies: its value lives in a package `.dec`
   and the variable is each module's. Code without sources in the tree cannot qualify
   through a constant.
+- A module global of a shared type is no obstacle: `gBS` typed `EFI_BOOT_SERVICES *`,
+  `gST`, `gImageHandle`, a PCD protocol pointer, a boot-script table pointer — a global
+  a review named and typed with a type the EDK2 archive or the shared review archive
+  holds under that name, with the same shape. The entry keeps the type it reads at each
+  such instruction (and the name, for a reader), never an address; in another module the
+  body is the entry's only where its own global there has the same type. Untyped data, a
+  raw `undefined8`, a type only the program has, a GUID, or an unnamed global (its C
+  would print the module's address) is still the module's data: type and name the global
+  first. `ghidra_library` lists what a candidate reads under `globals`, each with
+  `shared`.
 - It calls only functions the registry already holds.
 - A doubt keeps it in the module.
 
 A publish refuses a new body that fails this, under `library.not_library`, with `why`:
-`data` (the offsets, no citation), `callee` (the names), or `taken_out`. Bodies of one
+`data` (the offsets, no citation), `callee` (the names), `global` (a held body whose
+global here is not of the type the entry reads: the reason names the global and the
+type), or `taken_out`. Bodies of one
 publish enter together when each one's callees are held or among them, so a pair that
 call each other enters as a pair; a citation can be given before a body's first publish. The owner reads data references from the instructions and treats
 a constant that lands in the image as one, so it errs towards refusing.
@@ -745,7 +757,7 @@ a constant that lands in the image as one, so it errs towards refusing.
 **What a module stores of a registry function.** A stored function is one of two
 things. An own function has its name and its text and no library field. A link has
 `registry`, the entry's number, and its own facts: `entry`, `size`, `callers`,
-`callees`, `targets`, `body` and `reference_bytes`. A link has no name, signature,
+`callees`, `targets`, `body`, `reference_bytes` and `globals`. A link has no name, signature,
 plate, comment, C or instruction, in the artifact and in the review document alike,
 and no form holds them: the store writes every analysis through that one form,
 whatever it was given. The instructions are the registry's, one list per body, with a
@@ -775,7 +787,8 @@ function whose data references point at other bytes than the entry's
 reads 16 bytes, a string only up to its terminator, and anything in doubt counts as a
 difference. One limit: a GUID whose first byte is printable and whose second is zero
 reads as a one-character string, so two such GUIDs with the same first byte read
-alike. An entry learns its bytes when its source module publishes; until then it
+alike. A plan step `state: global` is a match whose global is untyped or of another
+type than the entry reads: type the global, and the next plan links it. An entry learns its bytes when its source module publishes; until then it
 decides nothing and lets a holder through, so a source module publishes first.
 
 An entry's C is its text, so what a printed name means is the entry's: the entry records each equate

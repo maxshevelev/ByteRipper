@@ -341,6 +341,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// with one key can differ here, since the key masks the operand. Nil
         /// for a body with none, and before the exporter wrote it.
         public let referenceBytes: String?
+        /// The module globals the body reads and their types
+        /// (`LibraryGlobal`). Nil before the exporter wrote them.
+        public let globals: [LibraryGlobal]?
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
         public var hasPlaceholderName: Bool {
@@ -380,6 +383,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             fingerprint = try container.decodeIfPresent(String.self, forKey: .fingerprint)
             body = try container.decodeIfPresent(String.self, forKey: .body)
             referenceBytes = try container.decodeIfPresent(String.self, forKey: .referenceBytes)
+            globals = try container.decodeIfPresent([LibraryGlobal].self, forKey: .globals)
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -399,7 +403,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case reviewGaps = "review_gaps"
             case registryNumber = "registry"
             case targets
-            case fingerprint, body
+            case fingerprint, body, globals
             case referenceBytes = "reference_bytes"
         }
     }

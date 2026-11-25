@@ -414,7 +414,8 @@ extension ContentStore {
             let now = Timestamps.now()
             let digest = SHA256Digest(data: data)
             let new = LibraryIndexEntry(version: 1, entry: digest, name: name, kind: entry.kind, source: entry.source,
-                                        variants: [LibraryVariant(body: variant.body, module: variant.module, code: variant.code)],
+                                        variants: [LibraryVariant(body: variant.body, module: variant.module, code: variant.code,
+                                                                          globals: variant.globals)],
                                         role: entry.role)
             let newHistory = LibraryHistory(id: key, versions: [
                 LibraryVersion(version: 1, entry: digest, source: entry.source,

@@ -39,12 +39,15 @@ public enum LibraryRefusal {
             case "data":
                 why = "the registry refused it, it reads data no citation covers: "
                     + (row.data ?? []).joined(separator: ", ")
+                    + " (a global a review named and typed with a shared type is no obstacle)"
             case "callee":
                 why = "the registry refused it, it calls what the registry does not hold: "
                     + (row.callees ?? []).joined(separator: ", ")
             case "dependency":
                 why = "the registry refused it, it calls a library its own does not depend on: "
                     + (row.callees ?? []).joined(separator: ", ")
+            case "global":
+                why = "the registry refused it, " + (row.reason ?? "its global is not of the type the entry reads")
             case "library":
                 why = "the registry refused it, it declares no such library"
             case "taken_out":

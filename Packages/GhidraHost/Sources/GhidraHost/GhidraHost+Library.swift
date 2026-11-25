@@ -96,10 +96,11 @@ extension GhidraHost {
         var declined: [String]?
         /// The digest of what the body's data references point at.
         var referenceBytes: String?
-        /// A plate or a comment is written in the project.
+        /// The globals the body reads, with their types (`LibraryGlobal`).
+        var globals: [LibraryGlobal]?
 
         private enum CodingKeys: String, CodingKey {
-            case address, name, named, key, exact, near, mark, declined
+            case address, name, named, key, exact, near, mark, declined, globals
             case referenceBytes = "reference_bytes"
         }
     }
@@ -145,7 +146,7 @@ extension GhidraHost {
         /// signature for its callers to print. Everything else is the entry's.
         public var mode: String?
         /// `unnamed`, `named`, `copy`, `newer_version`, `assert_codes`, `applied`,
-        /// `edited`, `candidate`, `short_candidate`, `reference_bytes`, `callee_differs` or `declined`.
+        /// `edited`, `candidate`, `short_candidate`, `reference_bytes`, `global`, `callee_differs` or `declined`.
         public var state: String
         public var codes: [String]?
         public var differences: [LibraryConstant]?
@@ -279,6 +280,12 @@ extension GhidraHost {
                     plan.candidates.append(step(id, held, mode: nil, state: "reference_bytes",
                                                 why: "its data references point at other bytes than the entry holds: "
                                                     + "another function"))
+                    continue
+                }
+                // The entry reads a global of a shared type this module's
+                // global is not: the reviewer types the global first.
+                if match.globals != nil, let why = index.globalsDiffer(id: id, body: match.key, globals: match.globals) {
+                    plan.candidates.append(step(id, held, mode: nil, state: "global", why: why))
                     continue
                 }
                 if (match.declined ?? []).contains(id) {

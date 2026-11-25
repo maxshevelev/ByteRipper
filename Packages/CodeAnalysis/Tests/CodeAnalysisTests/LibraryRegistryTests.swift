@@ -225,6 +225,51 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex().entries[body.key]?.version, 1)
     }
 
+    /// A module global of a shared type is no obstacle (issue 5b6ade08): the
+    /// entry keeps the type, and another module's function is the entry's
+    /// only where its global has the same. Untyped, it is refused by name.
+    func testAGlobalOfASharedTypeEntersAndBindsOnlyWhereTheTypeIsTheSame() throws {
+        func reading(_ type: String?, shared: Bool, data: [String]) -> LibraryProposal {
+            var made = proposal("ReadServices")
+            made.dataReferences = data
+            made.callees = []
+            made.globals = [LibraryGlobal(offset: "0x4", name: type == nil ? "DAT_00012340" : "gBS", type: type, shared: shared)]
+            return made
+        }
+        // A data reference of the module's own still refuses a new body.
+        let own = try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                              proposals: [reading("MODULE_ONLY *", shared: false, data: ["0x4"])])
+        XCTAssertEqual(own.notLibrary?.map(\.why), ["data"])
+
+        let added = try store.putLibraryEntries(module: first, rev: 2, by: "agent",
+                                                proposals: [reading("EFI_BOOT_SERVICES *", shared: true, data: [])])
+        XCTAssertEqual(added.added.map(\.name), ["ReadServices"])
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entries[body.key]?.variants.first?.globals,
+                       [LibraryGlobal(offset: "0x4", name: "gBS", type: "EFI_BOOT_SERVICES *")])
+
+        let untyped = try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                                  proposals: [reading(nil, shared: false, data: ["0x4"])])
+        XCTAssertEqual(untyped.notLibrary?.map(\.why), ["global"])
+        let why = try XCTUnwrap(LibraryRefusal.rows(of: untyped).first?.why)
+        XCTAssertTrue(why.contains("DAT_00012340 here is untyped") && why.contains("EFI_BOOT_SERVICES *"), why)
+        XCTAssertTrue(untyped.unchanged.isEmpty)
+
+        let same = try store.putLibraryEntries(module: second, rev: 2, by: "agent",
+                                               proposals: [reading("EFI_BOOT_SERVICES *", shared: true, data: [])])
+        XCTAssertEqual(same.unchanged.map(\.name), ["ReadServices"])
+
+        // A reader binds a module's function the same way.
+        func bound(_ globals: [LibraryGlobal]?) -> String? {
+            LibraryView.entryID(body: body.key, mark: nil, external: false, thunk: false, referenceBytes: nil,
+                                globals: globals, in: index)
+        }
+        XCTAssertEqual(bound([LibraryGlobal(offset: "0x4", name: "mBS", type: "EFI_BOOT_SERVICES *")]), body.key)
+        XCTAssertNil(bound([LibraryGlobal(offset: "0x4", name: "DAT_1")]))
+        XCTAssertNil(bound([LibraryGlobal(offset: "0x4", name: "gST", type: "EFI_SYSTEM_TABLE *")]))
+        XCTAssertNil(bound(nil), "a function that says nothing of its globals is in doubt")
+    }
+
     func testTheEntryReasonsCrossTheServedStore() throws {
         let sent = ServedStoreProtocol.PutLibrary(module: first, rev: 1, by: "agent", proposals: [],
                                                   entryReasons: ["a": "why a"])

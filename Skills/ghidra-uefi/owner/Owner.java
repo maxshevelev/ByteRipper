@@ -3775,54 +3775,61 @@ public class Owner {
         return answer;
     }
 
+    /** What the body names outside itself and the stack (`ExportCode.outside`). */
+    private void libraryOutside(Function function, java.util.Map<String, Address> data, java.util.Set<Address> code) {
+        ExportCode.outside(function, data, code);
+    }
+
     /**
-     * What the body names outside itself and the stack: a reference to memory
-     * that is not a call or a jump, or a constant that lands in the image — a
-     * `PUSH imm32` of a GUID's address, or `MOV EAX,imm; CALL EAX`, carries no
-     * reference until something makes one. An address where an instruction
-     * starts is code, an indirect callee; any other is data, by the offset that
-     * names it. A small constant in an image based at zero is not taken for an
-     * address. It errs towards naming: a doubt keeps a function in its module.
+     * Whether a library function may read the global at `to`: it is data of
+     * a type the EDK2 archive or the shared review archive holds under its
+     * name, with the same shape there, and a review named it — so the entry's
+     * C prints a name, never this module's address. A GUID never is: a GUID
+     * variable is the module's own. Untyped data, a raw `undefined8`, or a type
+     * only this program has keeps the function in its module.
      */
-    private void libraryOutside(Function function, java.util.Set<String> data, java.util.Set<Address> code) {
-        Address entry = function.getEntryPoint();
-        boolean baseIsReal = program.getImageBase().getOffset() >= 0x10000;
-        ghidra.program.model.listing.Listing listing = program.getListing();
-        ghidra.program.model.listing.InstructionIterator instructions = listing.getInstructions(function.getBody(), true);
-        while (instructions.hasNext()) {
-            ghidra.program.model.listing.Instruction instruction = instructions.next();
-            java.util.List<Address> named = new java.util.ArrayList<>();
-            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
-                if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
-                if (throughBaseRegister(instruction, reference.getOperandIndex())) continue;
-                if (!ExportCode.namedByOperands(instruction, reference.getToAddress())) continue;
-                // An immediate in an image based at zero is a constant, not an
-                // address: GetApicId's `MOV R8D,0x400` is the x2APIC enable
-                // bit, and Ghidra's PARAM reference to 0x400 made AsmReadCr2
-                // its callee (issue 787b26b6). Such an image reaches its data
-                // RIP-relative, through a memory operand.
-                if (!baseIsReal && !instruction.getDefaultOperandRepresentation(
-                        Math.max(0, reference.getOperandIndex())).contains("[")) continue;
-                named.add(reference.getToAddress());
-            }
-            if (baseIsReal) {
-                for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
-                    for (Object part : instruction.getOpObjects(operand)) {
-                        if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
-                        try {
-                            named.add(entry.getNewAddress(scalar.getUnsignedValue()));
-                        } catch (Exception error) {
-                            // Not an address of this space.
-                        }
-                    }
-                }
-            }
-            for (Address to : named) {
-                if (!to.isMemoryAddress() || !program.getMemory().contains(to) || function.getBody().contains(to)) continue;
-                if (listing.getInstructionAt(to) != null) code.add(to);
-                else data.add(String.format("0x%X", instruction.getAddress().subtract(entry)));
+    private boolean sharedGlobal(Address to) {
+        Data datum = program.getListing().getDefinedDataAt(to);
+        ghidra.program.model.symbol.Symbol symbol = program.getSymbolTable().getPrimarySymbol(to);
+        if (datum == null || symbol == null || symbol.getSource() == SourceType.DEFAULT) return false;
+        DataType type = datum.getDataType();
+        while (type instanceof ghidra.program.model.data.Pointer || type instanceof ghidra.program.model.data.Array) {
+            type = type instanceof ghidra.program.model.data.Pointer pointer
+                ? pointer.getDataType() : ((ghidra.program.model.data.Array) type).getDataType();
+        }
+        if (type == null || type instanceof ghidra.program.model.data.BuiltInDataType
+            || ghidra.program.model.data.Undefined.isUndefined(type)) return false;
+        if (type.getName().equals("EFI_GUID") || type.getName().equals("GUID")) return false;
+        for (FileDataTypeManager source : new FileDataTypeManager[] {archive, reviewArchive}) {
+            if (source == null) continue;
+            java.util.List<DataType> there = new java.util.ArrayList<>();
+            source.findDataTypes(type.getName(), there);
+            for (DataType held : there) {
+                if (held.isEquivalent(type)) return true;
             }
         }
+        return false;
+    }
+
+    /**
+     * The globals the body reads (`ExportCode.globals`), each with whether a
+     * library function may read it (`sharedGlobal`): what the registry
+     * compares between modules.
+     */
+    private JsonArray libraryGlobals(Function function, java.util.Map<String, Address> data) {
+        JsonArray list = new JsonArray();
+        java.util.Map<String, String[]> described = new java.util.HashMap<>();
+        for (String[] global : ExportCode.globals(function)) described.put(global[0], global);
+        for (java.util.Map.Entry<String, Address> each : data.entrySet()) {
+            String[] global = described.get(each.getKey());
+            JsonObject item = new JsonObject();
+            item.addProperty("offset", each.getKey());
+            if (global != null && global[1] != null) item.addProperty("name", global[1]);
+            if (global != null && global[2] != null) item.addProperty("type", global[2]);
+            item.addProperty("shared", global != null && global[2] != null && sharedGlobal(each.getValue()));
+            list.add(item);
+        }
+        return list;
     }
 
     /**
@@ -3840,12 +3847,21 @@ public class Owner {
     /** What decides whether a function depends on a module: `data_references` and `callees`, beside the review. */
     private void libraryDependencies(Function function, ghidra.feature.fid.service.FidService fid, JsonObject item)
             throws Exception {
-        java.util.Set<String> data = new java.util.LinkedHashSet<>();
+        java.util.Map<String, Address> data = new java.util.LinkedHashMap<>();
         java.util.Set<Address> code = new java.util.LinkedHashSet<>();
         libraryOutside(function, data, code);
+        // A global of a shared type is no dependency on the module: the entry
+        // keeps its type, and another module's function is the entry's only
+        // where its global has the same (issue 5b6ade08).
+        JsonArray globals = libraryGlobals(function, data);
         JsonArray references = new JsonArray();
-        data.forEach(references::add);
+        for (JsonElement global : globals) {
+            if (!global.getAsJsonObject().get("shared").getAsBoolean()) {
+                references.add(global.getAsJsonObject().get("offset"));
+            }
+        }
         item.add("data_references", references);
+        item.add("globals", globals);
         JsonArray callees = new JsonArray();
         java.util.Set<Function> called = new java.util.LinkedHashSet<>(
             function.getCalledFunctions(ghidra.util.task.TaskMonitor.DUMMY));
@@ -4153,6 +4169,9 @@ public class Owner {
             if (near != null) item.add("near", near);
             String bytes = ExportCode.referenceBytes(function);
             if (bytes != null) item.addProperty("reference_bytes", bytes);
+            java.util.Map<String, Address> read = new java.util.LinkedHashMap<>();
+            libraryOutside(function, read, new java.util.HashSet<>());
+            item.add("globals", libraryGlobals(function, read));
             if (mark != null) {
                 JsonObject held = mark.deepCopy();
                 held.addProperty("edited", !atItsMark(function, hash, mark));
