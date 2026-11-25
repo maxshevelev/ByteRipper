@@ -229,6 +229,12 @@ and `scripts/` in place and leave `var/` alone. The store and the projects
 carry the reviews; a newer server reads what an older one wrote. The one thing
 not to do is run two servers on the same `var/`.
 
+The console alone can be updated without a restart: its files are read on
+every request from `bin/ByteRipperServer_ServerConsole.bundle/Console/`.
+Replace that folder from the new copy and reload the page; the server and the
+reviews in work are not touched. A console that needs a new `/admin/api` call
+still comes with a new server.
+
 ## When something is wrong
 
 - **`no Ghidra found`** — name it: `--ghidra-home /path/ghidra_12.2_PUBLIC`,

@@ -628,3 +628,22 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(value, 7)
     }
 }
+
+/// The console's files are read on every request, so replacing them in the
+/// install's bundle updates the console without restarting the server.
+final class ConsoleAssetsFreshTests: XCTestCase {
+    func testAFileReplacedOnDiskIsServedAsItIsNow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ConsoleAssetsFresh-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let start = HTTPResponse(.ok, headers: ["content-type": "text/javascript"], body: Data("old".utf8))
+        let assets = ConsoleAssets(page: start, files: ["console.js": start], directory: directory)
+        XCTAssertEqual(assets.current("console.js").body, Data("old".utf8), "nothing on disk: the start copy")
+        try Data("new".utf8).write(to: directory.appendingPathComponent("console.js"))
+        let now = assets.current("console.js")
+        XCTAssertEqual(now.body, Data("new".utf8))
+        XCTAssertEqual(now.headers["cache-control"], "no-cache")
+        XCTAssertEqual(now.headers["content-type"], "text/javascript")
+    }
+}

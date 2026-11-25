@@ -81,10 +81,10 @@ public struct Console: Sendable {
 
         // The shell.
         for page in Self.pages {
-            add("GET", page, access: .open) { _ in assets.page }
+            add("GET", page, access: .open) { _ in assets.current("index.html") }
         }
         for name in assets.files.keys.sorted() {
-            add("GET", "/admin/assets/\(name)", access: .open) { _ in assets.files[name]! }
+            add("GET", "/admin/assets/\(name)", access: .open) { _ in assets.current(name) }
         }
 
         // Signing in and out.
@@ -628,11 +628,26 @@ public struct Console: Sendable {
     }
 }
 
-/// The shell's files, read from the target's resources once, at start: a
-/// missing one stops the server rather than serving a broken page.
+/// The shell's files, read from the target's resources at start — a missing
+/// one stops the server rather than serving a broken page — and again on
+/// every request: the console is updated by replacing its files in the
+/// install's bundle, with no restart of the server beside it. A file that
+/// cannot be read then is served as it was at start.
 struct ConsoleAssets: Sendable {
     let page: HTTPResponse
     let files: [String: HTTPResponse]
+    let directory: URL?
+
+    /// The file as the bundle holds it now, not cached by the browser.
+    func current(_ name: String) -> HTTPResponse {
+        let start = name == "index.html" ? page : files[name]!
+        guard let directory, let data = try? Data(contentsOf: directory.appendingPathComponent(name)) else {
+            return start
+        }
+        var headers = start.headers
+        headers["cache-control"] = "no-cache"
+        return HTTPResponse(start.status, headers: headers, body: data)
+    }
 
     static let types = [
         "css": "text/css; charset=utf-8",
@@ -655,6 +670,8 @@ struct ConsoleAssets: Sendable {
             files[name] = HTTPResponse(.ok, headers: ["content-type": type], body: try read(name))
         }
         let page = HTTPResponse(.ok, headers: ["content-type": "text/html; charset=utf-8"], body: try read("index.html"))
-        return ConsoleAssets(page: page, files: files)
+        let directory = bundle.url(forResource: "index", withExtension: "html", subdirectory: "Console")?
+            .deletingLastPathComponent()
+        return ConsoleAssets(page: page, files: files, directory: directory)
     }
 }
