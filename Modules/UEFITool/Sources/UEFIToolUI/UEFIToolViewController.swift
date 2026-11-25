@@ -671,7 +671,7 @@ import UEFITool
         // The cells read the switch as they are drawn: the rows only have to
         // be drawn again.
         readinessObserver = CodeReadinessDisplay.observe { [weak self] in
-            self?.outline.reloadData()
+            self?.redrawRows()
         }
     }
 
@@ -698,8 +698,30 @@ import UEFITool
         contentResults.applyFont()
         ToolPanelTable.apply(to: outline)
         applyColumnWidths()
-        outline.reloadData()
+        redrawRows()
         renderDetail(detailShown, subject: detailSubject)
+    }
+
+    /// Draws the rows again — their cells and their row views — without
+    /// asking the data source for the tree. What changed is how a row looks
+    /// (the zoom, a display switch), not which rows there are.
+    ///
+    /// Not `reloadData()`: that re-reads the tree from the top and forgets
+    /// every row the reader had opened, so a zoom step shut the whole tree and
+    /// the reveal of the selection then opened its way back, one animated
+    /// level at a time — more than a second on a real dump, with every other
+    /// open branch lost. Only the rows on screen have views, so this costs what
+    /// the screen holds, not what the tree holds.
+    func redrawRows() {
+        // The rows that have views, not every row: asking for all of them
+        // walks the whole open tree (tens of milliseconds on a dump of a
+        // thousand rows) to reach the few dozen a screen holds. A row with no
+        // view yet is configured when it scrolls in, at the size then in force.
+        var built = IndexSet()
+        outline.enumerateAvailableRowViews { _, row in built.insert(row) }
+        outline.reloadData(forRowIndexes: built,
+                           columnIndexes: IndexSet(integersIn: 0..<outline.numberOfColumns))
+        updateRowMarks()
     }
 
     /// Moves the columns to the size on screen — the widths grow and shrink

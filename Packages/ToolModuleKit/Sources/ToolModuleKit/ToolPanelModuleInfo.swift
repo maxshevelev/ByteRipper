@@ -47,8 +47,13 @@ public class ToolPanelInfoButton: NSButton {
     /// the glyphs beside it take: blue on the accent is not seen.
     public private(set) var color: NSColor = .linkColor
 
+    /// Repainted only when the style really moves. AppKit hands a cell its
+    /// style again on every layout of the row, and a new symbol image each
+    /// time also re-measured the button's intrinsic size: on a zoom step that
+    /// was a third of the time the tree took to lay its rows out again.
     public var backgroundStyle: NSView.BackgroundStyle = .normal {
         didSet {
+            guard backgroundStyle != oldValue else { return }
             color = backgroundStyle == .emphasized ? .alternateSelectedControlTextColor : .linkColor
             paint()
         }

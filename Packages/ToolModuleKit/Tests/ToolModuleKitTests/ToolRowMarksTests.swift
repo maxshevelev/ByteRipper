@@ -307,6 +307,20 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(info.color, .linkColor)
     }
 
+    /// AppKit hands a cell its style again on every layout of the row; the
+    /// (i) repaints only when the style moves. A new symbol image each time
+    /// re-measured the button too, and a zoom step, which lays every row out
+    /// again, spent a third of the tree's layout on it.
+    func testTheInfoButtonKeepsItsImageWhenTheStyleIsHandedAgain() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"), warning: true, badges: true)
+        let info = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.codeInfoTag) as? ToolPanelModuleInfoButton)
+        let image = try XCTUnwrap(info.image)
+        cell.backgroundStyle = .normal
+        XCTAssertTrue(info.image === image, "the same style, the same image")
+        cell.backgroundStyle = .emphasized
+        XCTAssertFalse(info.image === image, "a selection repaints it")
+    }
+
     /// The popover shows at once with the module's name, progress where the
     /// summary and the code are still loading, and opens the code once it is
     /// loaded.

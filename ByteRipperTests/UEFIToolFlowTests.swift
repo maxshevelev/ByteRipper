@@ -1603,6 +1603,40 @@ final class UEFIToolFlowTests: XCTestCase {
                        "so the second session has nothing left to read there")
     }
 
+    /// A zoom step changes how the rows look, not which rows there are: the
+    /// rows the reader opened stay open, and the cells come back at the new
+    /// size. It used to reload the whole outline, which shut every open row;
+    /// the reveal of the selection then opened its way back one animated
+    /// level at a time — more than a second on a real dump — and every other
+    /// open branch stayed shut.
+    func testAZoomStepKeepsTheOpenRowsAndRedrawsThemAtTheNewSize() throws {
+        _ = try open(UEFITestImage.make())
+        let outline = try expandRow(0)
+        let rows = outline.numberOfRows
+        XCTAssertGreaterThan(rows, 1, "the premise: an open row")
+        let volume = try XCTUnwrap(outline.item(atRow: 0))
+        XCTAssertTrue(outline.isItemExpanded(volume))
+
+        defer {
+            ToolPanelFont.defaults.removeObject(forKey: ToolPanelFont.zoomSizeKey)
+            NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        }
+        ToolPanelFont.defaults.set(ToolPanelFont.size + 3, forKey: ToolPanelFont.zoomSizeKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        window?.layoutIfNeeded()
+
+        XCTAssertEqual(outline.numberOfRows, rows, "no row shut")
+        XCTAssertTrue(outline.isItemExpanded(volume), "the opened row is still open")
+        XCTAssertEqual(outline.rowHeight, ToolPanelFont.rowHeight)
+        let name = outline.column(withIdentifier: NSUserInterfaceItemIdentifier("name"))
+        for row in 0..<rows {
+            let cell = outline.view(atColumn: max(name, 0), row: row, makeIfNecessary: false) as? NSTableCellView
+            if let font = cell?.textField?.font {
+                XCTAssertEqual(font.pointSize, ToolPanelFont.size, "row \(row) is drawn at the new size")
+            }
+        }
+    }
+
     /// A file with no root to fold — one that is a single leaf, padding the
     /// whole file — shows that leaf as its one row and hides nothing. The title
     /// has nothing to select, so clicking it does nothing rather than clear a
