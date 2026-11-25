@@ -242,4 +242,43 @@ final class GuidRegistryTests: XCTestCase {
         XCTAssertEqual(registry.entries[reset]?.citations?.count, 2)
         XCTAssertNil(registry.entries[topology], "a GUID two reviews name two ways waits for a person")
     }
+
+    // MARK: - Removal
+
+    func testARemovalTakesTheEntryAndItsHistoryAndADryRunNothing() throws {
+        _ = try store.offerGuid(offer("gAmdPspFtpmPpiGuid"), by: "First")
+        _ = try store.offerGuid(offer("gAmdFactoryResetPpiGuid", module: ccx), by: "admin", replace: true, reason: "r")
+        let dry = try store.removeGuid(reset, reason: "a wrong entry", dryRun: true)
+        XCTAssertFalse(dry.applied)
+        XCTAssertEqual(dry.entry.history?.count, 1)
+        XCTAssertNotNil(try store.guidRegistry().entries[reset], "a dry run removes nothing")
+        let done = try store.removeGuid(reset.lowercased(), reason: "a wrong entry")
+        XCTAssertTrue(done.applied)
+        XCTAssertNil(try store.guidRegistry().entries[reset])
+        let text = try String(contentsOf: store.guidsURL.appendingPathComponent("registry.json"), encoding: .utf8)
+        XCTAssertFalse(text.contains(reset), "nothing of the entry, history included, remains")
+        XCTAssertFalse(text.contains("gAmdPspFtpmPpiGuid"))
+    }
+
+    func testARemovalRefusesAnotherNameAndAReferencedEntry() throws {
+        _ = try store.offerGuid(offer("gAmdFactoryResetPpiGuid"), by: "First")
+        XCTAssertThrowsError(try store.removeGuid(reset, reason: "x", expectName: "gOtherPpiGuid")) {
+            XCTAssertTrue("\($0)".contains("gAmdFactoryResetPpiGuid"), "\($0)")
+        }
+        try record(ccx, [interface(reset, "AMD_FACTORY_RESET_PPI", at: "0x2468")])
+        XCTAssertThrowsError(try store.removeGuid(reset, reason: "x", expectName: "gAmdFactoryResetPpiGuid")) {
+            XCTAssertTrue("\($0)".contains(ccx.hex) && "\($0)".contains("0x2468"), "\($0)")
+        }
+        XCTAssertNotNil(try store.guidRegistry().entries[reset])
+    }
+
+    func testAMirrorDropsARemovedEntry() throws {
+        _ = try store.offerGuid(offer("gAmdFactoryResetPpiGuid"), by: "First")
+        let mirror = try ContentStore(root: directory.appendingPathComponent("mirror"))
+        try mirror.mirrorGuids(try store.guidRegistry())
+        XCTAssertNotNil(try mirror.guidRegistry().entries[reset])
+        _ = try store.removeGuid(reset, reason: "wrong")
+        try mirror.mirrorGuids(try store.guidRegistry())
+        XCTAssertNil(try mirror.guidRegistry().entries[reset])
+    }
 }

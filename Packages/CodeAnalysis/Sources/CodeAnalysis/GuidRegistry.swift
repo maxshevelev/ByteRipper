@@ -374,6 +374,102 @@ extension ContentStore {
         }
     }
 
+    /// What still uses a registry entry: a module's interface record that
+    /// holds its GUID or its name, a library body that reads a GUID global of
+    /// its value or under its name. An entry anything uses is not removed.
+    public struct GuidReference: Codable, Equatable, Sendable {
+        /// `module` or `library`.
+        public var kind: String
+        /// The module's digest, or the library entry's id.
+        public var at: String
+        /// The module's name, or the library entry's.
+        public var name: String?
+        public var guid: String
+        public var written: String?
+        public var address: String?
+    }
+
+    public struct GuidRemoval: Codable, Equatable, Sendable {
+        public var guid: String
+        /// The entry as it stood, history and all — what the removal takes away.
+        public var entry: GuidEntry
+        public var reason: String
+        public var applied: Bool
+    }
+
+    /// Everything in the store that uses `guid` or `name`.
+    public func guidReferences(guid: String, name: String) throws -> [GuidReference] {
+        var found: [GuidReference] = []
+        for item in try GuidSeed.recorded(in: self)
+        where item.guid == guid || item.name == name || item.written == name {
+            found.append(GuidReference(kind: "module", at: item.module.hex, name: item.moduleName, guid: item.guid,
+                                       written: item.written, address: item.address))
+        }
+        let index = try libraryIndex()
+        for (id, entry) in index.entries.sorted(by: { $0.key < $1.key }) {
+            for variant in entry.variants {
+                for global in variant.globals ?? [] {
+                    let value = global.guid.flatMap { GuidName.canonicalGUID($0) }
+                    guard value == guid || (global.guid != nil && global.name == name) else { continue }
+                    found.append(GuidReference(kind: "library", at: id, name: entry.name, guid: value ?? guid,
+                                               written: global.name, address: "+\(global.offset)"))
+                }
+            }
+        }
+        return found
+    }
+
+    /// Remove a wrong entry completely, its history with it: an
+    /// administrator's, with a reason, for an entry nothing uses. The reason
+    /// is answered, not kept — nothing of the entry is to remain.
+    /// `expectName` guards against the wrong GUID; `dryRun` writes nothing.
+    public func removeGuid(_ guidText: String, reason: String, expectName: String? = nil,
+                           dryRun: Bool = false) throws -> GuidRemoval {
+        guard let guid = GuidName.canonicalGUID(guidText) else {
+            throw CodeAnalysisError.invalidName("\(guidText) is no GUID: 8-4-4-4-12 hex digits")
+        }
+        guard !reason.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw CodeAnalysisError.invalidName("a removal gives its reason")
+        }
+        func check(_ registry: GuidRegistry) throws -> GuidEntry {
+            guard let entry = registry.entries[guid] else {
+                throw CodeAnalysisError.invalidName("the registry has no \(guid)")
+            }
+            if let expectName, entry.name != expectName {
+                throw CodeAnalysisError.analysisMismatch(
+                    "the registry names \(guid) \(entry.name), not \(expectName): nothing removed")
+            }
+            let references = try guidReferences(guid: guid, name: entry.name)
+            if !references.isEmpty {
+                let list = references.map { ref in
+                    "\(ref.kind) \(ref.at)\(ref.name.map { " (\($0))" } ?? "")"
+                        + "\(ref.written.map { " as \($0)" } ?? "")\(ref.address.map { " at \($0)" } ?? "")"
+                }
+                throw CodeAnalysisError.analysisMismatch(
+                    "\(entry.name) (\(guid)) is still referenced, nothing removed:\n  " + list.joined(separator: "\n  "))
+            }
+            return entry
+        }
+        // References are read before the lock: the readers take none, and a
+        // nested lock on the same file would wait on itself.
+        _ = try check(try guidRegistry())
+        return try withLock {
+            var registry = try guidRegistry()
+            guard let entry = registry.entries[guid] else {
+                throw CodeAnalysisError.invalidName("the registry has no \(guid)")
+            }
+            if let expectName, entry.name != expectName {
+                throw CodeAnalysisError.analysisMismatch(
+                    "the registry names \(guid) \(entry.name), not \(expectName): nothing removed")
+            }
+            if !dryRun {
+                registry.entries[guid] = nil
+                try atomicWrite(try encoder.encode(registry), to: guidRegistryURL)
+            }
+            return GuidRemoval(guid: guid, entry: entry, reason: reason, applied: !dryRun)
+        }
+    }
+
     static func apply(_ offer: GuidOffer, guid: String, to registry: inout GuidRegistry, by: String?,
                       replace: Bool, reason: String?, at: String) -> GuidOfferResult {
         let citation = offer.source.kind == .review

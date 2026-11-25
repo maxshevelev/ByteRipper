@@ -43,6 +43,7 @@ public enum CASCommand {
           drop-earlier-projects [--apply]
           guids-seed --edk2 <checkout> --tag <edk2 tag> [--catalogue <guids.csv>] [--apply]
           guid-replace <guid> --name <gName…Guid> --kind <kind> --reason <text> [--note <text>] [--by <who>]
+          guid-remove <guid> --reason <text> [--expect-name <gName…Guid>] [--apply]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
           put-object <file>
           has-object <sha256>
@@ -305,6 +306,19 @@ public enum CASCommand {
             output.stdout = try encode(try content.offerGuid(
                 GuidOffer(guid: guid, name: name, kind: kind, source: source, note: note),
                 by: by, replace: true, reason: reason))
+        case "guid-remove":
+            let apply = parser.flag("--apply")
+            guard let guid = parser.next(), let reason = parser.option("--reason") else {
+                throw Usage(description: "guid-remove: <guid> --reason are required")
+            }
+            let expectName = parser.option("--expect-name")
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("guid-remove runs on a store directory, not on a server")
+            }
+            let content = try ContentStore(root: local.root, create: local.create)
+            output.stdout = try encode(try content.removeGuid(guid, reason: reason, expectName: expectName,
+                                                              dryRun: !apply))
         case "library-source-rev":
             let apply = parser.flag("--apply")
             guard let text = parser.option("--module"), let module = SHA256Digest(hex: text),

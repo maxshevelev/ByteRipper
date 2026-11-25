@@ -91,4 +91,20 @@ final class CASCommandTests: XCTestCase {
         XCTAssertTrue(String(decoding: help.stdout, as: UTF8.self).hasPrefix("usage: byteripper-cas"))
         XCTAssertTrue(help.stderr.isEmpty)
     }
+
+    func testGuidRemoveIsADryRunUntilApplied() throws {
+        let guid = "9C98130A-8921-45EB-86F3-16041C6BB7AD"
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        _ = try store.offerGuid(GuidOffer(guid: guid, name: "gAmdFactoryResetPpiGuid", kind: .ppi,
+                                          source: .review(module: SHA256Digest(data: Data("m".utf8)), address: "0x10")),
+                                by: "x")
+        let dry = run("guid-remove", guid, "--reason", "wrong", "--expect-name", "gAmdFactoryResetPpiGuid")
+        XCTAssertEqual(dry.status, 0, String(decoding: dry.stderr, as: UTF8.self))
+        XCTAssertEqual((try json(dry) as? [String: Any])?["applied"] as? Bool, false)
+        XCTAssertNotNil(try store.guidRegistry().entries[guid])
+        XCTAssertNotEqual(run("guid-remove", guid, "--reason", "wrong", "--expect-name", "gOtherGuid", "--apply").status, 0)
+        let done = run("guid-remove", guid, "--reason", "wrong", "--apply")
+        XCTAssertEqual(done.status, 0, String(decoding: done.stderr, as: UTF8.self))
+        XCTAssertNil(try store.guidRegistry().entries[guid])
+    }
 }
