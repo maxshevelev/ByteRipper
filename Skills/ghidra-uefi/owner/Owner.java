@@ -3015,7 +3015,7 @@ public class Owner {
     }
 
     private static boolean repairConflictNamesOnce(FileDataTypeManager shared) {
-        boolean changed = false;
+        boolean changed = foldFunctionWrappers(shared);
         // Taken from the listing: `findDataTypes` reads past the suffix, so
         // asking it for `X.conflict` answers X, which then "replaces" itself.
         java.util.List<DataType> copies = new java.util.ArrayList<>();
@@ -3029,13 +3029,21 @@ public class Owner {
             String canonical = name.substring(0, name.length() - ".conflict".length());
             java.util.List<DataType> found = new java.util.ArrayList<>();
             shared.findDataTypes(canonical, found);
-            DataType twin = exactly(found, canonical);
+            DataType twin = exactly(found, canonical, copy);
             if (twin == null) continue;
             // The same type, or a typedef that only renames the twin function:
             // either way the twin takes its uses.
             boolean same = sameShapeIgnoringComments(twin, copy)
                 || (namesItsFunction(copy) && sameShapeIgnoringComments(
                         twin, ((ghidra.program.model.data.TypeDef) copy).getBaseDataType()));
+            // A function definition's copy nothing in the archive points to
+            // any more — its wrapper folded into the twin — goes whatever its
+            // shape: it is a name that says "conflict" for nothing (a80f7518).
+            if (!same && copy instanceof ghidra.program.model.data.FunctionDefinition
+                && twin instanceof ghidra.program.model.data.FunctionDefinition && !referenced(shared, copy)) {
+                if (shared.remove(copy)) changed = true;
+                continue;
+            }
             if (!same) continue;
             try {
                 shared.replaceDataType(copy, twin, true);
@@ -3047,12 +3055,85 @@ public class Owner {
         return changed;
     }
 
+    /**
+     * The parser's `typedef X X;` over the function definition X (or over its
+     * `.conflict` copy) stored in the archive: the definition takes its uses
+     * and it goes, so the archive holds the prototype, not a wrapper a module
+     * takes back in (issues 78ba6eb8, a80f7518).
+     */
+    private static boolean foldFunctionWrappers(FileDataTypeManager shared) {
+        boolean changed = false;
+        java.util.List<ghidra.program.model.data.TypeDef> wrappers = new java.util.ArrayList<>();
+        for (java.util.Iterator<DataType> all = shared.getAllDataTypes(); all.hasNext(); ) {
+            if (all.next() instanceof ghidra.program.model.data.TypeDef def
+                && def.getBaseDataType() instanceof ghidra.program.model.data.FunctionDefinition function
+                && (function.getName().equals(def.getName())
+                    || function.getName().equals(def.getName() + ".conflict"))) {
+                wrappers.add(def);
+            }
+        }
+        for (ghidra.program.model.data.TypeDef wrapper : wrappers) {
+            if (wrapper.isDeleted()) continue;
+            String name = wrapper.getName();
+            java.util.List<DataType> found = new java.util.ArrayList<>();
+            shared.findDataTypes(name, found);
+            DataType definition = null;
+            for (DataType type : found) {
+                if (name.equals(type.getName()) && type instanceof ghidra.program.model.data.FunctionDefinition) definition = type;
+            }
+            if (definition == null) definition = wrapper.getBaseDataType();
+            try {
+                shared.replaceDataType(wrapper, definition, true);
+                if (definition.getName().endsWith(".conflict")) definition.setName(name);
+                changed = true;
+            } catch (Exception error) {
+                System.out.println("OWNER TYPE fold " + name + ": " + error.getMessage());
+            }
+        }
+        return changed;
+    }
+
+    /** Whether another type of the archive is made of `type`: a member, a pointer, a typedef, an array, a parameter. */
+    private static boolean referenced(FileDataTypeManager shared, DataType type) {
+        for (java.util.Iterator<DataType> all = shared.getAllDataTypes(); all.hasNext(); ) {
+            DataType other = all.next();
+            if (other == type) continue;
+            if (other.dependsOn(type)) return true;
+            if (other instanceof ghidra.program.model.data.FunctionDefinition function) {
+                if (function.getReturnType() == type) return true;
+                for (ghidra.program.model.data.ParameterDefinition parameter : function.getArguments()) {
+                    if (parameter.getDataType() == type) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** The type of exactly this name: a lookup also answers its `.conflict` copies. */
     private static DataType exactly(java.util.List<DataType> found, String name) {
         for (DataType type : found) {
             if (name.equals(type.getName())) return type;
         }
         return null;
+    }
+
+    /**
+     * The twin of `copy`: of the types of exactly this name, one of the same
+     * kind first. A function definition `X.conflict` has two of the name X —
+     * the root wrapper `typedef X X;` and `/functions/X` — and only the
+     * definition is its twin (issue a80f7518); the wrapper read as no twin and
+     * the copy stayed.
+     */
+    private static DataType exactly(java.util.List<DataType> found, String name, DataType copy) {
+        for (DataType type : found) {
+            if (name.equals(type.getName()) && type.getClass().equals(copy.getClass())) return type;
+        }
+        if (copy instanceof ghidra.program.model.data.FunctionDefinition) {
+            for (DataType type : found) {
+                if (name.equals(type.getName()) && type instanceof ghidra.program.model.data.FunctionDefinition) return type;
+            }
+        }
+        return exactly(found, name);
     }
 
     /** A take replaces a structure, a union or a typedef; an enum is taken by `takeEnum`. */
