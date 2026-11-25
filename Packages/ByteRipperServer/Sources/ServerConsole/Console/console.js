@@ -16,7 +16,7 @@
       if (value === undefined || value === null || value === false) continue;
       if (key === "class") el.className = value;
       else if (key === "text") el.textContent = value;
-      else if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
+      else if (key.startsWith("on")) { el.addEventListener(key.slice(2), value); el.__handlers = true; }
       else if (key === "value") el.value = value;
       else el.setAttribute(key, value === true ? "" : value);
     }
@@ -32,9 +32,51 @@
     return el;
   }
 
+  // `refill` puts `children` in `el`, keeping every node that reads the same
+  // as its new copy: a poll that rebuilds a table every second then leaves the rows
+  // that did not change where they are, so the row under the pointer does not
+  // flicker its hover and a selection or a focus inside it survives.
   function fill(el, ...children) {
     el.replaceChildren();
     return append(el, children);
+  }
+
+  // For a table a poll rebuilds: only nodes built fresh for this call, none a
+  // view keeps a reference to — a kept node would leave that reference outside
+  // the page.
+  function refill(el, ...children) {
+    const fresh = append(document.createDocumentFragment(), children);
+    morph(el, [...fresh.childNodes]);
+    return el;
+  }
+
+  function sameNode(a, b) {
+    if (a.nodeType !== b.nodeType) return false;
+    if (a.nodeType !== Node.ELEMENT_NODE) return a.nodeValue === b.nodeValue;
+    return a.outerHTML === b.outerHTML;
+  }
+
+  // An element the new copy only changes inside, with no handlers of its own,
+  // takes the new attributes and is filled the same way; anything else that
+  // differs is replaced. A node that reads the same stays, handlers and all.
+  function morph(el, wanted) {
+    const old = [...el.childNodes];
+    wanted.forEach((node, i) => {
+      const was = old[i];
+      if (!was) { el.append(node); return; }
+      if (sameNode(was, node)) return;
+      if (was.nodeType === Node.ELEMENT_NODE && node.nodeType === Node.ELEMENT_NODE
+          && was.tagName === node.tagName && !node.__handlers && !was.__handlers
+          && !(was instanceof HTMLInputElement) && !(was instanceof HTMLTextAreaElement)
+          && !(was instanceof HTMLSelectElement)) {
+        for (const attr of [...was.attributes]) if (!node.hasAttribute(attr.name)) was.removeAttribute(attr.name);
+        for (const attr of [...node.attributes]) if (was.getAttribute(attr.name) !== attr.value) was.setAttribute(attr.name, attr.value);
+        morph(was, [...node.childNodes]);
+        return;
+      }
+      el.replaceChild(node, was);
+    });
+    for (let i = wanted.length; i < old.length; i++) old[i].remove();
   }
 
   const ICONS = {
@@ -712,7 +754,7 @@
         return;
       }
       const rows = docs.map((doc, index) => documentRow(doc, index, docs));
-      fill(list.body, h("div", { class: "table-wrap" }, h("table", {},
+      refill(list.body, h("div", { class: "table-wrap" }, h("table", {},
         h("thead", {}, h("tr", {},
           h("th", { text: "Order" }), h("th", { text: "Document" }), h("th", { text: "Id" }),
           h("th", { class: "num", text: "Size" }), h("th", { class: "num", text: "Version" }),
@@ -934,7 +976,7 @@
           h("div", { class: "empty-action" }, h("button", { class: "btn small", type: "button", onclick: () => go("/admin/configuration") },
             icon("sliders", 15), "Agent configuration"))));
       } else {
-        fill(agents.body, h("table", { class: "lines" },
+        refill(agents.body, h("table", { class: "lines" },
           h("thead", {}, h("tr", {},
             h("th", { class: "w-who", text: "Agent" }), h("th", { class: "w-state", text: "State" }),
             h("th", { class: "num w-n", text: "Calls" }), h("th", { class: "num w-n", text: "Errors" }),
@@ -944,7 +986,7 @@
       if (!data.rest.length) {
         fill(clients.body, empty("globe", "No REST requests yet", "The app and the scripts show up here, one row per token, when they reach the store or Ghidra."));
       } else {
-        fill(clients.body, h("table", { class: "lines" },
+        refill(clients.body, h("table", { class: "lines" },
           h("thead", {}, h("tr", {},
             h("th", { class: "w-who", text: "Token" }), h("th", { class: "w-state", text: "State" }),
             h("th", { class: "num w-n", text: "Requests" }), h("th", { class: "num w-n", text: "Refused" }),
@@ -1023,7 +1065,7 @@
           "A publish, a lease taken or given back, and the server's next start appear here."));
         return;
       }
-      fill(scroller, table(rows.slice(-EVENTS_SHOWN)));
+      refill(scroller, table(rows.slice(-EVENTS_SHOWN)));
     }
 
     function full() {
@@ -1572,7 +1614,7 @@
       }[state.issueFilter] || (() => true);
       const shown = issues.filter(keep);
       for (const issue of issues) updateDetail(`issue:${issue.id}`, `Report on ${issue.tool}`, () => issueDetail(issue));
-      fill(open.body, shown.length ? issueList(shown)
+      refill(open.body, shown.length ? issueList(shown)
         : empty("check", "No report here", "An agent reports a problem with a tool through ghidra_report_issue; it is listed here."));
     }
     return { root, update };
@@ -1676,14 +1718,14 @@
       // A ticket the switch now hides — closed from the sheet — is drawn there
       // from what the server says, as one the board still lists.
       for (const ticket of tickets) updateDetail(`ticket:${ticket.module}`, ticketTitle(ticket), () => ticketDetail(ticket));
-      fill(board.body, shown.length ? ticketTable(shown)
+      refill(board.body, shown.length ? ticketTable(shown)
         : empty("reviewFindings", state.ticketState === "all" ? "No ticket yet" : `No ${state.ticketState} ticket`,
           "A verifying agent writes a remark on a module's review with ghidra_ticket_remark; the module's ticket is listed here."));
       call("GET", "/admin/api/type-proposals").then((rows) => {
         const shownProposals = rows.filter((p) => state.ticketState === "all"
           || PROPOSAL_STATES[state.ticketState].includes(p.state));
         for (const p of rows) updateDetail(`proposal:${p.id}`, proposalTitle(p), () => proposalDetail(p, proposalNames(p)));
-        fill(proposals.body, shownProposals.length ? proposalTable(shownProposals)
+        refill(proposals.body, shownProposals.length ? proposalTable(shownProposals)
           : empty("proposals", state.ticketState === "all" ? "No proposal" : `No ${state.ticketState} proposal`,
             "When a module's publish would replace a shared type or a library registry entry, its holder proposes the module's definitions with ghidra_type_propose; other agents vote here."));
       }, () => fill(proposals.body, h("div", { class: "muted", text: "This server keeps no type proposals." })));
@@ -1996,7 +2038,7 @@
       rights = data.rights;
       const active = data.tokens.filter((t) => !t.revoked);
       const gone = data.tokens.filter((t) => t.revoked);
-      fill(live.body, active.length ? tokenTable(active) : empty("key", "No live token", "Make one with New token."));
+      refill(live.body, active.length ? tokenTable(active) : empty("key", "No live token", "Make one with New token."));
       if (gone.length) {
         fill(revoked, h("section", { class: "card" },
           h("details", { class: "revoked" }, h("summary", { text: `Revoked (${gone.length})` }), tokenTable(gone))));
@@ -2126,7 +2168,7 @@
     modules.root.hidden = false;
     const held = rows.filter((row) => row.holder);
     const ended = rows.filter((row) => row.closed);
-    fill(modules.body, held.length ? leaseTable(held, proposals || [])
+    refill(modules.body, held.length ? leaseTable(held, proposals || [])
       : empty("layers", "No module in work", "A holder takes a module into work before its first write; it shows here until it gives it back."));
     if (ended.length) {
       fill(closed, h("section", { class: "card" },
