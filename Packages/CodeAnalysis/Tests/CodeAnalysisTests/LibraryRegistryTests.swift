@@ -328,6 +328,54 @@ final class LibraryRegistryTests: XCTestCase {
                                           guid: "D2B2B828-0826-48A7-B3DF-983C006024F0")]))
     }
 
+    func testAStringAnAmdBodyReadsEntersUncitedAndLinksOnlyWithTheSameBytes() throws {
+        // "AmdS3Lib table Signature check fail" and a one-letter change of it.
+        let message = Data("AmdS3Lib table Signature check fail\0".utf8).map { String(format: "%02x", $0) }.joined()
+        let changed = Data("AmdS3Lib table Signature check FAIL\0".utf8).map { String(format: "%02x", $0) }.joined()
+        func reading(_ text: String, kind: String = "amd", address: String = "0xD790") -> LibraryProposal {
+            var made = proposal("AmdS3SaveTableCheck", kind: kind)
+            made.dataReferences = ["0x1A"]
+            made.callees = []
+            made.globals = [LibraryGlobal(offset: "0x1A", name: "s_AmdS3Lib_table_Signature", type: "char[36]",
+                                          shared: false, address: address, text: text)]
+            return made.admittingStrings()
+        }
+        // An edk2 body's string still needs its citation.
+        let edk2 = try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                               proposals: [reading(message, kind: "edk2")])
+        XCTAssertEqual(edk2.notLibrary?.map(\.why), ["data"])
+        let said = try XCTUnwrap(LibraryRefusal.rows(of: edk2).first?.why)
+        XCTAssertTrue(said.contains("no citation covers") && said.contains("ghidra_library_cite"), said)
+
+        let added = try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [reading(message)])
+        XCTAssertEqual(added.added.map(\.name), ["AmdS3SaveTableCheck"])
+        XCTAssertNil(added.notLibrary)
+        let index = try store.libraryIndex()
+        XCTAssertNil(index.sources?[body.key], "no citation was needed")
+        XCTAssertEqual(index.entries[body.key]?.variants.first?.globals,
+                       [LibraryGlobal(offset: "0x1A", name: "s_AmdS3Lib_table_Signature", type: "char[36]", text: message)])
+
+        // The same string elsewhere in another module links.
+        let same = try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                               proposals: [reading(message, address: "0xE010")])
+        XCTAssertEqual(same.unchanged.map(\.name), ["AmdS3SaveTableCheck"])
+
+        // Other bytes are another function.
+        let other = try store.putLibraryEntries(module: second, rev: 2, by: "agent", proposals: [reading(changed)])
+        XCTAssertEqual(other.notLibrary?.map(\.why), ["global"])
+        let why = try XCTUnwrap(LibraryRefusal.rows(of: other).first?.why)
+        XCTAssertTrue(why.contains("\"AmdS3Lib table Signature check fail\"") && why.contains("byte for byte"), why)
+
+        func bound(_ globals: [LibraryGlobal]?) -> String? {
+            LibraryView.entryID(body: body.key, mark: nil, external: false, thunk: false, referenceBytes: nil,
+                                globals: globals, in: index)
+        }
+        XCTAssertEqual(bound([LibraryGlobal(offset: "0x1A", text: message)]), body.key)
+        XCTAssertNil(bound([LibraryGlobal(offset: "0x1A", text: changed)]))
+        XCTAssertNil(bound([LibraryGlobal(offset: "0x1A", name: "DAT_1")]))
+        XCTAssertNil(bound(nil))
+    }
+
     func testADataRefusalNamesTheDatumNotTheInstructionOffset() {
         var result = LibraryWriteResult()
         result.notLibrary = [.init(

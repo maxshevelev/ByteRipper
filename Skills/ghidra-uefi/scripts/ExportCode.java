@@ -938,8 +938,8 @@ public class ExportCode extends GhidraScript {
 
     /**
      * The globals a body reads, by the offset of the instruction that names
-     * each: the name a review gave it, its type — null when it has none — and,
-     * for a GUID, its value.
+     * each: the name a review gave it, its type — null when it has none —,
+     * for a GUID, its value, and for a string, its bytes (`stringBytes`).
      * What lets a library function read a module's global of a shared type:
      * the registry keeps the type, and another module's function is the
      * entry's only where its global there has the same.
@@ -958,6 +958,7 @@ public class ExportCode extends GhidraScript {
                 symbol == null ? null : symbol.getName(),
                 type == null || ghidra.program.model.data.Undefined.isUndefined(type) ? null : type.getDisplayName(),
                 isGuidType(type) ? guidText(function.getProgram(), each.getValue()) : null,
+                isGuidType(type) ? null : stringBytes(function.getProgram(), each.getValue()),
             });
         }
         return found;
@@ -993,6 +994,37 @@ public class ExportCode extends GhidraScript {
             text.append(String.format("%02X", raw[i] & 0xFF));
         }
         return text.toString();
+    }
+
+    /**
+     * The bytes of the string at `at`, terminator included, as lowercase hex;
+     * null where no string starts there. A string is at least four printable
+     * characters, narrow or UTF-16, ending in its terminator within 1024
+     * bytes. An `amd` or `intel` library function may read one: its bytes
+     * enter the entry, and in another module the body is the entry's only
+     * where the string there has the same bytes (`LibraryProposal.admittingStrings`).
+     */
+    static String stringBytes(ghidra.program.model.listing.Program program, Address at) {
+        byte[] raw = new byte[1024];
+        int read;
+        try {
+            read = program.getMemory().getBytes(at, raw);
+        } catch (ghidra.program.model.mem.MemoryAccessException | ghidra.program.model.address.AddressOutOfBoundsException e) {
+            return null;
+        }
+        int length = -1;
+        int narrow = 0;
+        while (narrow < read && printable(raw[narrow])) narrow++;
+        if (narrow >= 4 && narrow < read && raw[narrow] == 0) length = narrow + 1;
+        if (length < 0) {
+            int wide = 0;
+            while (wide + 1 < read && printable(raw[wide]) && raw[wide + 1] == 0) wide += 2;
+            if (wide >= 8 && wide + 1 < read && raw[wide] == 0 && raw[wide + 1] == 0) length = wide + 2;
+        }
+        if (length < 0) return null;
+        StringBuilder hex = new StringBuilder();
+        for (int i = 0; i < length; i++) hex.append(String.format("%02x", raw[i] & 0xFF));
+        return hex.toString();
     }
 
     /** How many of the bytes count: a string's up to its terminator, else all of them. */
@@ -1204,7 +1236,8 @@ public class ExportCode extends GhidraScript {
                 globals.add("{\"offset\": " + quote(global[0])
                     + (global[1] == null ? "" : ", \"name\": " + quote(global[1]))
                     + (global[2] == null ? "" : ", \"type\": " + quote(global[2]))
-                    + (global[3] == null ? "" : ", \"guid\": " + quote(global[3])) + "}");
+                    + (global[3] == null ? "" : ", \"guid\": " + quote(global[3]))
+                    + (global[4] == null ? "" : ", \"text\": " + quote(global[4])) + "}");
             }
             // Left out when empty, so a body that reads no global exports as
             // it did before the field existed.

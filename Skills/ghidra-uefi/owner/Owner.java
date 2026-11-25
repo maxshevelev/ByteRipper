@@ -3817,6 +3817,7 @@ public class Owner {
             if (global != null && global[1] != null) item.addProperty("name", global[1]);
             if (global != null && global[2] != null) item.addProperty("type", global[2]);
             if (global != null && global[3] != null) item.addProperty("guid", global[3]);
+            if (global != null && global[4] != null) item.addProperty("text", global[4]);
             item.addProperty("address", hex(each.getValue()));
             item.addProperty("shared", global != null && global[2] != null && sharedGlobal(each.getValue()));
             list.add(item);
@@ -7321,6 +7322,11 @@ public class Owner {
             + " at a later first use, and say what the register holds after that in an eol comment");
     }
 
+    /** A stack offset as Ghidra prints it: -0x1d8. */
+    private static String signedHex(long value) {
+        return (value < 0 ? "-0x" : "0x") + Long.toHexString(Math.abs(value));
+    }
+
     private JsonObject renameVariable(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "function"));
         refuseThunkVariables(function, "named");
@@ -7601,17 +7607,44 @@ public class Owner {
         // pair (EDX:4,EAX:4) drops a name on its piece (EDX:4) there, and the
         // other way round (issue 60431b90). A name the write took away is
         // refused, and the transaction rolls back.
+        // A stack slot typed as the whole buffer takes in the slots that lie
+        // wholly inside its new extent: they are its fields now, and are
+        // answered as `absorbed` (issue aff3367c). A slot it only partly
+        // covers is still a name the write took away.
         java.util.Map<String, String> namedAfter = userNamedLocals(function);
         java.util.List<String> dropped = new java.util.ArrayList<>();
+        JsonArray absorbed = new JsonArray();
+        boolean stackWrite = match.getStorage().isStackStorage();
+        long extentStart = stackWrite ? match.getStorage().getStackOffset() : 0;
+        long extentEnd = extentStart + (type != null ? type.getLength() : match.getStorage().size());
+        java.util.regex.Pattern stackSlot = java.util.regex.Pattern.compile("Stack\\[(-?)0x([0-9a-fA-F]+)\\]:(\\d+) @ .*");
         for (java.util.Map.Entry<String, String> before : namedBefore.entrySet()) {
             if (before.getKey().equals(asked) || before.getKey().equals(applied)) continue;
-            if (!namedAfter.containsKey(before.getKey())) dropped.add(before.getKey() + " (" + before.getValue() + ")");
+            if (namedAfter.containsKey(before.getKey())) continue;
+            java.util.regex.Matcher slot = stackSlot.matcher(before.getValue());
+            if (stackWrite && slot.matches()) {
+                long start = Long.parseLong(slot.group(2), 16) * (slot.group(1).isEmpty() ? 1 : -1);
+                long end = start + Long.parseLong(slot.group(3));
+                if (start >= extentStart && end <= extentEnd) {
+                    JsonObject item = new JsonObject();
+                    item.addProperty("name", before.getKey());
+                    item.addProperty("storage", before.getValue().substring(0, before.getValue().indexOf(" @ ")));
+                    absorbed.add(item);
+                    continue;
+                }
+            }
+            dropped.add(before.getKey() + " (" + before.getValue() + ")");
         }
         if (!dropped.isEmpty()) {
-            throw new Failure(409, "naming " + askedStorage + (askedFirstUse == null ? "" : " at " + hex(askedFirstUse))
-                + " would drop " + String.join(", ", dropped) + ": Ghidra holds one variable per register at a"
-                + " first use, so a register pair and its piece there cannot both be named. Nothing was changed;"
-                + " name one of them and say what the other is in an eol comment");
+            String where = "naming " + askedStorage + (askedFirstUse == null ? "" : " at " + hex(askedFirstUse));
+            throw new Failure(409, stackWrite
+                ? where + " would drop " + String.join(", ", dropped) + ": the new extent [" + signedHex(extentStart)
+                    + ", " + signedHex(extentEnd) + ") covers these stack slots only in part, so they cannot stay"
+                    + " and cannot become its fields. Nothing was changed; give the buffer a type that ends where"
+                    + " a slot ends, or let the slot go with ghidra_function_locals_reset first"
+                : where + " would drop " + String.join(", ", dropped) + ": Ghidra holds one variable per register at a"
+                    + " first use, so a register pair and its piece there cannot both be named. Nothing was changed;"
+                    + " name one of them and say what the other is in an eol comment");
         }
         if (type != null) requireTypeTaken(function, applied, type);
         // The storage as it is now: a decompiler temporary becomes HASH:… once
@@ -7621,6 +7654,7 @@ public class Owner {
         answer.addProperty("function", hex(function.getEntryPoint()));
         answer.addProperty("name", applied);
         if (typeUnchanged != null) answer.addProperty("type_unchanged", typeUnchanged);
+        if (absorbed.size() > 0) answer.add("absorbed", absorbed);
         if (localsBefore != null) {
             JsonArray removed = localsRemoved(function, localsBefore, applied);
             if (removed.size() > 0) answer.add("locals_removed", removed);

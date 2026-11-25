@@ -732,6 +732,14 @@ functions that call nothing first, then their callers.
   file. Compare the bytes with that source and cite the file and line with
   `ghidra_library_cite`, one citation per constant. Code without sources in the tree
   cannot qualify through a constant.
+- A string an `amd` or `intel` body reads — a debug message it passes to a debug print,
+  an assert's text — is no obstacle (person's ruling 2026-11-26): those libraries have no
+  public source to cite, so the string's bytes, terminator included, enter the entry as
+  part of its data, and in another module the body is the entry's only where the string
+  at that instruction has the same bytes. A differing string is another function, under
+  the same rules as any other difference. `ghidra_library` lists it under `globals` with
+  its `text` (hex). An `edk2` body's string still needs its line cited with
+  `ghidra_library_cite`.
 - A GUID global is no obstacle when it carries the GUID registry's name for its value
   (person's ruling 2026-11-25, issue d92d6b88): `gEfiPcdProtocolGuid` typed `EFI_GUID`
   is a known constant — EDK2's AutoGen gives each module its own copy of the value the

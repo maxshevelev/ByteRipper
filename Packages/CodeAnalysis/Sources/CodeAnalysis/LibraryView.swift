@@ -87,7 +87,7 @@ public enum LibraryView {
             (row["offset"] as? String).map {
                 LibraryGlobal(offset: $0, name: row["name"] as? String, type: row["type"] as? String,
                               shared: row["shared"] as? Bool, address: row["address"] as? String,
-                              guid: row["guid"] as? String)
+                              guid: row["guid"] as? String, text: row["text"] as? String)
             }
         }
     }

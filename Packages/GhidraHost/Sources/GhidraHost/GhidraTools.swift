@@ -390,7 +390,8 @@ public enum GhidraTools {
                     its own library's source. Cite the file and line after comparing the bytes with that \
                     source; the registry cannot check it and keeps who said so. Give `id` for an entry's bodies, \
                     or `body` for one, also before its first publish: a publish's `library.not_library` names \
-                    the key. A GUID never qualifies. A body with two constants has two citations: another \
+                    the key. A GUID never qualifies. A string an `amd` or `intel` body reads needs no citation: \
+                    its bytes enter the entry and are compared byte for byte; an `edk2` body's string does. A body with two constants has two citations: another \
                     file or line adds one, the same file and line replaces it, `remove: true` takes it away. \
                     `citations` says which, with what was replaced; the registry keeps that. `dry_run: true` \
                     answers the same and writes nothing.

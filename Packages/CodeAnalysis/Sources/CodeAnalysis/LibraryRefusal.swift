@@ -54,7 +54,8 @@ public enum LibraryRefusal {
                         return global.said + Self.guidHint(global)
                     }.joined(separator: ", ")
                     + " (a global a review named and typed with a shared type is no obstacle, nor a GUID "
-                    + "under the GUID registry's name for its value)"
+                    + "under the GUID registry's name for its value, nor a string in an `amd` or `intel` body, "
+                    + "whose bytes enter the entry; an `edk2` body's string needs its line cited with `ghidra_library_cite`)"
             case "callee":
                 why = "the registry refused it, it calls what the registry does not hold: "
                     + (row.callees ?? []).joined(separator: ", ")

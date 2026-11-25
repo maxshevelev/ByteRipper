@@ -97,9 +97,15 @@ public struct LibraryGlobal: Codable, Equatable, Sendable {
     /// The GUID registry's name for `guid`, where it is not the global's own
     /// name: what the refusal tells the reviewer to name it. Never kept.
     public var registryName: String?
+    /// For a string the body reads: its bytes, terminator included, as hex.
+    /// In an `amd` or `intel` body a string is part of the entry's data and
+    /// is compared byte for byte (`admittingStrings`); in an `edk2` one it
+    /// stays a data reference that needs a citation.
+    public var text: String?
 
     public init(offset: String, name: String? = nil, type: String? = nil, shared: Bool? = nil,
-                address: String? = nil, guid: String? = nil, registryName: String? = nil) {
+                address: String? = nil, guid: String? = nil, registryName: String? = nil, text: String? = nil) {
+        self.text = text
         self.offset = offset
         self.name = name
         self.type = type
@@ -113,7 +119,7 @@ public struct LibraryGlobal: Codable, Equatable, Sendable {
     /// type, without the verdict. Nil when there are none.
     static func kept(_ globals: [LibraryGlobal]?) -> [LibraryGlobal]? {
         let kept = (globals ?? []).filter { $0.shared == true }.map {
-            LibraryGlobal(offset: $0.offset, name: $0.name, type: $0.type, guid: $0.guid)
+            LibraryGlobal(offset: $0.offset, name: $0.name, type: $0.type, guid: $0.guid, text: $0.text)
         }
         return kept.isEmpty ? nil : kept
     }
@@ -150,6 +156,32 @@ extension LibraryProposal {
                 global.shared = false
                 global.registryName = held
             }
+            return global
+        }
+        proposal.dataReferences = dataReferences?.filter { !admitted.contains($0) }
+        return proposal
+    }
+
+    /// Libraries with no public source to cite a string's line in.
+    public static let uncitedStringKinds: Set<String> = [LibraryKind.amd.rawValue, LibraryKind.intel.rawValue]
+
+    /// The person's rule for strings (2026-11-26): an `amd` or `intel` body
+    /// has no public source to cite, so a string it reads — a debug message
+    /// it prints — enters the entry as part of its data, its bytes compared
+    /// byte for byte when another module's function is linked
+    /// (`LibraryIndex.globalsDiffer`). Such a string leaves `dataReferences`.
+    /// An `edk2` body's string stays a data reference: its citation is
+    /// required.
+    public func admittingStrings() -> LibraryProposal {
+        guard Self.uncitedStringKinds.contains(kind), let globals,
+              globals.contains(where: { $0.text != nil && $0.guid == nil }) else { return self }
+        var proposal = self
+        var admitted: Set<String> = []
+        proposal.globals = globals.map { global in
+            guard global.text != nil, global.guid == nil else { return global }
+            var global = global
+            global.shared = true
+            admitted.insert(global.offset)
             return global
         }
         proposal.dataReferences = dataReferences?.filter { !admitted.contains($0) }
@@ -303,6 +335,20 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
         guard let held = entries[id]?.variants.first(where: { $0.body.key == body })?.globals, !held.isEmpty
         else { return nil }
         for expected in held {
+            // A string an `amd` or `intel` body reads is the entry's only with
+            // the same bytes (`LibraryProposal.admittingStrings`).
+            if let text = expected.text, expected.guid == nil {
+                let reads = "the entry reads the string \(Self.quoted(text)) at +\(expected.offset)"
+                guard let globals else { return reads + ", and this function's globals are not known: publish its module again" }
+                guard let here = globals.first(where: { $0.offset == expected.offset }) else {
+                    return reads + ", and this function reads no datum there"
+                }
+                if here.text != text {
+                    return reads + ": here it reads " + (here.text.map { "\(Self.quoted($0)), other bytes" } ?? "no string")
+                        + ". Only the same string, byte for byte, is the entry's"
+                }
+                continue
+            }
             // A GUID is the same constant only under the same registry name
             // and value: its type says nothing (issue d92d6b88).
             if let guid = expected.guid {
@@ -339,6 +385,23 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
             }
         }
         return nil
+    }
+
+    /// A string's hex bytes as a reader sees them, quoted; the hex where
+    /// they are not text.
+    static func quoted(_ hex: String) -> String {
+        var bytes: [UInt8] = []
+        var index = hex.startIndex
+        while let next = hex.index(index, offsetBy: 2, limitedBy: hex.endIndex), index < hex.endIndex {
+            guard let byte = UInt8(hex[index..<next], radix: 16) else { return hex }
+            bytes.append(byte)
+            index = next
+        }
+        let wide = bytes.count >= 4 && bytes[1] == 0
+        let text = wide
+            ? String(decoding: stride(from: 0, to: bytes.count - 1, by: 2).map { UInt16(bytes[$0]) | UInt16(bytes[$0 + 1]) << 8 }, as: UTF16.self)
+            : String(decoding: bytes, as: UTF8.self)
+        return "\"" + text.trimmingCharacters(in: CharacterSet(charactersIn: "\0")) + "\""
     }
 
     private enum CodingKeys: String, CodingKey {

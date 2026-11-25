@@ -670,6 +670,70 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await release()
     }
 
+    /// Issue aff3367c: a frame's first slot typed as the whole buffer takes
+    /// in the named slots that lie wholly inside it — they are its fields, and
+    /// the answer lists them as `absorbed`. A slot it covers only in part is
+    /// still refused, in words about stack slots.
+    func testTypingTheFirstStackSlotAsTheBufferAbsorbsTheSlotsInside() async throws {
+        try await open(try image())
+        struct Slot { let start: Int; let size: Int; let storage: String }
+        func slots(_ entry: String) async throws -> [Slot] {
+            let locals = try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+            let pattern = try NSRegularExpression(pattern: #"^Stack\[-0x([0-9a-fA-F]+)\]:(\d+)$"#)
+            return locals.compactMap { local -> Slot? in
+                // A stack local is the whole body's: it has no first use.
+                guard let storage = local["storage"] as? String, local["first_use"] == nil,
+                      let m = pattern.firstMatch(in: storage, range: NSRange(storage.startIndex..., in: storage)),
+                      let offset = Int((storage as NSString).substring(with: m.range(at: 1)), radix: 16),
+                      let size = Int((storage as NSString).substring(with: m.range(at: 2))) else { return nil }
+                return Slot(start: -offset, size: size, storage: storage)
+            }.sorted { $0.start < $1.start }
+        }
+        // A function with three stack slots that do not overlap, the last
+        // wider than a byte, all named first: a review names a buffer before
+        // it knows its type.
+        var found: (entry: String, a: Slot, c: Slot)?
+        for entry in try await entries() {
+            let all = try await slots(entry)
+            guard let a = all.first,
+                  let b = all.first(where: { $0.start >= a.start + a.size }),
+                  let c = all.first(where: { $0.start >= b.start + b.size && $0.size > 1 && $0.start + $0.size <= 0 })
+            else { continue }
+            var stayed = true
+            for (slot, name) in [(b, "ProbePieceB"), (c, "ProbePieceC"), (a, "ProbeBuffer")] where stayed {
+                let named = try? await post("/v1/rename/variable", ["function": entry, "storage": slot.storage,
+                                                                    "name": name])
+                stayed = named?["storage"] as? String == slot.storage
+            }
+            if stayed { found = (entry, a, c); break }
+        }
+        let (entry, a, c) = try XCTUnwrap(found, "no function with three stack slots apart")
+        // Ending inside C: refused, and both names stay.
+        let partial = try JSONSerialization.data(withJSONObject: [
+            "function": entry, "storage": a.storage, "name": "ProbeBuffer",
+            "type": "UINT8[\(c.start + 1 - a.start)]"])
+        try await host.take(module)
+        do {
+            let answer = try await host.write(module, "/v1/rename/variable", body: partial)
+            XCTFail("a slot covered in part was dropped: \(String(data: answer, encoding: .utf8) ?? "")")
+        } catch {
+            XCTAssertTrue("\(error)".contains("ProbePieceC"), "\(error)")
+            XCTAssertTrue("\(error)".contains("stack slots"), "\(error)")
+            XCTAssertFalse("\(error)".contains("register pair"), "\(error)")
+        }
+        let kept = try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+        XCTAssertTrue(kept.contains { $0["name"] as? String == "ProbePieceB" }, "\(kept.map { $0["name"] ?? "" })")
+        // Ending where C ends: both are absorbed.
+        let merged = try await post("/v1/rename/variable", [
+            "function": entry, "storage": a.storage, "name": "ProbeBuffer",
+            "type": "UINT8[\(c.start + c.size - a.start)]"])
+        let absorbed = (merged["absorbed"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
+        XCTAssertEqual(Set(absorbed), ["ProbePieceB", "ProbePieceC"], "\(merged)")
+        XCTAssertTrue((merged["absorbed"] as? [[String: Any]] ?? []).contains { $0["storage"] as? String == c.storage },
+                      "\(merged)")
+        _ = try await release()
+    }
+
     /// Issue 25962cd2: an inline function-pointer parameter is not a type
     /// named after the parameter (`Table * * Table`): its function type is
     /// named after the function and the parameter, as a member's is after the

@@ -905,7 +905,8 @@ public actor GhidraHost {
     }
 
     /// `guids` is the GUID registry: a GUID global under its name for the
-    /// value is no data reference (`LibraryProposal.admittingGuids`).
+    /// value is no data reference (`LibraryProposal.admittingGuids`), nor is
+    /// a string an `amd` or `intel` body reads (`admittingStrings`).
     static func libraryOffer(_ data: Data, artifact: Data? = nil,
                              guids: GuidRegistry? = nil) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
         guard let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -947,7 +948,7 @@ public actor GhidraHost {
                                                  LibraryCallee(name: $0["name"] as? String ?? "", body: $0["body"] as? String)
                                              },
                                              referenceBytes: item["reference_bytes"] as? String,
-                                             globals: LibraryView.globals(item["globals"])).admittingGuids(guids))
+                                             globals: LibraryView.globals(item["globals"])).admittingGuids(guids).admittingStrings())
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)
