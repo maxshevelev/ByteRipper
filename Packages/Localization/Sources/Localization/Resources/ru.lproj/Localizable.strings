@@ -2106,3 +2106,10 @@
 "RT" = "RT";
 "EC image facts" = "Сведения об образе EC";
 "Shows what was read from the EC firmware image" = "Показывает данные, прочитанные из образа прошивки EC";
+"Interrupts" = "Прерывания";
+"Host commands" = "Команды хоста";
+"EC RAM" = "ОЗУ EC";
+"SMBus and I2C" = "SMBus и I2C";
+"GPIO" = "GPIO";
+"Flash data area" = "Область данных во флеш-памяти";
+"The review has recorded none yet. They appear here when the review is published." = "В разборе пока нет ни одной такой записи. Записи появятся здесь после публикации разбора.";

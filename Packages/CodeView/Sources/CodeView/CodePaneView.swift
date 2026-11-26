@@ -1,4 +1,5 @@
 import ALSplitView
+import AnalysisProfiles
 import AppKit
 import AppPalette
 import CodeAnalysis
@@ -214,6 +215,12 @@ import ToolModuleKit
     let interfacesPanel = CodeInterfacesPanel()
     /// Whether the Interfaces tab is the one in front of the lists.
     public internal(set) var showsInterfacesTab = false
+    /// The navigator switch's tabs, from the module's analysis profile.
+    public private(set) var navigatorTabs: [CodeNavigatorTab]
+    /// A record section's tab: the records of one kind the profile declares.
+    let recordPanel = CodeRecordSectionView()
+    /// The record section in front of the lists, nil when none is.
+    public internal(set) var shownRecordSection: String?
     /// The search of every function in flight.
     var searchAllTask: Task<Void, Never>?
     /// The query the Search tab last ran, while its result stands.
@@ -443,9 +450,9 @@ import ToolModuleKit
         // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(labels: ["ASM", "C"], trackingMode: .selectOne,
                                          target: nil, action: nil)
-        listControl = NSSegmentedControl(
-            labels: [L("Functions"), L("Strings"), L("POST"), L("Status"), "", ""],
-            trackingMode: .selectOne, target: nil, action: nil)
+        navigatorTabs = CodeNavigatorTab.tabs(for: AnalysisProfile.derive(for: manifest.module))
+        listControl = NSSegmentedControl(labels: Self.segmentLabels(navigatorTabs),
+                                         trackingMode: .selectOne, target: nil, action: nil)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -511,6 +518,13 @@ import ToolModuleKit
         readingGeneration += 1
         self.manifest = manifest
         self.recipes = Self.ordered(manifest, recipes)
+        let tabs = CodeNavigatorTab.tabs(for: AnalysisProfile.derive(for: manifest.module))
+        if tabs != navigatorTabs {
+            navigatorTabs = tabs
+            showRecordSection(nil)
+            if showsInterfacesTab, segment(of: .interfaces) == nil { showInterfacesTab(false) }
+            configureListSegments()
+        }
         state = state.carried(to: model)
         artifact = model.artifact
 
@@ -1754,7 +1768,7 @@ import ToolModuleKit
     /// state had to switch to Functions or clear the search for it.
     private func revealInNavigator(_ function: Int) {
         guard state.reveal(function: function) else { return }
-        listControl.selectedSegment = List.functions.rawValue
+        listControl.selectedSegment = segment(of: .list(.functions)) ?? -1
         searchField.stringValue = state.searchText
         drawNavigator()
     }
@@ -2684,28 +2698,113 @@ import ToolModuleKit
     }
 
     @objc private func listChanged() {
-        if listControl.selectedSegment == Self.searchSegment {
+        let index = listControl.selectedSegment
+        guard navigatorTabs.indices.contains(index) else { return }
+        switch navigatorTabs[index] {
+        case .search:
             showSearchTab(true)
-            return
-        }
-        if listControl.selectedSegment == Self.interfacesSegment {
+        case .interfaces:
             showInterfacesTab(true)
-            return
+        case let .record(id, _, _):
+            showRecordSection(id)
+        case let .list(list):
+            showSearchTab(false)
+            showInterfacesTab(false)
+            showRecordSection(nil)
+            selectList(list)
         }
-        guard let list = List(rawValue: listControl.selectedSegment) else { return }
-        showSearchTab(false)
-        showInterfacesTab(false)
-        selectList(list)
     }
 
-    /// The Interfaces tab's place in the switch, after the lists.
-    static let interfacesSegment = List.allCases.count
-    /// The Search tab's place in the switch, last.
-    static let searchSegment = List.allCases.count + 1
+    /// The segment of `tab` in the switch, nil when the profile leaves it out.
+    func segment(of tab: CodeNavigatorTab) -> Int? {
+        navigatorTabs.firstIndex(of: tab)
+    }
 
-    /// The segment of the tab in front.
+    /// The segment of a record section's tab.
+    private func segment(ofRecord id: String) -> Int? {
+        navigatorTabs.firstIndex {
+            if case let .record(recordID, _, _) = $0 { return recordID == id }
+            return false
+        }
+    }
+
+    /// The segment of the tab in front, -1 when its tab is not in the switch.
     private var shownSegment: Int {
-        showsSearchTab ? Self.searchSegment : showsInterfacesTab ? Self.interfacesSegment : state.list.rawValue
+        let segment: Int? = if showsSearchTab {
+            segment(of: .search)
+        } else if showsInterfacesTab {
+            segment(of: .interfaces)
+        } else if let shownRecordSection {
+            segment(ofRecord: shownRecordSection)
+        } else {
+            segment(of: .list(state.list))
+        }
+        return segment ?? -1
+    }
+
+    /// The words of the switch's segments: a list's name, and nothing for a
+    /// tab drawn as a glyph.
+    private static func segmentLabels(_ tabs: [CodeNavigatorTab]) -> [String] {
+        tabs.map { tab in
+            switch tab {
+            case .list(.functions): L("Functions")
+            case .list(.strings): L("Strings")
+            case .list(.postCodes): L("POST")
+            case .list(.statusCodes): L("Status")
+            case .interfaces, .search, .record: ""
+            }
+        }
+    }
+
+    /// Gives the switch one segment per tab, each with its word or its glyph
+    /// and what it says it is.
+    private func configureListSegments() {
+        let labels = Self.segmentLabels(navigatorTabs)
+        listControl.segmentCount = labels.count
+        for (segment, tab) in navigatorTabs.enumerated() {
+            listControl.setLabel(labels[segment], forSegment: segment)
+            listControl.setImage(nil, forSegment: segment)
+            listControl.setToolTip(nil, forSegment: segment)
+            switch tab {
+            case .list:
+                break
+            case .search:
+                // help: panel.code.search-all
+                // The Search tab is a glyph, not a word: the four lists keep
+                // their room, and the magnifier says what it is in every
+                // language.
+                listControl.setImage(NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil),
+                                     forSegment: segment)
+                ControlHelp.describe(listControl, segment: segment, L("Find in All Functions"))
+            case .interfaces:
+                // help: panel.code.interfaces
+                listControl.setImage(NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: nil),
+                                     forSegment: segment)
+                ControlHelp.describe(listControl, segment: segment, name: L("Interfaces"),
+                                     tooltip: L("Interfaces: what the module installs, looks up and is notified of"))
+            case let .record(id, title, symbol):
+                // help: panel.code.record-sections
+                listControl.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: nil),
+                                     forSegment: segment)
+                ControlHelp.describe(listControl, segment: segment,
+                                     CodeRecordSectionView.title(of: id, fallback: title))
+            }
+        }
+        listControl.selectedSegment = shownSegment
+    }
+
+    /// Puts a record section's tab in front of the lists — nil puts the lists
+    /// back.
+    public func showRecordSection(_ id: String?) {
+        if let id {
+            guard case let .record(_, title, _)? = segment(ofRecord: id).map({ navigatorTabs[$0] }) else { return }
+            if showsSearchTab { showsSearchTab = false; searchPanel.isHidden = true }
+            if showsInterfacesTab { showsInterfacesTab = false; interfacesPanel.isHidden = true }
+            recordPanel.show(id: id, fallbackTitle: title, font: Self.navigatorFont())
+        }
+        shownRecordSection = id
+        recordPanel.isHidden = id == nil
+        drawListSwitch()
     }
 
     /// Puts the Interfaces tab in front of the lists, or the lists back.
@@ -2713,6 +2812,10 @@ import ToolModuleKit
         if shows, showsSearchTab {
             showsSearchTab = false
             searchPanel.isHidden = true
+        }
+        if shows, shownRecordSection != nil {
+            shownRecordSection = nil
+            recordPanel.isHidden = true
         }
         showsInterfacesTab = shows
         interfacesPanel.isHidden = !shows
@@ -2932,11 +3035,12 @@ import ToolModuleKit
     /// focus ring would be drawn over the tab.
     func drawListSwitch() {
         listControl.selectedSegment = shownSegment
-        if showsSearchTab || showsInterfacesTab, let responder = window?.firstResponder as? NSView,
+        let showsTab = showsSearchTab || showsInterfacesTab || shownRecordSection != nil
+        if showsTab, let responder = window?.firstResponder as? NSView,
            responder.isDescendant(of: navigatorBar) {
             window?.makeFirstResponder(functionTable)
         }
-        navigatorBar.isHidden = showsSearchTab || showsInterfacesTab
+        navigatorBar.isHidden = showsTab
     }
 
     /// What the Search tab searches in its scope: the description as the
@@ -3813,22 +3917,10 @@ import ToolModuleKit
 
         listControl.target = self
         listControl.action = #selector(listChanged)
-        listControl.selectedSegment = List.functions.rawValue
         listControl.controlSize = .small
         listControl.font = .systemFont(ofSize: 11)
-        // help: panel.code.search-all
-        // The Search tab is a glyph, not a word: the four lists keep their
-        // room, and the magnifier says what it is in every language.
-        listControl.setImage(NSImage(systemSymbolName: "magnifyingglass",
-                                     accessibilityDescription: L("Find in All Functions")),
-                             forSegment: Self.searchSegment)
-        listControl.setToolTip(L("Find in All Functions"), forSegment: Self.searchSegment)
-        // help: panel.code.interfaces
-        listControl.setImage(NSImage(systemSymbolName: "arrow.up.arrow.down",
-                                     accessibilityDescription: L("Interfaces")),
-                             forSegment: Self.interfacesSegment)
-        listControl.setToolTip(L("Interfaces: what the module installs, looks up and is notified of"),
-                               forSegment: Self.interfacesSegment)
+        configureListSegments()
+        listControl.selectedSegment = segment(of: .list(.functions)) ?? -1
         listControl.setContentHuggingPriority(.defaultLow, for: .horizontal)
         listControl.translatesAutoresizingMaskIntoConstraints = false
 
@@ -3945,6 +4037,16 @@ import ToolModuleKit
             interfacesPanel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
             interfacesPanel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
             interfacesPanel.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor)
+        ])
+        // A record section's tab stands there too.
+        recordPanel.translatesAutoresizingMaskIntoConstraints = false
+        recordPanel.isHidden = true
+        functionPane.addSubview(recordPanel)
+        NSLayoutConstraint.activate([
+            recordPanel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),
+            recordPanel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
+            recordPanel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
+            recordPanel.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor)
         ])
         // help: panel.code.new-clear
         clearNewMarksButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)

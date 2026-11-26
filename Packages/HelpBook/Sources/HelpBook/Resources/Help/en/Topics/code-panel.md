@@ -25,6 +25,7 @@
 @covers panel.code.registry
 @covers panel.code.search-all
 @covers panel.code.interfaces
+@covers panel.code.record-sections
 @covers menu.edit.find-in-functions
 
 **Open with Code** in the [[topic:tool-uefi|UEFI Structure]] tree opens a module the store holds an analysis of: the module's bytes and its code side by side in one fragment panel, named after the module and the image's format, such as `SecCore ▸ PE32`. The analysis is read-only — editing belongs in the dump — and the panel is where it is read: the functions on the left, the selected function's ASM or C above, the module's bytes below.
@@ -74,6 +75,10 @@ Over a code panel, **Edit ▸ Find** (**⌘F**) puts the find bar over the code 
 ## Interfaces
 
 The up and down arrows in the switch above the list, before the magnifier, show the Interfaces tab. Its first branch, **Dependency expression**, is the module's [[term:depex|dependency expression]]: the condition under which the dispatcher starts the module, read from the module's firmware file. Each PPI or protocol that must be installed is a line of its own: its name where one is known, otherwise its GUID. The GUID of a named one shows when the pointer rests on the line. Where the expression lets one of several do, **One of** is a branch with the alternatives under it, and **All of** under it groups the ones that must be installed together; **NOT** marks one that must not be. It is shown whenever the module comes from a firmware image open in the window, and says "None" when the file has no expression. Opening a PPI or protocol of the expression shows what it is: its kind and GUID, and the EDK2 file that declares it. Below that come the places where the module's code installs, looks up or waits for the same interface, as the review recorded them; a click on such a place opens the C there. If the module's code does not use the interface at all, that is stated: only the dispatcher checks it. The branches after it are the PPIs or protocols the module [[term:module-installs|installs]], [[term:module-locates|looks up]] and [[term:module-notified-of|is notified of]], as its review recorded them from the code. Each kind is a branch with the number of its interfaces in parentheses, 0 when the module does none of it, or "Not recorded yet" when the review has not gone through it; its **?** opens the kind's explanation. Under a kind every interface is listed by name, with its marks: **reinstalls**, **handed over**, **required** or **optional**. Opening an interface shows what the review says of it: why the module needs it and what it gives, when it happens, the GUID, and the place in the code where the module supplies it, with the callback for a notification. A click on an interface, or on its place in blue, opens the C with the call that supplies it selected; a descriptor that no call holds is selected in the bytes. A click on a callback opens its function.
+
+## Sections by module kind
+
+The tabs of the switch depend on the kind of module the panel reads. A UEFI module has every tab described above. An EC firmware image has no interfaces and no POST codes, so it has neither tab; in their place come tabs of its own, each drawn as a symbol after the magnifier: **Interrupts**, **Host commands**, **EC RAM**, **SMBus and I2C**, **GPIO** and **Flash data area**. The pointer over a symbol shows the section's name. These sections are filled in by the review of the EC image; while the review has recorded none, a section says so.
 
 ## Copying a name
 

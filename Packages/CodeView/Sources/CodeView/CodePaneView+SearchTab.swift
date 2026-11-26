@@ -22,6 +22,10 @@ extension CodePaneView {
             showsInterfacesTab = false
             interfacesPanel.isHidden = true
         }
+        if shows, shownRecordSection != nil {
+            shownRecordSection = nil
+            recordPanel.isHidden = true
+        }
         showsSearchTab = shows
         searchPanel.isHidden = !shows
         drawListSwitch()

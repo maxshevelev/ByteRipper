@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../ALSplitView"),
+        .package(path: "../AnalysisProfiles"),
         .package(path: "../AppPalette"),
         .package(path: "../CodeAnalysis"),
         .package(path: "../Find"),
@@ -28,6 +29,7 @@ let package = Package(
     targets: [
         .target(name: "CodeView", dependencies: [
             .product(name: "ALSplitView", package: "ALSplitView"),
+            .product(name: "AnalysisProfiles", package: "AnalysisProfiles"),
             .product(name: "AppPalette", package: "AppPalette"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "Find", package: "Find"),

@@ -75,6 +75,20 @@ import AppKit
         if let view = item.view { describe(view, name: name, tooltip: tooltip) }
     }
 
+    /// The same for one segment of a segmented control, which is not a view:
+    /// the phrase is the segment's tooltip and, for a segment drawn as a
+    /// glyph, what its image tells a screen reader.
+    public static func describe(_ control: NSSegmentedControl, segment: Int, _ phrase: String?) {
+        describe(control, segment: segment, name: phrase, tooltip: phrase)
+    }
+
+    /// A segment whose name and explanation are different sentences.
+    public static func describe(_ control: NSSegmentedControl, segment: Int,
+                                name: String?, tooltip: String?) {
+        control.setToolTip(tooltip, forSegment: segment)
+        control.image(forSegment: segment)?.accessibilityDescription = name
+    }
+
     /// The same for a menu item, which is not a view either: its title is its
     /// name, on screen and to a screen reader alike, and the phrase is the
     /// tooltip a pause over it shows.

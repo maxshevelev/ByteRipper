@@ -67,8 +67,8 @@ final class CodePaneViewTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
         let tabs = try XCTUnwrap(first(NSSegmentedControl.self, in: view) { $0.label(forSegment: 0) == "Functions" })
         XCTAssertEqual(tabs.segmentCount, 6)
-        XCTAssertEqual(CodePaneView.interfacesSegment, 4, "after Status")
-        XCTAssertEqual(CodePaneView.searchSegment, 5, "Search stays last")
+        XCTAssertEqual(view.segment(of: .interfaces), 4, "after Status")
+        XCTAssertEqual(view.segment(of: .search), 5, "Search stays last")
 
         view.showInterfacesTab(true)
         XCTAssertEqual(view.navigatorListIndex, 4)
@@ -150,7 +150,7 @@ final class CodePaneViewTests: XCTestCase {
 
         XCTAssertEqual(view.readingGeneration, generation + 1)
         XCTAssertTrue(view.showsInterfacesTab, "the tab in front stays")
-        XCTAssertEqual(view.navigatorListIndex, CodePaneView.interfacesSegment)
+        XCTAssertEqual(view.navigatorListIndex, view.segment(of: .interfaces))
         XCTAssertEqual(view.interfacesPanel.linesForTests.first, "Dependency expression")
         XCTAssertEqual(view.showsDecompiledC, showsC)
         XCTAssertEqual(view.manifest.reading?.rev, 2)

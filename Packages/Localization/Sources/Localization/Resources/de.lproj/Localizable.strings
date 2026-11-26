@@ -2106,3 +2106,10 @@
 "RT" = "RT";
 "EC image facts" = "Angaben zum EC-Image";
 "Shows what was read from the EC firmware image" = "Zeigt die aus dem EC-Firmware-Image gelesenen Angaben";
+"Interrupts" = "Interrupts";
+"Host commands" = "Host-Befehle";
+"EC RAM" = "EC-RAM";
+"SMBus and I2C" = "SMBus und I2C";
+"GPIO" = "GPIO";
+"Flash data area" = "Flash-Datenbereich";
+"The review has recorded none yet. They appear here when the review is published." = "Die Analyse enthält noch keine solchen Einträge. Sie erscheinen hier, sobald die Analyse veröffentlicht ist.";
