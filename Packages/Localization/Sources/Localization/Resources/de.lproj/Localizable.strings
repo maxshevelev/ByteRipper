@@ -2104,3 +2104,5 @@
 "Compiler runtime" = "Laufzeitbibliothek des Compilers";
 "ITE" = "ITE";
 "RT" = "RT";
+"EC image facts" = "Angaben zum EC-Image";
+"Shows what was read from the EC firmware image" = "Zeigt die aus dem EC-Firmware-Image gelesenen Angaben";

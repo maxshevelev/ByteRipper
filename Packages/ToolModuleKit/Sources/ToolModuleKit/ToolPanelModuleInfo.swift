@@ -78,9 +78,26 @@ public final class ToolPanelModuleInfoButton: ToolPanelInfoButton {
         // only while the focus is in its own panel.
         target = nil
         action = #selector(ToolPanelModuleInfoResponder.showModuleInfo(_:))
-        ControlHelp.describe(self, name: L("Module summary"),
-                             tooltip: L("Shows the module's summary from its description"))
+        describe(ecImage: false)
         isHidden = true
+    }
+
+    /// Whether the row is an EC firmware image: its (i) opens what was read
+    /// from the image, not a description's summary. Set per row — a cell is
+    /// reused across kinds.
+    public var isECImage = false {
+        didSet { if isECImage != oldValue { describe(ecImage: isECImage) } }
+    }
+
+    // help: panel.uefi.ec-image
+    private func describe(ecImage: Bool) {
+        if ecImage {
+            ControlHelp.describe(self, name: L("EC image facts"),
+                                 tooltip: L("Shows what was read from the EC firmware image"))
+        } else {
+            ControlHelp.describe(self, name: L("Module summary"),
+                                 tooltip: L("Shows the module's summary from its description"))
+        }
     }
 
     @available(*, unavailable)

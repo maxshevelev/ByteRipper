@@ -2776,6 +2776,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // The (i) answers here, wherever the window's focus is: up the
         // responder chain it reached this controller only from its own panel.
         (cell.viewWithTag(ToolPanelTable.codeInfoTag) as? NSButton)?.target = self
+        (cell.viewWithTag(ToolPanelTable.codeInfoTag) as? ToolPanelModuleInfoButton)?.isECImage =
+            UEFICodeCandidates.isECImage(node)
         cell.textField?.stringValue = text(for: node, in: identifier)
         // Set per row, not once when the cell is made: a reused cell carries
         // the font it was made with, and the zoom moves under it.

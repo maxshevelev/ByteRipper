@@ -2104,3 +2104,5 @@
 "Compiler runtime" = "Среда выполнения компилятора";
 "ITE" = "ITE";
 "RT" = "RT";
+"EC image facts" = "Сведения об образе EC";
+"Shows what was read from the EC firmware image" = "Показывает данные, прочитанные из образа прошивки EC";
