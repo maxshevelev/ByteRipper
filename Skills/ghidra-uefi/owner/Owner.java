@@ -8952,6 +8952,13 @@ public class Owner {
         ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
         DataType own = ownCopy(manager, theirs.getName());
         if (own == null) return manager.resolve(theirs, DataTypeConflictHandler.DEFAULT_HANDLER);
+        if (theirs instanceof ghidra.program.model.data.FunctionDefinition
+            && own instanceof ghidra.program.model.data.TypeDef def
+            && def.getBaseDataType() instanceof ghidra.program.model.data.Pointer pointer
+            && pointer.getDataType() instanceof ghidra.program.model.data.FunctionDefinition pointed
+            && pointed.getDataTypeManager() == manager) {
+            return takeSharedSignature(manager, def, pointed, theirs);
+        }
         // The content is replaced in place, not resolved beside it: a copy
         // taken from the shared types keeps their identity, and Ghidra then
         // reads the shared one as held already. In place, every use and the
@@ -8968,6 +8975,47 @@ public class Owner {
         }
         ownTarget.setDescription(target.getDescription());
         return own;
+    }
+
+    /**
+     * The shared signature `X` taken by a program that holds `X` as a
+     * function-pointer typedef, `typedef R (*X)(...)`: Ghidra's typedef of
+     * `/functions/X *` (issue d4011ad4). A pointer cannot take a signature's
+     * content, so the signature the typedef points at takes the shared one's,
+     * and then stands in for the typedef at its every use and in its place:
+     * a member declared `X *` becomes one pointer to the signature, which is
+     * what the shared C means. A member that held the typedef by value held a
+     * pointer, and keeps one.
+     */
+    private DataType takeSharedSignature(ghidra.program.model.data.DataTypeManager manager,
+                                         ghidra.program.model.data.TypeDef own,
+                                         ghidra.program.model.data.FunctionDefinition pointed,
+                                         DataType theirs) throws Exception {
+        pointed.replaceWith(theirs);
+        pointed.setDescription(theirs.getDescription());
+        ghidra.program.model.data.CategoryPath category = own.getCategoryPath();
+        String name = own.getName();
+        // Ghidra will not put a signature where a typedef was, since a use by
+        // value cannot hold one. A pointer to the typedef becomes a pointer to
+        // the signature; then the typedef itself, at a use by value, becomes
+        // the pointer it was.
+        long ownId = manager.getID(own);
+        java.util.List<ghidra.program.model.data.Pointer> pointers = new java.util.ArrayList<>();
+        java.util.Iterator<DataType> all = manager.getAllDataTypes();
+        while (all.hasNext()) {
+            if (all.next() instanceof ghidra.program.model.data.Pointer held && held.getDataType() != null
+                && manager.getID(held.getDataType()) == ownId) pointers.add(held);
+        }
+        for (ghidra.program.model.data.Pointer held : pointers) {
+            manager.replaceDataType(held, held.hasLanguageDependantLength()
+                ? manager.getPointer(pointed) : manager.getPointer(pointed, held.getLength()), true);
+        }
+        manager.replaceDataType(own, manager.getPointer(pointed), true);
+        DataType placed = pointed;
+        if (!placed.getCategoryPath().equals(category) || !placed.getName().equals(name)) {
+            placed.setNameAndCategory(category, name);
+        }
+        return placed;
     }
 
     /** The program's own type of that name, in any category; null when it holds none. */
