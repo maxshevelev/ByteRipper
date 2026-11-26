@@ -1924,6 +1924,8 @@ import ToolModuleKit
         case .edk2: L("EDK2")
         case .amd: L("AMD AGESA")
         case .intel: L("Intel FSP/RC")
+        case .ite: L("ITE EC library")
+        case .toolchain: L("Compiler runtime")
         case .unrecorded: L("Kind not recorded")
         }
     }
@@ -1934,6 +1936,8 @@ import ToolModuleKit
         case .edk2: L("EDK2")
         case .amd: L("AMD")
         case .intel: L("Intel")
+        case .ite: L("ITE")
+        case .toolchain: L("RT")
         case .unrecorded: L("LIB")
         }
     }
@@ -1964,6 +1968,8 @@ import ToolModuleKit
             case .edk2: .edk2
             case .amd: .amd
             case .intel: .intel
+            case .ite: .ite
+            case .toolchain: .toolchain
             case nil: .unrecorded
             }
             level = L("library function: %1$@", title(of: section))
@@ -5651,6 +5657,8 @@ import ToolModuleKit
             case .edk2: .edk2
             case .amd: .amd
             case .intel: .intel
+            case .ite: .ite
+            case .toolchain: .toolchain
             case nil: .unrecorded
             }
             return CodeNavigatorIcon.library(Self.badge(of: section))

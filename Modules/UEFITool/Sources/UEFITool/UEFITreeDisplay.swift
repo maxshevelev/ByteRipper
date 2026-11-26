@@ -587,6 +587,7 @@ public enum UEFITreeDisplay {
         case .nonUEFIData: return L("Non-UEFI data", in: language)
         case .flashDeviceMapRegion: return L("Flash device map region", in: language)
         case .ecImage: return L("EC firmware image", in: language)
+        case .ecImagePart: return L("EC image part", in: language)
         case .fitComponent: return L("FIT component", in: language)
         case .hpSignatureBlock: return L("HP signature block", in: language)
         case .gpnvStore: return L("GPNV store", in: language)

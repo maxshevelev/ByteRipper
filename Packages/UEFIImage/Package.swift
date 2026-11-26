@@ -43,7 +43,11 @@ let package = Package(
         .package(path: "../Localization"),
         // Lenovo's DMI store is read into the tree in the format's own terms,
         // so the tree and whatever else reads the store cannot drift apart.
-        .package(path: "../LenovoDMI")
+        .package(path: "../LenovoDMI"),
+        // An EC image's parts — where its code ends, its `.data` initializer,
+        // a chip read's run-time data — read by the same rules the analysis
+        // server identifies the module by.
+        .package(path: "../ECImage")
     ],
     targets: [
         .target(name: "UEFIImage", dependencies: [
@@ -51,7 +55,8 @@ let package = Package(
             .product(name: "FirmwareCompression", package: "FirmwareCompression"),
             .product(name: "MapData", package: "MapData"),
             .product(name: "Localization", package: "Localization"),
-            .product(name: "LenovoDMI", package: "LenovoDMI")
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
+            .product(name: "ECImage", package: "ECImage")
         ], resources: [
             // The strap tables as one binary (`Design/MAP_DATA.md`):
             // the JSON sources are the reviewable form, this is what loads.

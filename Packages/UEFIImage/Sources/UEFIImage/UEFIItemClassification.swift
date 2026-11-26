@@ -42,7 +42,7 @@ extension UEFINode {
         case .startupApData: return UEFITypes.Item.startupApDataEntry.rawValue
         // UEFITool's word for these bytes; the row's name says what the map
         // makes of them.
-        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound, .hpSignatureBlock,
+        case .padding, .flashDeviceMapRegion, .ecImage, .ecImagePart, .fitComponent, .picture, .sound, .hpSignatureBlock,
              .gpnvStore, .gpnvRecord, .amdEFS, .amdDirectory, .amdFirmwareEntry,
              .biosGuardUpdate, .biosGuardEntry,
              .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry, .acerDMIStore,
@@ -93,7 +93,7 @@ extension UEFINode {
         case .startupApData:
             // The one form UEFITool recognises.
             return UEFITypes.Sub.x86128kStartupApDataEntry
-        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound, .hpSignatureBlock,
+        case .padding, .flashDeviceMapRegion, .ecImage, .ecImagePart, .fitComponent, .picture, .sound, .hpSignatureBlock,
              .gpnvStore, .gpnvRecord, .amdEFS, .amdDirectory, .amdFirmwareEntry,
              .biosGuardUpdate, .biosGuardEntry,
              .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry, .acerDMIStore,

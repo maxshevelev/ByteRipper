@@ -1,4 +1,6 @@
+import ECImage
 import Foundation
+import Localization
 
 /// An embedded controller's firmware image, recognised by what it carries
 /// (`UEFI_IMAGE_FORMAT.md` §9): an ITE image by the signature block and
@@ -169,6 +171,7 @@ extension Parser {
             read.namedImageLength = node.kind == .flashDeviceMapRegion
                 ? UInt64(node.body.count)
                 : min(roundedUp(max(first.written, 1)), UInt64(node.body.count))
+            read.children = ecParts(in: node.body)
             return read
         }
         // Several: each row names its own, and the block names none of them.
@@ -186,13 +189,31 @@ extension Parser {
                 name: image.name,
                 header: image.start..<image.start,
                 body: image.start..<end,
-                isFixed: true
+                isFixed: true,
+                children: ecParts(in: image.start..<end)
             ))
             at = end
         }
         children += padding(from: at, to: node.body.upperBound, emptyByte: emptyByte)
         read.children = children
         return read
+    }
+
+    /// The parts of the EC image that `range` holds, read by `ECFirmware`
+    /// from its bytes: the vectors, the signature, the code, the `.data`
+    /// initializer, the erased space past the image, a chip read's run-time
+    /// data. None when the bytes are not an image of a family `ECImage`
+    /// knows, or hold more than the image and its erased tail.
+    func ecParts(in range: Range<UInt64>) -> [UEFINode] {
+        guard let bytes = reader.bytes(range), ECFirmware.isEC(Data(bytes)),
+              let firmware = try? ECFirmware(slice: Data(bytes))
+        else { return [] }
+        return firmware.parts.map { part in
+            let body = (range.lowerBound + UInt64(part.range.lowerBound))..<(range.lowerBound + UInt64(part.range.upperBound))
+            return UEFINode(kind: .ecImagePart, subtype: part.kind.rawValue, named: ECImagePart.name(of: part.kind),
+                            header: body.lowerBound..<body.lowerBound, body: body, isFixed: true,
+                            isErased: part.kind == .free)
+        }
     }
 
     private func roundedUp(_ size: UInt64) -> UInt64 {
@@ -246,5 +267,25 @@ extension Parser {
             + [named]
             + padding(from: end, to: node.body.upperBound, emptyByte: emptyByte)
         return read
+    }
+}
+
+/// A part of an EC image the tree shows under the image's row
+/// (`ECImage.ECPart`); the node's subtype is the part's kind.
+public enum ECImagePart {
+    public static func kind(of node: UEFINode) -> ECPart.Kind? {
+        guard node.kind == .ecImagePart else { return nil }
+        return node.subtype.flatMap(ECPart.Kind.init(rawValue:))
+    }
+
+    public static func name(of kind: ECPart.Kind) -> LocalizedText {
+        switch kind {
+        case .vectors: L("Vector table")
+        case .signature: L("Signature and version")
+        case .code: L("Code and constants")
+        case .dataInitializer: L("Initial values of variables")
+        case .free: L("Free space")
+        case .runtimeData: L("EC run-time data")
+        }
     }
 }

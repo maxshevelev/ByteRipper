@@ -277,6 +277,11 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable, Codable {
     /// its start to its last written byte (`UEFI_IMAGE_FORMAT.md` §9). Like a
     /// map region, it classifies as UEFITool's padding.
     case ecImage
+    /// A part of an EC image the bytes say is there (`ECImage.ECPart`): the
+    /// vectors, the signature, the code, the `.data` initializer, the erased
+    /// space past the image, a chip read's run-time data. The subtype is the
+    /// part's kind. Padding to UEFITool, as the image is.
+    case ecImagePart
     /// A structure the FIT names — the table, the Startup ACM, a Boot Guard
     /// manifest — read out of padding (`UEFI_IMAGE_FORMAT.md` §9). The subtype
     /// is the FIT type that names it (`FITComponent.Kind`). Padding to

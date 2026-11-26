@@ -1,3 +1,5 @@
+import CodeAnalysis
+import ECImage
 import Foundation
 import UEFIImage
 
@@ -8,6 +10,11 @@ import UEFIImage
 /// The structural test is cheap and does not read bytes. `isImage` reads the
 /// two magic bytes and is the one that decides; a PE32 or TE section whose body
 /// is padding is a candidate structurally and not an image.
+///
+/// An EC firmware image is a module too (`ECImage`): the node the tree cut
+/// into the image's parts. Its module is not the node's bytes but
+/// [0, extent) with the bytes the EC rewrites normalised, so its identity is
+/// `moduleDigest(of:)`'s, never the body's plain SHA-256.
 public enum UEFICodeCandidates {
     public static let pe32Section: UInt8 = 0x10
     public static let teSection: UInt8 = 0x12
@@ -16,6 +23,7 @@ public enum UEFICodeCandidates {
     /// typed file whose body reads as sections is not filtered here; its body
     /// does not begin with the magic, so `isImage` answers.
     public static func isCandidate(_ node: UEFINode) -> Bool {
+        if isECImage(node) { return true }
         switch node.kind {
         case .section:
             return node.subtype == pe32Section || node.subtype == teSection
@@ -36,7 +44,24 @@ public enum UEFICodeCandidates {
     }
 
     public static func isImage(_ data: Data) -> Bool {
-        isImage(Array(data.prefix(2)))
+        isImage(Array(data.prefix(2))) || ECFirmware.isEC(data)
+    }
+
+    /// The node holding an EC image the parser read (`ECImage.ECFirmware`):
+    /// the one its parts are the rows of. No bytes are read.
+    public static func isECImage(_ node: UEFINode) -> Bool {
+        node.children.first?.kind == .ecImagePart
+    }
+
+    /// The module the bytes of a candidate's body are, and its identity: the
+    /// bytes themselves for a PE32 or TE image; for an EC image, the part
+    /// [0, extent) as read — the dump's own bytes, which the Code panel shows —
+    /// identified as `ECFirmware` identifies it. Nil when they are neither.
+    public static func module(of data: Data) -> (digest: SHA256Digest, bytes: Data, ec: ECFirmware?)? {
+        if isImage(Array(data.prefix(2))) { return (SHA256Digest(data: data), data, nil) }
+        guard ECFirmware.isEC(data), let firmware = try? ECFirmware(slice: data),
+              let digest = SHA256Digest(hex: firmware.sha256) else { return nil }
+        return (digest, Data(data.prefix(firmware.extent)), firmware)
     }
 
     public static func isImage(_ bytes: [UInt8]) -> Bool {

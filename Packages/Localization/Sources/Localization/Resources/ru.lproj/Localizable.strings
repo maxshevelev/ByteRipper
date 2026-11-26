@@ -2081,3 +2081,26 @@
 "The module's code does not use it: only the dispatcher checks it." = "Код модуля его не использует: его проверяет только диспетчер.";
 "The review has not recorded whether the module's code uses it." = "Разбор ещё не записал, использует ли его код модуля.";
 "Callback:" = "Обработчик:";
+
+/* EC firmware image: its parts in the UEFI tree, its (i), its library kinds */
+"Vector table" = "Таблица векторов";
+"Signature and version" = "Сигнатура и версия";
+"Code and constants" = "Код и константы";
+"Initial values of variables" = "Начальные значения переменных";
+"EC run-time data" = "Рабочие данные EC";
+"EC image part" = "Часть образа EC";
+"Family" = "Семейство";
+"Not stated" = "Не указана";
+"from the start-up code" = "по коду запуска";
+"last written byte" = "последний записанный байт";
+"Image end" = "Конец образа";
+"Module SHA-256" = "SHA-256 модуля";
+"Dump SHA-256" = "SHA-256 в дампе";
+"BIOS update writes" = "Объём записи при обновлении BIOS";
+"Byte rewritten by the EC" = "Байт, перезаписываемый EC";
+"%1$@: %2$@ in the dump, %3$@ in the identity" = "%1$@: в дампе %2$@, для идентификации %3$@";
+"Read of the EC chip" = "Дамп чипа EC";
+"ITE EC library" = "Библиотека ITE для EC";
+"Compiler runtime" = "Среда выполнения компилятора";
+"ITE" = "ITE";
+"RT" = "RT";

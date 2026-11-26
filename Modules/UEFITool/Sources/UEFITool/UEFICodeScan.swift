@@ -48,14 +48,16 @@ public enum UEFICodeScan {
             guard only?.contains(node.id) ?? true,
                   UEFICodeCandidates.isCandidate(node)
             else { return false }
-            return index.analyzedSizes.contains(node.body.count)
+            // An EC image's module is shorter than its node: its extent is
+            // read from the bytes.
+            return UEFICodeCandidates.isECImage(node) || index.analyzedSizes.contains(node.body.count)
         }
         var found: [NodeID: AnalysisManifest] = [:]
         for node in candidates {
             if Task.isCancelled { break }
             guard let data = bytesOf(node), data.count == node.body.count,
-                  UEFICodeCandidates.isImage(data),
-                  let manifest = index.newest(for: SHA256Digest(data: data))
+                  let module = UEFICodeCandidates.module(of: data),
+                  let manifest = index.newest(for: module.digest)
             else { continue }
             found[node.id] = manifest
         }

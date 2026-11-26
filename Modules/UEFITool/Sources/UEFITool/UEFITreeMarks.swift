@@ -112,7 +112,9 @@ public enum UEFITreeMarks {
             problem: .worst(errors: errors, cautions: cautions),
             roles: roles,
             origin: codeModule != nil ? origin : nil,
-            moduleInfo: codeModule != nil && moduleInfo
+            // An EC image's row is its module's own row: its (i) says what
+            // the image is, read from its bytes, analysed or not.
+            moduleInfo: codeModule != nil && moduleInfo || UEFICodeCandidates.isECImage(node)
         )
     }
 

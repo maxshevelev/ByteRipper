@@ -3,6 +3,9 @@ import XCTest
 import CodeAnalysis
 import FirmwareCompressionTestSupport
 import UEFIImage
+import ECImage
+import Localization
+import ToolModuleKit
 @testable import UEFITool
 
 /// The background scan: image nodes whose body has a usable analysis in the
@@ -212,5 +215,72 @@ final class UEFICodeScanTests: XCTestCase {
                                       only: Set([NodeID([99])]),
                                       bytesOf: { _ in module })
         XCTAssertTrue(found.isEmpty)
+    }
+
+    // MARK: - EC firmware
+
+    /// An ITE NDS32 slice with no start-up code to read: 0x200 bytes of image,
+    /// the rest erased, the byte at +0x8D as the BIOS copy has it.
+    private static func ecSlice() -> Data {
+        var data = Data(repeating: 0xFF, count: 0x4000)
+        data.replaceSubrange(0..<4, with: [0x48, 0x00, 0x00, 0x00])
+        data.replaceSubrange(0x80..<0x90, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x94, 0x85, 0x12,
+                                                 0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55])
+        data.replaceSubrange(0x90..<0xA0, with: Array("ITE8380-EC-V9.99".utf8))
+        for at in 0xA0..<0x200 { data[at] = 0x11 }
+        return data
+    }
+
+    /// The node the parser cut into an EC image's parts.
+    private static func ecNode(size: Int) -> UEFINode {
+        UEFINode(kind: .padding, name: "EC firmware (ITE8380-EC-V9.99)", header: 0..<0, body: 0..<UInt64(size),
+                 children: [UEFINode(kind: .ecImagePart, subtype: ECPart.Kind.vectors.rawValue, name: "Vector table",
+                                     header: 0..<0, body: 0..<0x80, isFixed: true)])
+    }
+
+    /// An EC image is found by its module's identity — [0, extent) with the
+    /// byte the EC rewrites normalised — not by its node's bytes, and the
+    /// node's length is no reason to skip it.
+    func testAnAnalyzedECImageIsFoundByItsModuleIdentity() throws {
+        let slice = Self.ecSlice()
+        let firmware = try ECFirmware(slice: slice)
+        XCTAssertEqual(firmware.extent, 0x200)
+        let store = try ContentStore(root: directory)
+        try store.putAnalysis(
+            module: ModuleIdentity(sha256: try XCTUnwrap(SHA256Digest(hex: firmware.sha256)), size: firmware.extent,
+                                   name: "ITE8380-EC-V9.99", kind: "EC", language: "NDS32:LE:32:default"),
+            recipe: recipe, artifact: Data("{\"script_version\":2}".utf8), source: SourceIdentity())
+        let node = Self.ecNode(size: slice.count)
+        XCTAssertTrue(UEFICodeCandidates.isCandidate(node))
+        let image = UEFIImage(size: UInt64(slice.count), roots: [node])
+        XCTAssertEqual(Set(UEFICodeScan.scan(in: image, index: index(), bytesOf: { _ in slice }).keys),
+                       [image.roots[0].id])
+        // The chip's own copy, with the byte rewritten: the same module.
+        var rewritten = slice
+        rewritten[0x8D] = 0x00
+        XCTAssertEqual(UEFICodeScan.scan(in: image, index: index(), bytesOf: { _ in rewritten }).count, 1)
+        // The module's bytes are the dump's own, [0, extent).
+        let module = try XCTUnwrap(UEFICodeCandidates.module(of: slice))
+        XCTAssertEqual(module.bytes, slice.prefix(0x200))
+        XCTAssertEqual(module.digest.hex, firmware.sha256)
+        // A padding the parser did not cut is no candidate.
+        XCTAssertFalse(UEFICodeCandidates.isCandidate(UEFINode(kind: .padding, name: "Padding", header: 0..<0,
+                                                                body: 0..<0x4000)))
+    }
+
+    /// The (i) on an EC image's row, analysed or not, and what it says.
+    func testAnECImageRowWearsItsInfoAndFacts() throws {
+        let node = Self.ecNode(size: 0x4000)
+        let image = UEFIImage(size: 0x4000, roots: [node])
+        let marks = UEFITreeMarks.marks(for: image.roots[0], in: image, code: .mechanical, in: .english)
+        XCTAssertTrue(marks.moduleInfo)
+        XCTAssertTrue(marks.roles.contains(.codeAnalysis(.mechanical)))
+
+        let rows = UEFIECFacts.rows(of: try ECFirmware(slice: Self.ecSlice()), in: .english)
+        XCTAssertEqual(rows.map(\.label), ["Family", "Version", "Image end", "Module SHA-256", "Dump SHA-256",
+                                           "BIOS update writes", "Byte rewritten by the EC"])
+        XCTAssertEqual(rows[1].value, "ITE8380-EC-V9.99")
+        XCTAssertTrue(rows[2].value.contains("last written byte"))
+        XCTAssertTrue(rows[6].value.contains("0xAF in the dump, 0x00 in the identity"))
     }
 }

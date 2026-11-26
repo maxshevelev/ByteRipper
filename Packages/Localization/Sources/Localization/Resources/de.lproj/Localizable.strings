@@ -2081,3 +2081,26 @@
 "The module's code does not use it: only the dispatcher checks it." = "Der Code des Moduls verwendet es nicht; nur der Dispatcher prüft es.";
 "The review has not recorded whether the module's code uses it." = "Die Analyse hat noch nicht erfasst, ob der Code des Moduls es verwendet.";
 "Callback:" = "Rückruf:";
+
+/* EC firmware image: its parts in the UEFI tree, its (i), its library kinds */
+"Vector table" = "Vektortabelle";
+"Signature and version" = "Signatur und Version";
+"Code and constants" = "Code und Konstanten";
+"Initial values of variables" = "Anfangswerte der Variablen";
+"EC run-time data" = "Laufzeitdaten des EC";
+"EC image part" = "Teil des EC-Abbilds";
+"Family" = "Familie";
+"Not stated" = "Nicht angegeben";
+"from the start-up code" = "aus dem Startcode";
+"last written byte" = "letztes beschriebenes Byte";
+"Image end" = "Ende des Abbilds";
+"Module SHA-256" = "SHA-256 des Moduls";
+"Dump SHA-256" = "SHA-256 im Dump";
+"BIOS update writes" = "Schreibumfang beim BIOS-Update";
+"Byte rewritten by the EC" = "Vom EC überschriebenes Byte";
+"%1$@: %2$@ in the dump, %3$@ in the identity" = "%1$@: im Dump %2$@, für die Identität %3$@";
+"Read of the EC chip" = "Auslesung des EC-Chips";
+"ITE EC library" = "ITE-Bibliothek für EC";
+"Compiler runtime" = "Laufzeitbibliothek des Compilers";
+"ITE" = "ITE";
+"RT" = "RT";

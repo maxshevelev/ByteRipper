@@ -65,6 +65,9 @@ let package = Package(
         // The stored code analyses a module can have, and the index over them
         // that marks the tree.
         .package(path: "../../Packages/CodeAnalysis"),
+        // An EC firmware image's identity as a module, and its facts for the
+        // image row's popover: the same rules the analysis server opens it by.
+        .package(path: "../../Packages/ECImage"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -78,7 +81,8 @@ let package = Package(
             .product(name: "AgentKit", package: "AgentKit"),
             .product(name: "LenovoDMI", package: "LenovoDMI"),
             .product(name: "BytePattern", package: "BytePattern"),
-            .product(name: "CodeAnalysis", package: "CodeAnalysis")
+            .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "ECImage", package: "ECImage")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
             .product(name: "HexText", package: "HexText"),
@@ -99,7 +103,8 @@ let package = Package(
             .product(name: "AgentKit", package: "AgentKit"),
             .product(name: "LenovoDMI", package: "LenovoDMI"),
             .product(name: "BytePattern", package: "BytePattern"),
-            .product(name: "CodeAnalysis", package: "CodeAnalysis")
+            .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "ECImage", package: "ECImage")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
@@ -110,7 +115,8 @@ let package = Package(
             .product(name: "AgentKit", package: "AgentKit"),
             .product(name: "LenovoDMI", package: "LenovoDMI"),
             .product(name: "BytePattern", package: "BytePattern"),
-            .product(name: "CodeAnalysis", package: "CodeAnalysis")
+            .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "ECImage", package: "ECImage")
         ])
     ]
 )

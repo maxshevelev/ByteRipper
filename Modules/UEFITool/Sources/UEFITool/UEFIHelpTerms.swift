@@ -66,7 +66,7 @@ public enum UEFIHelpTerms {
         // what it looks like.
         case .padding where ECImage.isECFirmwarePadding(node):
             return HelpTermID("ec-firmware")
-        case .ecImage:
+        case .ecImage, .ecImagePart:
             return HelpTermID("ec-firmware")
         case .fitComponent:
             switch node.subtype.flatMap(FITComponent.Kind.init(rawValue:)) {

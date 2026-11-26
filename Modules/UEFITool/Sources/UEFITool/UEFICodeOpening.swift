@@ -63,7 +63,10 @@ public struct UEFICodeOpening: Sendable {
                                names: GuidsCatalogue = .empty) async throws -> UEFICodeOpening {
         let image = tree.image()
         guard let root, let node = image.node(id), UEFICodeCandidates.isCandidate(node),
+              // A node with no header of its own — the padding or map region an
+              // EC image is — has no body apart from itself.
               let open = UEFIPresenter.nodeOpen(for: node, in: image, body: true)
+                ?? UEFIPresenter.nodeOpen(for: node, in: image, body: false)
         else { throw Failure.noAnalysis }
         let readers = tree.spaceReaders
         let space = node.space
@@ -72,9 +75,13 @@ public struct UEFICodeOpening: Sendable {
             readers.reader(for: space)?.bytes(body)
         }.value
         guard let bytes, !bytes.isEmpty else { throw Failure.unreadableBytes }
+        // The module the bytes are: an EC image's is [0, extent) of them,
+        // identified with the bytes the EC rewrites normalised.
+        guard let module = UEFICodeCandidates.module(of: Data(bytes)) else { throw Failure.noAnalysis }
+        let digest = module.digest
+        let moduleBytes = [UInt8](module.bytes)
         let loaded = await Task.detached(priority: .userInitiated)
         { () -> (manifest: AnalysisManifest, artifact: CodeArtifact?, recipes: [AnalysisManifest])? in
-            let digest = SHA256Digest(data: Data(bytes))
             let index = known ?? CodeAnalysisIndex.load(from: root)
             let manifest = preferred.flatMap { preferred in
                 // The preferred analysis as the store has it now: the tree
@@ -89,6 +96,16 @@ public struct UEFICodeOpening: Sendable {
             throw preferred == nil ? Failure.noAnalysis : Failure.changed
         }
         guard let artifact = loaded.artifact else { throw Failure.unreadableAnalysis }
+        if let ec = module.ec {
+            // The part links back to the image's extent in the file; inside a
+            // buffer it links to the section the buffer came out of, whole.
+            let start = open.source.lowerBound
+            let source = open.space == .file ? start..<(start + UInt64(ec.extent)) : open.source
+            return UEFICodeOpening(partName: (ec.version ?? node.displayName(in: .english)) + " ▸ EC",
+                                   source: source, bytes: moduleBytes,
+                                   manifest: loaded.manifest, artifact: artifact,
+                                   recipes: loaded.recipes, dependencies: nil)
+        }
         return UEFICodeOpening(partName: UEFIPresenter.codePartName(of: id, in: image, bytes: bytes) ?? open.partName,
                                source: open.source, bytes: bytes,
                                manifest: loaded.manifest, artifact: artifact,

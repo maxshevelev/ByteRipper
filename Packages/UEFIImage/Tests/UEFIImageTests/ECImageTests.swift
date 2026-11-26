@@ -145,4 +145,51 @@ final class ECImageTests: XCTestCase {
         XCTAssertEqual(image.uefiItemType, UEFITypes.Item.padding.rawValue)
         XCTAssertEqual(image.uefiItemSubtype, UEFITypes.Sub.dataPadding)
     }
+
+    /// An ITE image with a reset vector (`ECImage` reads it), `code` bytes of
+    /// code after the version, and the rest erased.
+    private static func iteNDS32(code: Int, size: Int) -> [UInt8] {
+        var bytes = [UInt8](repeating: 0xFF, count: size)
+        bytes.replaceSubrange(0..<4, with: [0x48, 0x00, 0x00, 0x00])
+        bytes.replaceSubrange(0x80..<0x90, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x94, 0x85, 0x12,
+                                                  0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55])
+        bytes.replaceSubrange(0x90..<0xA0, with: Array("ITE8380-EC-V9.99".utf8))
+        for at in 0xA0..<(0xA0 + code) { bytes[at] = 0x11 }
+        return bytes
+    }
+
+    /// An image `ECImage` reads is cut into its parts under the row that
+    /// names it; an image it does not (a `PHCM` one) has none.
+    func testAnNDS32ImageShowsItsParts() {
+        let region = ecRegion(Self.iteNDS32(code: 0x160, size: 0x4000))
+        XCTAssertEqual(region.name, "EC region (ITE8380-EC-V9.99)")
+        XCTAssertEqual(region.children.map { ECImagePart.kind(of: $0) }, [.vectors, .signature, .code, .free])
+        XCTAssertEqual(region.children.map(\.name),
+                       ["Vector table", "Signature and version", "Code and constants", "Free space"])
+        XCTAssertEqual(region.children.map(\.range.count), [0x80, 0x20, 0x160, 0x4000 - 0x200])
+        XCTAssertEqual(region.children.first?.range.lowerBound, region.body.lowerBound)
+        XCTAssertTrue(region.children.allSatisfy { $0.isFixed && $0.uefiItemType == UEFITypes.Item.padding.rawValue })
+        XCTAssertTrue(region.children.last!.isErased)
+
+        let several = ecRegion(Self.block(0x8000, [(0x0000, Self.iteNDS32(code: 0x100, size: 0x1000)),
+                                                   (0x4000, Self.phcm(length: 0x800))]))
+        let rows = several.children.filter { $0.kind == .ecImage }
+        XCTAssertEqual(rows.map { $0.children.count }, [4, 0])
+        XCTAssertEqual(rows[0].children.last?.range.upperBound, rows[0].body.upperBound)
+    }
+
+    /// The BIOS copy of `ITE8380-EC-V0.00` the analysis server opens
+    /// (`GHIDRA_EC_MODULE`), in an EC region: its `.data` initializer is a
+    /// part of its own.
+    func testARealImageShowsItsDataInitializer() throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        let region = ecRegion(Array(try Data(contentsOf: URL(fileURLWithPath: path))))
+        let start = region.body.lowerBound
+        XCTAssertEqual(region.children.map { ECImagePart.kind(of: $0) },
+                       [.vectors, .signature, .code, .dataInitializer, .free])
+        XCTAssertEqual(region.children[3].range, (start + 0x24974)..<(start + 0x2497C))
+        XCTAssertEqual(region.children[4].range.upperBound, start + 0x30000)
+    }
 }

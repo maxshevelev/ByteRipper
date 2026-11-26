@@ -53,6 +53,8 @@ import UEFITool
     /// A module file's (i) was clicked: the analysed image whose summary it
     /// shows, and the button to show it beside.
     var onModuleInfo: ((NodeID, NSView) -> Void)?
+    /// The (i) on an EC image's row: what the image is, read from its bytes.
+    var onECImageInfo: ((NodeID, NSView) -> Void)?
     /// A node's Save As item was chosen: the node itself, or its body alone.
     var onSaveNode: ((NodeID, Bool) -> Void)?
 
@@ -3405,8 +3407,13 @@ extension UEFIToolViewController: ToolPanelModuleInfoResponder {
     /// described image is the one whose summary shows.
     func showModuleInfo(_ sender: NSButton) {
         let row = outline.row(for: sender)
-        guard row >= 0, let node = node(of: outline.item(atRow: row) as Any), let image,
-              let module = UEFITreeMarks.summaryImage(of: node, described: codeDescribed, in: image)
+        guard row >= 0, let node = node(of: outline.item(atRow: row) as Any), let image else { return }
+        // help: panel.uefi.ec-image
+        if UEFICodeCandidates.isECImage(node) {
+            onECImageInfo?(node.id, sender)
+            return
+        }
+        guard let module = UEFITreeMarks.summaryImage(of: node, described: codeDescribed, in: image)
         else { return }
         onModuleInfo?(module, sender)
     }

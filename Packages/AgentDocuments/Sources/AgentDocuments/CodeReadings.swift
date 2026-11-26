@@ -479,8 +479,8 @@ public final class CodeReadings {
         } catch let failure as UEFICodeOpening.Failure {
             switch failure {
             case .noAnalysis:
-                throw AgentToolError("Node \(text) of \(document.named) is not a PE32/TE image with a stored code "
-                    + "analysis. `code_modules` lists the ones that are; the ghidra-uefi skill makes one.")
+                throw AgentToolError("Node \(text) of \(document.named) is neither a PE32/TE image nor an EC firmware image "
+                    + "with a stored code analysis. `code_modules` lists the ones that are; the ghidra-uefi skill makes one.")
             default:
                 throw AgentToolError(failure.text.text)
             }

@@ -42,6 +42,10 @@ public struct CodeReaderState: Sendable {
     /// whose kind was not recorded (a bare `library` tag, a v7 artifact).
     public enum LibrarySection: Int, CaseIterable, Sendable {
         case edk2, amd, intel, unrecorded
+        /// An EC image's: ITE's chip support code, and the compiler's runtime
+        /// (`LibraryKind.ite`, `.toolchain`). After `unrecorded`, so a kept
+        /// raw value still means what it meant.
+        case ite, toolchain
     }
 
     /// One row of the Functions list: a heading, a library kind's heading
@@ -316,7 +320,8 @@ public struct CodeReaderState: Sendable {
             }
             // The library functions under their kinds, each kind a heading of
             // its own; a kind with none is not shown.
-            for section in LibrarySection.allCases {
+            // `unrecorded` last, though its raw value is older than ITE's.
+            for section in LibrarySection.allCases.sorted(by: { ($0 == .unrecorded ? 1 : 0, $0.rawValue) < ($1 == .unrecorded ? 1 : 0, $1.rawValue) }) {
                 let kind = members.filter { librarySection(of: $0) == section }
                 guard !kind.isEmpty else { continue }
                 sectionCounts[section] = kind.count
@@ -337,6 +342,8 @@ public struct CodeReaderState: Sendable {
         case .edk2: return .edk2
         case .amd: return .amd
         case .intel: return .intel
+        case .ite: return .ite
+        case .toolchain: return .toolchain
         case nil: return .unrecorded
         }
     }
@@ -709,9 +716,16 @@ public struct CodeReaderState: Sendable {
                 if let index = model.function(at: CodeAddress(address)) { return index }
             }
         }
-        return model.functions.firstIndex {
-            $0.name.caseInsensitiveCompare("entry") == .orderedSame
+        // An EC image (`ModuleLayout.Format.flat`) starts with its vectors:
+        // the word at 0 jumps to the reset code, which the EC pass names
+        // `ResetEntry`.
+        let names = model.layout?.format == .flat ? ["ResetEntry", "entry"] : ["entry"]
+        for name in names {
+            if let index = model.functions.firstIndex(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                return index
+            }
         }
+        return nil
     }
 
     /// Makes Functions the list in front, with the search cleared when it hides

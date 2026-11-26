@@ -1,3 +1,4 @@
+import ECImage
 import AgentKit
 import AppKit
 import CodeAnalysis
@@ -433,6 +434,9 @@ private struct ChecksumPass: Sendable {
         }
         controller.onModuleInfo = { [weak self] nodeID, view in
             self?.showModuleSummary(for: nodeID, beside: view)
+        }
+        controller.onECImageInfo = { [weak self] nodeID, view in
+            self?.showECImageInfo(for: nodeID, beside: view)
         }
         controller.onOpenDecompressed = { [weak self] nodeID in
             self?.openDecompressedInNewTab(for: nodeID)
@@ -2386,6 +2390,32 @@ private struct ChecksumPass: Sendable {
             _ = self
         }
     }
+
+    // help: panel.uefi.ec-image
+    /// An EC image row's (i): what the image is, read from its bytes off the
+    /// main actor, and **Open with Code** when the store has its analysis.
+    public func showECImageInfo(for nodeID: NodeID, beside view: NSView) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID) else { return }
+        let reader = tree.spaceReaders.reader(for: node.space)
+        let body = node.body
+        let hasCode = codeAnalysisManifests[nodeID] != nil
+        let language = Localization.appLanguage
+        Task { [weak self] in
+            let firmware = await Task.detached(priority: .userInitiated) { () -> ECFirmware? in
+                guard let bytes = reader?.bytes(body) else { return nil }
+                return try? ECFirmware(slice: Data(bytes))
+            }.value
+            guard let self, let firmware else { return }
+            let popover = UEFIECImagePopover(title: firmware.version ?? node.displayName(in: language),
+                                             rows: UEFIECFacts.rows(of: firmware, in: language),
+                                             openCode: hasCode ? { [weak self] in self?.openCode(for: nodeID) } : nil)
+            self.ecImagePopover = popover
+            popover.show(beside: view)
+        }
+    }
+
+    /// The popover an EC image row's (i) opened last, for the app's tests.
+    public private(set) var ecImagePopover: UEFIECImagePopover?
 
     /// Opens the code `opening` makes ready, busy until the panel opens: the
     /// bytes are quick, the artifact is not — a large DXE driver's is ten

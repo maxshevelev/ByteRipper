@@ -1,6 +1,6 @@
 # Code Analyses and the Analysis Server
 
-> A code analysis is what Ghidra found in one PEI or DXE module — its functions, instructions and decompiled C, and the names a review gave them. ByteRipper reads analyses from a store: a folder on this Mac, or an analysis server shared by every Mac in a network.
+> A code analysis is what Ghidra found in one PEI or DXE module, or in the firmware of an embedded controller (EC) — its functions, instructions and decompiled C, and the names a review gave them. ByteRipper reads analyses from a store: a folder on this Mac, or an analysis server shared by every Mac in a network.
 
 @covers settings.code-analysis
 @covers settings.code-analysis.server
@@ -10,6 +10,7 @@
 @covers settings.code-analysis.new-marks
 @covers panel.uefi.module-origin
 @covers panel.uefi.module-summary
+@covers panel.uefi.ec-image
 
 An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes; the panel is described on [[topic:code-panel|Code Panel]]. The badge stands after the name of the module's file, collapsed or expanded, and the section that holds the module's image carries it too. A row that holds the files of further modules, such as a volume or a compressed section, carries no badge, collapsed or expanded: the circle stands only on a module's own rows. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
 
@@ -18,6 +19,12 @@ The badge is a circle that shows how far the module's review has got. An empty c
 After the circle, a reviewed module carries a short word in a coloured frame: whose code the module is, as its review established it. **EDK2** is code that matches EDK2, the open reference code; **EDK2\*** is an EDK2 module with the firmware vendor's changes; **AMD** is AGESA, AMD's platform code; **Intel** is FSP or Intel's reference code; a vendor's name, such as **Insyde** or **Lenovo**, is the firmware vendor's own code. A solid frame on a light background means the origin was established: the code was compared with the source, or the origin is named in the module's own bytes. A dashed frame with paler text means it was inferred from strings, interfaces or the libraries the module links in. A module whose origin the review could not tell, or whose review has not said, has no word. The word stands only on the module's file, collapsed or expanded, not on the section with its image. The Code panel shows the circle and the word before the module's name in its title.
 
 A module whose review wrote a description carries a third mark after the word: **(i)**. Clicking it shows the description's summary, the paragraph that says in a few sentences what the module is and what it is for, so the module can be understood without opening it or its code. **Open with Code** under it opens the module's bytes and its code, as the menu item does. The module's dependency expression and the PPIs or protocols it installs, looks up and waits for are in the Code panel's Interfaces tab.
+
+## EC firmware
+
+The firmware of an ITE embedded controller with an NDS32 core, such as `ITE8380-EC-V0.00`, is a module as well. Its row in the UEFI tree carries the code badge as a PE32 or TE image does, and **Open with Code** opens its code. The module is the image itself, up to where its code ends, not the whole block: the erased bytes after it and the controller's run-time data are not part of it. One byte of the image, which the controller rewrites in its own flash memory, does not count towards the module's identity. A copy of the firmware in a BIOS update and a dump read from the controller's chip therefore open the same analysis.
+
+The row of an EC image carries **(i)** whether or not an analysis exists. Clicking it shows what the image's bytes state: the controller family, the version, where the image ends and how that was determined, the module's SHA-256 and the SHA-256 of the dump's bytes, how many bytes a BIOS update writes to the controller, and the byte the controller rewrites with its value in the dump. When an analysis exists, **Open with Code** is under the list.
 
 ## Where the analyses are kept
 
@@ -61,7 +68,7 @@ The line below the fields says whether the server is reached. A token the server
 
 ## A review by an agent
 
-When the analysis server also hosts Ghidra, an agent connected to ByteRipper (see [[topic:agent|Working with an Agent]]) can review a module there: it opens the module from a PE32 or TE image node of the UEFI tree, names functions, variables and types, writes comments, and publishes the result. Each publication is a new revision of the module's analysis, and every Mac that reads the server shows it. The project in Ghidra stays on the server, so a review can be continued later, by the agent or by a person. An agent running on the server's own computer connects to `byteripper-server` directly, through the server's local connection, not through ByteRipper.
+When the analysis server also hosts Ghidra, an agent connected to ByteRipper (see [[topic:agent|Working with an Agent]]) can review a module there: it opens the module from a PE32 or TE image node of the UEFI tree, or from the node of an EC image, names functions, variables and types, writes comments, and publishes the result. Each publication is a new revision of the module's analysis, and every Mac that reads the server shows it. The project in Ghidra stays on the server, so a review can be continued later, by the agent or by a person. An agent running on the server's own computer connects to `byteripper-server` directly, through the server's local connection, not through ByteRipper.
 
 The server also gives an agent its roles and the rules of a review. ByteRipper connected to such a server offers its agents two prompts — in Claude Code, the commands `/mcp__byteripper__reviewer` and `/mcp__byteripper__verifier` — and the review rules as MCP resources. A session started with the first reviews modules and publishes them; a session started with the second checks the first one's results and changes nothing. While ByteRipper is connected to such a server with a token that may use Ghidra, **Settings ▸ Code Analysis** shows how to start these sessions: in Terminal, `claude -n` with the name of the role and of this Mac (`Reviewer · Bench-Mac`), one window for each role, then the role's command typed in the session that opens. Both sessions need the agent service switched on and ByteRipper added to Claude Code, as **Settings ▸ Agent** shows. The two sessions find each other by these names, and a running session cannot rename itself; a session started under another name asks for `/rename` once. The command is not given to `claude` as it starts: Claude Code learns ByteRipper's commands only once it has connected to it, and before that it answers that the command is unknown. Because the names carry this Mac's name, the server's console also tells the sessions of different Macs apart. The roles and the rules are the server's own, of the same version as its tools, and nothing has to be installed on this Mac for them. ByteRipper keeps the last copy it received and offers it while the server cannot be reached. With the analyses on this Mac, the prompts and the rules are not offered. A tree of EDK2 sources, which a review cites, is not part of them: the reviewing session asks for it to be cloned once.
 

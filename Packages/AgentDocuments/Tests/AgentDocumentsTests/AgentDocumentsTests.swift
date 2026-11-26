@@ -691,6 +691,42 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertGreaterThan(entry["history"]?.arrayValue?.count ?? 0, 0)
     }
 
+    /// An EC firmware image's node is read by its module's identity — the
+    /// image's extent with the byte the EC rewrites normalised — not by the
+    /// SHA-256 of the node's bytes; a node that is no module is refused in
+    /// words that name both kinds.
+    func testANodeHoldingAnECImageReadsItsModule() async throws {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x4000)
+        bytes.replaceSubrange(0..<4, with: [0x48, 0x00, 0x00, 0x00])
+        bytes.replaceSubrange(0x80..<0x90, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x94, 0x85, 0x12,
+                                                  0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55])
+        bytes.replaceSubrange(0x90..<0xA0, with: Array("ITE8380-EC-V9.99".utf8))
+        for at in 0xA0..<0x200 { bytes[at] = 0x11 }
+        let digest = GhidraHost.moduleDigest(of: Data(bytes))
+        XCTAssertNotEqual(digest, SHA256Digest(data: Data(bytes)))
+        try ContentStore(root: directory).putAnalysis(
+            module: ModuleIdentity(sha256: digest, size: 0x200, name: "ITE8380-EC-V9.99", kind: "EC",
+                                   language: "NDS32:LE:32:default"),
+            recipe: recipe, artifact: Data(Self.artifact.utf8))
+        let tree = UEFIParser.parse(bytes)
+        let node = try XCTUnwrap(tree.allNodes.first { $0.children.first?.kind == .ecImagePart })
+        let tool = try query(readings([Document("d1", "ec.bin", bytes: bytes)]))
+        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "document": "d1", "node": .string(node.id.description), "what": "functions"])))
+        guard case .json(.object(let members)) = answer else { return XCTFail("not an object: \(answer)") }
+        XCTAssertEqual(members["sha256"]?.stringValue, digest.hex)
+        XCTAssertEqual(members["module"]?.stringValue, "ITE8380-EC-V9.99")
+
+        let part = try XCTUnwrap(node.children.first)
+        do {
+            _ = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+                "document": "d1", "node": .string(part.id.description)])))
+            XCTFail("answered about a part of the image")
+        } catch let error as AgentToolError {
+            XCTAssertTrue(error.message.contains("nor an EC firmware image"), error.message)
+        }
+    }
+
     /// A document that is not a module's code and has no `node` given is
     /// refused in the host's words — the app's name its Code panel, the
     /// server's name nothing.
@@ -710,14 +746,29 @@ private struct Document: AgentDocument {
     let id: String
     let label: String
     var disk: String?
+    var bytes: [UInt8]?
 
-    init(_ id: String, _ label: String, disk: String? = nil) {
+    init(_ id: String, _ label: String, disk: String? = nil, bytes: [UInt8]? = nil) {
         self.id = id
         self.label = label
         self.disk = disk
+        self.bytes = bytes
     }
 
-    @MainActor func readHost() -> any ToolReadHost { Host(fileName: label) }
+    @MainActor func readHost() -> any ToolReadHost {
+        // One host per document: the tree it parses is kept, as a pane's is.
+        if let bytes { return Host.shared(label, bytes) }
+        return Host(fileName: label)
+    }
+}
+
+private struct BytesReader: ToolContentReader {
+    let bytes: [UInt8]
+    var size: UInt64 { UInt64(bytes.count) }
+    func read(at offset: UInt64, length: Int) throws -> [UInt8] {
+        guard Int(offset) + length <= bytes.count else { throw AgentToolError("past the end") }
+        return Array(bytes[Int(offset)..<(Int(offset) + length)])
+    }
 }
 
 @MainActor
@@ -733,10 +784,34 @@ private final class Documents: AgentDocumentSet {
 @MainActor
 private final class Host: ToolReadHost {
     let fileName: String
-    init(fileName: String) { self.fileName = fileName }
-    var contentSize: UInt64 { 0 }
-    func read(_ range: Range<UInt64>) throws -> [UInt8] { [] }
-    func snapshot() throws -> any ToolContentReader { throw AgentToolError("no bytes") }
+    let bytes: [UInt8]?
+    private static var hosts: [String: Host] = [:]
+    static func shared(_ label: String, _ bytes: [UInt8]) -> Host {
+        if let host = hosts[label], host.bytes == bytes { return host }
+        let host = Host(fileName: label, bytes: bytes)
+        hosts[label] = host
+        return host
+    }
+    init(fileName: String, bytes: [UInt8]? = nil) {
+        self.fileName = fileName
+        self.bytes = bytes
+    }
+    var contentSize: UInt64 { UInt64(bytes?.count ?? 0) }
+    func read(_ range: Range<UInt64>) throws -> [UInt8] {
+        guard let bytes else { return [] }
+        return Array(bytes[Int(range.lowerBound)..<Int(range.upperBound)])
+    }
+    func snapshot() throws -> any ToolContentReader {
+        guard let bytes else { throw AgentToolError("no bytes") }
+        return BytesReader(bytes: bytes)
+    }
+    private lazy var tree: LazyUEFITree? = bytes.map { LazyUEFITree($0) }
+}
+
+extension Host: UEFITreeProviding {
+    func uefiTree() -> LazyUEFITree? { tree }
+    func openUEFIRows() -> Set<NodeID> { [] }
+    func setOpenUEFIRows(_ rows: Set<NodeID>) {}
 }
 
 private struct NoGhidra: GhidraBackendWithoutServer {

@@ -1238,6 +1238,10 @@ public enum UEFIDetail {
         case .ecImage:
             break
 
+        // What a part is, its name says; where it lies, the common fields.
+        case .ecImagePart:
+            break
+
         // A layout read off HP's dumps, not a published one: the digest is
         // shown, and checked in the table of signed ranges only where its span
         // is known.
@@ -2208,6 +2212,7 @@ public enum UEFIDetail {
         case .nonUEFIData: return L("Non-UEFI data", in: language)
         case .flashDeviceMapRegion: return L("Flash device map region", in: language)
         case .ecImage: return L("EC firmware image", in: language)
+        case .ecImagePart: return L("EC image part", in: language)
         case .fitComponent: return L("FIT component", in: language)
         case .hpSignatureBlock: return L("HP signature block", in: language)
         case .gpnvStore: return L("GPNV store", in: language)
