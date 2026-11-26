@@ -3,9 +3,9 @@ import Localization
 import ToolModuleKit
 
 /// The plate over the code that says why the function on screen wears **New**
-/// when the comparison cannot: what changed besides the code — another name,
-/// another signature, a function this revision added — and, the code reading
-/// the same in both revisions, what the mark is about then. A yellow notice,
+/// when the comparison cannot: what changed that the C does not show — a
+/// comment the decompiler does not print, the registry link, a constant's
+/// meaning, a function this revision added (`NewMarkChange`). A yellow notice,
 /// as macOS draws one, over the code it is about, wearing the same **New**
 /// badge the function's row wears, so the notice says what it is about before
 /// its words are read.

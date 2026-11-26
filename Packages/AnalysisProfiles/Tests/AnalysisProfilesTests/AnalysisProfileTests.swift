@@ -121,7 +121,7 @@ final class AnalysisProfileTests: XCTestCase {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let panel = try XCTUnwrap(object["panel"] as? [String: Any])
         XCTAssertEqual((panel["built_in"] as? [[String: Any]])?.compactMap { $0["section"] as? String },
-                       ["interfaces", "post_codes"])
+                       ["interfaces", "post_codes", "strings", "status_codes"])
         let record = try XCTUnwrap((object["records"] as? [[String: Any]])?.first?["panel"] as? [String: Any])
         XCTAssertEqual(record["symbol"] as? String, "bolt")
         XCTAssertEqual(record["order"] as? Int, 0)
@@ -143,7 +143,9 @@ final class AnalysisProfileTests: XCTestCase {
         let ec = AnalysisProfile.ecIteNds32
         XCTAssertFalse(ec.shows(.interfaces))
         XCTAssertFalse(ec.shows(.postCodes))
-        for section in [AnalysisProfile.BuiltInSection.functions, .strings, .statusCodes, .search] {
+        XCTAssertFalse(ec.shows(.strings))
+        XCTAssertFalse(ec.shows(.statusCodes))
+        for section in [AnalysisProfile.BuiltInSection.functions, .search] {
             XCTAssertTrue(ec.shows(section), section.rawValue)
         }
         XCTAssertEqual(ec.addedPanelRecords.map(\.id),

@@ -1912,26 +1912,29 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     private func oneFunction(name: String, signature: String, c: String?,
-                             entry: String = "0x220") throws -> CodeArtifact {
+                             entry: String = "0x220", gaps: [String]? = nil,
+                             registry: String? = nil) throws -> CodeArtifact {
         var function: [String: Any] = [
             "entry": entry, "name": name, "signature": signature,
             "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]
         ]
         if let c { function["c"] = c }
+        if let gaps { function["review_gaps"] = gaps }
+        if let registry { function["registry"] = registry }
         return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: [
             "script_version": 2, "program": ["image_base": "0x0"], "functions": [function]
         ]))
     }
 
     /// The plate over the code says what the mark is about besides the code:
-    /// another name and signature, while the code itself reads the same — the
-    /// case the comparison has nothing to show.
+    /// a change the C does not show — here a step comment the decompiler does
+    /// not print — while the code itself reads the same, the case the
+    /// comparison has nothing to show.
     func testThePlateSaysWhatChangedBesidesTheCode() throws {
-        let before = try oneFunction(name: "FUN_0012AB40", signature: "void FUN_0012AB40(void)",
-                                     c: "{\n  A();\n}")
-        let after = try oneFunction(name: "PspSmmFatalError",
-                                    signature: "void PspSmmFatalError(UINT32 ErrorCode)",
-                                    c: "{\n  A();\n}")
+        let before = try oneFunction(name: "F", signature: "void F(void)",
+                                     c: "void F(void)\n{\n  A();\n}", gaps: ["comments"])
+        let after = try oneFunction(name: "F", signature: "void F(void)",
+                                    c: "void F(void)\n{\n  A();\n}", gaps: [])
         let view = CodePaneView(manifest: manifest(), artifact: after,
                                 moduleBytes: teModule(), hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
@@ -1939,17 +1942,50 @@ final class CodePaneViewTests: XCTestCase {
         view.markRevisionChange(from: before, revision: 23)
         view.selectFunction(at: 0)
 
+        XCTAssertFalse(view.newMarks.isEmpty, "a change the C does not show still marks the function")
         XCTAssertTrue(view.newBannerIsShown)
         XCTAssertEqual(view.newBannerTitle, "New against r23")
         XCTAssertEqual(view.newBannerBullets, [
-            "Renamed: FUN_0012AB40 → PspSmmFatalError",
-            "Signature: void FUN_0012AB40(void) → void PspSmmFatalError(UINT32 ErrorCode)",
+            "Step comments added (end-of-line or post): the C does not print them.",
             "The code reads the same in both revisions, so the comparison has nothing to show."
         ])
         XCTAssertFalse(view.showsRevisionDiff, "the comparison has nothing to draw")
         XCTAssertTrue(view.newBannerWordsAreSelectable, "the notice can be selected and copied")
         XCTAssertEqual(view.newBannerWordFontPoints, [12],
                        "the field editor keeps the words at their size when one is selected")
+    }
+
+    /// A rename is in the C's header line: the comparison shows it, so the
+    /// plate does not repeat it.
+    func testARenameTheHeaderShowsNeedsNoPlate() throws {
+        let before = try oneFunction(name: "FUN_0012AB40", signature: "void FUN_0012AB40(void)",
+                                     c: "void FUN_0012AB40(void)\n{\n  A();\n}")
+        let after = try oneFunction(name: "PspSmmFatalError", signature: "void PspSmmFatalError(void)",
+                                    c: "void PspSmmFatalError(void)\n{\n  A();\n}")
+        let view = CodePaneView(manifest: manifest(), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: before, revision: 23)
+        view.selectFunction(at: 0)
+        XCTAssertFalse(view.newMarks.isEmpty)
+        XCTAssertFalse(view.newBannerIsShown, "the header line of the diff says it")
+    }
+
+    /// A function the revision linked to the library registry says which entry.
+    func testThePlateNamesTheRegistryEntryLinked() throws {
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "void F(void)\n{\n}")
+        let after = try oneFunction(name: "F", signature: "void F(void)", c: "void F(void)\n{\n}",
+                                    registry: "17")
+        let view = CodePaneView(manifest: manifest(), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: before, revision: 23)
+        view.selectFunction(at: 0)
+        XCTAssertTrue(view.newBannerIsShown)
+        XCTAssertEqual(view.newBannerBullets.first.map { $0.hasPrefix("Linked to the library registry entry") }, true)
+        XCTAssertTrue(view.newBannerBullets.first?.contains("(17)") ?? false)
     }
 
     /// A function whose only difference is its code needs no plate: the
@@ -2345,8 +2381,9 @@ final class CodePaneViewTests: XCTestCase {
     /// would: the rows, the comparison a mark put up and the plate go, and the
     /// next launch does not put them up again. With nothing to clear it is dim.
     func testTheBarsButtonClearsEveryNewMark() throws {
-        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
-        let after = try oneFunction(name: "F2", signature: "void F2(void)", c: "{\n  B();\n}")
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}",
+                                     gaps: ["comments"])
+        let after = try oneFunction(name: "F2", signature: "void F2(void)", c: "{\n  B();\n}", gaps: [])
         let view = CodePaneView(manifest: manifest(revision: 54), artifact: after,
                                 moduleBytes: teModule(), hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
@@ -2853,8 +2890,9 @@ final class CodePaneViewTests: XCTestCase {
             CodePaneView.defaults = .standard
         }
         XCTAssertTrue(CodeRevisionSeen.tracksNewMarks, "on with nothing stored")
-        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
-        let after = try oneFunction(name: "F2", signature: "void F2(void)", c: "{\n  B();\n}")
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}",
+                                     gaps: ["comments"])
+        let after = try oneFunction(name: "F2", signature: "void F2(void)", c: "{\n  B();\n}", gaps: [])
         let stale = ["0x220": SeenRecord(revision: 53, fingerprint: "the code as it read")]
         let other = SHA256Digest(data: Data("another module".utf8))
         CodeRevisionSeen.save(stale, module: other, recipe: "code-v2")

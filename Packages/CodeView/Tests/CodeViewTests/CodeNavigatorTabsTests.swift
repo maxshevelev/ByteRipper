@@ -25,16 +25,18 @@ final class CodeNavigatorTabsTests: XCTestCase {
 
     func testAnITEECImageHasItsRecordSectionsInPlaceOfInterfacesAndPOST() {
         let tabs = CodeNavigatorTab.tabs(for: .ecIteNds32)
-        XCTAssertEqual(Array(tabs.prefix(3)), [.list(.functions), .list(.strings), .list(.statusCodes)])
+        XCTAssertEqual(Array(tabs.prefix(1)), [.list(.functions)])
+        XCTAssertFalse(tabs.contains(.list(.strings)))
+        XCTAssertFalse(tabs.contains(.list(.statusCodes)))
         XCTAssertEqual(tabs.last, .search, "Search stays last")
         XCTAssertFalse(tabs.contains(.interfaces))
         XCTAssertFalse(tabs.contains(.list(.postCodes)))
-        let records = tabs.dropFirst(3).dropLast().map { tab -> String in
+        let records = tabs.dropFirst(1).dropLast().map { tab -> String in
             guard case let .record(id, _, _) = tab else { return "?" }
             return id
         }
         XCTAssertEqual(records, ["irq_map", "host_commands", "ec_ram", "smbus_peers", "gpio", "eflash_area"])
-        XCTAssertEqual(tabs[3], .record(id: "irq_map", title: "Interrupts", symbol: "bolt"))
+        XCTAssertEqual(tabs[1], .record(id: "irq_map", title: "Interrupts", symbol: "bolt"))
     }
 
     /// Every record the catalogue adds a section for has words of the app's
@@ -81,10 +83,10 @@ final class CodeNavigatorTabsTests: XCTestCase {
 
     func testAnECPaneShowsARecordSectionsHonestEmptyState() throws {
         let pane = try self.pane(kind: "EC", ecFamily: "ite-nds32")
-        XCTAssertEqual(pane.navigatorTabs.count, 10)
+        XCTAssertEqual(pane.navigatorTabs.count, 8)
         pane.showRecordSection("ec_ram")
         XCTAssertEqual(pane.shownRecordSection, "ec_ram")
-        XCTAssertEqual(pane.navigatorListIndex, 5)
+        XCTAssertEqual(pane.navigatorListIndex, 3)
         XCTAssertFalse(pane.recordPanel.isHidden)
         XCTAssertEqual(pane.recordPanel.shownTitle, "EC RAM")
         XCTAssertEqual(pane.recordPanel.shownEmptyText, CodeRecordSectionView.emptyText)

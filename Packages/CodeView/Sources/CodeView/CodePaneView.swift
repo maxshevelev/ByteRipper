@@ -1579,7 +1579,7 @@ import ToolModuleKit
         // Told apart only now that the code is here: a record made against
         // another copy of that revision. Nothing changed, so a mark would be
         // about the bookkeeping and not about the function.
-        if kept == nil, mark.artifact == nil, Self.holdsTheSame(artifact.functions[index], in: held) {
+        if kept == nil, mark.artifact == nil, Self.holdsTheSame(artifact.functions[index], in: held, now: artifact) {
             takeMark(of: index)
             return
         }
@@ -2030,7 +2030,8 @@ import ToolModuleKit
                 changed.insert(index)
                 continue
             }
-            if old.readingFingerprint != function.readingFingerprint {
+            if old.readingFingerprint != function.readingFingerprint
+                || Self.changedUnseen(old, function, before: previous, after: artifact) {
                 changed.insert(index)
             }
         }
@@ -2198,7 +2199,7 @@ import ToolModuleKit
             // Changed and changed back: the revision the mark began at reads
             // as the code does now, and there is nothing to show against it.
             if let baseline = mark.baseline.artifact,
-               Self.holdsTheSame(artifact.functions[index], in: baseline) { continue }
+               Self.holdsTheSame(artifact.functions[index], in: baseline, now: artifact) { continue }
             if let existing = unopenedChanges[index] {
                 switch (mark.baseline.revision, existing.revision) {
                 case let (carried?, current?) where carried >= current:
@@ -2363,7 +2364,7 @@ import ToolModuleKit
             if record.fingerprint == fingerprint {
                 seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
             } else if let baseline = baselines[record.revision],
-                      Self.holdsTheSame(function, in: baseline) {
+                      Self.holdsTheSame(function, in: baseline, now: artifact) {
                 // The record was made against another copy of that revision:
                 // the store's code for it is the code on screen. Nothing
                 // changed, so a mark would be about the bookkeeping and not
@@ -2449,11 +2450,26 @@ import ToolModuleKit
     }
 
     /// Whether `revision` holds `function` as it reads now: the name, the
-    /// signature and the C the New mark is about. A mark against such a revision
-    /// would have nothing to compare and nothing to explain.
-    private static func holdsTheSame(_ function: CodeArtifact.Function, in revision: CodeArtifact) -> Bool {
+    /// signature and the C the New mark is about, and nothing the C does not
+    /// show changed either. A mark against such a revision would have nothing
+    /// to compare and nothing to explain. `now` is the artifact `function` is of.
+    private static func holdsTheSame(_ function: CodeArtifact.Function, in revision: CodeArtifact,
+                                     now: CodeArtifact) -> Bool {
         guard let old = revision.functions.first(where: { $0.entry == function.entry }) else { return false }
         return old.readingFingerprint == function.readingFingerprint
+            && !changedUnseen(old, function, before: revision, after: now)
+    }
+
+    /// Whether the function changed in a way its C does not show — a comment
+    /// the decompiler does not print, the registry link, a constant's
+    /// meaning — so that it is New although it reads the same. Only when both
+    /// sides have their code at hand: an index entry says nothing of these.
+    private static func changedUnseen(_ old: CodeArtifact.Function, _ new: CodeArtifact.Function,
+                                      before: CodeArtifact, after: CodeArtifact) -> Bool {
+        guard !old.codeIsPending, !new.codeIsPending else { return false }
+        return NewMarkChange.between(old: old, new: new,
+                                     oldEquates: before.equates, newEquates: after.equates)
+            .contains(where: \.marksNew)
     }
 
     private static func seenRecords(of artifact: CodeArtifact, revision: Int) -> [String: SeenRecord] {
@@ -2599,11 +2615,12 @@ import ToolModuleKit
 
     // help: panel.code.new
     /// Says why the function on screen wears New, in the plate over the code:
-    /// what changed besides the code — another name, another signature, a
-    /// function this revision added — and, the code reading the same in both
-    /// revisions, what the mark is about then, since the comparison has
-    /// nothing to draw. A function whose only difference is its code needs no
-    /// plate: the comparison is the explanation.
+    /// every change the comparison of the C cannot show (`NewMarkChange`) —
+    /// a comment the decompiler does not print, the registry link, a
+    /// constant's meaning — or a function this revision added; and, the code
+    /// reading the same in both revisions, that the comparison has nothing to
+    /// draw. A change the C shows — a rename, a type in a declaration — is
+    /// the comparison's: a function with only such changes needs no plate.
     private func updateNewMarkBanner() {
         guard mode != Self.descriptionSegment,
               let index = state.function, model.functions.indices.contains(index),
@@ -2629,17 +2646,14 @@ import ToolModuleKit
         let old = baseline.functions.first { $0.entry == function.entry }
         var bullets: [String] = []
         if let old {
-            if old.name != function.name {
-                bullets.append(L("Renamed: %1$@ → %2$@", old.name, function.name))
-            }
-            if old.signature != function.signature {
-                bullets.append(L("Signature: %1$@ → %2$@",
-                                 old.signature ?? L("no signature"),
-                                 function.signature ?? L("no signature")))
-            }
-            if old.c == nil && function.c == nil {
-                bullets.append(L("Neither revision has decompiled code for this function."))
-            } else if old.c == function.c, !bullets.isEmpty {
+            // Only what the comparison cannot show: a rename or a changed
+            // declaration is in the C, and the diff draws it.
+            let changes = NewMarkChange.between(old: old, new: function,
+                                                oldEquates: baseline.equates, newEquates: artifact.equates,
+                                                oldTypes: baseline.types, newTypes: artifact.types)
+            bullets = changes.map(\.bullet)
+            // With nothing to draw, the reader is told not to look for it.
+            if old.c == function.c, old.c != nil, !bullets.isEmpty {
                 bullets.append(L("The code reads the same in both revisions, so the comparison has nothing to show."))
             }
         } else if let before {

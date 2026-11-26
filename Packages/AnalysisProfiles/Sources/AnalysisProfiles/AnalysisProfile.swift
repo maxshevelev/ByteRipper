@@ -369,6 +369,10 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             InapplicableTool(tool: "ghidra_guid_add",
                              hint: "EC firmware has no GUIDs to name.")
         ],
+        // An EC image has no strings worth a list and no UEFI status-code
+        // reports: Functions, its own sections and Search.
         panel: Panel(builtIn: [BuiltInVisibility(.interfaces, shown: false),
-                               BuiltInVisibility(.postCodes, shown: false)]))
+                               BuiltInVisibility(.postCodes, shown: false),
+                               BuiltInVisibility(.strings, shown: false),
+                               BuiltInVisibility(.statusCodes, shown: false)]))
 }
