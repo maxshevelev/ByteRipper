@@ -464,8 +464,31 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
         // A tail jump is a callee too: the code names its target, while an
         // owner from before that listed only calls (issue cbffc53d), so what
         // the variant records is read together with what its code names.
-        guard let named = variant.callees.map({ Set($0).union(coded ?? []) }) ?? coded else { return nil }
+        guard let named = variant.callees.map({ Set(recordedCallees($0, coded: coded, module: variant.module)).union(coded ?? []) }) ?? coded
+        else { return nil }
         return named.subtracting(own).sorted()
+    }
+
+    /// What a variant records it calls, a short callee read as the entry it
+    /// became. A publish before issue 38a7f82b recorded a new short callee by
+    /// the key the owner gave it, while the entry took an identity of its own:
+    /// that key is no entry and no entry holds it, and the code — written
+    /// after the entries — names the entry of the same bytes. A variant with
+    /// no code reads the one entry of those bytes its own module wrote.
+    func recordedCallees(_ recorded: [String], coded: Set<String>?, module: SHA256Digest) -> [String] {
+        recorded.compactMap { key in
+            guard LibraryBody.isShort(key: key), entries[key] == nil, holders(of: key).isEmpty else { return key }
+            let shape = Self.shape(ofKey: key)
+            let became = coded.map { $0.filter { entries[$0] != nil && Self.shape(ofKey: $0) == shape } }
+                ?? Set(entries.filter { id, entry in
+                    Self.shape(ofKey: id) == shape && entry.variants.contains { $0.module == module }
+                }.keys)
+            return became.count == 1 ? became.first : key
+        }
+    }
+
+    static func shape(ofKey key: String) -> String {
+        key.split(separator: "-").prefix(2).joined(separator: "-")
     }
 
     /// The entry a body belongs to.
@@ -1303,6 +1326,23 @@ extension ContentStore {
             var settled: [String: String] = [:]
             let now = Timestamps.now()
             let admitted = LibraryProposal.admitted(proposals, in: index)
+            // A new short body's identity, drawn before any proposal is read:
+            // a caller in this publish names the callee by the key the owner
+            // gave, and must record the entry it becomes, whichever of the two
+            // the loop reaches first (issue 38a7f82b).
+            var ownIdentity: [String: LibraryBody] = [:]
+            for proposal in proposals where proposal.body.isShort {
+                if let based = proposal.basedOn,
+                   index.entries[based]?.variants.contains(where: { $0.body.shape == proposal.body.shape }) == true {
+                    continue
+                }
+                ownIdentity[proposal.body.key] = proposal.body.withOwnIdentity()
+            }
+            // The same bytes offered twice are two functions: neither is the
+            // one a caller's key names.
+            for (key, count) in Dictionary(proposals.map { ($0.body.key, 1) }, uniquingKeysWith: +) where count > 1 {
+                ownIdentity[key] = nil
+            }
             for (offered, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
                 // A short body is the entry its review was made on, or one of
                 // its own: its bytes alone say nothing of which.
@@ -1312,7 +1352,7 @@ extension ContentStore {
                        let held = index.entries[based]?.variants.first(where: { $0.body.shape == proposal.body.shape }) {
                         proposal.body = held.body
                     } else {
-                        proposal.body = proposal.body.withOwnIdentity()
+                        proposal.body = ownIdentity[proposal.body.key] ?? proposal.body.withOwnIdentity()
                     }
                     proposal.variantOf = nil
                 }
@@ -1322,7 +1362,9 @@ extension ContentStore {
                 // are another function (issue df8c0e9c), so a body none of them
                 // calls like is a new entry. An entry that does not say what it
                 // calls, or a proposal that does not, decides as the key alone.
-                let calls = proposal.calls(in: index)
+                let calls = proposal.calls(in: index).map { numbers in
+                    Array(Set(numbers.map { ownIdentity[$0]?.key ?? $0 })).sorted()
+                }
                 func callsAgree(_ id: String) -> Bool {
                     guard let calls, let theirs = index.callees(ofEntry: id, body: proposal.body.key, object: object)
                     else { return true }
@@ -1446,6 +1488,17 @@ extension ContentStore {
                     result.added.append(.init(id: id, name: proposal.name, version: 1, module: module))
                     settled[id] = "this publish adds it as a new entry, version 1"
                     continue
+                }
+                // A short callee recorded by the owner's key, from before
+                // issue 38a7f82b, is re-pointed at the entry it became.
+                if let position = found.variants.firstIndex(where: { $0.body.key == proposal.body.key }),
+                   let recorded = found.variants[position].callees {
+                    let coded = found.variants[position].code.flatMap { try? object($0) }.map { LibraryCode.callees(code: $0) }
+                    let repointed = index.recordedCallees(recorded, coded: coded, module: found.variants[position].module)
+                    if repointed != recorded {
+                        index.entries[id]?.variants[position].callees = repointed
+                        changedIndex = true
+                    }
                 }
                 // One key, other data: another function, which the entry does not
                 // take and whose review says nothing of it.

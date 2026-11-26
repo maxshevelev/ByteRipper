@@ -937,4 +937,56 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertFalse(LibraryProposal.samePrinting("Found = '\\x01';", "Found = FALSE;"))
         XCTAssertFalse(LibraryProposal.samePrinting("Mask = '\\xff';", "Mask = 0xfe;"))
     }
+
+    /// A short callee entering in the same publish as its caller (issue
+    /// 38a7f82b): the caller records the entry the short body becomes, not
+    /// the key the owner gave it, and the same review published again is no
+    /// conflict with its own name.
+    func testACallerRecordsTheShortCalleeEnteringWithIt() throws {
+        let short = LibraryBody(size: 2, full: "2be8c4f9dbf9273a", specific: "df6943945858f55c")
+        let caller = LibraryBody(size: 9, full: "fb5c0bcf6c142b04", specific: "6dbb0eb516723ab9")
+        func pair(linkedTo id: String?) -> [LibraryProposal] {
+            var calling = proposal("NextDevicePathNode", body: caller, address: "0x8E60")
+            calling.callees = [LibraryCallee(name: "ReadUnaligned16", body: short.key, entry: id)]
+            var callee = proposal("ReadUnaligned16", body: short, address: "0x9474")
+            callee.callees = []
+            if let id { callee.basedOn = id; callee.linked = true }
+            return [calling, callee]
+        }
+        let added = try store.putLibraryEntries(module: first, rev: 3, by: "agent", proposals: pair(linkedTo: nil))
+        XCTAssertEqual(Set(added.added.map(\.name)), ["NextDevicePathNode", "ReadUnaligned16"])
+        let index = try store.libraryIndex()
+        let calleeID = try XCTUnwrap(added.added.first { $0.name == "ReadUnaligned16" }?.id)
+        XCTAssertNotEqual(calleeID, short.key, "a short body takes an identity of its own")
+        XCTAssertEqual(index.entries[caller.key]?.variants.first?.callees, [calleeID])
+
+        let again = try store.putLibraryEntries(module: first, rev: 4, by: "agent", proposals: pair(linkedTo: calleeID),
+                                                dryRun: true)
+        XCTAssertNil(again.nameConflicts)
+        XCTAssertEqual(Set(again.unchanged.map(\.name)), ["NextDevicePathNode", "ReadUnaligned16"])
+    }
+
+    /// A caller recorded before issue 38a7f82b names its short callee by the
+    /// owner's key: it is read, and re-pointed, as the entry that key became.
+    func testAStaleShortCalleeIsReadAsTheEntryItBecame() throws {
+        let short = LibraryBody(size: 2, full: "2be8c4f9dbf9273a", specific: "df6943945858f55c")
+        let caller = LibraryBody(size: 9, full: "fb5c0bcf6c142b04", specific: "6dbb0eb516723ab9")
+        var callee = proposal("ReadUnaligned16", body: short, address: "0x9474")
+        callee.callees = []
+        let calleeID = try XCTUnwrap(try store.putLibraryEntries(module: first, rev: 3, by: "agent",
+                                                                 proposals: [callee]).added.first?.id)
+        var calling = proposal("NextDevicePathNode", body: caller, address: "0x8E60")
+        calling.callees = [LibraryCallee(name: "ReadUnaligned16", body: short.key, entry: calleeID)]
+        try store.putLibraryEntries(module: first, rev: 3, by: "agent", proposals: [calling])
+        // What the earlier publish wrote: the owner's key.
+        var index = try store.libraryIndex()
+        index.entries[caller.key]?.variants[0].callees = [short.key]
+        try store.mirrorLibrary(index)
+
+        let preview = try store.putLibraryEntries(module: first, rev: 4, by: "agent", proposals: [calling], dryRun: true)
+        XCTAssertNil(preview.nameConflicts)
+        XCTAssertEqual(preview.unchanged.map(\.name), ["NextDevicePathNode"])
+        try store.putLibraryEntries(module: first, rev: 4, by: "agent", proposals: [calling])
+        XCTAssertEqual(try store.libraryIndex().entries[caller.key]?.variants.first?.callees, [calleeID])
+    }
 }
