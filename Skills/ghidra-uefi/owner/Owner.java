@@ -1627,8 +1627,9 @@ public class Owner {
         ghidra.program.model.listing.Listing listing = program.getListing();
         AddressSetView bytes = program.getMemory().getLoadedAndInitializedAddressSet();
         if (!bytes.contains(gap)) throw new Failure(404, "no function, no instruction and no bytes at " + hex(gap));
-        ghidra.program.model.listing.Data data = listing.getDefinedDataContaining(gap);
-        if (data != null) throw new Failure(404, hex(gap) + " is defined data (" + data.getDataType().getDisplayName() + "): ghidra_data reads it");
+        // Defined data is decoded too, for reading only: the answer says
+        // which datum it reads through (`over_data`), and the datum stays.
+        ghidra.program.model.listing.Data over = listing.getDefinedDataContaining(gap);
         ghidra.app.util.PseudoDisassembler decoder = new ghidra.app.util.PseudoDisassembler(program);
         JsonArray rows = new JsonArray();
         int most = limit == Integer.MAX_VALUE ? UNDECODED_ROWS : limit;
@@ -1638,7 +1639,10 @@ public class Owner {
             if (!bytes.contains(at)) { stopped = "the end of the bytes"; break; }
             if (program.getFunctionManager().getFunctionContaining(at) != null) { stopped = "a function"; break; }
             if (listing.getInstructionAt(at) != null) { stopped = "an instruction"; break; }
-            if (listing.getDefinedDataContaining(at) != null) { stopped = "defined data"; break; }
+            ghidra.program.model.listing.Data datum = listing.getDefinedDataContaining(at);
+            if (datum != null && (over == null || !datum.getMinAddress().equals(over.getMinAddress()))) {
+                stopped = "defined data"; break;
+            }
             if (rows.size() == most) { next = hex(at); break; }
             ghidra.app.util.PseudoInstruction instruction;
             try {
@@ -1667,6 +1671,10 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("gap", hex(gap));
         answer.addProperty("undecoded", true);
+        if (over != null) {
+            answer.addProperty("over_data", over.getDataType().getDisplayName());
+            answer.addProperty("over_data_at", hex(over.getMinAddress()));
+        }
         answer.add("instructions", rows);
         if (next != null) answer.addProperty("next", next);
         if (stopped != null) {
@@ -4162,7 +4170,7 @@ public class Owner {
     private JsonObject libraryMatch(JsonObject body) throws Exception {
         JsonObject bodies = body.has("bodies") ? body.getAsJsonObject("bodies") : new JsonObject();
         JsonObject shapes = body.has("shapes") ? body.getAsJsonObject("shapes") : new JsonObject();
-        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
+        boolean shortInstructions = body.has("short_instructions") && body.get("short_instructions").getAsBoolean();
         JsonArray matches = new JsonArray();
         int hashed = 0;
         for (Function function : program.getFunctionManager().getFunctions(true)) {
@@ -4174,7 +4182,11 @@ public class Owner {
             JsonObject mark = libraryMark(function);
             JsonElement exact = bodies.get(key);
             JsonElement near = exact == null ? shapes.get(shapeKey(hash)) : null;
-            if (exact == null && near == null && mark == null) continue;
+            // A short body's bytes hold its references' displacements: the
+            // host masks them (`LibraryShortShape`) to find an entry of the
+            // same instructions in another module, from these rows.
+            boolean shortRows = shortInstructions && exact == null && hash.getCodeUnitSize() < 4;
+            if (exact == null && near == null && mark == null && !shortRows) continue;
             JsonObject item = new JsonObject();
             item.addProperty("address", hex(function.getEntryPoint()));
             item.addProperty("name", function.getName());
@@ -4182,6 +4194,7 @@ public class Owner {
             item.addProperty("key", key);
             if (exact != null) item.add("exact", exact);
             if (near != null) item.add("near", near);
+            if (shortRows) item.add("instructions", shortRows(function));
             String bytes = ExportCode.referenceBytes(function);
             if (bytes != null) item.addProperty("reference_bytes", bytes);
             java.util.Map<String, Address> read = new java.util.LinkedHashMap<>();
@@ -4204,6 +4217,32 @@ public class Owner {
         answer.addProperty("hashed", hashed);
         answer.add("matches", matches);
         return answer;
+    }
+
+    /**
+     * A short body's instructions as the exporter stores an entry's: address,
+     * bytes, and the targets of every reference but a fallthrough
+     * (ExportCode's `instructions`), so both sides mask alike.
+     */
+    private JsonArray shortRows(Function function) throws Exception {
+        JsonArray rows = new JsonArray();
+        InstructionIterator code = program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            Instruction instruction = code.next();
+            JsonObject row = new JsonObject();
+            row.addProperty("address", hex(instruction.getAddress()));
+            row.addProperty("bytes", hexBytes(instruction.getBytes()));
+            JsonArray references = new JsonArray();
+            for (Reference reference : instruction.getReferencesFrom()) {
+                if (reference.getReferenceType().isFallthrough()) continue;
+                JsonObject to = new JsonObject();
+                to.addProperty("to", hex(reference.getToAddress()));
+                references.add(to);
+            }
+            row.add("references", references);
+            rows.add(row);
+        }
+        return rows;
     }
 
     /**
@@ -6618,7 +6657,22 @@ public class Owner {
         // named on the C's constant itself, by the decompiler's hash of it, as
         // Ghidra's own Set Equate does in the decompiler window.
         CConstant constant = null;
-        if (scalar == null && !inDisplacement && value != null && operand < 0) constant = cConstant(at, value);
+        if (scalar == null && !inDisplacement && value != null && operand < 0) {
+            constant = cConstant(at, value);
+            // NDS32 (and any sethi/ori, lui/ori ISA) builds a 32-bit value in
+            // several instructions, and the analysis' DATA reference on the
+            // register that ends the chain makes the C print it as
+            // `symbol + n` — no constant of the value is left to name. The
+            // reference goes (as a named value drops it anyway) and the C is
+            // read again; a refusal below rolls it back (issue a79c591d).
+            if (constant == null) {
+                Function holder = program.getFunctionManager().getFunctionContaining(at);
+                if (dropCarriedAddress(holder, value) > 0) {
+                    decompiled.remove(holder.getEntryPoint());
+                    constant = cConstant(at, value);
+                }
+            }
+        }
         if (constant != null) return applyEquateOnC(body, at, constant, value, name, enumName, comment, enumComment);
         if (scalar == null && inDisplacement) {
             throw new Failure(409, "`" + instruction + "` at " + hex(at) + " holds "
@@ -6627,8 +6681,13 @@ public class Owner {
                               + "where the operand holds a scale too) if that is meant");
         }
         if (scalar == null) {
+            String asAddress = value == null ? null : cAddressOf(at, value);
             throw new Failure(409, "no operand of `" + instruction + "` at " + hex(at) + " holds "
-                              + (value == null ? "a constant" : valueText));
+                              + (value == null ? "a constant" : valueText)
+                              + (value == null ? "" : asAddress != null
+                                 ? ", and the C holds it only as an address (" + asAddress + "): no constant of "
+                                   + valueText + " is left to name; nothing was changed"
+                                 : ", and the decompiled C holds no constant " + valueText + " either"));
         }
         long held = scalar.getUnsignedValue();
         long signed = scalar.getSignedValue();
@@ -6769,6 +6828,51 @@ public class Owner {
                 + " in " + function.getName() + "; nothing was changed");
         }
         return new CConstant(hash.getAddress(), hash.getHash());
+    }
+
+    /**
+     * Where the C of the function holding `at` computes `value` as an address
+     * — a constant base plus a constant offset (`TaskEventPending + 1`) — for
+     * a refusal to say so. Null when it does not.
+     */
+    private String cAddressOf(Address at, long value) {
+        try {
+            Function function = program.getFunctionManager().getFunctionContaining(at);
+            if (function == null) return null;
+            DecompileResults results = decompile(function);
+            HighFunction high = results == null ? null : results.getHighFunction();
+            if (high == null) return null;
+            java.util.Iterator<ghidra.program.model.pcode.PcodeOpAST> ops = high.getPcodeOps();
+            while (ops.hasNext()) {
+                ghidra.program.model.pcode.PcodeOpAST op = ops.next();
+                int code = op.getOpcode();
+                if (code != ghidra.program.model.pcode.PcodeOp.PTRSUB && code != ghidra.program.model.pcode.PcodeOp.PTRADD
+                    && code != ghidra.program.model.pcode.PcodeOp.INT_ADD) continue;
+                long sum = 0;
+                boolean constants = true;
+                for (int index = 0; index < op.getNumInputs(); index++) {
+                    ghidra.program.model.pcode.Varnode input = op.getInput(index);
+                    if (input == null) { constants = false; break; }
+                    long term = input.isConstant() ? input.getOffset()
+                        : input.getDef() != null && input.getDef().getOpcode() == ghidra.program.model.pcode.PcodeOp.PTRSUB
+                          && input.getDef().getInput(0).isConstant() && input.getDef().getInput(1).isConstant()
+                          ? input.getDef().getInput(0).getOffset() + input.getDef().getInput(1).getOffset() : -1;
+                    if (term == -1) { constants = false; break; }
+                    // PTRADD's third input is the element size, a multiplier.
+                    if (code == ghidra.program.model.pcode.PcodeOp.PTRADD && index == 1) {
+                        ghidra.program.model.pcode.Varnode size = op.getInput(2);
+                        if (size == null || !size.isConstant()) { constants = false; break; }
+                        sum += term * size.getOffset();
+                        break;
+                    }
+                    sum += term;
+                }
+                if (constants && (sum & 0xFFFFFFFFL) == (value & 0xFFFFFFFFL)) return hex(op.getSeqnum().getTarget());
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
     }
 
     /** `applyEquate` for a constant only the C holds: the same rules, the reference by hash. */

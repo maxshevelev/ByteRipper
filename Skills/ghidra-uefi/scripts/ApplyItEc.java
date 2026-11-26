@@ -99,7 +99,10 @@ public class ApplyItEc extends GhidraScript {
             data(signature, new ArrayDataType(ByteDataType.dataType, 16, 1));
         }
         label(version, "VersionString");
-        data(version, StringDataType.dataType);
+        // Exactly the printable run (ECChipFamily.version): a terminated
+        // string would run on over the code that follows it (0xA0 on IT8227E).
+        int versionLength = has(input, "version_length") ? input.get("version_length").getAsInt() : 0;
+        if (versionLength > 0) data(version, new StringDataType(), versionLength);
 
         JsonObject layout = input.getAsJsonObject("layout");
         JsonObject startup = layout.has("startup") && layout.get("startup").isJsonObject()
@@ -225,7 +228,69 @@ public class ApplyItEc extends GhidraScript {
                 }
             }
         }
+        // Calls into bytes the analysis left undecoded: a `jral5` through a
+        // register the code builds with sethi/ori, whose target the analysis
+        // only learns as a reference once the data laid above no longer
+        // covers it (0xA0, called from ResetEntry on IT8227E).
+        seedCallTargets(memory);
         println("ApplyItEc done: " + functions + " functions, " + labels + " labels, " + registers + " registers");
+    }
+
+    private void seedCallTargets(Memory memory) throws Exception {
+        java.util.Set<Address> targets = new java.util.TreeSet<>();
+        var references = currentProgram.getReferenceManager().getReferenceIterator(currentProgram.getMinAddress());
+        while (references.hasNext()) {
+            var reference = references.next();
+            if (!reference.getReferenceType().isCall()) continue;
+            Address target = reference.getToAddress();
+            MemoryBlock block = memory.getBlock(target);
+            if (block == null || !block.isExecute() || !block.isInitialized()) continue;
+            if (getInstructionAt(target) != null || getDataContaining(target) != null) continue;
+            targets.add(target);
+        }
+        // `sethi rX,hi; ori rX,rX,lo; jral5 rX`: the call target is
+        // hi << 12 | lo. The analysis makes no reference of it when the
+        // target was not code, so the call is found here and referenced.
+        var instructions = currentProgram.getListing().getInstructions(true);
+        while (instructions.hasNext()) {
+            var call = instructions.next();
+            if (!call.getMnemonicString().startsWith("jral")) continue;
+            var low = call.getPrevious();
+            var high = low == null ? null : low.getPrevious();
+            if (low == null || high == null || !low.getMnemonicString().equals("ori")
+                || !high.getMnemonicString().equals("sethi")) continue;
+            Object[] target = call.getOpObjects(0);
+            Object[] lowOps = low.getOpObjects(0), lowSource = low.getOpObjects(1), highOps = high.getOpObjects(0);
+            if (target.length != 1 || lowOps.length != 1 || lowSource.length != 1 || highOps.length != 1
+                || !target[0].equals(lowOps[0]) || !target[0].equals(lowSource[0]) || !target[0].equals(highOps[0])) continue;
+            var hi = high.getScalar(1);
+            var lo = low.getScalar(2);
+            if (hi == null || lo == null) continue;
+            Address to;
+            try {
+                to = at((hi.getUnsignedValue() << 12) | lo.getUnsignedValue());
+            } catch (Exception e) {
+                continue;
+            }
+            MemoryBlock block = memory.getBlock(to);
+            if (block == null || !block.isExecute() || !block.isInitialized()) continue;
+            boolean referenced = false;
+            for (var each : call.getReferencesFrom()) referenced |= each.getToAddress().equals(to);
+            if (!referenced) {
+                currentProgram.getReferenceManager().addMemoryReference(call.getAddress(), to,
+                    ghidra.program.model.symbol.RefType.COMPUTED_CALL, SourceType.ANALYSIS, 0);
+            }
+            if (getInstructionAt(to) == null && getDataContaining(to) == null) targets.add(to);
+        }
+        for (Address target : targets) {
+            if (getInstructionAt(target) == null) {
+                new DisassembleCommand(new AddressSet(target), null, true).applyTo(currentProgram, monitor);
+            }
+            if (getInstructionAt(target) != null && getFunctionAt(target) == null
+                && currentProgram.getFunctionManager().getFunctionContaining(target) == null) {
+                if (createFunction(target, null) != null) functions++;
+            }
+        }
     }
 
     private static boolean has(JsonObject object, String key) {
@@ -245,6 +310,15 @@ public class ApplyItEc extends GhidraScript {
     private void data(long offset, DataType type) {
         try {
             DataUtilities.createData(currentProgram, at(offset), type, -1,
+                DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA);
+        } catch (Exception e) {
+            println("ApplyItEc: no " + type.getName() + " at 0x" + Long.toHexString(offset) + ": " + e.getMessage());
+        }
+    }
+
+    private void data(long offset, DataType type, int length) {
+        try {
+            DataUtilities.createData(currentProgram, at(offset), type, length,
                 DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA);
         } catch (Exception e) {
             println("ApplyItEc: no " + type.getName() + " at 0x" + Long.toHexString(offset) + ": " + e.getMessage());

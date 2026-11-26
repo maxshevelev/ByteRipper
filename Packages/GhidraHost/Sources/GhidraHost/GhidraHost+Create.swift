@@ -203,7 +203,8 @@ extension GhidraHost {
             family: family.id, extent: firmware.extent, extentSource: firmware.extentSource.rawValue,
             sliceSize: firmware.sliceSize, rawSHA256: firmware.rawSHA256,
             masked: firmware.masked.map { .init(offset: $0.offset, actual: Int($0.actual), normalised: Int($0.normalised)) },
-            chipRead: firmware.chipRead, hostUpdateSize: family.hostUpdateSize, version: firmware.version)
+            chipRead: firmware.chipRead, hostUpdateSize: family.hostUpdateSize, version: firmware.version,
+            refsPastExtent: firmware.referencesPastExtent.map { .init(address: $0.address, from: $0.from) })
         let state = ProjectState(
             schema: 1, project: UUID().uuidString.lowercased(),
             module: .init(sha256: digest.hex, size: firmware.extent, name: name, kind: "EC", phase: nil, bits: 32,
@@ -228,6 +229,9 @@ extension GhidraHost {
             "regs": [family.registers.lowerBound, family.registers.upperBound],
             "signature": family.signatureForm(of: firmware.image) == 2 ? family.textSignatureOffset : family.signatureOffset,
             "version": family.signatureForm(of: firmware.image) == 2 ? family.textSignatureOffset : family.versionOffset,
+            // The printable run the family reads as the version: the datum
+            // is exactly that long, so it never covers the code after it.
+            "version_length": family.version(of: firmware.image)?.utf8.count ?? 0,
             "known_labels": (ecKnownLabels[firmware.sha256] ?? []).map { ["name": $0.name, "address": $0.address] },
             "refs_past_extent": firmware.referencesPastExtent.map { ["address": $0.address, "from": $0.from] }
         ]

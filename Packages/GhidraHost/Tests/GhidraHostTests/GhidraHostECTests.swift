@@ -42,6 +42,9 @@ final class GhidraHostECTests: XCTestCase {
         XCTAssertEqual(state.module.ec?.sliceSize, 0x30000)
         XCTAssertEqual(state.module.ec?.hostUpdateSize, 0x2C000)
         XCTAssertEqual(state.module.ec?.masked, [.init(offset: 0x8D, actual: 0xAF, normalised: 0)])
+        let past = try XCTUnwrap(state.module.ec?.refsPastExtent)
+        XCTAssertEqual(past.count, 10, "\(past)")
+        XCTAssertTrue(past.contains(.init(address: 0x249F0, from: 0x15424)), "\(past)")
         XCTAssertEqual(state.madeWith.passes, ["ApplyItEc.java"])
         XCTAssertNil(state.madeWith.types)
         XCTAssertEqual(GhidraHost.typeGroup(state), "Nds32")
@@ -94,6 +97,7 @@ final class GhidraHostECTests: XCTestCase {
         XCTAssertEqual(published.manifest.module.kind, "EC")
         XCTAssertEqual(published.manifest.module.language?.hasPrefix("NDS32"), true)
         XCTAssertEqual(published.manifest.module.ec?.extent, 0x2497C)
+        XCTAssertEqual(published.manifest.module.ec?.refsPastExtent?.count, 10, "the facts travel with the publish")
         XCTAssertEqual(published.manifest.recipe.passes, ["ApplyItEc.java"])
         XCTAssertTrue(published.manifest.recipe.id.contains("-ec-"), published.manifest.recipe.id)
     }

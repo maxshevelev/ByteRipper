@@ -163,9 +163,24 @@ public struct ECModuleFacts: Codable, Equatable, Sendable {
     /// How many bytes the BIOS's EC update writes — not the extent.
     public var hostUpdateSize: Int?
     public var version: String?
+    /// The flash addresses past the extent the code refers to, each with the
+    /// instruction that does (`FlashRef_<address>` in the program). Optional:
+    /// a module created before it was recorded reads without it.
+    public var refsPastExtent: [FlashRef]?
+
+    public struct FlashRef: Codable, Equatable, Sendable {
+        public var address: Int
+        public var from: Int
+
+        public init(address: Int, from: Int) {
+            self.address = address
+            self.from = from
+        }
+    }
 
     public init(family: String, extent: Int, extentSource: String, sliceSize: Int, rawSHA256: String,
-                masked: [Masked], chipRead: Bool, hostUpdateSize: Int?, version: String?) {
+                masked: [Masked], chipRead: Bool, hostUpdateSize: Int?, version: String?,
+                refsPastExtent: [FlashRef]? = nil) {
         self.family = family
         self.extent = extent
         self.extentSource = extentSource
@@ -175,10 +190,12 @@ public struct ECModuleFacts: Codable, Equatable, Sendable {
         self.chipRead = chipRead
         self.hostUpdateSize = hostUpdateSize
         self.version = version
+        self.refsPastExtent = refsPastExtent
     }
 
     private enum CodingKeys: String, CodingKey {
         case family, extent, masked, version
+        case refsPastExtent = "refs_past_extent"
         case extentSource = "extent_source"
         case sliceSize = "slice_size"
         case rawSHA256 = "raw_sha256"
