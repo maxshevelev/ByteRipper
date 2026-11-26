@@ -509,6 +509,35 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.source.module, restorer.sha256)
     }
 
+    /// A taken-out review with no C comes back with the C an earlier version
+    /// of its entry held under the same head, and with none when no version
+    /// under that head held any (issue 6feea19a).
+    func testARestoreBringsBackTheTextAnEarlierVersionHeld() throws {
+        try register(try entryObject())
+        try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "x"), by: "agent")
+        func takenOutWithout(signature: String) throws {
+            let bare = try store.putObject(try JSONSerialization.data(withJSONObject: [
+                "schema": 1, "name": "CopyMem", "kind": "edk2", "plate": "EDK2 CopyMem", "signature": signature
+            ], options: .sortedKeys))
+            var index = try store.libraryIndex()
+            index.takenOut?[body.key]?.entry = bare
+            try store.mirrorLibrary(index)
+        }
+        try takenOutWithout(signature: "void CopyMem(void)")
+        try store.changeLibrary(.init(action: .restore, body: body.key, reason: "wrong"), by: "agent")
+        let back = try XCTUnwrap(try store.libraryIndex().entries[body.key])
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(back.entry)) as? [String: Any])
+        XCTAssertEqual((object["function"] as? [String: Any])?["c"] as? String, "void CopyMem(void) {\n  Theirs(Count);\n}\n")
+        XCTAssertEqual(object["plate"] as? String, "EDK2 CopyMem")
+
+        try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "x"), by: "agent")
+        try takenOutWithout(signature: "void CopyMem(int Count)")
+        try store.changeLibrary(.init(action: .restore, body: body.key, reason: "wrong"), by: "agent")
+        let other = try XCTUnwrap(try store.libraryIndex().entries[body.key])
+        let bare = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(other.entry)) as? [String: Any])
+        XCTAssertNil(bare["function"], "C printed under another head is not this review's")
+    }
+
     /// A taken-out body whose name another entry took since comes back under
     /// the name its function has now (issue cd692d8f).
     func testARestoreTakesTheNameTheFunctionHasNow() throws {

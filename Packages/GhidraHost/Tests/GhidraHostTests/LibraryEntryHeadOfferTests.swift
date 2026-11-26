@@ -119,4 +119,31 @@ final class LibraryEntryHeadOfferTests: XCTestCase {
         // The C is still the reading of the module it came from.
         XCTAssertEqual((function["source"] as? [String: Any])?["module"] as? String, source.hex)
     }
+
+    /// A function linked to an entry with no C may be marked a candidate: the
+    /// mark is what makes the owner offer its review, which the next publish
+    /// records as the entry's C when it only adds (issue 6feea19a). An entry
+    /// holding its C refuses the mark as before.
+    func testOnlyAnEntryWithNoCLetsALinkedFunctionBeMarked() async throws {
+        var bare = try XCTUnwrap(JSONSerialization.jsonObject(with: try entry(convention: "__cdecl", c: heldC))
+                                 as? [String: Any])
+        bare["function"] = nil
+        let written = try await store.writeLibraryEntries(
+            module: source, rev: 1, by: "agent",
+            proposals: [LibraryProposal(body: body, name: "InternalMathDivRemU64x64", kind: "edk2", address: "0x9DFC200",
+                                        entry: try JSONSerialization.data(withJSONObject: bare, options: [.sortedKeys]))],
+            take: .none)
+        let id = try XCTUnwrap(written.added.first?.id, "\(written)")
+        let holds = try await GhidraHost.holdsText(id, writer: store)
+        XCTAssertFalse(holds)
+
+        let filled = try await store.writeLibraryEntries(
+            module: other, rev: 2, by: "agent",
+            proposals: [LibraryProposal(body: body, name: "InternalMathDivRemU64x64", kind: "edk2", address: "0x9A1A8E0",
+                                        entry: try entry(convention: "__cdecl", c: heldC), basedOn: id, base: 1)],
+            take: .none)
+        XCTAssertEqual(filled.updated.map(\.id), [id], "a C that only adds is the entry's: \(filled)")
+        let now = try await GhidraHost.holdsText(id, writer: store)
+        XCTAssertTrue(now)
+    }
 }

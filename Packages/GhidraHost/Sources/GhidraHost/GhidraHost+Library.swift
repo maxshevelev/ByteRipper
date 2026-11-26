@@ -398,7 +398,11 @@ extension GhidraHost {
                 let (plan, _) = try await libraryPlan(module)
                 let held = plan.toApply + plan.applied + plan.edited
                 for candidate in candidates {
-                    if let step = held.first(where: { $0.address.caseInsensitiveCompare(candidate.address) == .orderedSame }) {
+                    // An entry holding no C learns it from a marked review here at
+                    // the next publish, as an addition (issue 6feea19a): the mark is
+                    // what makes the owner offer it.
+                    if let step = held.first(where: { $0.address.caseInsensitiveCompare(candidate.address) == .orderedSame }),
+                       try await Self.holdsText(step.id, writer: writer) {
                         throw GhidraHostError(.refused, "the function at \(candidate.address) is entry \(step.id) (\(step.entryName)) "
                             + "of the registry already: no candidate. A change to it offers itself at a publish", status: 409)
                     }
@@ -570,7 +574,8 @@ extension GhidraHost {
                   LibraryProposal.hasFunctionText(own.entry) else {
                 refused.append(.init(address: address, name: name, why: lacks
                     + ", and this module offers no review of it the registry could record (short of the bar, or not marked): "
-                    + "take the entry's text with `ghidra_library_apply` and `take_text`"))
+                    + "bring the review to the bar and mark it with `ghidra_library_candidate`, or take the entry's text "
+                    + "with `ghidra_library_apply` and `take_text`"))
                 continue
             }
             // What only adds to the entry is its next version, from any module; a
@@ -591,6 +596,12 @@ extension GhidraHost {
                 + "wrong one, propose this module's review with `ghidra_type_propose`", entry: id))
         }
         return (proposals, refused)
+    }
+
+    /// Whether the entry `id` holds its function's C; true for no such entry.
+    static func holdsText(_ id: String, writer: any AnalysisWriter) async throws -> Bool {
+        guard let held = try await writer.readLibraryIndex().entries[id] else { return true }
+        return LibraryProposal.hasFunctionText(try await writer.readObject(held.entry))
     }
 
     /// The bodies the registry holds with no code take it from this module.

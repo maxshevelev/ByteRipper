@@ -345,11 +345,13 @@ extension ContentStore {
                         + "function has now, or rename one of them first")
                 }
                 var stored = out.entry
-                if name != out.name {
+                let text = try restoredText(of: out)
+                if name != out.name || text != nil {
                     guard var review = try JSONSerialization.jsonObject(with: try object(out.entry)) as? [String: Any] else {
                         throw CodeAnalysisError.analysisMismatch("the taken-out review of \(body) is not an object")
                     }
-                    Self.rename(&review, from: out.name, to: name)
+                    if let text { review.merge(text) { _, new in new } }
+                    if name != out.name { Self.rename(&review, from: out.name, to: name) }
                     let data = try JSONSerialization.data(withJSONObject: review, options: [.sortedKeys, .withoutEscapingSlashes])
                     stored = SHA256Digest(data: data)
                     renamed = data
@@ -372,6 +374,26 @@ extension ContentStore {
             try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             return result
         }
+    }
+
+    /// The C a taken-out review with none had in an earlier version of its
+    /// entry, under the same name and head: what a restore puts back with it,
+    /// so the entry does not come back with no text (issue 6feea19a). Nil when
+    /// the review holds its C, or no version under its head held any.
+    private func restoredText(of out: LibraryTakenOut) throws -> [String: Any]? {
+        guard let review = try JSONSerialization.jsonObject(with: try object(out.entry)) as? [String: Any],
+              review["function"] == nil, let history = try libraryHistory(id: out.id) else { return nil }
+        for version in history.versions.reversed() where version.entry != out.entry {
+            guard let data = try? object(version.entry),
+                  let earlier = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let function = earlier["function"] as? [String: Any], function["c"] is String,
+                  earlier["name"] as? String == review["name"] as? String,
+                  earlier["signature"] as? String == review["signature"] as? String else { continue }
+            var text: [String: Any] = ["function": function]
+            if review["equates"] == nil, let equates = earlier["equates"] { text["equates"] = equates }
+            return text
+        }
+        return nil
     }
 
     /// A different body is a different function: one of an entry's bodies
