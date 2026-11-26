@@ -593,11 +593,25 @@ public class ExportCode extends GhidraScript {
     }
 
     /**
-     * The language patch this Ghidra was compiled with, from the marker
-     * Scripts/make-patched-ghidra.sh leaves in it; null on a stock install.
+     * The language patches this Ghidra was compiled with for the program's
+     * processor, from the marker Scripts/make-patched-ghidra.sh leaves in it:
+     * its first line is `x86:descriptor-tables-1+NDS32:nds32-standby-1`; a
+     * patch without a processor is NDS32's when named `nds32-…`, else x86's
+     * (`LanguagePatches` in Swift reads it the same way).
+     * null on a stock install, and for a processor no patch is for — so an x86
+     * module's recipe stays `-lang-descriptor-tables-1`.
      */
-    private static String languagePatch() {
-        return patchMarker("byteripper-language-patch");
+    private String languagePatch() {
+        String line = patchMarker("byteripper-language-patch");
+        if (line == null) return null;
+        String processor = currentProgram.getLanguage().getProcessor().toString();
+        java.util.List<String> mine = new java.util.ArrayList<>();
+        for (String each : line.split("\\+")) {
+            int colon = each.indexOf(':');
+            String owner = colon >= 0 ? each.substring(0, colon) : each.toLowerCase().startsWith("nds32-") ? "NDS32" : "x86";
+            if (owner.equalsIgnoreCase(processor)) mine.add(colon < 0 ? each : each.substring(colon + 1));
+        }
+        return mine.isEmpty() ? null : String.join("+", mine);
     }
 
     /**

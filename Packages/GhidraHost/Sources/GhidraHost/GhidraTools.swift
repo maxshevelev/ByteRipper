@@ -272,7 +272,7 @@ public enum GhidraTools {
                 server restart — only an owner killed outright or crashed loses it, and then `writes_lost` here and in \
                 `ghidra_modules` says so from the next open on. It counts from this build's first open of the project: \
                 what was lost before that cannot be told, and its absence on a module not opened since says nothing. \
-                `language_patch` names the patch of the x86 language this Ghidra was compiled with, `decompiler_patch` the patch of its decompiler; a stock Ghidra answers neither. A module seen before is opened \
+                `language_patch` names the patches of the languages (x86, NDS32) this Ghidra was compiled with, `decompiler_patch` the patch of its decompiler; a stock Ghidra answers neither. A module seen before is opened \
                 by `module`.\(byImage ? " A new one is sent as `image_base64` with a `name`: its project is made first — Ghidra's analysis and the UEFI pass, seconds for a PEIM, a minute for a large DXE driver." : "")
                 """,
             inputSchema: AgentSchema.object(properties),
@@ -1500,7 +1500,11 @@ public enum GhidraTools {
             },
             write("ghidra_ec_reapply", "ec/reapply", "Add the flash references to an older EC module",
                   "EC only: adds to a module created before these were part of creation the flash references "
-                  + "past the image extent, their FlashRef_ labels and plates, and refs_past_extent in the facts; "
+                  + "past the image extent, their FlashRef_ labels and plates, the eflash_data block over the flash "
+                  + "data area, and refs_past_extent in the facts; removes a FlashRef_ label, its reference and plate "
+                  + "an earlier rule made from a value the code never uses as an address, unless a review renamed it; "
+                  + "on a Ghidra with nds32-standby-1 also disassembles the code after each standby and gives the "
+                  + "functions it cut their whole body (standby_* in the answer); "
                   + "touches nothing else; safe to repeat.",
                   [:], required: []) { _ in [:] },
             AgentTool(

@@ -43,8 +43,9 @@ final class GhidraHostECTests: XCTestCase {
         XCTAssertEqual(state.module.ec?.hostUpdateSize, 0x2C000)
         XCTAssertEqual(state.module.ec?.masked, [.init(offset: 0x8D, actual: 0xAF, normalised: 0)])
         let past = try XCTUnwrap(state.module.ec?.refsPastExtent)
-        XCTAssertEqual(past.count, 10, "\(past)")
-        XCTAssertTrue(past.contains(.init(address: 0x249F0, from: 0x15424)), "\(past)")
+        XCTAssertEqual(past.count, 11, "\(past)")
+        XCTAssertTrue(past.contains(.init(address: 0x2A600, from: 0x718C)), "\(past)")
+        XCTAssertFalse(past.contains { $0.address == 0x249F0 }, "a timer's 150000 ms is no address: \(past)")
         XCTAssertEqual(state.madeWith.passes, ["ApplyItEc.java"])
         XCTAssertNil(state.madeWith.types)
         XCTAssertEqual(GhidraHost.typeGroup(state), "Nds32")
@@ -84,20 +85,32 @@ final class GhidraHostECTests: XCTestCase {
         let input = try XCTUnwrap(JSONSerialization.jsonObject(
             with: try GhidraHost.ecPassInput(try ECFirmware(slice: image), reference: nil)) as? [String: Any])
         let references = try XCTUnwrap(input["refs_past_extent"] as? [[String: Int]])
-        XCTAssertTrue(references.contains(["address": 0x249F0, "from": 0x15424]), "\(references)")
-        // The label: the C of the function that builds the address names it.
-        let user = try await read("/v1/function/0x15324")
-        XCTAssertTrue("\(user)".contains("FlashRef_249F0"), "\(user)")
-        let xrefs = try await read("/v1/xrefs?to=0x249F0")
+        XCTAssertTrue(references.contains(["address": 0x2A600, "from": 0x718C]), "\(references)")
+        // The label, in the eflash_data block, and the code that uses it;
+        // the timer's 150000 at 0x15424 is no reference, not even the
+        // analysis's (the block is made after it).
+        let xrefs = try await read("/v1/xrefs?to=0x2A600")
         let from = (xrefs["references"] as? [[String: Any]] ?? []).compactMap { $0["from"] as? String }
-        XCTAssertTrue(from.contains { CodeAddress(hex: $0)?.value == 0x15424 }, "\(xrefs)")
+        XCTAssertTrue(from.contains { CodeAddress(hex: $0)?.value == 0x718C }, "\(xrefs)")
+        let timer = try await read("/v1/xrefs?to=0x249F0")
+        XCTAssertTrue((timer["references"] as? [Any] ?? []).isEmpty, "\(timer)")
+        let user = try await read("/v1/function/0x15324")
+        XCTAssertFalse("\(user)".contains("FlashRef_249F0"), "\(user)")
+        let c = try await read("/v1/function/0x718C")
+        XCTAssertTrue("\(c)".contains("FlashRef_2A600"), "\(c)")
 
         try await host.take(module)
+        // The eflash_data block, made after the analysis: data there takes a type.
+        _ = try await host.write(module, "/v1/set/data", body: try JSONSerialization.data(
+            withJSONObject: ["address": "0x2B800", "type": "byte[16]"]))
+        let typed = try await read("/v1/data?limit=5000")
+        XCTAssertTrue((typed["data"] as? [[String: Any]] ?? []).contains {
+            ($0["address"] as? String).flatMap(CodeAddress.init(hex:))?.value == 0x2B800 }, "\(typed)")
         let published = try await host.publish(module, by: "agent")
         XCTAssertEqual(published.manifest.module.kind, "EC")
         XCTAssertEqual(published.manifest.module.language?.hasPrefix("NDS32"), true)
         XCTAssertEqual(published.manifest.module.ec?.extent, 0x2497C)
-        XCTAssertEqual(published.manifest.module.ec?.refsPastExtent?.count, 10, "the facts travel with the publish")
+        XCTAssertEqual(published.manifest.module.ec?.refsPastExtent?.count, 11, "the facts travel with the publish")
         XCTAssertEqual(published.manifest.recipe.passes, ["ApplyItEc.java"])
         XCTAssertTrue(published.manifest.recipe.id.contains("-ec-"), published.manifest.recipe.id)
     }

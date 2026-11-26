@@ -134,15 +134,42 @@ public struct ECFirmware: Equatable, Sendable {
 
     /// Every such reference, found by a straight walk of the code — from
     /// the vectors' end to the `.data` copy's source, or the extent — with
-    /// the register constants `sethi`/`ori`/`movi`/`addi` leave. A value is
-    /// taken when it is complete: not while the next instruction still adds
-    /// to the same register. Sorted by address, then by `from`.
+    /// the register constants `sethi`/`ori`/`movi`/`addi` leave.
+    ///
+    /// A value past the extent is a reference only when the code uses it as
+    /// a flash address, which the walk proves two ways:
+    ///
+    /// - dereferenced: a load or a store through the register holding it,
+    ///   before the next control transfer the decoder knows (a call, a jump,
+    ///   a `beqz`/`bnez`), which ends what the walk can say of a register;
+    /// - passed to a flash routine: at a direct call, an argument register
+    ///   (r0–r5) still holds it, and the callee writes the flash address
+    ///   registers (`flashAddressRegisters`, ECINDAR) in its first
+    ///   instructions, or calls a routine that does (`storesFlashAddress`);
+    /// - passed to a flash routine split into bytes: r0, r1, r2 hold bytes
+    ///   whose `r0 << 16 | r1 << 8 | r2` lies past the extent — the order the
+    ///   routine at 0x1E596 writes them to ECINDAR2, 1, 0 (0x16A0C on
+    ///   IT8227E: `(2, 0xA6, 0)` to 0x71CE, which reads 0x2A600). The `from`
+    ///   is the call.
+    ///
+    /// Then the instruction that completed the value (the `ori`/`addi` after
+    /// a `sethi`, or the `movi`) is a `from`, and so is a load or store that
+    /// reached it. A value the code moves on through an instruction the
+    /// decoder does not follow (a `mov`, an `add` of two registers) before
+    /// the call is lost: 0x2BC00 at 0x11D10, a base of a loop's addresses. A value that is only built — `movi a1,0x249f0` at 0x15424,
+    /// 150000 passed to the timer routine at 0x20E36 — is no reference, and
+    /// neither is an address handed on through a routine that only keeps it
+    /// for another to write: the walk cannot tell that from a count. Sorted
+    /// by address, then by `from`.
     public var referencesPastExtent: [FlashReference] {
         let base = Int(family.flashBase)
         let target = (base + extent)..<(base + sliceSize)
         let end = startup?.dataSource.map { min(Int($0), extent) } ?? extent
         var constants = NDS32.Constants()
         var found = Set<[Int]>()
+        var routines: [UInt64: Bool] = [:]
+        // The register a past-extent value was completed in, and where.
+        var built: [Int: (address: Int, from: Int)] = [:]
         var pending: (register: Int, address: Int, from: Int)?
         var offset = 0x100
         while offset < end, let instruction = NDS32.decode(image, at: offset, base: family.flashBase) {
@@ -153,30 +180,90 @@ public struct ECFirmware: Equatable, Sendable {
                 case let .or(rt, ra, _), let .add(rt, ra, _): extends = ra == held.register && rt == held.register
                 default: extends = false
                 }
-                if !extends { found.insert([held.address, held.from]) }
+                if !extends { built[held.register] = (held.address, held.from) }
                 pending = nil
             }
             switch op {
             case let .load(_, ra, imm, _), let .store(_, ra, imm, _):
-                if let value = constants[ra] {
+                if let value = constants[ra], let source = built[ra], source.address == Int(value) {
                     let at = Int(Int64(value) + Int64(imm))
+                    if target.contains(at) {
+                        found.insert([at, Int(instruction.address)])
+                        found.insert([source.address, source.from])
+                    }
+                }
+            case let .call(callee):
+                let isFlash: Bool
+                if let known = routines[callee] {
+                    isFlash = known
+                } else {
+                    isFlash = storesFlashAddress(at: callee, depth: 1)
+                    routines[callee] = isFlash
+                }
+                if isFlash, let high = constants[0], let middle = constants[1], let low = constants[2],
+                   high <= 0xFF, middle <= 0xFF, low <= 0xFF {
+                    let at = Int(high << 16 | middle << 8 | low)
                     if target.contains(at) { found.insert([at, Int(instruction.address)]) }
                 }
+                if isFlash {
+                    for register in 0...5 {
+                        if let source = built[register], constants[register].map(Int.init) == source.address {
+                            found.insert([source.address, source.from])
+                        }
+                    }
+                }
+            default: break
+            }
+            switch op {
+            case .call, .callRegister, .jump, .branchZero:
+                constants = NDS32.Constants()
+                built = [:]
             default: break
             }
             constants.step(op)
             switch op {
             case let .constant(rt, _), let .or(rt, _, _), let .add(rt, _, _):
+                built[rt] = nil
                 if let value = constants[rt], target.contains(Int(value)) {
                     pending = (rt, Int(value), Int(instruction.address))
                 }
+            case let .load(rt, _, _, _), let .loadIndexed(rt, _, _, _):
+                built[rt] = nil
             default: break
             }
             offset += instruction.length
         }
-        if let held = pending { found.insert([held.address, held.from]) }
         return found.sorted { $0[0] != $1[0] ? $0[0] < $1[0] : $0[1] < $1[1] }
             .map { FlashReference(address: $0[0], from: $0[1]) }
+    }
+
+    /// Whether the routine at `entry` stores to the flash address registers
+    /// in its first 64 instructions, up to its first jump — or, with `depth`
+    /// left, calls a routine that does: the EC's own flash read and write
+    /// routines (0x20E6, 0x2400, 0x1E596 on IT8227E) load the address into
+    /// ECINDAR before anything else, and their wrappers (0x71CE, 0x11D4A)
+    /// call them first.
+    func storesFlashAddress(at entry: UInt64, depth: Int) -> Bool {
+        let base = Int(family.flashBase)
+        guard entry >= family.flashBase, Int(entry) - base < extent else { return false }
+        var constants = NDS32.Constants()
+        var offset = Int(entry) - base
+        for _ in 0..<64 {
+            guard offset < extent, let instruction = NDS32.decode(image, at: offset, base: family.flashBase) else { break }
+            switch instruction.op {
+            case let .store(_, ra, imm, _):
+                if let value = constants[ra],
+                   family.flashAddressRegisters.contains(UInt64(Int64(value) + Int64(imm))) { return true }
+            case let .call(callee):
+                if depth > 0, callee != entry, storesFlashAddress(at: callee, depth: depth - 1) { return true }
+                constants = NDS32.Constants()
+            case .callRegister, .jump: return false
+            default: break
+            }
+            constants.step(instruction.op)
+            offset += instruction.length
+        }
+        return false
     }
 
     /// The layout the review pass names, read from the image.

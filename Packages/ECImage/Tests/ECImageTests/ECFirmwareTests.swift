@@ -105,12 +105,21 @@ final class ECFirmwareTests: XCTestCase {
         XCTAssertNoThrow(try layout.json())
     }
 
-    /// The flash past the extent the code points at: 0x249F0, built at 0x15424.
+    /// The flash past the extent the code uses as a flash address: built and
+    /// passed to the flash routines 0x20E6/0x2400, or split into bytes for
+    /// 0x1E596 and its wrapper 0x71CE. 0x249F0 at 0x15424 is 150000 ms for
+    /// the timer routine 0x20E36: no reference.
     func testReferencesPastTheExtent() throws {
         let firmware = try ECFirmware(slice: try image())
         let references = firmware.referencesPastExtent
         print("refs past extent:", references.map { String(format: "0x%X<-0x%X", $0.address, $0.from) })
-        XCTAssertTrue(references.contains(.init(address: 0x249F0, from: 0x15424)), "\(references)")
+        let expected: [(Int, Int)] = [
+            (0x2A600, 0x718C), (0x2A600, 0x71B2), (0x2A600, 0x16A16),
+            (0x2A800, 0x11DD4), (0x2A800, 0x11E4A), (0x2A800, 0x11E70),
+            (0x2B800, 0x11E1A), (0x2B800, 0x11EB8), (0x2B800, 0x11EE2),
+            (0x2BC00, 0x124DC), (0x2BC00, 0x149A2)]
+        XCTAssertEqual(references, expected.map { .init(address: $0.0, from: $0.1) })
+        XCTAssertFalse(references.contains { $0.address == 0x249F0 }, "\(references)")
         XCTAssertTrue(references.allSatisfy { $0.address >= firmware.extent && $0.address < firmware.sliceSize })
     }
 

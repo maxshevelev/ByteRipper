@@ -184,6 +184,9 @@ extension GhidraHost {
         var passInput = try Self.ecPassInput(firmware, reference: configuration.ecReference)
         if ecCreatesAsBefore866, var object = try JSONSerialization.jsonObject(with: passInput) as? [String: Any] {
             object["refs_past_extent"] = nil
+            // Nor the eflash_data block, which ApplyItEc makes only up to
+            // host_update_size.
+            object["host_update_size"] = nil
             passInput = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted])
         }
         try passInput.write(to: layoutURL)
@@ -193,7 +196,9 @@ extension GhidraHost {
                          "-processor", family.language, "-loader", "BinaryLoader",
                          "-loader-baseAddr", String(format: "0x%llX", family.flashBase),
                          "-scriptPath", configuration.sources.scripts.path,
-                         "-preScript", Self.ecPass, layoutURL.path]
+                         "-preScript", Self.ecPass, layoutURL.path,
+                         // The eflash_data block, after the analysis (ApplyItEc `post`).
+                         "-postScript", Self.ecPass, layoutURL.path, "post"]
         let log = project.folder.appendingPathComponent("analyze.log")
         let status = try Subprocess.run(install.analyzeHeadless, arguments, log: log, timeout: 1800,
                                         environment: install.environment)

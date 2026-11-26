@@ -1,12 +1,41 @@
 import Foundation
 
+/// The language marker's first line (`Scripts/make-patched-ghidra.sh`):
+/// `<processor>:<patch>` joined by `+`, as `x86:descriptor-tables-1+NDS32:nds32-standby-1`.
+/// A patch belongs to a module only when it is for the module's processor, so
+/// one install's patches for another processor change neither the module's
+/// recipe nor what its project needs. `Owner.languagePatch` and
+/// `ExportCode.languagePatch` read the line the same way.
+public enum LanguagePatches {
+    /// The patches of `line` for `processor` (Ghidra's processor name, `x86`
+    /// or `NDS32`), joined by `+`; nil when there are none. A patch written
+    /// without its processor — a marker made before NDS32 had one, or a
+    /// project record, which keeps the module's own — is NDS32's when its name
+    /// starts `nds32-`, else x86's.
+    public static func `for`(_ processor: String, in line: String?) -> String? {
+        guard let line else { return nil }
+        let mine = line.split(separator: "+").compactMap { each -> Substring? in
+            guard let colon = each.firstIndex(of: ":") else {
+                return unqualifiedProcessor(each).lowercased() == processor.lowercased() ? each : nil
+            }
+            return each[..<colon].lowercased() == processor.lowercased() ? each[each.index(after: colon)...] : nil
+        }
+        return mine.isEmpty ? nil : mine.joined(separator: "+")
+    }
+
+    static func unqualifiedProcessor(_ patch: Substring) -> String {
+        patch.lowercased().hasPrefix("nds32-") ? "NDS32" : "x86"
+    }
+}
+
 /// What a module's Ghidra project was made and last written with: what an
 /// owner opening it elsewhere must match, so the program reads as it was
 /// reviewed.
 public struct ProjectEnvironment: Codable, Equatable, Sendable {
     /// The Ghidra version, as the install names it.
     public var ghidra: String
-    /// The x86 language patch the install was compiled with; nil for a stock Ghidra.
+    /// The language patches of the project's processor the install was
+    /// compiled with (`LanguagePatches`); nil for none.
     public var languagePatch: String?
     /// The EDK2 type set the program was typed with.
     public var types: String?
@@ -29,11 +58,16 @@ public struct ProjectEnvironment: Codable, Equatable, Sendable {
 
     /// What an install must share with the project to open it: the program's
     /// database is Ghidra's version's, and its instructions are the language's.
+    /// The install must carry every language patch the project was made with
+    /// (`a+b` names two); one it carries besides opens the project too — a
+    /// patch for another processor changes none of its instructions, and
+    /// nds32-standby-1 is brought into an older EC project by `ec/reapply`.
     /// Empty when it may.
     public func differences(ghidra other: String, languagePatch otherPatch: String?) -> [String] {
         var said: [String] = []
         if ghidra != other { said.append("Ghidra \(ghidra) made it, this install is \(other)") }
-        if languagePatch != otherPatch {
+        func patches(_ line: String?) -> Set<Substring> { Set((line ?? "").split(separator: "+")) }
+        if !patches(languagePatch).isSubset(of: patches(otherPatch)) {
             said.append("its language patch is \(languagePatch ?? "none"), this install's is \(otherPatch ?? "none")")
         }
         return said

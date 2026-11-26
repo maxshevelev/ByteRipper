@@ -437,12 +437,25 @@ public class Owner {
     }
 
     /**
-     * The language patch this Ghidra was compiled with, from the marker
-     * Scripts/make-patched-ghidra.sh leaves in it; null on a stock install. The
-     * folder's name and the jar do not tell: the patched copy shares both.
+     * The language patches this Ghidra was compiled with for the program's
+     * processor, from the marker Scripts/make-patched-ghidra.sh leaves in it:
+     * its first line is `x86:descriptor-tables-1+NDS32:nds32-standby-1`; a
+     * patch without a processor is NDS32's when named `nds32-…`, else x86's
+     * (`LanguagePatches` in Swift reads it the same way).
+     * null on a stock install, and for a processor no patch is for — so an x86
+     * module's recipe stays `-lang-descriptor-tables-1`.
      */
-    private static String languagePatch() {
-        return patchMarker("byteripper-language-patch");
+    private String languagePatch() {
+        String line = patchMarker("byteripper-language-patch");
+        if (line == null) return null;
+        String processor = program.getLanguage().getProcessor().toString();
+        java.util.List<String> mine = new java.util.ArrayList<>();
+        for (String each : line.split("\\+")) {
+            int colon = each.indexOf(':');
+            String owner = colon >= 0 ? each.substring(0, colon) : each.toLowerCase().startsWith("nds32-") ? "NDS32" : "x86";
+            if (owner.equalsIgnoreCase(processor)) mine.add(colon < 0 ? each : each.substring(colon + 1));
+        }
+        return mine.isEmpty() ? null : String.join("+", mine);
     }
 
     /** The decompiler patch (stack-params-1), from its own marker; null on a stock install. */
@@ -5365,8 +5378,19 @@ public class Owner {
         }
         if (program.getMemory().getBlock("flash") == null) throw new Failure(409, "the program has no `flash` block: not an EC module");
         JsonObject answer = identity();
+        // The block over the flash data area, when the project has none.
+        answer.add("eflash_data", ApplyItEc.eflashDataBlock(program, body));
         JsonObject applied = ApplyItEc.flashReferences(program, body);
         for (String key : applied.keySet()) answer.add(key, applied.get(key));
+        // The standby sites: only a Ghidra whose NDS32 language goes on after
+        // standby (nds32-standby-1) reads code past them.
+        String patch = languagePatch();
+        if (patch != null && java.util.Arrays.asList(patch.split("\\+")).contains("nds32-standby-1")) {
+            JsonObject standby = ApplyItEc.standbySites(program, TaskMonitor.DUMMY);
+            for (String key : standby.keySet()) answer.add(key, standby.get(key));
+        } else {
+            answer.addProperty("standby", "this Ghidra has no nds32-standby-1: standby sites left as they are");
+        }
         return answer;
     }
 

@@ -72,7 +72,7 @@ commit: $(git -C "$repo" rev-parse --short HEAD)
 branch: $(git -C "$repo" rev-parse --abbrev-ref HEAD)
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 bundles:$bundles
-ghidra: 12.2 with language patch descriptor-tables-1 — the analyses' recipe; another version or patch is a second recipe
+ghidra: 12.2 with language patches x86:descriptor-tables-1+NDS32:nds32-standby-1 — the analyses' recipe; another version or patch is a second recipe
 EOF
 
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"

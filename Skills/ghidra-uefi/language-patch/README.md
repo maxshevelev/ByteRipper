@@ -1,6 +1,6 @@
-# The x86 language patch and the decompiler patch
+# The language patches and the decompiler patch
 
-Three patches, applied together by `Scripts/make-patched-ghidra.sh` to a copy of
+Four patches, applied together by `Scripts/make-patched-ghidra.sh` to a copy of
 a stock install. The stock install is not touched.
 
 `descriptor-tables-1.patch` changes Ghidra 12.2's
@@ -126,4 +126,47 @@ globals, and pointers in modules based at their link address, do not change.
   `-decomp-stack-params-1-equates-1`.
 - Like `stack-params-1`, it changes the C printed, not the program kept.
 - At a new Ghidra version the script stops, because `coreaction.cc` is another
+  file: read the patch against it, then make a new patch and a new id.
+
+# The NDS32 language patch: standby
+
+`nds32-standby-1.patch` changes one constructor of Ghidra 12.2's
+`Ghidra/Processors/NDS32/data/languages/nds32.sinc`. The script compiles
+`nds32le.sla` and `nds32be.sla` with it, beside the x86 ones.
+
+## What it corrects
+
+`STANDBY` stops the core until an interrupt or a wake-up event, then goes on
+with the next instruction. Stock models it as `goto inst_start`, a branch to
+itself, so the flow ends at it: the code after it is never disassembled, the
+function around it ends there and decompiles as `do {} while (true)`, and a
+caller can be cut after the call. In ItEcNmD562 the function at 0x20CD2 lost
+its return at 0x20CE6 (issue a29c3b91).
+
+| instruction | stock | patched |
+|---|---|---|
+| `standby n` | `goto inst_start` | `standby(n:1)`, falls through |
+
+The instruction text, bytes and lengths do not change.
+
+## What depends on it
+
+- The marker `byteripper-language-patch` names both language patches with
+  their processors on its first line,
+  `x86:descriptor-tables-1+NDS32:nds32-standby-1`, and hashes the four
+  compiled files. A module takes only its own processor's: `language_patch`
+  in the owner's `hello` and in the artifact is `nds32-standby-1` for an EC
+  module and `descriptor-tables-1` for a UEFI one, so an x86 recipe id stays
+  `-lang-descriptor-tables-1` and an EC one reads `-lang-nds32-standby-1`.
+  A patch written without a processor is NDS32's when named `nds32-…`, else
+  x86's (`LanguagePatches`).
+- The language id and version stay as they are. A project made before opens
+  on the patched Ghidra and reads its standby sites as falling through at
+  once, but the code stock never read past them and the bodies it cut stay
+  as they were: `ghidra_ec_reapply` disassembles that code and gives the
+  functions their bodies, only on a Ghidra with this patch.
+- A project's environment names its processor's language patches; an
+  install with a patch the project was made without opens it, one without a
+  patch the project was made with does not.
+- At a new Ghidra version the script stops, because `nds32.sinc` is another
   file: read the patch against it, then make a new patch and a new id.

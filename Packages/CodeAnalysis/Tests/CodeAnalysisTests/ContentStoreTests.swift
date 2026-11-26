@@ -476,11 +476,28 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(store.verify().filter { $0.contains("is not in the module's history") }.count, 1)
     }
 
+    func testALanguagePatchBelongsToItsProcessor() {
+        let line = "x86:descriptor-tables-1+NDS32:nds32-standby-1"
+        XCTAssertEqual(LanguagePatches.for("x86", in: line), "descriptor-tables-1")
+        XCTAssertEqual(LanguagePatches.for("NDS32", in: line), "nds32-standby-1")
+        XCTAssertNil(LanguagePatches.for("ARM", in: line))
+        XCTAssertNil(LanguagePatches.for("x86", in: nil))
+        // A marker or a record without processors: by the name.
+        XCTAssertEqual(LanguagePatches.for("x86", in: "descriptor-tables-1"), "descriptor-tables-1")
+        XCTAssertNil(LanguagePatches.for("NDS32", in: "descriptor-tables-1"))
+        XCTAssertEqual(LanguagePatches.for("NDS32", in: "nds32-standby-1"), "nds32-standby-1")
+    }
+
     func testAnEnvironmentSaysWhatAnInstallDoesNotShare() {
         let made = ProjectEnvironment(ghidra: "12.2", languagePatch: "descriptor-tables-1", types: nil, passes: [],
                                       recipe: "r", ownerBuild: 1)
         XCTAssertEqual(made.differences(ghidra: "12.2", languagePatch: "descriptor-tables-1"), [])
         XCTAssertEqual(made.differences(ghidra: "12.3", languagePatch: nil).count, 2)
+        // A patch added to the install (nds32-standby-1) opens it; one taken away does not.
+        XCTAssertEqual(made.differences(ghidra: "12.2", languagePatch: "descriptor-tables-1+nds32-standby-1"), [])
+        let both = ProjectEnvironment(ghidra: "12.2", languagePatch: "descriptor-tables-1+nds32-standby-1", types: nil,
+                                      passes: [], recipe: "r", ownerBuild: 1)
+        XCTAssertEqual(both.differences(ghidra: "12.2", languagePatch: "descriptor-tables-1").count, 1)
     }
 
     /// A revision keeps the code it published: the history names the

@@ -36,6 +36,10 @@ public struct ECChipFamily: Equatable, Sendable {
     /// The data RAM and the register window.
     public let ram: Range<UInt64>
     public let registers: Range<UInt64>
+    /// The registers the EC writes a flash address into to read or write its
+    /// own flash (SMFI ECINDAR0–3 on IT83xx): a routine that stores to them
+    /// takes a flash address.
+    public let flashAddressRegisters: Range<UInt64>
     /// Where, in a read of the chip, the EC keeps what it writes at run time
     /// (settings, a log): a slice whose bytes past the image are only there
     /// is a chip read, and those bytes are not the image's.
@@ -68,6 +72,7 @@ public struct ECChipFamily: Equatable, Sendable {
         flashBase: 0,
         ram: 0x80000..<0x83000,
         registers: 0xF00000..<0xF10000,
+        flashAddressRegisters: 0xF0103B..<0xF0103F,
         runtimeAreaStart: 0x2A000,
         firstInterruptVector: 9,
         exceptionVectors: [1: "TlbFill", 2: "PteNotPresent", 3: "TlbMisc", 4: "TlbVlptMiss",

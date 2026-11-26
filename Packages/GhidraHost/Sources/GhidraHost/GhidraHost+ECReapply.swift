@@ -6,8 +6,11 @@ import Foundation
 /// added to a project made before it did (builds before 866): the DATA
 /// references from the code, the `FlashRef_<ADDR>` labels with their plates
 /// (`ApplyItEc.flashReferences`, the same code creation runs), and
-/// `refs_past_extent` in the module's facts. Nothing else of the review is
-/// touched, and a second run adds nothing.
+/// `refs_past_extent` in the module's facts. On a Ghidra whose language
+/// carries nds32-standby-1, also the code a stock analysis never read after
+/// each `standby`, and the bodies of the functions it cut
+/// (`ApplyItEc.standbySites`). Nothing else of the review is touched, and a
+/// second run adds nothing.
 extension GhidraHost {
     static let ecReapplyPath = "/v1/ec/reapply"
 
@@ -53,11 +56,14 @@ extension GhidraHost {
         if after.module.ec?.refsPastExtent == nil {
             after.module.ec?.refsPastExtent = references
             factsAnswer = ["refs_past_extent": "added", "count": references.count]
+        } else if after.module.ec?.refsPastExtent != references {
+            // A list an earlier rule read (by value, not by use): the facts
+            // are the image's, not the review's, so they follow the rule.
+            let before = after.module.ec?.refsPastExtent?.count ?? 0
+            after.module.ec?.refsPastExtent = references
+            factsAnswer = ["refs_past_extent": "replaced", "count": references.count, "was": before]
         } else {
-            factsAnswer = ["refs_past_extent": "kept", "count": after.module.ec?.refsPastExtent?.count ?? 0]
-            if after.module.ec?.refsPastExtent != references {
-                factsAnswer["note"] = "the facts hold another list than the image gives (\(references.count)): kept"
-            }
+            factsAnswer = ["refs_past_extent": "kept", "count": references.count]
         }
         after.reviewed = state.reviewed
         try project.write(after)

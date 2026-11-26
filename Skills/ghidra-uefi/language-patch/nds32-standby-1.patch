@@ -1,0 +1,19 @@
+--- a/Ghidra/Processors/NDS32/data/languages/nds32.sinc
++++ b/Ghidra/Processors/NDS32/data/languages/nds32.sinc
+@@ -644,10 +644,15 @@
+ 
+ :setend.^SetendBE is $(I32) & $(MISC) & ToggleL=0 & SetendBE & SrIdx=0b0010000000 & Rd=0b00001 & Sub5=0b00011 { }
+ 
+-:standby StandbySub is $(I32) & $(MISC) & Rt=0 & Ra=0 & Rb=0 & StandbyZ=0 & StandbySub & Sub5=0b00000 { goto inst_start; }
++# ByteRipper nds32-standby-1: standby waits for an interrupt or a wake-up event and
++# then goes on with the next instruction; stock modelled it as a branch to itself,
++# which ended every function at it
++define pcodeop standby;
+ 
++:standby StandbySub is $(I32) & $(MISC) & Rt=0 & Ra=0 & Rb=0 & StandbyZ=0 & StandbySub & Sub5=0b00000 { standby(StandbySub:1); }
+ 
+ 
++
+ ### 32-bit Baseline V2 instructions ###
+ 
+ ### ALU Instructions ###

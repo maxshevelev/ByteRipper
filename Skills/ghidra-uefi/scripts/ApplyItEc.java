@@ -9,7 +9,8 @@
 // Skills/ghidra-ec/reference, into the JSON this script reads. The script
 // only applies it:
 //
-// - blocks: `flash` [0, extent) r-x, `ram` rw, `regs` rw volatile;
+// - blocks: `flash` [0, extent) r-x, `eflash_data` [extent,
+//   host_update_size) rw uninitialised, `ram` rw, `regs` rw volatile;
 // - functions at the vectors: ResetEntry, Exc_<name>, Isr_Lvl<N> (N is the
 //   level the stub loads into r0: vector 9 + N); IsrCommonEntry, the level
 //   handlers IsrLevelHandler<N>, IsrDispatch, and one Isr_Irq<NNN> per INTC
@@ -65,6 +66,15 @@ public class ApplyItEc extends GhidraScript {
         JsonObject input = JsonParser.parseString(Files.readString(Path.of(args[0]))).getAsJsonObject();
         space = currentProgram.getAddressFactory().getDefaultAddressSpace();
         Memory memory = currentProgram.getMemory();
+        if (args.length > 1 && args[1].equals("post")) {
+            // After the analysis: the eflash_data block. Made before it, the
+            // analysis would reference every constant that falls in it (the
+            // timer's 150000 at 0x15424 = 0x249F0) — the very thing
+            // flashReferences proves by use instead.
+            JsonObject block = eflashDataBlock(currentProgram, input);
+            println("ApplyItEc eflash_data: " + block);
+            return;
+        }
 
         // The blocks.
         long extent = input.get("extent").getAsLong();
@@ -352,12 +362,13 @@ public class ApplyItEc extends GhidraScript {
             }
             try {
                 // Only what this module's bytes and family say: the plate
+                // (begins with FLASH_REF_PLATE, which a rejection looks for)
                 // is keyed by the module and shows in every dump.
                 String rewrite = hostUpdate > 0 && address < hostUpdate
                     ? String.format(" A host update (host_update_size 0x%X) rewrites [0x%X, 0x%X) from the host's copy.", hostUpdate, extent, hostUpdate)
                     : " Outside the range a host update rewrites.";
                 listing.setComment(to, CommentType.PLATE, String.format(
-                    "Referenced past the image extent (0x%X): the EC's flash data area, not part of this module."
+                    FLASH_REF_PLATE + " (0x%X): the EC's flash data area, not part of this module."
                     + " Its contents are whatever the EC wrote there at run time.%s"
                     + " The meaning comes from the code that reads or writes it.", extent, rewrite));
                 platesAdded.add(plate);
@@ -366,12 +377,139 @@ public class ApplyItEc extends GhidraScript {
                 platesKept.add(plate);
             }
         }
+        rejectFlashReferences(program, input, answer);
         answer.add("references_added", refsAdded);
         answer.add("references_kept", refsKept);
         answer.add("labels_added", labelsAdded);
         answer.add("labels_kept", labelsKept);
         answer.add("plates_added", platesAdded);
         answer.add("plates_kept", platesKept);
+        return answer;
+    }
+
+    /** How the plate `flashReferences` writes begins. */
+    static final String FLASH_REF_PLATE = "Referenced past the image extent";
+
+    /**
+     * The places a project made under the earlier rule labelled that the
+     * input's `refs_past_extent` no longer holds (0x249F0 on IT8227E: a
+     * timer's 150000 ms, not an address): the label goes, with the DATA
+     * references this pass made to it and its plate, only while it is still
+     * this pass's — named `FlashRef_<ADDR>` and IMPORTED, the plate still
+     * beginning with FLASH_REF_PLATE. A renamed place, or one a review
+     * commented, is kept and listed with `why`. Adds `labels_removed`,
+     * `references_removed`, `plates_removed` and `rejected_kept` to `answer`.
+     */
+    static void rejectFlashReferences(ghidra.program.model.listing.Program program, JsonObject input, JsonObject answer) {
+        AddressSpace space = program.getAddressFactory().getDefaultAddressSpace();
+        var references = program.getReferenceManager();
+        var listing = program.getListing();
+        java.util.Set<Long> given = new java.util.HashSet<>();
+        if (has(input, "refs_past_extent")) {
+            for (JsonElement each : input.getAsJsonArray("refs_past_extent")) {
+                given.add(each.getAsJsonObject().get("address").getAsLong());
+            }
+        }
+        JsonArray labelsRemoved = new JsonArray(), refsRemoved = new JsonArray(),
+            platesRemoved = new JsonArray(), kept = new JsonArray();
+        // Every place past the extent this pass referenced (IMPORTED DATA).
+        long extent = input.get("extent").getAsLong();
+        java.util.TreeSet<Address> places = new java.util.TreeSet<>();
+        var destinations = references.getReferenceDestinationIterator(
+            new AddressSet(space.getAddress(extent), space.getMaxAddress()), true);
+        while (destinations.hasNext()) places.add(destinations.next());
+        var symbols = program.getSymbolTable();
+        for (Address to : places) {
+            long address = to.getOffset();
+            if (given.contains(address)) continue;
+            List<ghidra.program.model.symbol.Reference> ours = new ArrayList<>();
+            for (var reference : references.getReferencesTo(to)) {
+                if (reference.getSource() == SourceType.IMPORTED
+                    && reference.getReferenceType() == ghidra.program.model.symbol.RefType.DATA) ours.add(reference);
+            }
+            if (ours.isEmpty()) continue;
+            String where = String.format("0x%X", address);
+            String name = String.format("FlashRef_%X", address);
+            var primary = symbols.getPrimarySymbol(to);
+            if (primary == null || primary.isDynamic() || !primary.getName().equals(name)
+                || primary.getSource() != SourceType.IMPORTED) {
+                JsonObject note = new JsonObject();
+                note.addProperty("address", where);
+                note.addProperty("why", (primary == null || primary.isDynamic() ? "no FlashRef_ label"
+                    : "named " + primary.getName() + " by a review") + ": kept, with its references");
+                kept.add(note);
+                continue;
+            }
+            for (var reference : ours) {
+                JsonObject removed = new JsonObject();
+                removed.addProperty("from", String.format("0x%X", reference.getFromAddress().getOffset()));
+                removed.addProperty("address", where);
+                references.delete(reference);
+                refsRemoved.add(removed);
+            }
+            String plate = listing.getComment(CommentType.PLATE, to);
+            if (plate != null && plate.startsWith(FLASH_REF_PLATE)) {
+                listing.setComment(to, CommentType.PLATE, null);
+                platesRemoved.add(where);
+            }
+            JsonObject label = new JsonObject();
+            label.addProperty("address", where);
+            label.addProperty("name", primary.getName());
+            primary.delete();
+            labelsRemoved.add(label);
+        }
+        answer.add("labels_removed", labelsRemoved);
+        answer.add("references_removed", refsRemoved);
+        answer.add("plates_removed", platesRemoved);
+        answer.add("rejected_kept", kept);
+    }
+
+    /** The name of the block over the flash data area past the image. */
+    public static final String EFLASH_DATA_BLOCK = "eflash_data";
+
+    /**
+     * The flash past the image, from the end of the `flash` block to the end
+     * of what a host update writes (`host_update_size`, 0x2C000 on IT8227E:
+     * the EC's settings and log live there): an uninitialised block, read and
+     * write, not executable, so a review can type data and write plates
+     * there. Its bytes are not the module's — the BIOS copy holds FF, the
+     * chip what the EC wrote — so none are given. Added when absent, in the
+     * caller's transaction; the answer says whether it was added, kept, or
+     * why there is none.
+     */
+    public static JsonObject eflashDataBlock(ghidra.program.model.listing.Program program, JsonObject input) {
+        JsonObject answer = new JsonObject();
+        Memory memory = program.getMemory();
+        MemoryBlock held = memory.getBlock(EFLASH_DATA_BLOCK);
+        if (held != null) {
+            answer.addProperty("block", "kept");
+            answer.addProperty("start", String.format("0x%X", held.getStart().getOffset()));
+            answer.addProperty("end", String.format("0x%X", held.getEnd().getOffset() + 1));
+            return answer;
+        }
+        MemoryBlock flash = memory.getBlock("flash");
+        long end = has(input, "host_update_size") ? input.get("host_update_size").getAsLong() : 0;
+        if (flash == null || end <= flash.getEnd().getOffset() + 1) {
+            answer.addProperty("block", "none");
+            answer.addProperty("why", flash == null ? "no flash block" : "no flash past the image to cover");
+            return answer;
+        }
+        long start = flash.getEnd().getOffset() + 1;
+        try {
+            MemoryBlock block = memory.createUninitializedBlock(EFLASH_DATA_BLOCK,
+                program.getAddressFactory().getDefaultAddressSpace().getAddress(start), end - start, false);
+            block.setRead(true);
+            block.setWrite(true);
+            block.setExecute(false);
+            block.setComment("The EC's flash past the image: settings and log written at run time; no bytes here.");
+            answer.addProperty("block", "added");
+        } catch (Exception e) {
+            answer.addProperty("block", "none");
+            answer.addProperty("why", e.getMessage());
+            return answer;
+        }
+        answer.addProperty("start", String.format("0x%X", start));
+        answer.addProperty("end", String.format("0x%X", end));
         return answer;
     }
 
@@ -430,6 +568,94 @@ public class ApplyItEc extends GhidraScript {
                 if (createFunction(target, null) != null) functions++;
             }
         }
+    }
+
+    /**
+     * `standby` sites made right on a Ghidra whose NDS32 language carries
+     * nds32-standby-1 (Scripts/make-patched-ghidra.sh). Stock Ghidra models
+     * standby as a branch to itself, so a program analysed on it has no code
+     * after a standby and its function ends there; the patched language
+     * reads the same bytes as an instruction that goes on. Here the code
+     * after each site is disassembled, the function around it gets its body
+     * again and loses a no-return mark it no longer earns, and a call to it
+     * that was cut as a terminator goes on too — then its caller the same
+     * way. Names, comments and types are not touched; a second run changes
+     * nothing. Only for a Ghidra with the patch: on stock, standby still
+     * ends the flow and this would undo nothing.
+     */
+    public static JsonObject standbySites(ghidra.program.model.listing.Program program,
+                                          ghidra.util.task.TaskMonitor monitor) throws Exception {
+        var listing = program.getListing();
+        JsonArray sites = new JsonArray(), disassembled = new JsonArray(), bodies = new JsonArray(),
+            returning = new JsonArray(), calls = new JsonArray();
+        java.util.ArrayDeque<Function> work = new java.util.ArrayDeque<>();
+        java.util.Set<Address> queued = new java.util.HashSet<>();
+        List<ghidra.program.model.listing.Instruction> found = new ArrayList<>();
+        for (var instruction : listing.getInstructions(true)) {
+            if (instruction.getMnemonicString().equalsIgnoreCase("standby")) found.add(instruction);
+        }
+        for (var instruction : found) {
+            Address at = instruction.getAddress();
+            sites.add(String.format("0x%X", at.getOffset()));
+            Address next = instruction.getFallThrough();
+            if (next == null) continue; // the language is stock's: nothing to do
+            if (listing.getInstructionAt(next) == null && listing.getDefinedDataAt(next) == null) {
+                new DisassembleCommand(next, null, true).applyTo(program, monitor);
+                if (listing.getInstructionAt(next) != null) disassembled.add(String.format("0x%X", next.getOffset()));
+            }
+            Function around = program.getFunctionManager().getFunctionContaining(at);
+            if (around != null && queued.add(around.getEntryPoint())) work.add(around);
+        }
+        while (!work.isEmpty()) {
+            Function function = work.poll();
+            var before = function.getBody();
+            ghidra.app.cmd.function.CreateFunctionCmd.fixupFunctionBody(program, listing.getInstructionAt(function.getEntryPoint()), monitor);
+            if (!function.getBody().equals(before)) {
+                bodies.add(String.format("0x%X", function.getEntryPoint().getOffset()));
+            }
+            if (function.hasNoReturn() && returns(program, function)) {
+                function.setNoReturn(false);
+                returning.add(String.format("0x%X", function.getEntryPoint().getOffset()));
+            }
+            if (function.hasNoReturn()) continue;
+            for (var reference : program.getReferenceManager().getReferencesTo(function.getEntryPoint())) {
+                if (!reference.getReferenceType().isCall()) continue;
+                var call = listing.getInstructionAt(reference.getFromAddress());
+                if (call == null) continue;
+                boolean changed = false;
+                if (call.getFlowOverride() == ghidra.program.model.listing.FlowOverride.CALL_RETURN
+                    || call.getFlowOverride() == ghidra.program.model.listing.FlowOverride.RETURN) continue;
+                if (call.getFallThrough() == null && call.getFlowOverride() != ghidra.program.model.listing.FlowOverride.NONE) {
+                    call.setFlowOverride(ghidra.program.model.listing.FlowOverride.NONE);
+                    changed = true;
+                }
+                Address next = call.getFallThrough();
+                if (next != null && listing.getInstructionAt(next) == null && listing.getDefinedDataAt(next) == null) {
+                    new DisassembleCommand(next, null, true).applyTo(program, monitor);
+                    changed |= listing.getInstructionAt(next) != null;
+                }
+                if (!changed) continue;
+                calls.add(String.format("0x%X", call.getAddress().getOffset()));
+                Function caller = program.getFunctionManager().getFunctionContaining(call.getAddress());
+                if (caller != null && queued.add(caller.getEntryPoint())) work.add(caller);
+            }
+        }
+        JsonObject answer = new JsonObject();
+        answer.add("standby_sites", sites);
+        answer.add("standby_disassembled", disassembled);
+        answer.add("standby_bodies", bodies);
+        answer.add("standby_returning", returning);
+        answer.add("standby_calls", calls);
+        return answer;
+    }
+
+    /** Whether a function's body holds a return. */
+    private static boolean returns(ghidra.program.model.listing.Program program, Function function) {
+        for (var instruction : program.getListing().getInstructions(function.getBody(), true)) {
+            var flow = instruction.getFlowType();
+            if (flow.isTerminal() && !flow.isCall() && !flow.isJump()) return true;
+        }
+        return false;
     }
 
     private static boolean has(JsonObject object, String key) {

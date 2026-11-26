@@ -6,10 +6,17 @@ import Foundation
 /// opens that one, so the project the review goes on is the one the revision
 /// was published from.
 extension GhidraHost {
+    /// The processor a module's program is of, from the passes it was made
+    /// with: an EC module (the EC pass) is NDS32, every other x86.
+    static func processor(passes: [String]) -> String {
+        passes.contains(ecPass) ? "NDS32" : "x86"
+    }
+
     /// What this install and the project make: the environment a record keeps.
     func environment(of state: ProjectState, recipe: String) throws -> ProjectEnvironment {
         let install = try ghidra()
-        return ProjectEnvironment(ghidra: install.version, languagePatch: install.languagePatch,
+        return ProjectEnvironment(ghidra: install.version,
+                                  languagePatch: install.languagePatch(for: Self.processor(passes: state.madeWith.passes)),
                                   types: state.madeWith.types, passes: state.madeWith.passes, recipe: recipe,
                                   ownerBuild: try? OwnerBuild.build(for: install, sources: configuration.sources))
     }
@@ -37,8 +44,13 @@ extension GhidraHost {
     func restoreProject(_ module: SHA256Digest) async throws {
         guard let kept = try await writer.readProject(module: module) else { return }
         let install = try ghidra()
-        let differences = kept.record.environment.differences(ghidra: install.version,
-                                                              languagePatch: install.languagePatch)
+        // Both sides read for the module's processor: a record made before
+        // the marker named processors holds the x86 patch for an EC module too.
+        let processor = Self.processor(passes: kept.record.environment.passes)
+        var made = kept.record.environment
+        made.languagePatch = LanguagePatches.for(processor, in: made.languagePatch)
+        let differences = made.differences(ghidra: install.version,
+                                           languagePatch: install.languagePatch(for: processor))
         guard differences.isEmpty else {
             throw GhidraHostError(.refused, "the store keeps \(module.hex)'s project, and this install cannot open it "
                                   + "as it was made: " + differences.joined(separator: "; "), status: 409)

@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Foundation
 
 /// What `GhidraHost` refuses, in the words the client shows.
@@ -48,10 +49,16 @@ public struct GhidraInstall: Equatable, Sendable {
     }
     public var java: URL { jdk.appendingPathComponent("bin/java") }
 
-    /// The x86 language patch this install was compiled with, as
+    /// The language patches this install was compiled with (x86, NDS32), as
     /// `Scripts/make-patched-ghidra.sh` marks it — what the owner's `hello`
     /// says; nil for a stock Ghidra.
     public var languagePatch: String? { patch("byteripper-language-patch") }
+
+    /// The language patches this install carries for one processor (`x86`,
+    /// `NDS32`): what a module of that processor is made with.
+    public func languagePatch(for processor: String) -> String? {
+        LanguagePatches.for(processor, in: languagePatch)
+    }
 
     /// The decompiler patch this install was built with (`stack-params-1`:
     /// 32-bit x86 stack parameters in 4-byte slots); nil for a stock Ghidra.

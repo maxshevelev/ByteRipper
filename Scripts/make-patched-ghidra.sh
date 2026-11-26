@@ -1,6 +1,6 @@
 #!/bin/bash
 # Makes the Ghidra the analyses run on: a copy of a stock install with the x86
-# language patched and compiled, and the decompiler's 32-bit x86 stack
+# language and the NDS32 `standby` patched and compiled, and the decompiler's 32-bit x86 stack
 # parameters and its reading of named constants corrected and rebuilt; the
 # stock install left as it was.
 #
@@ -8,7 +8,9 @@
 #
 # Why the patches exist is in Skills/ghidra-uefi/language-patch/README.md. The
 # copy carries two markers, `byteripper-language-patch` and
-# `byteripper-decompiler-patch`: the first line of each names its patch, the
+# `byteripper-decompiler-patch`: the first line of each names its patches (the
+# language marker's as `<processor>:<patch>`, joined by `+`, so a module's
+# recipe names only its own processor's), the
 # rest are the built files' hashes, which the exporter, the owner's `hello` and
 # the doctor read. Name the copy's folder in `ghidraHome`.
 set -euo pipefail
@@ -25,7 +27,9 @@ patches="$here/../Skills/ghidra-uefi/language-patch"
 id=descriptor-tables-1
 decompiler_id=stack-params-1
 equates_id=equates-1
+nds32_id=nds32-standby-1
 languages=Ghidra/Processors/x86/data/languages
+nds32=Ghidra/Processors/NDS32/data/languages
 cpp=Ghidra/Features/Decompiler/src/decompile/cpp
 java=Ghidra/Framework/SoftwareModeling/src/main/java
 modeling=Ghidra/Framework/SoftwareModeling/lib/SoftwareModeling.jar
@@ -53,6 +57,13 @@ if [ "$have" != "$coreaction_sha" ]; then
     echo "$stock/$cpp/coreaction.cc is not the file $equates_id was made against: read the patch against it first" >&2
     exit 1
 fi
+# The NDS32 nds32.sinc the fourth patch was made against.
+nds32_sha=b045960a0ca508dd2162bf577e0e3727a5e4933d6c9684acd7b02cdae33fff63
+have="$(shasum -a 256 "$stock/$nds32/nds32.sinc" | cut -d' ' -f1)"
+if [ "$have" != "$nds32_sha" ]; then
+    echo "$stock/$nds32/nds32.sinc is not the file $nds32_id was made against: read the patch against it first" >&2
+    exit 1
+fi
 if [ -e "$stock/byteripper-language-patch" ]; then
     echo "$stock already carries a language patch: start from a stock install" >&2
     exit 1
@@ -62,6 +73,7 @@ export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 25+)}"
 mkdir -p "$(dirname "$copy")"
 cp -c -R "$stock" "$copy" 2>/dev/null || cp -R "$stock" "$copy"
 patch -s -p1 -d "$copy" < "$patches/$id.patch"
+patch -s -p1 -d "$copy" < "$patches/$nds32_id.patch"
 # The decompiler: ParamEntry in its C++ and in the Java that hands the
 # decompiler its storage, both from the sources the install ships.
 mkdir -p "$copy/$java"
@@ -88,10 +100,13 @@ rm -rf "$classes"
 for spec in x86.slaspec x86-64.slaspec; do
     (cd "$copy/$languages" && "$copy/support/sleigh" "$spec" >/dev/null)
 done
+for spec in nds32le.slaspec nds32be.slaspec; do
+    (cd "$copy/$nds32" && "$copy/support/sleigh" "$spec" >/dev/null)
+done
 {
-    echo "$id"
-    (cd "$copy" && shasum -a 256 "$languages/x86.sla" "$languages/x86-64.sla")
+    echo "x86:$id+NDS32:$nds32_id"
+    (cd "$copy" && shasum -a 256 "$languages/x86.sla" "$languages/x86-64.sla" "$nds32/nds32le.sla" "$nds32/nds32be.sla")
 } > "$copy/byteripper-language-patch"
-echo "made $copy: $id, $decompiler_id, $equates_id"
+echo "made $copy: $id, $nds32_id, $decompiler_id, $equates_id"
 sed -n '2,$p' "$copy/byteripper-language-patch"
 sed -n '2,$p' "$copy/byteripper-decompiler-patch"

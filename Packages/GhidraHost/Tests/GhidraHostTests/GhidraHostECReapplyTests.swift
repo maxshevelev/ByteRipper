@@ -5,8 +5,11 @@ import XCTest
 
 /// `ec/reapply` (`ghidra_ec_reapply`) on an ITE EC module (`GHIDRA_EC_MODULE`)
 /// made as a build before 866 made it: no flash references past the extent,
-/// no `FlashRef_` labels or plates, no `refs_past_extent` in the facts. The
-/// step adds them, keeps a reviewer's name for a place and every other edit,
+/// no `FlashRef_` labels or plates, no `eflash_data` block, no
+/// `refs_past_extent` in the facts — and with a label the earlier rule made
+/// by value (`FlashRef_249F0`, a timer's 150000 ms). The step adds them,
+/// removes that label while it is still the pass's, keeps one a reviewer
+/// renamed, keeps a reviewer's name for a place and every other edit,
 /// adds nothing a second time, and is refused without the lease and for a
 /// module that is no EC; the facts reach the next publish. A run without the
 /// image or Ghidra skips.
@@ -74,11 +77,30 @@ final class GhidraHostECReapplyTests: XCTestCase {
         _ = try await post("/v1/rename/function", ["address": "0x15324", "name": "ReviewerFlashReader"])
         _ = try await post("/v1/set/comment", ["address": "0x15424", "kind": "eol", "text": "reviewer note kept"])
         _ = try await post("/v1/set/data", ["address": "0x2A600", "name": "EflashState_2A600"])
+        // What the earlier rule (by value) left: FlashRef_249F0 from the
+        // timer's `movi` at 0x15424, and one at 0x2A400 a reviewer renamed.
+        let byValue: [String: Any] = ["extent": 0x249F0, "host_update_size": 0,
+                                      "refs_past_extent": [["address": 0x249F0, "from": 0x15424],
+                                                           ["address": 0x2A400, "from": 0x15424]]]
+        _ = try await host.write(module, "/v1/ec/reapply", body: try JSONSerialization.data(withJSONObject: byValue),
+                                 byHost: true)
+        let oldReader = try await read("/v1/function/0x15324")
+        XCTAssertTrue("\(oldReader)".contains("FlashRef_249F0"), "\(oldReader)")
+        _ = try await post("/v1/set/data", ["address": "0x2A400", "name": "ReviewerNamed_2A400"])
 
         // 2. The step.
         let first = try await post("/v1/ec/reapply", [:])
         let added = first["references_added"] as? [[String: Any]] ?? []
-        XCTAssertEqual(added.count, 10, "\(first)")
+        XCTAssertEqual(added.count, 11, "\(first)")
+        let removed = first["labels_removed"] as? [[String: Any]] ?? []
+        XCTAssertEqual(removed.map { $0["name"] as? String }, ["FlashRef_249F0"], "\(first)")
+        XCTAssertEqual(first["plates_removed"] as? [String], ["0x249F0"], "\(first)")
+        XCTAssertEqual((first["references_removed"] as? [[String: Any]])?.map { $0["from"] as? String }, ["0x15424"],
+                       "\(first)")
+        let rejectedKept = first["rejected_kept"] as? [[String: Any]] ?? []
+        XCTAssertEqual(rejectedKept.map { $0["address"] as? String }, ["0x2A400"], "\(first)")
+        XCTAssertEqual((first["eflash_data"] as? [String: Any])?["block"] as? String, "added", "\(first)")
+        XCTAssertEqual((first["eflash_data"] as? [String: Any])?["end"] as? String, "0x2C000", "\(first)")
         let kept = first["labels_kept"] as? [[String: Any]] ?? []
         XCTAssertTrue(kept.contains { $0["address"] as? String == "0x2A600" && $0["name"] as? String == "EflashState_2A600" },
                       "\(first)")
@@ -88,7 +110,9 @@ final class GhidraHostECReapplyTests: XCTestCase {
         let to2A600 = try await xrefs(to: "0x2A600")
         XCTAssertTrue(to2A600.contains(0x718C) && to2A600.contains(0x71B2), "\(to2A600)")
         let reader = try await read("/v1/function/0x15324")
-        XCTAssertTrue("\(reader)".contains("FlashRef_249F0"), "\(reader)")
+        XCTAssertFalse("\(reader)".contains("FlashRef_249F0"), "\(reader)")
+        let toTimer = try await xrefs(to: "0x249F0")
+        XCTAssertFalse(toTimer.contains(0x15424), "\(toTimer)")
         XCTAssertEqual(reader["name"] as? String, "ReviewerFlashReader", "the reviewer's name stays")
         XCTAssertTrue("\(reader)".contains("reviewer note kept"), "the reviewer's comment stays: \(reader)")
         let named = try await read("/v1/data?limit=5000")
@@ -96,15 +120,24 @@ final class GhidraHostECReapplyTests: XCTestCase {
         let c = try await read("/v1/function/0x718C")
         XCTAssertTrue("\(c)".contains("EflashState_2A600"), "the reviewer's name for 0x2A600 stays: \(c)")
         let state = try await host.project(module).state()
-        XCTAssertEqual(state.module.ec?.refsPastExtent?.count, 10)
-        XCTAssertTrue(state.module.ec?.refsPastExtent?.contains(.init(address: 0x249F0, from: 0x15424)) ?? false)
+        XCTAssertEqual(state.module.ec?.refsPastExtent?.count, 11)
+        XCTAssertFalse(state.module.ec?.refsPastExtent?.contains { $0.address == 0x249F0 } ?? true)
+
+        // The flash data area takes a type and a plate now.
+        _ = try await post("/v1/type", ["c": "typedef struct { unsigned char Kind; unsigned char Data[31]; } EFLASH_EVENT_LOG_RECORD;"])
+        _ = try await post("/v1/set/data", ["address": "0x2B800", "name": "EflashEventLog", "type": "EFLASH_EVENT_LOG_RECORD[32]"])
+        _ = try await post("/v1/set/comment", ["address": "0x2B800", "kind": "plate", "text": "The event log."])
+        let log = try await read("/v1/data?limit=5000")
+        XCTAssertTrue("\(log)".contains("EflashEventLog") && "\(log)".contains("EFLASH_EVENT_LOG_RECORD"), "\(log)")
 
         // 4. Again: nothing added.
         let second = try await post("/v1/ec/reapply", [:])
         for list in ["references_added", "labels_added", "plates_added"] {
             XCTAssertEqual((second[list] as? [Any])?.count, 0, "\(list): \(second)")
         }
-        XCTAssertEqual((second["references_kept"] as? [Any])?.count, 10, "\(second)")
+        XCTAssertEqual((second["references_kept"] as? [Any])?.count, 11, "\(second)")
+        XCTAssertEqual((second["labels_removed"] as? [Any])?.count, 0, "\(second)")
+        XCTAssertEqual((second["eflash_data"] as? [String: Any])?["block"] as? String, "kept", "\(second)")
         XCTAssertEqual((second["facts"] as? [String: Any])?["refs_past_extent"] as? String, "kept", "\(second)")
 
         // 5. A module that is no EC: refused before anything is asked of an owner.
@@ -126,6 +159,6 @@ final class GhidraHostECReapplyTests: XCTestCase {
 
         // 6. The facts travel with the next publish.
         let published = try await host.publish(module, by: "agent")
-        XCTAssertEqual(published.manifest.module.ec?.refsPastExtent?.count, 10, "the facts reach the manifest")
+        XCTAssertEqual(published.manifest.module.ec?.refsPastExtent?.count, 11, "the facts reach the manifest")
     }
 }
