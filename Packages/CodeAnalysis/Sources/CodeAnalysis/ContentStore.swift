@@ -445,7 +445,7 @@ public struct ContentStore: Sendable {
             let newest = history.revisions.map(\.rev).max() ?? 0
             var revision = ReviewRevision(rev: newest + 1, review: review, description: reading.description,
                                           artifact: artifact, changedFunctions: changed,
-                                          recordedAt: Timestamps.now(), by: by)
+                                          recordedAt: Timestamps.now(), by: by, profile: reading.profile)
             if let last = history.revisions.indices.last, history.revisions[last].rev == newest, newest > stored {
                 revision.rev = newest
                 revision.changedFunctions = artifact.flatMap {

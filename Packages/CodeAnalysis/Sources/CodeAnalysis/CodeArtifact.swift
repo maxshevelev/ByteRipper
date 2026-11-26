@@ -68,7 +68,7 @@ public enum ReviewLevel: String, Decodable, Sendable, CaseIterable {
 
 /// Whose library a registry function is: the code a module links in rather than
 /// its own, by the vendor that ships it.
-public enum LibraryKind: String, Decodable, Sendable, CaseIterable {
+public enum LibraryKind: String, Codable, Sendable, CaseIterable {
     /// EDK2's own libraries: BaseMemoryLib, HobLib, PeiServicesLib, …
     case edk2
     /// AMD's platform code, AGESA: its I/O, assert and debug routines.

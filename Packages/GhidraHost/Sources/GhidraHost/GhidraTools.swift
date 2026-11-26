@@ -888,6 +888,22 @@ public enum GhidraTools {
                 return try await answer { try await backend.readCall(module, "unpublished", query: asked) }
             },
             AgentTool(
+                name: "ghidra_profile",
+                title: "Read the module's analysis profile",
+                description: """
+                    The first call for a new module: which tools, records and gates apply depends on the \
+                    module's analysis profile, derived from its kind. Answers `profile` (`id`, `version`, \
+                    `skill`, `type_groups`, `library_kinds`, `references`, `records`, `gates`, \
+                    `inapplicable_tools` each with a `hint`), `stamp` (`<id>@<version>`), `type_group`, and \
+                    `latest_revision_profile`, the profile the latest revision was made under (null when unknown). \
+                    `profile` is null, with a `note`, for a kind no profile covers.
+                    """,
+                inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"])
+            ) { call in
+                let module = try module(call.arguments)
+                return try await answer { try await backend.readCall(module, "profile", query: [:]) }
+            },
+            AgentTool(
                 name: "ghidra_type_definition",
                 title: "Read a type's definition",
                 description: """

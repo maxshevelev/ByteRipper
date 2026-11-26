@@ -353,6 +353,12 @@ public actor GhidraHost {
     /// the module's owner when none runs.
     public func read(_ module: SHA256Digest, _ path: String, holder: String? = nil) async throws -> Data {
         try tellClosed(module, holder: holder)
+        // The module's analysis profile is the host's to answer, not the owner's.
+        if path == "/v1/profile" {
+            let data = try await profileAnswer(module)
+            noteActivity(module, holder: holder, call: "profile", kind: .read)
+            return data
+        }
         let record = try await owner(of: module)
         let data = try await Self.call(record.port, "GET", path).data
         noteActivity(module, holder: holder, call: Self.callName(path), kind: .read)

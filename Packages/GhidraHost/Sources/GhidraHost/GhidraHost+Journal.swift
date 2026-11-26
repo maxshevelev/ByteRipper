@@ -81,6 +81,9 @@ struct PublishJournal: Codable, Sendable {
     var project: ProjectRecord?
     var projectError: String?
 
+    /// The analysis profile the module's facts derive, as the revision records it.
+    var profileStamp: String? { AnalysisProfile.derive(for: identity)?.stamp }
+
     func did(_ step: Step) -> Bool { done.contains(step) }
 
     var storeDone: Bool { Step.store.allSatisfy(did) }
@@ -92,7 +95,7 @@ struct PublishJournal: Codable, Sendable {
     var reading: AnalysisReading? {
         guard reviewed, let rev, let review else { return nil }
         return AnalysisReading(rev: rev, review: review, description: described, origin: origin,
-                               interfaces: interfaces)
+                               interfaces: interfaces, profile: profileStamp)
     }
 }
 
@@ -208,7 +211,8 @@ extension GhidraHost {
                 journal.rev = try await writer.writeRevision(
                     module: module, reading: AnalysisReading(rev: journal.planned, review: review,
                                                              description: journal.described, origin: journal.origin,
-                                                             interfaces: journal.interfaces),
+                                                             interfaces: journal.interfaces,
+                                                             profile: journal.profileStamp),
                     artifact: code, by: journal.by)
             }
             try await mark(.revision, in: &journal)

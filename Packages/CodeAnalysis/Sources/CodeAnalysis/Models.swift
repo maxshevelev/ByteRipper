@@ -373,15 +373,20 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     /// What the module installs, locates and is notified of, as the review
     /// read it from the code; nil while it has written none of the three.
     public var interfaces: ModuleInterfaces?
+    /// The analysis profile the publish was made under, `"<id>@<version>"`
+    /// (`AnalysisProfile.stamp`); nil in everything published before it was
+    /// recorded, and for a module no profile covers.
+    public var profile: String?
 
     public init(project: String? = nil, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil,
-                origin: ModuleOrigin? = nil, interfaces: ModuleInterfaces? = nil) {
+                origin: ModuleOrigin? = nil, interfaces: ModuleInterfaces? = nil, profile: String? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
         self.description = description
         self.origin = origin
         self.interfaces = interfaces
+        self.profile = profile
     }
 
     /// The objects this reading names besides the artifact.
@@ -407,10 +412,15 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     public var changedFunctions: [String]?
     public var recordedAt: String
     public var by: String?
+    /// The analysis profile this revision was made under, `"<id>@<version>"`
+    /// (`AnalysisProfile.stamp`); nil in a history written before revisions
+    /// recorded it.
+    public var profile: String?
 
     public init(project: String? = nil, rev: Int, review: SHA256Digest, description: SHA256Digest? = nil,
                 artifact: SHA256Digest? = nil, changedFunctions: [String]? = nil,
-                recordedAt: String, by: String? = nil) {
+                recordedAt: String, by: String? = nil, profile: String? = nil) {
+        self.profile = profile
         self.project = project
         self.rev = rev
         self.review = review
@@ -428,7 +438,7 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case project, rev, review, description, artifact, by
+        case project, rev, review, description, artifact, by, profile
         case recordedAt = "recorded_at"
         case changedFunctions = "changed_functions"
     }
