@@ -23,6 +23,7 @@ extension GhidraHost {
     /// with says, or the image's machine, or — a project that recorded
     /// neither — its phase. The phase alone is a guess: an X64 PEIM exists.
     static func typedIa32(_ state: ProjectState) -> Bool {
+        if state.module.kind == "EC" { return false }
         if let archive = state.archive {
             let name = URL(fileURLWithPath: archive).lastPathComponent
             if name.hasPrefix("uefi_Ia32-") { return true }
@@ -30,6 +31,15 @@ extension GhidraHost {
         }
         if let bits = state.module.bits { return bits == 32 }
         return state.module.kind == "TE" || state.module.phase == "pei"
+    }
+
+    /// The group a project's types and registry entries belong to: `Nds32`
+    /// for an EC module, which never mixes with an x86 one, else `Ia32` or
+    /// `X64` as `typedIa32` says. The shared archive of a group is
+    /// `review-types-<group>.gdt`.
+    static func typeGroup(_ state: ProjectState) -> String {
+        if state.module.kind == "EC" { return "Nds32" }
+        return typedIa32(state) ? "Ia32" : "X64"
     }
 
     /// The state a project typed with an earlier revision opens with: the
@@ -55,8 +65,9 @@ extension GhidraHost {
     /// owner: a version of their own when anything changed.
     /// Under the publishes' hold. A failure is left for the next owner.
     func migrateSharedEDK2Enums(_ module: SHA256Digest) async {
-        guard writer.keepsTypeArchives, let state = try? project(module).state() else { return }
-        let bits = Self.typedIa32(state) ? "Ia32" : "X64"
+        // EDK2's enums are an x86 module's: an EC module's group has none.
+        guard writer.keepsTypeArchives, let state = try? project(module).state(), state.module.kind != "EC" else { return }
+        let bits = Self.typeGroup(state)
         guard !sharedEDK2EnumsDone.contains(bits) else { return }
         do {
             let hold = try await writer.lockPublishes()

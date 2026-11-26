@@ -22,6 +22,10 @@ fi
 [ -f "$dir/ghidra/owner/Owner.java" ] && ok "Ghidra scripts: owner/" || no "ghidra/owner/Owner.java is missing"
 [ -f "$dir/ghidra/scripts/ApplyUefi.java" ] && ok "Ghidra scripts: scripts/" || no "ghidra/scripts/ApplyUefi.java is missing"
 [ -f "$dir/skills/ghidra-uefi/SKILL.md" ] && ok "skill" || no "skills/ghidra-uefi/SKILL.md is missing"
+[ -f "$dir/ghidra/scripts/ApplyItEc.java" ] && ok "Ghidra scripts: EC pass" || no "ghidra/scripts/ApplyItEc.java is missing"
+[ -f "$dir/skills/ghidra-ec/SKILL.md" ] && ok "EC skill" || no "skills/ghidra-ec/SKILL.md is missing"
+[ -f "$dir/skills/ghidra-ec/reference/it83xx-registers.tsv" ] && ok "EC register map" \
+    || no "skills/ghidra-ec/reference/it83xx-registers.tsv is missing"
 [ -f "$dir/CLAUDE.md" ] && ok "agent instructions" || note "CLAUDE.md is missing"
 
 ghidra="${GHIDRA_HOME:-}"

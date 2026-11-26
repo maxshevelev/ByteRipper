@@ -23,7 +23,7 @@ swift build -c release --package-path "$repo/Packages/ByteRipperServer" --produc
 swift build -c release --package-path "$repo/Packages/CodeAnalysis" --product byteripper-cas
 
 rm -rf "$stage"
-mkdir -p "$stage"/{bin,ghidra/owner,ghidra/scripts,skills/ghidra-uefi/scripts,scripts,var/store,var/projects,var/support,var/dumps,var/log,.claude/skills}
+mkdir -p "$stage"/{bin,ghidra/owner,ghidra/scripts,skills/ghidra-uefi/scripts,skills/ghidra-ec,scripts,var/store,var/projects,var/support,var/dumps,var/log,.claude/skills}
 
 cp "$repo/Packages/ByteRipperServer/.build/release/byteripper-server" "$stage/bin/"
 cp "$repo/Packages/CodeAnalysis/.build/release/byteripper-cas" "$stage/bin/"
@@ -49,6 +49,10 @@ cp -R "$repo/Skills/ghidra-uefi/reference" "$stage/skills/ghidra-uefi/"
 cp "$repo/Skills/ghidra-uefi/scripts/cas.py" "$repo/Skills/ghidra-uefi/scripts/cas_cli.py" \
     "$stage/skills/ghidra-uefi/scripts/"
 cp -R "$repo/Skills/ghidra-uefi/tests" "$stage/skills/ghidra-uefi/"
+# The rules of an EC firmware review, and the register maps the server's EC
+# pass (ApplyItEc.java) labels the registers from: skills/ghidra-ec/reference.
+cp "$repo/Skills/ghidra-ec/SKILL.md" "$stage/skills/ghidra-ec/"
+cp -R "$repo/Skills/ghidra-ec/reference" "$stage/skills/ghidra-ec/"
 # The review kit the server serves to other Macs' agents (`ReviewKit`): the
 # roles beside the rules above.
 cp -R "$repo/Skills/review-roles" "$stage/skills/"
@@ -60,6 +64,7 @@ cp "$repo/Scripts/make-patched-ghidra.sh" "$stage/scripts/"
 chmod 755 "$stage"/scripts/{start-server,stop-server,restart-server,agent,doctor,make-patched-ghidra}.sh
 
 ln -s ../../skills/ghidra-uefi "$stage/.claude/skills/ghidra-uefi"
+ln -s ../../skills/ghidra-ec "$stage/.claude/skills/ghidra-ec"
 
 cat > "$stage/VERSION" <<EOF
 version: $version

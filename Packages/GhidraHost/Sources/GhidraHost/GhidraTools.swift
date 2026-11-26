@@ -258,7 +258,7 @@ public enum GhidraTools {
         var properties: [String: JSONValue] = ["module": moduleProperty]
         if byImage {
             properties["image_base64"] = AgentSchema.string(
-                "Or the module's PE32/TE image, base64, for a module that has no project yet.")
+                "Or the module's PE32/TE image — or an ITE EC firmware image, made a module of kind EC — base64, for a module that has no project yet.")
             properties["name"] = AgentSchema.string("With `image_base64`: what to call the module, e.g. \"CpuPei\".")
         }
         return AgentTool(
@@ -283,10 +283,10 @@ public enum GhidraTools {
                 guard let image = Data(base64Encoded: text, options: .ignoreUnknownCharacters) else {
                     throw AgentToolError("`image_base64` is not base64.")
                 }
-                let name = try arguments.optionalString("name") ?? "module"
+                let name = try arguments.optionalString("name") ?? GhidraHost.ecModuleName(image) ?? "module"
                 return try await answer {
                     await opened(try await backend.openImage(image, name: name, document: nil, node: nil),
-                                 module: SHA256Digest(data: image), backend: backend)
+                                 module: GhidraHost.moduleDigest(of: image), backend: backend)
                 }
             }
             let module = try module(arguments)
@@ -390,7 +390,7 @@ public enum GhidraTools {
                     its own library's source. Cite the file and line after comparing the bytes with that \
                     source; the registry cannot check it and keeps who said so. Give `id` for an entry's bodies, \
                     or `body` for one, also before its first publish: a publish's `library.not_library` names \
-                    the key. A GUID never qualifies. A string an `amd` or `intel` body reads needs no citation: \
+                    the key. A GUID never qualifies. A string an `amd`, `intel`, `ite` or `toolchain` body reads needs no citation: \
                     its bytes enter the entry and are compared byte for byte; an `edk2` body's string does. A body with two constants has two citations: another \
                     file or line adds one, the same file and line replaces it, `remove: true` takes it away. \
                     `citations` says which, with what was replaced; the registry keeps that. `dry_run: true` \
@@ -479,7 +479,8 @@ public enum GhidraTools {
                     Proposes reviewed functions for the shared registry: code the module statically links in, \
                     and whose — `edk2` (EDK2's MdePkg libraries: `CopyMem`, HobLib, PeiServicesLib, BaseLib's \
                     math), `amd` (AGESA's own libraries: LibAmd I/O, assert, IDS debug print) or `intel` (FSP \
-                    and Reference Code libraries), by the criteria in the skill's "Library functions". This \
+                    and Reference Code libraries), or for an EC module `ite` (ITE's chip support code) or \
+                    `toolchain` (the NDS32 compiler's runtime: memcpy, division helpers), by the criteria in the skill's "Library functions". This \
                     decides nothing and is kept in the project only. `ghidra_publish` decides, for all of them \
                     at once: either the registry takes every one, and the publish stores the module with \
                     links to the new entries, one revision; or it is refused whole, naming each function and \
@@ -508,7 +509,7 @@ public enum GhidraTools {
                         "description": .string("The functions to propose."),
                         "items": AgentSchema.object([
                             "address": AgentSchema.string("The function's entry."),
-                            "kind": AgentSchema.string("Whose library: edk2, amd or intel."),
+                            "kind": AgentSchema.string("Whose library: edk2, amd or intel; for an EC module ite or toolchain."),
                             "assert_routine": AgentSchema.boolean("An assert routine: the codes it is called with make variants of the entries that call it.")
                         ], required: ["address", "kind"])
                     ]),

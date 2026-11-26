@@ -17,9 +17,11 @@ extension GhidraHost {
                 "withdrawn.json": archive + ".withdrawn.json"]
     }
 
-    /// The archive's pointer size, from the program's language.
+    /// The archive's group, from the program's language: `Nds32` for the
+    /// NDS32 processor (an EC module), else the x86 pointer size.
     static func archiveBits(language: String) -> String {
-        language.split(separator: ":").dropFirst(2).first == "64" ? "X64" : "Ia32"
+        if language.uppercased().hasPrefix("NDS32:") { return "Nds32" }
+        return language.split(separator: ":").dropFirst(2).first == "64" ? "X64" : "Ia32"
     }
 
     /// The archive of this size as the store keeps it; when the store keeps
@@ -226,7 +228,7 @@ extension GhidraHost {
             }
         }
         for project in GhidraProject.all(in: configuration.projectsRoot) where project.module != module {
-            guard let state = try? project.state(), (Self.typedIa32(state) ? "Ia32" : "X64") == bits else { continue }
+            guard let state = try? project.state(), Self.typeGroup(state) == bits else { continue }
             let shown = label[project.module] ?? state.module.name
             if let record = await runningOwner(project) {
                 for name in names {
@@ -301,8 +303,8 @@ extension GhidraHost {
             hold.release()
         }
         let state = try project(module).state()
-        let language = try await ownerLanguage(module) ?? (Self.typedIa32(state)
-                                                            ? "x86:LE:32:default" : "x86:LE:64:default")
+        let language = try await ownerLanguage(module) ?? (state.module.kind == "EC" ? "NDS32:LE:32:default"
+            : Self.typedIa32(state) ? "x86:LE:32:default" : "x86:LE:64:default")
         let bits = Self.archiveBits(language: language)
         let (folder, current) = try await archiveWorkingCopy(bits: bits)
         defer { try? FileManager.default.removeItem(at: folder) }

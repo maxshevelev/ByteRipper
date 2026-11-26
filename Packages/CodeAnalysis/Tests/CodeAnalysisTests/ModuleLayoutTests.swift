@@ -27,6 +27,23 @@ final class ModuleLayoutTests: XCTestCase {
 
     // MARK: - TE
 
+    /// An EC image (module kind `EC`) is its flash as it executes, from 0:
+    /// an address is its offset.
+    func testAnECImageIsFlatFromZero() throws {
+        var data = Data(repeating: 0xFF, count: 0x200)
+        data.replaceSubrange(0..<4, with: [0x48, 0x00, 0x1C, 0x00])
+        data.replaceSubrange(0x80..<0x90, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x94, 0x85, 0x12,
+                                                 0x5A, 0x5A, 0xAA, 0x00, 0x55, 0x55])
+        let layout = try ModuleLayout(module: data)
+        XCTAssertEqual(layout.format, .flat)
+        XCTAssertEqual(layout.imageBase, 0)
+        XCTAssertFalse(layout.is64Bit)
+        XCTAssertEqual(layout.fileOffset(for: CodeAddress(0x1F0)), 0x1F0)
+        XCTAssertNil(layout.fileOffset(for: CodeAddress(0x200)))
+        data[0x83] = 0
+        XCTAssertThrowsError(try ModuleLayout(module: data))
+    }
+
     func testATEImageMapsAnAddressToItsBody() throws {
         var module = teImage(sections: [
             TestSection(name: ".text", virtualAddress: 0x1000, virtualSize: 0x40,

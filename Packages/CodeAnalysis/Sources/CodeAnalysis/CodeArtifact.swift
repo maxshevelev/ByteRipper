@@ -75,6 +75,11 @@ public enum LibraryKind: String, Decodable, Sendable, CaseIterable {
     case amd
     /// Intel's platform code, FSP and its Reference Code.
     case intel
+    /// ITE's EC firmware code: its chip support libraries (an EC module's).
+    case ite
+    /// The compiler's own runtime an EC image links in: the Andes NDS32
+    /// toolchain's libgcc/newlib routines (memcpy, division helpers).
+    case toolchain
 }
 
 /// The typed form of `code.json` (`Skills/ghidra-uefi/reference/code-artifact.md`).

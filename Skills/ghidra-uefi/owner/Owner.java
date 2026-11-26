@@ -4025,7 +4025,7 @@ public class Owner {
     /** The entries a review declined for a function, by id, comma-separated. */
     static final String LIBRARY_DECLINED = "ByteRipper.libraryDeclined";
     /** Whose library a registry entry can say it is. */
-    static final java.util.List<String> LIBRARY_KINDS = java.util.List.of("edk2", "amd", "intel");
+    static final java.util.List<String> LIBRARY_KINDS = java.util.List.of("edk2", "amd", "intel", "ite", "toolchain");
     /** The tag of an assert routine: the codes it is called with make variants, not functions. */
     static final String ASSERT_TAG = "assert_routine";
     private static final Gson COMPACT = new GsonBuilder().disableHtmlEscaping().create();
@@ -4826,7 +4826,7 @@ public class Owner {
                 JsonObject item = element.getAsJsonObject();
                 String kind = required(item, "kind");
                 if (!LIBRARY_KINDS.contains(kind)) {
-                    throw new Failure(400, kind + " is not a library kind: edk2, amd or intel");
+                    throw new Failure(400, kind + " is not a library kind: edk2, amd, intel, ite or toolchain");
                 }
                 Function function = functionAt(required(item, "address"));
                 if (libraryMark(function) != null) {

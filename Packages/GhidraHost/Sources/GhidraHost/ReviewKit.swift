@@ -24,6 +24,11 @@ public struct ReviewKit: Equatable, Sendable {
     /// Where the prompts' texts and the rules' files sit under the skills folder.
     static let roleFolder = "review-roles/roles"
     static let rulesFolder = "ghidra-uefi"
+    /// The rules of the other kinds of module: an EC firmware's
+    /// (`Skills/ghidra-ec`). Served when the skills folder has them — a
+    /// folder from before them is still a kit.
+    static let otherRulesFolders = ["ghidra-ec"]
+    static var allRulesFolders: [String] { [rulesFolder] + otherRulesFolders }
     /// The URI a file is offered at as an MCP resource.
     public static let resourceScheme = "byteripper://kit/"
 
@@ -74,6 +79,14 @@ public struct ReviewKit: Equatable, Sendable {
         for name in (try? manager.contentsOfDirectory(atPath: reference.path)) ?? [] where name.hasSuffix(".md") {
             try add("\(rulesFolder)/reference/\(name)")
         }
+        for folder in otherRulesFolders
+        where manager.fileExists(atPath: root.appendingPathComponent("\(folder)/SKILL.md").path) {
+            try add("\(folder)/SKILL.md")
+            let reference = root.appendingPathComponent("\(folder)/reference", isDirectory: true)
+            for name in (try? manager.contentsOfDirectory(atPath: reference.path)) ?? [] where name.hasSuffix(".md") {
+                try add("\(folder)/reference/\(name)")
+            }
+        }
         return ReviewKit(texts: texts)
     }
 
@@ -112,7 +125,7 @@ public struct ReviewKit: Equatable, Sendable {
 
     /// The rules, as MCP resources.
     public var resources: [AgentResource] {
-        manifest.files.filter { $0.path.hasPrefix("\(Self.rulesFolder)/") }.map { file in
+        manifest.files.filter { Self.isRule($0.path) }.map { file in
             AgentResource(uri: Self.resourceScheme + file.path, name: (file.path as NSString).lastPathComponent,
                           title: file.path, description: Self.describe(file.path), size: file.size)
         }
@@ -121,14 +134,22 @@ public struct ReviewKit: Equatable, Sendable {
     public func resource(uri: String) -> AgentResourceText? {
         guard uri.hasPrefix(Self.resourceScheme) else { return nil }
         let path = String(uri.dropFirst(Self.resourceScheme.count))
-        guard path.hasPrefix("\(Self.rulesFolder)/"), let text = texts[path] else { return nil }
+        guard Self.isRule(path), let text = texts[path] else { return nil }
         return AgentResourceText(uri: uri, text: text)
     }
 
+    static func isRule(_ path: String) -> Bool {
+        allRulesFolders.contains { path.hasPrefix("\($0)/") }
+    }
+
     private static func describe(_ path: String) -> String {
-        path == "\(rulesFolder)/SKILL.md"
-            ? "The review rules: how a module is reviewed in Ghidra through ByteRipper. Read before the first review."
-            : "Reference of the review rules: \((path as NSString).lastPathComponent)."
+        if path == "\(rulesFolder)/SKILL.md" {
+            return "The review rules: how a module is reviewed in Ghidra through ByteRipper. Read before the first review."
+        }
+        if path == "ghidra-ec/SKILL.md" {
+            return "The review rules of an EC firmware module (kind EC): read before reviewing one."
+        }
+        return "Reference of the review rules: \((path as NSString).lastPathComponent)."
     }
 }
 

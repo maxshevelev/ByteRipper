@@ -132,6 +132,10 @@ packages:
   # Ghidra skill writes it.
   CodeAnalysis:
     path: Packages/CodeAnalysis
+  # An EC firmware image as bytes: its family, extent, normalised identity
+  # and the layout the EC pass names. GhidraHost links it; the app will.
+  ECImage:
+    path: Packages/ECImage
   # The server's HTTP listener (`Design/SERVER_PLAN.md`). Only
   # `byteripper-server` links it, never the app; listed so Xcode sees it.
   HTTPService:

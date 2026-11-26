@@ -163,7 +163,8 @@ extension LibraryProposal {
     }
 
     /// Libraries with no public source to cite a string's line in.
-    public static let uncitedStringKinds: Set<String> = [LibraryKind.amd.rawValue, LibraryKind.intel.rawValue]
+    public static let uncitedStringKinds: Set<String> = [LibraryKind.amd.rawValue, LibraryKind.intel.rawValue,
+                                                         LibraryKind.ite.rawValue, LibraryKind.toolchain.rawValue]
 
     /// The person's rule for strings (2026-11-26): an `amd` or `intel` body
     /// has no public source to cite, so a string it reads — a debug message
@@ -297,7 +298,11 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public static let standardLibraries: [String: LibraryDefinition] = [
         LibraryKind.edk2.rawValue: LibraryDefinition(),
         LibraryKind.amd.rawValue: LibraryDefinition(dependsOn: [LibraryKind.edk2.rawValue]),
-        LibraryKind.intel.rawValue: LibraryDefinition(dependsOn: [LibraryKind.edk2.rawValue])
+        LibraryKind.intel.rawValue: LibraryDefinition(dependsOn: [LibraryKind.edk2.rawValue]),
+        // An EC module's: ITE's code may call the toolchain's runtime; neither
+        // calls EDK2.
+        LibraryKind.ite.rawValue: LibraryDefinition(dependsOn: [LibraryKind.toolchain.rawValue]),
+        LibraryKind.toolchain.rawValue: LibraryDefinition()
     ]
 
     /// The declared libraries.

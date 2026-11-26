@@ -173,7 +173,10 @@ enum GhidraRoutes {
         // tens of seconds for a large DXE driver — and its owner started.
         router.add("POST", "\(prefix)/modules", access: .rights([.ghidraUse])) { request in
             guard !request.body.isEmpty else { throw HTTPError(.badRequest, "send the module's bytes as the body") }
-            let name = request.query["name"].flatMap { $0.isEmpty ? nil : $0 } ?? "module"
+            // An EC image (kind EC) is named by its version string; `phase`
+            // and `uefi` are a UEFI module's and do not apply to it.
+            let name = request.query["name"].flatMap { $0.isEmpty ? nil : $0 }
+                ?? GhidraHost.ecModuleName(request.body) ?? "module"
             guard name.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) }) else {
                 throw HTTPError(.badRequest, "a module's name is letters, digits, '.', '_' and '-'")
             }
@@ -188,7 +191,7 @@ enum GhidraRoutes {
                 try await host.create(module: request.body, name: name, source: source, phase: phase,
                                       uefi: request.query["uefi"] != "0")
             }
-            let module = SHA256Digest(data: request.body)
+            let module = GhidraHost.moduleDigest(of: request.body)
             // The owner's hello, as a host on this Mac answers `ghidra_create`:
             // the program, its functions, `changed`, `writes_lost`, the
             // language patch. What the project adds goes beside it.

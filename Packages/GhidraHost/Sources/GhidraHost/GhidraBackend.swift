@@ -197,7 +197,7 @@ extension GhidraHost: GhidraBackend {
 
     public func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data {
         try await create(module: image, name: name, source: .init(document: document, node: node))
-        return try await read(SHA256Digest(data: image), "/v1/hello")
+        return try await read(Self.moduleDigest(of: image), "/v1/hello")
     }
 
     public func openModule(_ module: SHA256Digest) async throws -> Data {

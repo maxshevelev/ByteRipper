@@ -36,7 +36,7 @@ public enum GhidraNodeOpen {
             description: description,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string(document),
-                "node": AgentSchema.string("The PE32 or TE image node, e.g. \"0.6.4.0.0.199.3\"."),
+                "node": AgentSchema.string("The PE32 or TE image node, e.g. \"0.6.4.0.0.199.3\" — or a node holding an ITE EC firmware image, made a module of kind EC."),
                 "name": AgentSchema.string("What to call the module. Default: the file it is in."),
                 "module": AgentSchema.string("Or a module already opened, by its SHA-256.")
             ]),
@@ -62,7 +62,7 @@ public enum GhidraNodeOpen {
                                                     document: found.document.label.isEmpty
                                                         ? found.document.id : found.document.label,
                                                     node: node),
-                        module: SHA256Digest(data: found.image), backend: backend)
+                        module: GhidraHost.moduleDigest(of: found.image), backend: backend)
                 }
                 // The answer says which document it read and carries its disk
                 // mark, as a query's does: an agent calls `documents` once and
@@ -91,9 +91,12 @@ public enum GhidraNodeOpen {
         }
         let image = Data(bytes)
         guard TEImageSignature.isImage(image) else {
-            throw AgentToolError("Node \(text) is not a PE32 or TE image: `uefi_find` with name \"PE32 image\" "
-                + "or \"TE image\" lists those.")
+            throw AgentToolError("Node \(text) is not a PE32 or TE image, nor an EC firmware image: `uefi_find` with "
+                + "name \"PE32 image\" or \"TE image\" lists those.")
         }
+        // An EC image is named by its version string: the node it sits in is
+        // a region or padding, not a file.
+        if let name = GhidraHost.ecModuleName(image) { return (image, name, document) }
         var above: [UEFINode] = []
         var path = found.node.id.path
         while path.count > 1 {
@@ -128,7 +131,9 @@ public enum GhidraNodeOpen {
 
 /// Whether bytes start as an image Ghidra can be given.
 public enum TEImageSignature {
+    /// A PE (MZ), a TE (VZ), or an EC firmware image of a family
+    /// `GhidraHost` knows.
     public static func isImage(_ data: Data) -> Bool {
-        data.count > 2 && (data.prefix(2) == Data("MZ".utf8) || data.prefix(2) == Data("VZ".utf8))
+        GhidraHost.isModuleImage(data)
     }
 }

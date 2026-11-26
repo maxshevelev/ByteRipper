@@ -226,7 +226,7 @@ extension GhidraHost {
         async throws -> (reasons: [String: String], names: [String], blocking: [String: [String]])? {
         let now = try await libraryReplacements(module, raw: raw, offer: offer, reviewed: reviewed)
         guard !now.isEmpty, now.values.allSatisfy({ $0.heldBy == module.hex }) else { return nil }
-        let bits = moduleBits(module) == 32 ? "Ia32" : "X64"
+        let bits = moduleGroup(module) ?? "X64"
         let blocking = await otherEntryHolders(Array(now.keys), module: module, bits: bits)
         guard blocking.isEmpty else { return ([:], [], blocking) }
         let names = now.values.map(\.name).sorted()
@@ -266,7 +266,7 @@ extension GhidraHost {
             }
         }
         for project in GhidraProject.all(in: configuration.projectsRoot) where project.module != module {
-            guard let state = try? project.state(), (Self.typedIa32(state) ? "Ia32" : "X64") == bits,
+            guard let state = try? project.state(), Self.typeGroup(state) == bits,
                   await holdsUnpublishedWrites(project.module) else { continue }
             let shown = (label[project.module] ?? state.module.name) + " (unpublished writes)"
             for id in ids { holders[name(id), default: []].insert(shown) }
@@ -431,7 +431,7 @@ extension GhidraHost {
         var recipients: [(module: SHA256Digest, revision: Int?, name: String?)] = []
         func tell(_ other: SHA256Digest, revision: Int?, name: String?) {
             if width[other] == nil, let state = try? project(other).state() {
-                width[other] = Self.typedIa32(state) ? "Ia32" : "X64"
+                width[other] = Self.typeGroup(state)
             }
             guard (width[other] ?? proposal.bits) == proposal.bits, told.insert(other).inserted else { return }
             recipients.append((other, revision, name))

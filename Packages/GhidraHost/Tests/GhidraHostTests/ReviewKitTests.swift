@@ -25,6 +25,8 @@ final class ReviewKitTests: XCTestCase {
         XCTAssertTrue(paths.contains("review-roles/roles/verifier.md"))
         XCTAssertTrue(paths.contains("ghidra-uefi/SKILL.md"))
         XCTAssertTrue(paths.contains("ghidra-uefi/reference/description.md"))
+        XCTAssertTrue(paths.contains("ghidra-ec/SKILL.md"))
+        XCTAssertTrue(kit.resources.contains { $0.uri == "byteripper://kit/ghidra-ec/SKILL.md" })
         XCTAssertTrue(paths.allSatisfy { $0.hasSuffix(".md") && ReviewKitCache.safe($0) }, "\(paths)")
         // Every resource a role tells the agent to read is in the kit.
         for role in ReviewKit.roles {

@@ -14,6 +14,9 @@ public struct ProjectState: Codable, Equatable, Sendable {
         /// 32 or 64, from the image's machine; nil in a project made before
         /// it was recorded.
         public var bits: Int? = nil
+        /// An EC module's facts (kind `EC`): its family, extent, the slice it
+        /// was cut from and the bytes normalised in its identity.
+        public var ec: ECModuleFacts? = nil
     }
 
     public struct MadeWith: Codable, Equatable, Sendable {

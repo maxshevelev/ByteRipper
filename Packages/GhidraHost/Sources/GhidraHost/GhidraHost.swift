@@ -36,6 +36,10 @@ public actor GhidraHost {
         /// Where publishes and leases are written down for the console's
         /// Activity page (`ActivityLog`); nil writes nothing.
         public var events: ActivityLog?
+        /// The EC register and interrupt maps the EC pass labels from
+        /// (`Skills/ghidra-ec/reference`); nil labels no register.
+        public var ecReference: URL? = ReviewKit.resolvedSkills()
+            .appendingPathComponent("ghidra-ec/reference", isDirectory: true)
 
         public init(projectsRoot: URL = GhidraHost.defaultProjectsRoot, ghidraHome: URL? = nil,
                     sources: OwnerSources = .checkout, idle: Int = 1800,
@@ -675,7 +679,7 @@ public actor GhidraHost {
                                       kind: state.module.kind,
                                       language: program["language"] as? String ?? "unknown",
                                       imageBase: program["image_base"] as? String ?? "0x0",
-                                      phase: state.module.phase)
+                                      phase: state.module.phase, ec: state.module.ec)
         // A mechanical artifact never replaces another — except this project's
         // own last publish, which a new one of the same program supersedes.
         let stored = try await writer.storedAnalysis(module: module, recipe: recipe.id)
@@ -1472,6 +1476,12 @@ public actor GhidraHost {
                let revision = Int(types[dash.upperBound...]) {
                 id = id.replacingOccurrences(of: "-ghidra-", with: "-types\(revision)-ghidra-")
             }
+        } else if passes.contains(ecPass) {
+            // An EC module: its own pass, no EDK2 types — another recipe
+            // than a plain or a UEFI one.
+            id = id.replacingOccurrences(of: "-ghidra-", with: "-ec-ghidra-")
+            return AnalysisRecipe(id: id, exporter: exporter, ghidra: ghidra ?? "unknown", script: "ExportCode.java",
+                                  types: nil, passes: passes)
         } else {
             id = id.replacingOccurrences(of: "-ghidra-", with: "-plain-ghidra-")
         }

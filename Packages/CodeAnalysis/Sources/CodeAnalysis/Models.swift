@@ -110,10 +110,12 @@ public struct ModuleIdentity: Codable, Equatable, Sendable {
     public var imageBase: String?
     /// The boot phase the UEFI pass typed the entry point for: `pei`, `dxe`.
     public var phase: String?
+    /// What an EC module (kind `EC`) was cut from; nil for any other.
+    public var ec: ECModuleFacts?
 
     public init(sha256: SHA256Digest, size: Int, name: String,
                 kind: String? = nil, language: String? = nil, imageBase: String? = nil,
-                phase: String? = nil) {
+                phase: String? = nil, ec: ECModuleFacts? = nil) {
         self.sha256 = sha256
         self.size = size
         self.name = name
@@ -121,11 +123,67 @@ public struct ModuleIdentity: Codable, Equatable, Sendable {
         self.language = language
         self.imageBase = imageBase
         self.phase = phase
+        self.ec = ec
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sha256, size, name, kind, language, phase
+        case sha256, size, name, kind, language, phase, ec
         case imageBase = "image_base"
+    }
+}
+
+/// An EC firmware module's facts beside its identity: its identity hashes
+/// [0, `extent`) of the slice it was read from, with the bytes the EC
+/// rewrites in its own flash normalised (`ECImage.ECFirmware`).
+public struct ECModuleFacts: Codable, Equatable, Sendable {
+    public struct Masked: Codable, Equatable, Sendable {
+        public var offset: Int
+        public var actual: Int
+        public var normalised: Int
+
+        public init(offset: Int, actual: Int, normalised: Int) {
+            self.offset = offset
+            self.actual = actual
+            self.normalised = normalised
+        }
+    }
+
+    /// The chip family's id: `ite-nds32`.
+    public var family: String
+    /// Where the linked image ends; only [0, extent) is the module.
+    public var extent: Int
+    /// `crt0` (the reset code's `.data` copy) or `heuristic` (last byte not erased).
+    public var extentSource: String
+    /// The slice the module was read from, and its SHA-256 as read.
+    public var sliceSize: Int
+    public var rawSHA256: String
+    public var masked: [Masked]
+    /// The slice is a read of the chip: past the image, the EC's run-time data.
+    public var chipRead: Bool
+    /// How many bytes the BIOS's EC update writes — not the extent.
+    public var hostUpdateSize: Int?
+    public var version: String?
+
+    public init(family: String, extent: Int, extentSource: String, sliceSize: Int, rawSHA256: String,
+                masked: [Masked], chipRead: Bool, hostUpdateSize: Int?, version: String?) {
+        self.family = family
+        self.extent = extent
+        self.extentSource = extentSource
+        self.sliceSize = sliceSize
+        self.rawSHA256 = rawSHA256
+        self.masked = masked
+        self.chipRead = chipRead
+        self.hostUpdateSize = hostUpdateSize
+        self.version = version
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case family, extent, masked, version
+        case extentSource = "extent_source"
+        case sliceSize = "slice_size"
+        case rawSHA256 = "raw_sha256"
+        case chipRead = "chip_read"
+        case hostUpdateSize = "host_update_size"
     }
 }
 

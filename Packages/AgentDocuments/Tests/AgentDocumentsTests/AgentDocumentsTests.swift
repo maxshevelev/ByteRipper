@@ -99,6 +99,49 @@ final class AgentDocumentsTests: XCTestCase {
         XCTAssertNotNil(open?.inputSchema["properties"]?["node"])
         XCTAssertNil(open?.inputSchema["properties"]?["image"])
     }
+
+    /// An EC firmware image is a module image too: a node holding one is
+    /// taken (`GhidraNodeOpen.image` checks with `TEImageSignature`), named by
+    /// its version string, and `ghidra_create` by image opens it under the
+    /// normalised identity. `GHIDRA_EC_MODULE` names the image; skipped without.
+    func testAnECImageIsAModuleImage() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        XCTAssertTrue(TEImageSignature.isImage(image))
+        XCTAssertFalse(TEImageSignature.isImage(Data(repeating: 0xFF, count: 0x200)))
+        XCTAssertEqual(GhidraHost.ecModuleName(image), "ITE8380-EC-V0.00")
+
+        let backend = RecordingGhidra()
+        let tool = try XCTUnwrap(GhidraTools.tools(backend: backend, includeOpenByImage: true)
+            .first { $0.name == "ghidra_create" })
+        _ = try await tool.run(AgentCall(tool: "ghidra_create", arguments: AgentArguments(
+            ["image_base64": .string(image.base64EncodedString())])))
+        XCTAssertEqual(backend.opened.map(\.name), ["ITE8380-EC-V0.00"])
+        XCTAssertEqual(backend.opened.first?.image, image)
+        XCTAssertEqual(GhidraHost.moduleDigest(of: image).hex,
+                       "889159a794a3015e5547312b224db1f43c76daeddb90069ee856e32b6eac2b39")
+    }
+}
+
+/// A backend that keeps what it was asked to open.
+private final class RecordingGhidra: GhidraBackendWithoutServer, @unchecked Sendable {
+    var opened: [(image: Data, name: String)] = []
+    func listModules() async throws -> Data { Data() }
+    func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data {
+        opened.append((image, name))
+        return Data("{}".utf8)
+    }
+    func openModule(_ module: SHA256Digest) async throws -> Data { Data("{}".utf8) }
+    func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data { Data("{}".utf8) }
+    func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
+    func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
+    func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data { Data() }
+    func publishPreview(_ module: SHA256Digest, entryReasons: [String: String]) async throws -> Data { Data() }
+    func takeModule(_ module: SHA256Digest) async throws -> Data { Data() }
+    func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data { Data() }
+    func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data { Data() }
 }
 
 /// `CodeReadings` on its own: a module's analysis read from the store with no

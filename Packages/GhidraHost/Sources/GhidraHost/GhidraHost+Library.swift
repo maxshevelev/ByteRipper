@@ -914,11 +914,12 @@ extension GhidraHost {
         return nil
     }
 
-    /// 32 or 64 for a module with a project here, as its archive or its image
-    /// says; nil for one this host has no project of.
-    func moduleBits(_ module: SHA256Digest) -> Int? {
+    /// The group a module's types and registry entries belong to — `Ia32`,
+    /// `X64` or `Nds32` (an EC module) — for a module with a project here;
+    /// nil for one this host has no project of.
+    func moduleGroup(_ module: SHA256Digest) -> String? {
         guard let state = try? project(module).state() else { return nil }
-        return Self.typedIa32(state) ? 32 : 64
+        return Self.typeGroup(state)
     }
 
     /// The entries made from modules of another width than `module`'s. An
@@ -927,12 +928,12 @@ extension GhidraHost {
     /// stack or convention: an entry of the other width is no match. An entry
     /// whose modules' width is unknown here is not counted.
     func foreignEntries(_ index: LibraryIndex, for module: SHA256Digest) -> Set<String> {
-        guard let own = moduleBits(module) else { return [] }
-        var known: [SHA256Digest: Int?] = [:]
+        guard let own = moduleGroup(module) else { return [] }
+        var known: [SHA256Digest: String?] = [:]
         var foreign: Set<String> = []
         for (id, entry) in index.entries {
             for each in [entry.source.module] + entry.variants.map(\.module) {
-                if known[each] == nil { known[each] = .some(moduleBits(each)) }
+                if known[each] == nil { known[each] = .some(moduleGroup(each)) }
                 guard let bits = known[each] ?? nil else { continue }
                 if bits != own { foreign.insert(id) }
                 break
@@ -989,7 +990,7 @@ extension GhidraHost {
         -> (proposals: [LibraryProposal], kept: [String]) {
         guard !proposals.isEmpty else { return (proposals, []) }
         let index = try await writer.readLibraryIndex()
-        let bits = moduleBits(module) == 32 ? "Ia32" : "X64"
+        let bits = moduleGroup(module) ?? "X64"
         var kept: [LibraryProposal] = []
         var names: [String] = []
         for var proposal in proposals {

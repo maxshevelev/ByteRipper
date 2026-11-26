@@ -18,6 +18,9 @@ public struct ModuleLayout: Equatable, Sendable {
         case te
         case pe32
         case pe32Plus
+        /// A raw image that executes where it is loaded, with no header: an
+        /// EC firmware's flash (`ECImage`), one section from offset 0.
+        case flat
     }
 
     /// One section, with `rawOffset` already translated to an offset in the
@@ -61,7 +64,7 @@ public struct ModuleLayout: Equatable, Sendable {
 
     public var is64Bit: Bool {
         if format == .pe32Plus { return true }
-        if format == .pe32 { return false }
+        if format == .pe32 || format == .flat { return false }
         return Self.machines64.contains(machine)
     }
 
@@ -188,7 +191,23 @@ public struct ModuleLayout: Equatable, Sendable {
         if bytes[0] == 0x4D, bytes[1] == 0x5A {          // "MZ"
             return try parsePE(bytes)
         }
-        throw ModuleLayoutError.invalid("the signature is neither VZ nor MZ")
+        if isECFlash(bytes) {
+            return Parsed(format: .flat, machine: 0, imageBase: 0, entryPoint: 0, sizeOfHeaders: 0,
+                          strippedSize: nil,
+                          sections: [Section(name: "flash", virtualAddress: 0, virtualSize: UInt64(bytes.count),
+                                             rawOffset: 0, rawSize: UInt64(bytes.count), characteristics: 0)])
+        }
+        throw ModuleLayoutError.invalid("the signature is neither VZ nor MZ, nor an EC image's")
+    }
+
+    /// An ITE EC image (module kind `EC`): the reset vector's NDS32 `j` at 0
+    /// and the signature's seven 0xA5 at 0x80. `ECImage.ECChipFamily` is the
+    /// whole rule; CodeAnalysis links nothing but the system, so this is the
+    /// part of it a layout needs, and its tests hold the two together.
+    static func isECFlash(_ bytes: [UInt8]) -> Bool {
+        bytes.count > 0x90 && bytes[0] == 0x48 && bytes[0x80..<0x87].allSatisfy { $0 == 0xA5 }
+            && bytes[0x8A] == 0x5A && bytes[0x8B] == 0x5A && bytes[0x8C] == 0xAA && bytes[0x8E] == 0x55
+            && bytes[0x8F] == 0x55
     }
 
     private static func parseTE(_ bytes: [UInt8]) throws -> Parsed {

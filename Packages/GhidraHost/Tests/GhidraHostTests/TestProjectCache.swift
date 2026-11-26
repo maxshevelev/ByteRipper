@@ -52,7 +52,7 @@ extension GhidraHost {
     /// already has.
     func createCached(module blob: Data, name: String, source: ProjectState.Source? = nil,
                       phase: Phase? = nil, uefi: Bool = true) async throws -> ProjectState {
-        let project = self.project(SHA256Digest(data: blob))
+        let project = self.project(GhidraHost.moduleDigest(of: blob))
         guard !project.exists else { return try project.state() }
         let key = try await TestProjectCache.key(host: self, blob: blob, name: name, phase: phase, uefi: uefi)
         let kept = TestProjectCache.root.appendingPathComponent(key, isDirectory: true)
