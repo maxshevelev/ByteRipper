@@ -88,12 +88,15 @@ The code that keeps running while the host reflashes the EC is mapped from flash
 
 **Rule 7: the description.** It keeps the eight fixed sections of `ghidra-uefi` reference/description.md and is written for a bench technician.
 
-**Rule 8 becomes the EC map.** Until the server stores it as a record, `Interactions` holds these five `###` subsections, and each is answered, either filled in or "none" with the reason. The review is not complete while one is missing.
+**Rule 8 becomes the EC map.** Until the server stores it as a record, `Interactions` holds these six `###` subsections, and each is answered, either filled in or "none" with the reason. The review is not complete while one is missing.
 1. `### Interrupts`: IRQ → handler → source → what it does.
 2. `### Host commands`: port pair, command byte → handler → effect, data in and out.
 3. `### EC RAM`: offset → width → name → writer (EC or host) → meaning.
 4. `### SMBus and I2C`: channel and address → device → the commands and registers used.
 5. `### GPIO`: pin → direction → its function in this firmware. Board nets come later, from the board table.
+6. `### Flash data area`: every range or address past the extent that the code reads, writes or erases → the function that does it → the record format → what it holds (state bytes, logs, settings). Write the meaning only from the code (E2).
+
+These are the profile's records (`ghidra_profile`: irq_map, host_commands, ec_ram, smbus_peers, gpio, eflash_area). Once the server stores records, fill them in, and `Interactions` describes them in prose.
 
 ## 5. Library functions
 

@@ -6672,6 +6672,14 @@ public class Owner {
                     constant = cConstant(at, value);
                 }
             }
+            // The decompiler's constant-pointer rule turns a value that falls
+            // inside a named datum into `symbol + n` (`_dlmb = TaskEventPending
+            // + 1` for the DLMB value 0x80001 written by `mtsr`): no constant
+            // is left in that C to hash. The same function decompiled without
+            // pointer inference still holds the constant; its hash is the
+            // constant's place, and the equate on it keeps it a value in the
+            // ordinary C (equates-1.patch) (issue a79c591d).
+            if (constant == null) constant = cConstantNoPointers(at, value);
         }
         if (constant != null) return applyEquateOnC(body, at, constant, value, name, enumName, comment, enumComment);
         if (scalar == null && inDisplacement) {
@@ -6793,7 +6801,28 @@ public class Owner {
     private CConstant cConstant(Address at, long value) throws Exception {
         Function function = program.getFunctionManager().getFunctionContaining(at);
         if (function == null) return null;
-        DecompileResults results = decompile(function);
+        return cConstant(at, value, function, decompile(function));
+    }
+
+    /** `cConstant` on the C decompiled with no constant taken for a pointer. */
+    private CConstant cConstantNoPointers(Address at, long value) throws Exception {
+        Function function = program.getFunctionManager().getFunctionContaining(at);
+        if (function == null) return null;
+        ghidra.app.decompiler.DecompInterface probe = new ghidra.app.decompiler.DecompInterface();
+        try {
+            ghidra.app.decompiler.DecompileOptions options = ExportCode.decompileOptions(program);
+            options.setInferConstantPointers(false);
+            probe.setOptions(options);
+            probe.toggleCCode(true);
+            probe.toggleSyntaxTree(true);
+            probe.openProgram(program);
+            return cConstant(at, value, function, probe.decompileFunction(function, 120, TaskMonitor.DUMMY));
+        } finally {
+            probe.dispose();
+        }
+    }
+
+    private CConstant cConstant(Address at, long value, Function function, DecompileResults results) throws Exception {
         HighFunction high = results == null ? null : results.getHighFunction();
         if (high == null) return null;
         java.util.List<ghidra.program.model.pcode.Varnode> here = new java.util.ArrayList<>();
