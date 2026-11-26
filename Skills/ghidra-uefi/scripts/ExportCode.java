@@ -1428,6 +1428,11 @@ public class ExportCode extends GhidraScript {
             if (base instanceof Composite || base instanceof Enum) {
                 return "typedef " + typeBody(base) + " " + def.getName() + ";";
             }
+            // `typedef R (*X)(…)` is Ghidra's typedef X of `/functions/X *`:
+            // printed by display name it read `typedef X * X;`, a typedef of
+            // itself, and taken back as C it became one (issue 07cb5e92).
+            String pointerToFunction = functionPointerDeclarator(base, def.getName());
+            if (pointerToFunction != null) return "typedef " + pointerToFunction + ";";
             return "typedef " + declarator(base, def.getName()) + ";";
         }
         if (type instanceof Composite || type instanceof Enum) return typeBody(type) + ";";
@@ -1479,6 +1484,26 @@ public class ExportCode extends GhidraScript {
         }
         out.append("} /* size 0x").append(Integer.toHexString(type.getLength()).toUpperCase()).append(" */");
         return out.toString();
+    }
+
+    /**
+     * `R (*NAME)(args)` for a pointer (or a pointer to a pointer) to a
+     * function definition, the signature written out in place; null for any
+     * other type.
+     */
+    static String functionPointerDeclarator(DataType type, String name) {
+        String stars = "";
+        DataType at = type;
+        while (at instanceof Pointer pointer && pointer.getDataType() != null) {
+            stars += "*";
+            at = pointer.getDataType();
+        }
+        if (stars.isEmpty() || !(at instanceof FunctionDefinition function)) return null;
+        String prototype = function.getPrototypeString();
+        int called = prototype.indexOf(function.getName() + "(");
+        if (called < 0) return null;
+        return prototype.substring(0, called) + "(" + stars + name + ")"
+            + prototype.substring(called + function.getName().length());
     }
 
     /** `UINT8 Unknown01[7]` — an array's bounds after the name, outer first. */

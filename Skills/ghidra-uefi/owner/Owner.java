@@ -8805,6 +8805,7 @@ public class Owner {
                 if (earlier != resolved) functionTypedef(earlier);
             }
             resolved = keepCategories(resolved, previous);
+            refuseSelfReference(resolved);
             unsignedEnumMembers(resolved, c);
             restoreReferenced(referenced);
             commentsKept = restoreComments(resolved, kept);
@@ -9265,6 +9266,28 @@ public class Owner {
             }
         }
         return target;
+    }
+
+    /**
+     * Refuses a typedef that reaches itself through typedefs, pointers and
+     * arrays: `typedef X * X;` is no type, and stored it reads as one
+     * (issue 07cb5e92). The write is refused, so nothing of it is kept.
+     */
+    private static void refuseSelfReference(DataType resolved) throws Failure {
+        if (!(resolved instanceof ghidra.program.model.data.TypeDef def)) return;
+        ghidra.program.model.data.DataTypeManager manager = resolved.getDataTypeManager();
+        long id = manager == null ? -1 : manager.getID(resolved);
+        DataType at = def.getDataType();
+        for (int depth = 0; at != null && depth < 64; depth++) {
+            if (at == resolved || (id >= 0 && at.getDataTypeManager() == manager && manager.getID(at) == id)) {
+                throw new Failure(400, resolved.getName() + " would be a typedef of itself; write `typedef R (*"
+                    + resolved.getName() + ")(…);` for a function pointer. Nothing was changed");
+            }
+            if (at instanceof ghidra.program.model.data.TypeDef next) at = next.getDataType();
+            else if (at instanceof ghidra.program.model.data.Pointer pointer) at = pointer.getDataType();
+            else if (at instanceof ghidra.program.model.data.Array array) at = array.getDataType();
+            else return;
+        }
     }
 
     /** The program's typedefs `typedef X X;` over a function definition X, for an X the C names. */
