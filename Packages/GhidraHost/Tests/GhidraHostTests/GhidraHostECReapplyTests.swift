@@ -1,0 +1,131 @@
+import CodeAnalysis
+import Foundation
+import XCTest
+@testable import GhidraHost
+
+/// `ec/reapply` (`ghidra_ec_reapply`) on an ITE EC module (`GHIDRA_EC_MODULE`)
+/// made as a build before 866 made it: no flash references past the extent,
+/// no `FlashRef_` labels or plates, no `refs_past_extent` in the facts. The
+/// step adds them, keeps a reviewer's name for a place and every other edit,
+/// adds nothing a second time, and is refused without the lease and for a
+/// module that is no EC; the facts reach the next publish. A run without the
+/// image or Ghidra skips.
+final class GhidraHostECReapplyTests: XCTestCase {
+    private var directory: URL?
+
+    override func tearDown() {
+        if let directory { try? FileManager.default.removeItem(at: directory) }
+        super.tearDown()
+    }
+
+    func testAPreBuild866ProjectGetsItsFlashReferencesAndNothingElse() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        guard (try? GhidraInstall.find()) != nil else { throw XCTSkip("no Ghidra on this machine") }
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostECReapplyTests-\(UUID().uuidString)", isDirectory: true)
+        self.directory = directory
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let root = directory.appendingPathComponent("projects")
+        let host = GhidraHost(configuration: .init(projectsRoot: root, idle: 300, holder: "GhidraHostECReapplyTests"),
+                              writer: store)
+        let module = GhidraHost.moduleDigest(of: image)
+
+        // 1. A project as a build before 866 made it.
+        await host.setECCreatesAsBefore866(true)
+        let made = try await host.create(module: image, name: "ItEcNmD562", source: .init(document: "dump", node: "0.0.3"))
+        await host.setECCreatesAsBefore866(false)
+        defer { Task { await host.stop(module) } }
+        XCTAssertNil(made.module.ec?.refsPastExtent)
+
+        func json(_ data: Data) throws -> [String: Any] {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+        func read(_ call: String) async throws -> [String: Any] { try json(try await host.read(module, call)) }
+        func post(_ call: String, _ body: [String: Any]) async throws -> [String: Any] {
+            try json(try await host.write(module, call, body: try JSONSerialization.data(withJSONObject: body)))
+        }
+        func xrefs(to address: String) async throws -> [Int] {
+            let answer = try await read("/v1/xrefs?to=\(address)")
+            return (answer["references"] as? [[String: Any]] ?? [])
+                .compactMap { row -> Int? in
+                    guard let text = row["from"] as? String, let address = CodeAddress(hex: text) else { return nil }
+                    return Int(address.value)
+                }
+        }
+        let before = try await xrefs(to: "0x2A600")
+        XCTAssertFalse(before.contains(0x718C), "a pre-866 project has no reference: \(before)")
+        let unlabelled = try await read("/v1/function/0x15324")
+        XCTAssertFalse("\(unlabelled)".contains("FlashRef_249F0"), "\(unlabelled)")
+
+        // 5. No lease: refused, and nothing written.
+        do {
+            _ = try await post("/v1/ec/reapply", [:])
+            XCTFail("ec/reapply without the lease was taken")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409, "\(error)")
+        }
+
+        // The reviewer's work: a function named, a comment, and a flash
+        // address named before the step.
+        try await host.take(module)
+        _ = try await post("/v1/rename/function", ["address": "0x15324", "name": "ReviewerFlashReader"])
+        _ = try await post("/v1/set/comment", ["address": "0x15424", "kind": "eol", "text": "reviewer note kept"])
+        _ = try await post("/v1/set/data", ["address": "0x2A600", "name": "EflashState_2A600"])
+
+        // 2. The step.
+        let first = try await post("/v1/ec/reapply", [:])
+        let added = first["references_added"] as? [[String: Any]] ?? []
+        XCTAssertEqual(added.count, 10, "\(first)")
+        let kept = first["labels_kept"] as? [[String: Any]] ?? []
+        XCTAssertTrue(kept.contains { $0["address"] as? String == "0x2A600" && $0["name"] as? String == "EflashState_2A600" },
+                      "\(first)")
+        XCTAssertEqual((first["facts"] as? [String: Any])?["refs_past_extent"] as? String, "added", "\(first)")
+
+        // 3. What it added, and what it kept.
+        let to2A600 = try await xrefs(to: "0x2A600")
+        XCTAssertTrue(to2A600.contains(0x718C) && to2A600.contains(0x71B2), "\(to2A600)")
+        let reader = try await read("/v1/function/0x15324")
+        XCTAssertTrue("\(reader)".contains("FlashRef_249F0"), "\(reader)")
+        XCTAssertEqual(reader["name"] as? String, "ReviewerFlashReader", "the reviewer's name stays")
+        XCTAssertTrue("\(reader)".contains("reviewer note kept"), "the reviewer's comment stays: \(reader)")
+        let named = try await read("/v1/data?limit=5000")
+        XCTAssertFalse("\(named)".contains("FlashRef_2A600"), "\(named)")
+        let c = try await read("/v1/function/0x718C")
+        XCTAssertTrue("\(c)".contains("EflashState_2A600"), "the reviewer's name for 0x2A600 stays: \(c)")
+        let state = try await host.project(module).state()
+        XCTAssertEqual(state.module.ec?.refsPastExtent?.count, 10)
+        XCTAssertTrue(state.module.ec?.refsPastExtent?.contains(.init(address: 0x249F0, from: 0x15424)) ?? false)
+
+        // 4. Again: nothing added.
+        let second = try await post("/v1/ec/reapply", [:])
+        for list in ["references_added", "labels_added", "plates_added"] {
+            XCTAssertEqual((second[list] as? [Any])?.count, 0, "\(list): \(second)")
+        }
+        XCTAssertEqual((second["references_kept"] as? [Any])?.count, 10, "\(second)")
+        XCTAssertEqual((second["facts"] as? [String: Any])?["refs_past_extent"] as? String, "kept", "\(second)")
+
+        // 5. A module that is no EC: refused before anything is asked of an owner.
+        let other = SHA256Digest(data: Data("not an EC module".utf8))
+        let otherProject = await host.project(other)
+        try FileManager.default.createDirectory(at: otherProject.folder, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: otherProject.folder.appendingPathComponent("module.gpr").path, contents: Data())
+        var pe = state
+        pe.module.sha256 = other.hex
+        pe.module.kind = "PE32"
+        pe.module.ec = nil
+        try otherProject.write(pe)
+        do {
+            _ = try await host.write(other, "/v1/ec/reapply", body: Data("{}".utf8))
+            XCTFail("ec/reapply on a PE32 module was taken")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 422, "\(error)")
+        }
+
+        // 6. The facts travel with the next publish.
+        let published = try await host.publish(module, by: "agent")
+        XCTAssertEqual(published.manifest.module.ec?.refsPastExtent?.count, 10, "the facts reach the manifest")
+    }
+}

@@ -1479,6 +1479,11 @@ public enum GhidraTools {
                 if let section = try arguments.optionalString("section") { body["section"] = .string(section) }
                 return body
             },
+            write("ghidra_ec_reapply", "ec/reapply", "Add the flash references to an older EC module",
+                  "EC only: adds to a module created before these were part of creation the flash references "
+                  + "past the image extent, their FlashRef_ labels and plates, and refs_past_extent in the facts; "
+                  + "touches nothing else; safe to repeat.",
+                  [:], required: []) { _ in [:] },
             AgentTool(
                 name: "ghidra_set_interfaces",
                 title: "Record the module's interfaces",

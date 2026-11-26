@@ -4,8 +4,9 @@ import Foundation
 
 /// Where the owner's Java comes from, and where it is built.
 public struct OwnerSources: Equatable, Sendable {
-    /// `Owner.java`, `Harvest.java`, `TypeText.java`, `ExportCode.java` and
-    /// `ApplyUefi.java` (its typing runs in the owner too: `/v1/uefi/retype`).
+    /// `Owner.java`, `Harvest.java`, `TypeText.java`, `ExportCode.java`,
+    /// `ApplyUefi.java` (its typing runs in the owner too: `/v1/uefi/retype`) and
+    /// `ApplyItEc.java` (its flash references: `/v1/ec/reapply`).
     public let files: [URL]
     /// The folder of the Ghidra scripts `analyzeHeadless` runs —
     /// `ApplyUefi.java`, `ExportCode.java`, `BuildUefiTypes.java`.
@@ -27,7 +28,8 @@ public struct OwnerSources: Equatable, Sendable {
                                     owner.appendingPathComponent("Harvest.java"),
                                     owner.appendingPathComponent("TypeText.java"),
                                     scripts.appendingPathComponent("ExportCode.java"),
-                                    scripts.appendingPathComponent("ApplyUefi.java")],
+                                    scripts.appendingPathComponent("ApplyUefi.java"),
+                                    scripts.appendingPathComponent("ApplyItEc.java")],
                             scripts: scripts)
     }
 

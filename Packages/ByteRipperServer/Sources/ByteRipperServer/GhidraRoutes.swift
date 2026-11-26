@@ -19,7 +19,7 @@ enum GhidraRoutes {
                                       "merge/functions", "clear/locals", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
                                       "set/data", "set/description", "set/interfaces", "set/code-mode", "redecode", "set/equate",
-                                      "function/extend",
+                                      "function/extend", "ec/reapply",
                                       "type", "save"]
 
     /// `ghidra.use` for every route; publish and release write into the store

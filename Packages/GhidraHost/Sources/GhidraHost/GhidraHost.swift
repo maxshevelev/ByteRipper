@@ -207,6 +207,11 @@ public actor GhidraHost {
     /// is still going.
     var retypeRows: [RetypeRow] = []
     var retypeRunning = false
+    /// A test's: EC modules are made as a build before 866 made them — no
+    /// flash references past the extent, no `refs_past_extent` in the facts —
+    /// for `ecReapply` to add them to.
+    var ecCreatesAsBefore866 = false
+    func setECCreatesAsBefore866(_ value: Bool) { ecCreatesAsBefore866 = value }
     var leaseBaselines: [SHA256Digest: (writes: Int?, content: LeaseBaseline)] = [:]
     /// How many exports a baseline has cost, for the tests.
     private(set) var leaseBaselinesTaken = 0
@@ -418,6 +423,8 @@ public actor GhidraHost {
     /// registry's mark — made inside a call that has been allowed already.
     public func write(_ module: SHA256Digest, _ path: String, body: Data, holder: String? = nil,
                       byHost: Bool = false) async throws -> Data {
+        // The EC step works out its body itself, from the module's image.
+        if path == Self.ecReapplyPath, !byHost { return try await ecReapply(module, holder: holder) }
         if !byHost { try requireLease(module, holder: holder) }
         if path == "/v1/type", writer.keepsTypeArchives, Self.withdrawsShared(body) {
             return try await withdrawSharedType(module, body: body)

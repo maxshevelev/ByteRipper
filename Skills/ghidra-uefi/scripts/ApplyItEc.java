@@ -198,35 +198,13 @@ public class ApplyItEc extends GhidraScript {
                 label(known.get("address").getAsLong(), known.get("name").getAsString());
             }
         }
-        // The flash past the extent the code points at: a label, no type, and
-        // a plate saying what is known of it (the server finds the
-        // references in Swift, ECImage's `referencesPastExtent`).
-        if (input.has("refs_past_extent")) {
-            java.util.Set<Long> placed = new java.util.HashSet<>();
-            for (JsonElement each : input.getAsJsonArray("refs_past_extent")) {
-                long address = each.getAsJsonObject().get("address").getAsLong();
-                long from = each.getAsJsonObject().get("from").getAsLong();
-                // The reference itself, so `xrefs` finds the code that uses it.
-                currentProgram.getReferenceManager().addMemoryReference(at(from), at(address),
-                    ghidra.program.model.symbol.RefType.DATA, SourceType.IMPORTED,
-                    ghidra.program.model.listing.CodeUnit.MNEMONIC);
-                if (!placed.add(address)) continue;
-                label(address, String.format("FlashRef_%X", address));
-                try {
-                    // Only what this module's bytes and family say: the plate
-                    // is keyed by the module and shows in every dump.
-                    long hostUpdate = input.has("host_update_size") ? input.get("host_update_size").getAsLong() : 0;
-                    String rewrite = hostUpdate > 0 && address < hostUpdate
-                        ? String.format(" A host update (host_update_size 0x%X) rewrites [0x%X, 0x%X) from the host's copy.", hostUpdate, extent, hostUpdate)
-                        : " Outside the range a host update rewrites.";
-                    currentProgram.getListing().setComment(at(address), CommentType.PLATE, String.format(
-                        "Referenced past the image extent (0x%X): the EC's flash data area, not part of this module."
-                        + " Its contents are whatever the EC wrote there at run time.%s"
-                        + " The meaning comes from the code that reads or writes it.", extent, rewrite));
-                } catch (Exception e) {
-                    println("ApplyItEc: no plate at 0x" + Long.toHexString(address) + ": " + e.getMessage());
-                }
-            }
+        // The flash past the extent the code points at: the same code the
+        // owner's `/v1/ec/reapply` runs on a project made before it was here.
+        JsonObject flashRefs = flashReferences(currentProgram, input);
+        labels += flashRefs.getAsJsonArray("labels_added").size();
+        for (JsonElement each : flashRefs.getAsJsonArray("plates_kept")) {
+            println("ApplyItEc: no plate at " + each.getAsJsonObject().get("address").getAsString() + ": "
+                    + each.getAsJsonObject().get("why").getAsString());
         }
         // Calls into bytes the analysis left undecoded: a `jral5` through a
         // register the code builds with sethi/ori, whose target the analysis
@@ -234,6 +212,112 @@ public class ApplyItEc extends GhidraScript {
         // covers it (0xA0, called from ResetEntry on IT8227E).
         seedCallTargets(memory);
         println("ApplyItEc done: " + functions + " functions, " + labels + " labels, " + registers + " registers");
+    }
+
+    /**
+     * The flash past the image extent the code points at, from the input's
+     * `extent`, `host_update_size` and `refs_past_extent` (the server finds
+     * the references in Swift, ECImage's `referencesPastExtent`): a DATA
+     * reference from each `from`, so `xrefs` finds the code that uses it; a
+     * `FlashRef_<ADDR>` label, no type; and a plate saying what is known of
+     * it. Run by this script as a module is made, and by the owner
+     * (`/v1/ec/reapply`) on a project made before it was part of that, in
+     * the caller's transaction.
+     *
+     * It only adds: a reference that is there is not added again, a name a
+     * place already has (a reviewer's `EflashState_2A600`) is kept, and so is
+     * a plate. The answer lists each reference, label and plate added or
+     * kept, a kept one with `why`.
+     */
+    public static JsonObject flashReferences(ghidra.program.model.listing.Program program, JsonObject input) {
+        AddressSpace space = program.getAddressFactory().getDefaultAddressSpace();
+        var references = program.getReferenceManager();
+        SymbolTable symbols = program.getSymbolTable();
+        var listing = program.getListing();
+        long extent = input.get("extent").getAsLong();
+        long hostUpdate = has(input, "host_update_size") ? input.get("host_update_size").getAsLong() : 0;
+        JsonObject answer = new JsonObject();
+        JsonArray refsAdded = new JsonArray(), refsKept = new JsonArray();
+        JsonArray labelsAdded = new JsonArray(), labelsKept = new JsonArray();
+        JsonArray platesAdded = new JsonArray(), platesKept = new JsonArray();
+        java.util.Set<Long> placed = new java.util.HashSet<>();
+        JsonArray given = has(input, "refs_past_extent") ? input.getAsJsonArray("refs_past_extent") : new JsonArray();
+        for (JsonElement each : given) {
+            long address = each.getAsJsonObject().get("address").getAsLong();
+            long from = each.getAsJsonObject().get("from").getAsLong();
+            Address to = space.getAddress(address);
+            Address source = space.getAddress(from);
+            JsonObject reference = new JsonObject();
+            reference.addProperty("from", String.format("0x%X", from));
+            reference.addProperty("address", String.format("0x%X", address));
+            boolean there = false;
+            for (var held : references.getReferencesFrom(source)) there |= held.getToAddress().equals(to);
+            if (there) {
+                reference.addProperty("why", "the reference is there");
+                refsKept.add(reference);
+            } else {
+                references.addMemoryReference(source, to, ghidra.program.model.symbol.RefType.DATA,
+                    SourceType.IMPORTED, ghidra.program.model.listing.CodeUnit.MNEMONIC);
+                refsAdded.add(reference);
+            }
+            if (!placed.add(address)) continue;
+
+            String name = String.format("FlashRef_%X", address);
+            JsonObject label = new JsonObject();
+            label.addProperty("address", String.format("0x%X", address));
+            var primary = symbols.getPrimarySymbol(to);
+            if (primary != null && !primary.isDynamic()) {
+                label.addProperty("name", primary.getName());
+                label.addProperty("why", primary.getName().equals(name) ? "the label is there"
+                    : "the place is named " + primary.getName() + ": the name is kept");
+                labelsKept.add(label);
+            } else {
+                try {
+                    symbols.createLabel(to, name, SourceType.IMPORTED).setPrimary();
+                    label.addProperty("name", name);
+                    labelsAdded.add(label);
+                } catch (Exception e) {
+                    label.addProperty("why", "no label: " + e.getMessage());
+                    labelsKept.add(label);
+                }
+            }
+
+            JsonObject plate = new JsonObject();
+            plate.addProperty("address", String.format("0x%X", address));
+            String held = null;
+            try {
+                held = listing.getComment(CommentType.PLATE, to);
+            } catch (Exception e) {
+                held = null;
+            }
+            if (held != null && !held.isEmpty()) {
+                plate.addProperty("why", "the place has a plate: it is kept");
+                platesKept.add(plate);
+                continue;
+            }
+            try {
+                // Only what this module's bytes and family say: the plate
+                // is keyed by the module and shows in every dump.
+                String rewrite = hostUpdate > 0 && address < hostUpdate
+                    ? String.format(" A host update (host_update_size 0x%X) rewrites [0x%X, 0x%X) from the host's copy.", hostUpdate, extent, hostUpdate)
+                    : " Outside the range a host update rewrites.";
+                listing.setComment(to, CommentType.PLATE, String.format(
+                    "Referenced past the image extent (0x%X): the EC's flash data area, not part of this module."
+                    + " Its contents are whatever the EC wrote there at run time.%s"
+                    + " The meaning comes from the code that reads or writes it.", extent, rewrite));
+                platesAdded.add(plate);
+            } catch (Exception e) {
+                plate.addProperty("why", "no plate: " + e.getMessage());
+                platesKept.add(plate);
+            }
+        }
+        answer.add("references_added", refsAdded);
+        answer.add("references_kept", refsKept);
+        answer.add("labels_added", labelsAdded);
+        answer.add("labels_kept", labelsKept);
+        answer.add("plates_added", platesAdded);
+        answer.add("plates_kept", platesKept);
+        return answer;
     }
 
     private void seedCallTargets(Memory memory) throws Exception {

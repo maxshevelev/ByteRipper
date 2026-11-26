@@ -181,7 +181,12 @@ extension GhidraHost {
         let imageURL = work.appendingPathComponent(programName)
         try firmware.image.write(to: imageURL)
         let layoutURL = work.appendingPathComponent("ec-layout.json")
-        try Self.ecPassInput(firmware, reference: configuration.ecReference).write(to: layoutURL)
+        var passInput = try Self.ecPassInput(firmware, reference: configuration.ecReference)
+        if ecCreatesAsBefore866, var object = try JSONSerialization.jsonObject(with: passInput) as? [String: Any] {
+            object["refs_past_extent"] = nil
+            passInput = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted])
+        }
+        try passInput.write(to: layoutURL)
 
         progress("Ghidra: \(name) (EC, analysis)")
         let arguments = [project.folder.path, GhidraProject.name, "-import", imageURL.path, "-overwrite",
@@ -204,7 +209,8 @@ extension GhidraHost {
             sliceSize: firmware.sliceSize, rawSHA256: firmware.rawSHA256,
             masked: firmware.masked.map { .init(offset: $0.offset, actual: Int($0.actual), normalised: Int($0.normalised)) },
             chipRead: firmware.chipRead, hostUpdateSize: family.hostUpdateSize, version: firmware.version,
-            refsPastExtent: firmware.referencesPastExtent.map { .init(address: $0.address, from: $0.from) })
+            refsPastExtent: ecCreatesAsBefore866 ? nil
+                : firmware.referencesPastExtent.map { .init(address: $0.address, from: $0.from) })
         let state = ProjectState(
             schema: 1, project: UUID().uuidString.lowercased(),
             module: .init(sha256: digest.hex, size: firmware.extent, name: name, kind: "EC", phase: nil, bits: 32,
@@ -216,14 +222,22 @@ extension GhidraHost {
         return state
     }
 
+    /// What the EC pass's flash references read (`ApplyItEc.flashReferences`),
+    /// at creation and in `ecReapply` alike: the extent, the size a host
+    /// update rewrites, and the references past the extent.
+    static func ecFlashReferenceInput(_ firmware: ECFirmware) -> [String: Any] {
+        ["extent": firmware.extent,
+         "host_update_size": firmware.family.hostUpdateSize,
+         "refs_past_extent": firmware.referencesPastExtent.map { ["address": $0.address, "from": $0.from] }]
+    }
+
     /// What the EC pass reads: the family's memory map, the layout read from
     /// the image, and the register and interrupt maps of the family.
     static func ecPassInput(_ firmware: ECFirmware, reference: URL?) throws -> Data {
         let family = firmware.family
-        var input: [String: Any] = [
+        var input: [String: Any] = ecFlashReferenceInput(firmware)
+        input.merge([
             "family": family.id,
-            "extent": firmware.extent,
-            "host_update_size": family.hostUpdateSize,
             "flash_base": family.flashBase,
             "ram": [family.ram.lowerBound, family.ram.upperBound],
             "regs": [family.registers.lowerBound, family.registers.upperBound],
@@ -232,9 +246,8 @@ extension GhidraHost {
             // The printable run the family reads as the version: the datum
             // is exactly that long, so it never covers the code after it.
             "version_length": family.version(of: firmware.image)?.utf8.count ?? 0,
-            "known_labels": (ecKnownLabels[firmware.sha256] ?? []).map { ["name": $0.name, "address": $0.address] },
-            "refs_past_extent": firmware.referencesPastExtent.map { ["address": $0.address, "from": $0.from] }
-        ]
+            "known_labels": (ecKnownLabels[firmware.sha256] ?? []).map { ["name": $0.name, "address": $0.address] }
+        ]) { _, new in new }
         input["layout"] = try JSONSerialization.jsonObject(with: try firmware.layout.json())
         if let reference {
             let registers = reference.appendingPathComponent("it83xx-registers.tsv")

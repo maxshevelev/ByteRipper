@@ -363,6 +363,7 @@ public class Owner {
                 if (path.equals("/v1/guid-at")) { json(exchange, 200, guidAt(query)); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
                 if (path.equals("/v1/types")) { json(exchange, 200, types(query)); return; }
+                if (path.equals("/v1/ec/image")) { json(exchange, 200, ecImage()); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
                 json(exchange, 200, release(exchange));
                 return;
@@ -395,6 +396,7 @@ public class Owner {
                     case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/set/interfaces" -> write(exchange, this::setInterfaces);
                     case "/v1/uefi/retype" -> write(exchange, this::retypeUefi);
+                    case "/v1/ec/reapply" -> write(exchange, this::ecReapply);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
                     case "/v1/redecode" -> write(exchange, this::redecode);
                     case "/v1/function/extend" -> write(exchange, this::extendFunction);
@@ -5246,6 +5248,48 @@ public class Owner {
         JsonObject answer = new JsonObject();
         answer.addProperty("typed", typed);
         answer.addProperty("log", log.toString().trim());
+        return answer;
+    }
+
+    /**
+     * An EC module's image as the program holds it: the bytes of its `flash`
+     * block, base64, from where the block starts. The host reads the flash
+     * references past the extent from them (`GhidraHost.ecReapply`).
+     */
+    private JsonObject ecImage() throws Failure {
+        MemoryBlock flash = program.getMemory().getBlock("flash");
+        if (flash == null || !flash.isInitialized()) throw new Failure(409, "the program has no `flash` block: not an EC module");
+        if (flash.getSize() > Integer.MAX_VALUE) throw new Failure(409, "the flash block is too large to read");
+        byte[] bytes = new byte[(int) flash.getSize()];
+        try {
+            int read = flash.getBytes(flash.getStart(), bytes);
+            if (read != bytes.length) throw new Failure(500, "read " + read + " of " + bytes.length + " bytes of the flash block");
+        } catch (ghidra.program.model.mem.MemoryAccessException error) {
+            throw new Failure(500, error.getMessage());
+        }
+        JsonObject answer = new JsonObject();
+        answer.addProperty("start", hex(flash.getStart()));
+        answer.addProperty("length", bytes.length);
+        answer.addProperty("base64", java.util.Base64.getEncoder().encodeToString(bytes));
+        return answer;
+    }
+
+    /**
+     * What an EC module's creation adds for the flash past the image extent
+     * — the references, `FlashRef_<ADDR>` labels and their plates — added to
+     * a project made before it did, by the same code (`ApplyItEc.flashReferences`).
+     * `{extent, host_update_size, refs_past_extent: [{address, from}]}`, as
+     * the host computes it from the image. It only adds; the answer lists
+     * what it added and what it kept, and why.
+     */
+    private JsonObject ecReapply(JsonObject body) throws Exception {
+        if (!body.has("extent") || !body.has("refs_past_extent") || !body.get("refs_past_extent").isJsonArray()) {
+            throw new Failure(400, "give `extent` and `refs_past_extent`: [{address, from}]");
+        }
+        if (program.getMemory().getBlock("flash") == null) throw new Failure(409, "the program has no `flash` block: not an EC module");
+        JsonObject answer = identity();
+        JsonObject applied = ApplyItEc.flashReferences(program, body);
+        for (String key : applied.keySet()) answer.add(key, applied.get(key));
         return answer;
     }
 
