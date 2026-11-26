@@ -279,4 +279,22 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
         }
         throw XCTSkip("no function with two unnamed zero-hash temporaries of one kind")
     }
+    /// A temporary the decompiler maps only after its types are settled has
+    /// hash 0 and no variable behind it: a name cannot stick, and Ghidra's
+    /// rename dies on it with a NullPointerException. The local is listed as
+    /// `nameable: false` with the reason, and a rename is refused with 409
+    /// rather than answered with Ghidra's Java message (issue 29280951:
+    /// CpuDxe's HookAfterStubHeaderEnd, a pointer merged from two RSP reads).
+    func testALocalWithNoVariableIsListedAsUnnameableAndRefused() async throws {
+        for entry in try await entries() {
+            let locals = try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+            guard let local = locals.first(where: { ($0["nameable"] as? Bool) == false }),
+                  let storage = local["storage"] as? String, let use = local["first_use"] as? String else { continue }
+            XCTAssertTrue((local["nameable_reason"] as? String ?? "").contains("no storage it can keep"), "\(local)")
+            await refused("/v1/rename/variable", ["function": entry, "storage": storage, "first_use": use, "name": "Unkept"],
+                          saying: "cannot be named")
+            return
+        }
+        throw XCTSkip("no local with no variable behind it in this module")
+    }
 }

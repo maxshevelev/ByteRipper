@@ -1182,6 +1182,11 @@ public class Owner {
                 // A name Ghidra still made up is not one — typing a local
                 // alone leaves it unnamed, and `leftovers` agrees.
                 item.addProperty("named", symbol.getSymbol() != null && !placeholder(symbol.getName()));
+                String unnameable = unnameableReason(symbol);
+                if (unnameable != null) {
+                    item.addProperty("nameable", false);
+                    item.addProperty("nameable_reason", unnameable);
+                }
                 locals.add(item);
             }
         }
@@ -7586,6 +7591,11 @@ public class Owner {
                 return answer;
             }
         }
+        String unnameable = unnameableReason(match);
+        if (unnameable != null) {
+            throw new Failure(409, match.getName() + " (" + match.getStorage() + (match.getPCAddress() == null ? ""
+                : " at " + hex(match.getPCAddress())) + ") cannot be named: " + unnameable + ". Nothing was changed");
+        }
         String applied = name != null ? name : match.getName();
         String asked = match.getName();
         String askedStorage = match.getStorage().toString();
@@ -7598,6 +7608,12 @@ public class Owner {
         java.util.List<String> parametersBefore = parameterPlaces(function);
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
+        } catch (NullPointerException error) {
+            // Ghidra's own state, not the request: never a Java message for
+            // the caller (issue 29280951).
+            throw new Failure(409, "Ghidra could not name " + asked + " (" + askedStorage
+                + (askedFirstUse == null ? "" : " at " + hex(askedFirstUse)) + "): the decompiler holds no variable"
+                + " it can keep the name on. Nothing was changed; say what it is in an eol comment");
         } catch (Exception error) {
             throw new Failure(400, error.getMessage() + holderOf(applied, function));
         }
@@ -7775,6 +7791,23 @@ public class Owner {
                     : now == null ? "" : ": it still reads as " + now.getDisplayName())
                 + " — nothing was changed; " + typeSourceHint(held, name));
         }
+    }
+
+    /**
+     * Why a local the decompiler shows cannot be named, or null when it can
+     * (issue 29280951). A temporary the decompiler maps only after its types
+     * are settled — a value merged from several definitions, say — gets the
+     * hash 0 and no variable: a name has no varnode to be keyed by, cannot be
+     * found again by the next decompile, and Ghidra's rename dies on it.
+     */
+    static String unnameableReason(HighSymbol symbol) {
+        if (symbol == null || symbol.getHighVariable() != null) return null;
+        ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
+        if (storage == null || !(storage.isHashStorage() || storage.isUniqueStorage())) return null;
+        Address first = symbol.getPCAddress();
+        return "the decompiler gives this local no storage it can keep (" + storage
+            + ", a temporary with no variable behind it), so a name cannot stick to it — say what it is in an eol"
+            + " comment" + (first == null ? "" : " at " + hex(first)) + ", or type or name the value it is computed from";
     }
 
     /**
