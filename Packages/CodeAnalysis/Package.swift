@@ -20,8 +20,14 @@ let package = Package(
         .library(name: "CodeAnalysis", targets: ["CodeAnalysis"]),
         .executable(name: "byteripper-cas", targets: ["byteripper-cas"])
     ],
+    dependencies: [
+        // The analysis profiles a revision is stamped with.
+        .package(path: "../AnalysisProfiles")
+    ],
     targets: [
-        .target(name: "CodeAnalysis"),
+        .target(name: "CodeAnalysis", dependencies: [
+            .product(name: "AnalysisProfiles", package: "AnalysisProfiles")
+        ]),
         .executableTarget(name: "byteripper-cas", dependencies: ["CodeAnalysis"]),
         .testTarget(
             name: "CodeAnalysisTests",

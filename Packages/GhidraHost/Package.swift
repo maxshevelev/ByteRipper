@@ -19,6 +19,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../CodeAnalysis"),
+        .package(path: "../AnalysisProfiles"),
         .package(path: "../AgentKit"),
         // An EC firmware image opened as a module: its identity, extent and
         // the layout the EC pass names.
@@ -27,6 +28,7 @@ let package = Package(
     targets: [
         .target(name: "GhidraHost", dependencies: [
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "AnalysisProfiles", package: "AnalysisProfiles"),
             .product(name: "AgentKit", package: "AgentKit"),
             .product(name: "ECImage", package: "ECImage")
         ]),

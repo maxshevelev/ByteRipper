@@ -1,3 +1,4 @@
+import AnalysisProfiles
 import CodeAnalysis
 import Foundation
 

@@ -132,6 +132,11 @@ packages:
   # Ghidra skill writes it.
   CodeAnalysis:
     path: Packages/CodeAnalysis
+  # How modules of one kind are reviewed: the analysis profiles' catalogue,
+  # their records and gates, and the Code panel's sections per profile.
+  # CodeAnalysis and GhidraHost link it; the Code panel will.
+  AnalysisProfiles:
+    path: Packages/AnalysisProfiles
   # An EC firmware image as bytes: its family, extent, normalised identity
   # and the layout the EC pass names. GhidraHost links it; the app will.
   ECImage:

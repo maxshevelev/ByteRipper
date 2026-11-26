@@ -55,6 +55,11 @@ final class GhidraHostProfileTests: XCTestCase {
         XCTAssertTrue(((profile["inapplicable_tools"] as? [[String: Any]]) ?? [])
             .contains { $0["tool"] as? String == "ghidra_set_interfaces" && ($0["hint"] as? String)?.isEmpty == false })
         XCTAssertFalse((profile["gates"] as? [Any] ?? []).isEmpty)
+        // The Code panel's part, an addition under `panel`: the EC hides
+        // interfaces and POST codes, and every record has a section.
+        let panel = try XCTUnwrap(profile["panel"] as? [String: Any])
+        XCTAssertEqual((panel["built_in"] as? [[String: Any]])?.compactMap { $0["shown"] as? Bool }, [false, false])
+        XCTAssertTrue(((profile["records"] as? [[String: Any]]) ?? []).allSatisfy { $0["panel"] != nil })
 
         // A revision that recorded its profile is answered as such.
         let review = try store.putObject(Data(#"{"schema":1}"#.utf8))
