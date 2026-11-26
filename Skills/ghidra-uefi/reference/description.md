@@ -247,7 +247,9 @@ here: it is what the technician reads off the bench.
 
 Defects and oddities the review found, in plain language, each with its practical
 effect: what could go wrong on a real machine, and when. Each is also in a note
-at its place in the code and in the report to the person.
+at its place in the code and in the report to the person. Each is a fact of the code,
+written as a condition ("when PCD X is 0, Y is skipped"); the review does not hunt for
+weaknesses the code does not show. The section stays even when it is short.
 
 ### `## Terms`
 

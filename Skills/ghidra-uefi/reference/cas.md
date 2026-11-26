@@ -401,3 +401,98 @@ The suite runs the skill's client against the real tool and covers duplicate
 and corrupt objects, recipe separation, replacement by reading, unknown fields,
 path traversal, references and GC, and export/import with a conflict. The
 store's own tests are `swift test` in `Packages/CodeAnalysis`.
+
+## The analysis server and the store's commands
+
+`byteripper-server` (`Design/SERVER_PLAN.md`, `Design/SERVER_HEADLESS_PLAN.md`)
+runs the owners from Swift and serves them with the store and the documents, so
+one machine keeps every module's project and every Mac reads the result:
+
+```bash
+swift build -c release --package-path Packages/ByteRipperServer
+.build/release/byteripper-server token add --name admin --rights admin  # once: the console's
+.build/release/byteripper-server token add --name <mac> --preset app    # one per Mac, and per client
+.build/release/byteripper-server --dump-roots <dir> \
+    --listen 127.0.0.1:8765 --listen 100.64.0.7:8765
+# loopback for the app on the server itself (a Mac does not reach its own
+# tailnet address), the tailnet address for the other Macs.
+# Every address needs a token now, loopback included: the secret goes into the
+# app's Settings ▸ Code Analysis.
+```
+
+The server keeps its own documents — the dumps under `--dump-roots` and what
+the console uploads — and serves them to an agent **on that machine** over a
+Unix socket; the agent's client reaches it through the relay:
+
+```bash
+.build/release/byteripper-server relay      # MCP on stdin/stdout ↔ <Server>/mcp.sock
+```
+
+`/admin` on any listen address is the operator's console — documents,
+activity, tokens, status — behind an admin token. There is no `/mcp` over the
+network: an agent is on the machine, or it goes through the app.
+
+The server keeps the leases (`<store>/private/leases.json`, across restarts):
+a call on its MCP socket holds a module as `local MCP`, an HTTP client as
+`token <name>`. `GET /ghidra/v1/leases` lists the modules in work; an
+administrator closes one with `DELETE /ghidra/v1/leases/<module>` or from the
+console's Activity page, which shows each module in work with what its holder
+has done under the lease, and under it the server log: every take, give-back,
+close and publish (refused ones too) with its holder, and the server's
+restarts with its version, two weeks long (`<store>/private/events.jsonl`).
+Every agent on the socket is the one holder
+`local MCP`, so a lease of it also names the connection that took the module
+and the one that last named it, and a connection's card names the Claude Code
+session behind it. A client waiting on `GET
+/ghidra/v1/leases/<module>/wait` hears of it at once. Every `ghidra_` call,
+the publish included, goes to the server.
+The store it publishes into is its own — `<Server>/Analysis` by default, with
+its projects in `<Server>/GhidraProjects`, apart from the app's — and `--store`
+names another directory; `cas_cli.py --store` reads the same one from the
+terminal. A publish through the server is the only way a client's work reaches
+that store: the store's write routes (`PUT objects`, `POST analyses`, `POST
+reviews/<module>`, `POST library`, `POST import`) take an `admin` token, and
+`cas.write` is left the references and the publish.
+
+The app's store, and the scripts' on this Mac, is
+`~/Library/Application Support/ByteRipper/Analysis`, or wherever `--store`
+says; a server keeps its own (above):
+
+```
+objects/<sha256 of the artifact>
+analyses/<sha256 of the module>/<recipe>/manifest.json
+refs/<name>.json
+```
+
+The artifact holds functions, every instruction with its bytes and references,
+the decompiled C, strings, the POST codes with the place that sends each —
+followed back through `IoWrite8`, a `PostCode()` or a halt routine to the
+constant — and candidates for `ReportStatusCode` calls (a call through a PEI
+services table entry at `+0x58`, with the pushes before it kept as context).
+
+The store has its own commands for the work the MCP tools do not cover:
+
+```bash
+python3 scripts/cas_cli.py list
+python3 scripts/cas_cli.py verify
+python3 scripts/cas_cli.py ref add laptop <module-sha>/<recipe>
+python3 scripts/cas_cli.py gc --apply
+python3 scripts/cas_cli.py export --all --out analyses.zip
+python3 scripts/cas_cli.py import analyses.zip
+```
+
+`gc` is a dry run unless `--apply`; `--analyses` also drops analyses no
+reference names and refuses to do that on a store with no references. The
+bundle is how a project carries its analyses; `reference/cas.md` has the layout
+and the rules. The first store command builds `byteripper-cas` (about 20 s,
+once; it needs Xcode's `swift`) unless `BYTERIPPER_CAS` names a built one. The
+store's tests run without Ghidra:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+For CpuPei the artifact is 13 functions and 508 instructions; it finds the
+status-code call at `0x535` with `PUSH 0x80000002`, `PUSH 0x11004`, the core id
+and the descriptor — the call the manual analysis found. The Code panel in the
+app reads the same artifact.
