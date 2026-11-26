@@ -1305,6 +1305,48 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
+    "description" : "The program's bytes from `address`, at most 4096, as `hex`; with `unit` 2, 4 or 8 also `values` in the program's byte order, and `symbols`: the name at each value that is an address in the program. Initialized memory only; a read past its block's end stops there with `truncated`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The first byte.",
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes, 1 to 4096.",
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "unit" : {
+          "description" : "1, 2, 4 or 8: the size of each value. Default 1, bytes only.",
+          "type" : "integer"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "length"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_bytes",
+    "title" : "Read a module's bytes"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
     "description" : "The references `to` an address (who calls a function, reads a global) or `from` one. `to` also answers `held_by`: instructions that hold the address as a constant and have no reference to it, such as `MOV EAX,addr` before `CALL EAX`; in an image based at zero it is empty, a small constant being no address. `function` answers `calls`: every call it makes and every jump that leaves it, in order, each with `at`, `text` and `kind`, \"direct\" or \"indirect\", and `target` and `name` where known; an indirect one traced to its `MOV` gives `held_at`, one with no `target` is not known from here. An empty list means no calls. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,

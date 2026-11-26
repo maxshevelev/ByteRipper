@@ -137,7 +137,7 @@ public enum GhidraTools {
         or `ghidra_create`; before the first write take the module into work with `ghidra_take` — one \
         holder at a time writes and publishes a module, and reading needs nothing; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
-        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
+        locals with their storage), `ghidra_disassembly`, `ghidra_bytes`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_type_uses` (where every module names a type), `ghidra_description`, `ghidra_interfaces`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_set_interfaces` (what the module installs, \
@@ -817,6 +817,25 @@ public enum GhidraTools {
                 if let function = try arguments.optionalString("function") { query["function"] = function }
                 guard query.count == 1 else { throw AgentToolError("Give `to`, `from` or `function`, one of them.") }
                 return try await answer { try await backend.readCall(module, "xrefs", query: query) }
+            },
+            AgentTool(
+                name: "ghidra_bytes",
+                title: "Read a module's bytes",
+                description: "The program's bytes from `address`, at most 4096, as `hex`; with `unit` 2, 4 or 8 also `values` "
+                    + "in the program's byte order, and `symbols`: the name at each value that is an address in the program. "
+                    + "Initialized memory only; a read past its block's end stops there with `truncated`.",
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "address": AgentSchema.string("The first byte."),
+                    "length": AgentSchema.integer("How many bytes, 1 to 4096."),
+                    "unit": AgentSchema.integer("1, 2, 4 or 8: the size of each value. Default 1, bytes only.")
+                ], required: ["module", "address", "length"])
+            ) { call in
+                let module = try module(call.arguments)
+                var query = ["address": try call.arguments.string("address"),
+                             "length": String(try call.arguments.integer("length"))]
+                if call.arguments.has("unit") { query["unit"] = String(try call.arguments.integer("unit")) }
+                return try await answer { try await backend.readCall(module, "bytes", query: query) }
             },
             paged("ghidra_data", "data", "List a module's defined data",
                   "The defined data — named globals, GUIDs, tables — with address, name and type. Paged."),

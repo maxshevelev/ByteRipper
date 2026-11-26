@@ -187,6 +187,9 @@ public class ApplyItEc extends GhidraScript {
                 data(address, type);
                 String note = register.get("block").getAsString()
                     + (register.has("description") ? ": " + register.get("description").getAsString() : "");
+                String status = register.has("status") ? register.get("status").getAsString() : "";
+                if (status.equals("unverified")) note += " (IT8320 name, not verified for IT8227E)";
+                else if (status.equals("firmware")) note += " (from the firmware: " + register.get("source").getAsString() + ")";
                 currentProgram.getListing().setComment(at(address), CommentType.EOL, note);
                 registers++;
             }
@@ -211,7 +214,59 @@ public class ApplyItEc extends GhidraScript {
         // only learns as a reference once the data laid above no longer
         // covers it (0xA0, called from ResetEntry on IT8227E).
         seedCallTargets(memory);
+        int based = baseTypes(currentProgram);
+        println("ApplyItEc: " + based + " base types in " + BASE_CATEGORY);
         println("ApplyItEc done: " + functions + " functions, " + labels + " labels, " + registers + " registers");
+    }
+
+    /**
+     * Where the EDK2-style base types of an EC program live: the root, where
+     * a review's own `typedef unsigned char UINT8;` lands too, so the two are
+     * one type and not `/UINT8` beside another `UINT8` the parser cannot
+     * choose between.
+     */
+    public static final String BASE_CATEGORY = "/";
+
+    /**
+     * EDK2's base type names, in the widths NDS32 has (32-bit, so INTN and
+     * UINTN are 32 bits), each a typedef of Ghidra's own type: an EC review
+     * writes `UINT8`, `BOOLEAN` and `UINTN` as a UEFI review does, and has no
+     * EDK2 archive to take them from. `VOID` is not one: the owner reads it as
+     * `void` in every signature and type. `BOOL` is the 32-bit `int` C code
+     * outside EDK2 uses.
+     */
+    public static final String[][] BASE_TYPES = {
+        {"BOOLEAN", "u1"}, {"BOOL", "s4"},
+        {"INT8", "s1"}, {"UINT8", "u1"}, {"INT16", "s2"}, {"UINT16", "u2"},
+        {"INT32", "s4"}, {"UINT32", "u4"}, {"INT64", "s8"}, {"UINT64", "u8"},
+        {"INTN", "s4"}, {"UINTN", "u4"}, {"CHAR8", "c1"}, {"CHAR16", "u2"},
+    };
+
+    /**
+     * Adds to the program each of `BASE_TYPES` it does not hold by that name
+     * (a type a review brought in under the name is kept), in the caller's
+     * transaction; answers how many were added. Run as a module is made, and
+     * by the owner on a project made before it was part of that.
+     */
+    public static int baseTypes(ghidra.program.model.listing.Program program) {
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        ghidra.program.model.data.CategoryPath category = new ghidra.program.model.data.CategoryPath(BASE_CATEGORY);
+        int added = 0;
+        for (String[] base : BASE_TYPES) {
+            java.util.List<DataType> held = new ArrayList<>();
+            manager.findDataTypes(base[0], held);
+            if (held.stream().anyMatch(type -> type.getName().equals(base[0]))) continue;
+            int size = base[1].charAt(1) - '0';
+            DataType target = switch (base[1].charAt(0)) {
+                case 'c' -> ghidra.program.model.data.CharDataType.dataType;
+                case 's' -> ghidra.program.model.data.AbstractIntegerDataType.getSignedDataType(size, manager);
+                default -> ghidra.program.model.data.AbstractIntegerDataType.getUnsignedDataType(size, manager);
+            };
+            manager.resolve(new ghidra.program.model.data.TypedefDataType(category, base[0], target, manager),
+                            ghidra.program.model.data.DataTypeConflictHandler.KEEP_HANDLER);
+            added++;
+        }
+        return added;
     }
 
     /**

@@ -3,7 +3,7 @@ import Foundation
 /// A chip's registers as our own table keeps them
 /// (`Skills/ghidra-ec/reference/<chip>-registers.tsv`): lines starting with
 /// `#` are the header comment, the first other line names the columns
-/// `name address width block description source`.
+/// `name address width block description source status`.
 public struct ECRegisterMap: Equatable, Sendable {
     public struct Register: Codable, Equatable, Sendable {
         public let name: String
@@ -14,6 +14,9 @@ public struct ECRegisterMap: Equatable, Sendable {
         /// Nil where the table says `-`.
         public let description: String?
         public let source: String
+        /// `published`, `firmware` or `unverified` (column 7); nil in a
+        /// table without the column.
+        public var status: String? = nil
     }
 
     public struct Malformed: Error, CustomStringConvertible {
@@ -37,7 +40,8 @@ public struct ECRegisterMap: Equatable, Sendable {
             registers.append(Register(name: row[0], address: address, width: width,
                                       block: row.count > 3 ? row[3] : "",
                                       description: note == "-" || note.isEmpty ? nil : note,
-                                      source: row.count > 5 ? row[5] : ""))
+                                      source: row.count > 5 ? row[5] : "",
+                                      status: row.count > 6 && !row[6].isEmpty ? row[6] : nil))
         }
         self.registers = registers
         var byAddress: [UInt64: Int] = [:]

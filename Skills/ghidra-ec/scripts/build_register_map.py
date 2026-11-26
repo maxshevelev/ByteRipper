@@ -2,6 +2,7 @@
 """Build the IT83xx register and IRQ maps from Chromium EC's registers.h.
 
     python3 build_register_map.py <registers.h> <revision> <out-dir>
+    python3 build_register_map.py --overlay <reference-dir>
 
 Reads `chip/it83xx/registers.h` (Chromium EC, BSD licence) as text and writes
 two tables of our own: `it83xx-registers.tsv` (name, address, width, block,
@@ -10,8 +11,22 @@ addresses and numbers are taken, never code. Where the header has a
 family conditional, the IT8320 side is kept (the IT8227E/ITE8380 firmware
 this map was first checked against is of that generation); any other
 conditional keeps its first branch. A macro with parameters is skipped.
+
+Every published entry is marked `unverified` (an IT8320 name nobody has
+checked for IT8227E). Then the overlay `it8227e-overrides.tsv` beside the
+output is applied: a `firmware` entry (derived from the IT8227E firmware's
+code) removes every published entry at its address and takes its place; a
+`published` entry with the same name and address only flips that entry's
+status. Each removed entry is kept as a `# replaced:` comment line in the
+output, so the history stays in the table.
+
+`--overlay <reference-dir>` re-applies the overlay without registers.h: it
+rebuilds the published part from the existing `it83xx-registers.tsv` (its
+non-firmware rows plus its `# replaced:` lines, statuses reset to
+`unverified`) and keeps the table's header. Both modes give the same file.
 Stdlib only; a run is a diff to review.
 """
+import os
 import re
 import sys
 
@@ -19,7 +34,89 @@ import sys
 EXTRA_BASES = {"CHIP_EC_INTC_BASE": 0x00F01100}
 
 
+COLUMNS = "name\taddress\twidth\tblock\tdescription\tsource\tstatus\n"
+STATUS_NOTE = ("# status: published = registers.h, confirmed for IT8227E; firmware = derived from the\n"
+               "# IT8227E firmware's code (it8227e-overrides.tsv); unverified = an IT8320 name not checked\n"
+               "# for IT8227E. `# replaced:` lines are published entries a firmware entry removed.\n")
+
+
+def row_text(name, address, width, block, note, source, status):
+    return "%s\t0x%08X\t%d\t%s\t%s\t%s\t%s" % (name, address, width, block, note.replace("\t", " "), source, status)
+
+
+def read_overrides(path):
+    rows = []
+    for line in open(path, encoding="utf-8"):
+        line = line.rstrip("\n")
+        if not line or line.startswith("#") or line.startswith("name\t"):
+            continue
+        r = line.split("\t")
+        rows.append((r[0], int(r[1], 16), int(r[2]), r[3], r[4], r[5], r[6], r[7] if len(r) > 7 else "-"))
+    return rows
+
+
+def write_registers(out, head, published):
+    """published: (name, address, width, block, note, source) rows."""
+    overrides = read_overrides(os.path.join(out, "it8227e-overrides.tsv"))
+    rows = [list(r) + ["unverified"] for r in published]
+    replaced = []
+    for name, address, width, block, note, source, status, replaces in overrides:
+        if status == "published":
+            hits = [r for r in rows if r[0] == name and r[1] == address]
+            if not hits:
+                sys.exit("override %s at 0x%X: no such published entry" % (name, address))
+            for r in hits:
+                r[6] = "published"
+            continue
+        gone = [r for r in rows if r[1] == address]
+        listed = set(x for x in replaces.split(",") if x and x != "-")
+        if listed != set(r[0] for r in gone):
+            sys.exit("override %s at 0x%X: replaces %s, the map has %s"
+                     % (name, address, sorted(listed), sorted(r[0] for r in gone)))
+        for r in gone:
+            rows.remove(r)
+            replaced.append((r, name))
+        rows.append([name, address, width, block, note, source, status])
+    rows.sort(key=lambda r: (r[1], r[0]))
+    replaced.sort(key=lambda x: (x[0][1], x[0][0]))
+    with open(os.path.join(out, "it83xx-registers.tsv"), "w", encoding="utf-8") as f:
+        f.write(head + STATUS_NOTE)
+        for r, by in replaced:
+            f.write("# replaced: %s\t(by %s)\n" % (row_text(*r[:6], "unverified"), by))
+        f.write(COLUMNS)
+        for r in rows:
+            f.write(row_text(*r) + "\n")
+    for r, by in replaced:
+        print("replaced %s at 0x%08X by %s" % (r[0], r[1], by))
+    counts = {}
+    for r in rows:
+        counts[r[6]] = counts.get(r[6], 0) + 1
+    print("registers %d (%s)" % (len(rows), ", ".join("%s %d" % kv for kv in sorted(counts.items()))))
+
+
+def overlay(out):
+    head, published = "", []
+    for line in open(os.path.join(out, "it83xx-registers.tsv"), encoding="utf-8"):
+        line = line.rstrip("\n")
+        if line.startswith("# replaced: "):
+            r = line[len("# replaced: "):].split("\t")
+            published.append((r[0], int(r[1], 16), int(r[2]), r[3], r[4], r[5]))
+        elif line.startswith("#"):
+            head += line + "\n"
+        elif line and not line.startswith("name\t"):
+            r = line.split("\t")
+            if len(r) < 7 or r[6] != "firmware":
+                published.append((r[0], int(r[1], 16), int(r[2]), r[3], r[4], r[5]))
+    # The status note is written again by write_registers.
+    head = "".join(l + "\n" for l in head.split("\n") if l and l not in STATUS_NOTE.split("\n"))
+    published.sort(key=lambda r: (r[1], r[0]))
+    write_registers(out, head, published)
+
+
 def main():
+    if sys.argv[1] == "--overlay":
+        overlay(sys.argv[2])
+        return
     header, revision, out = sys.argv[1], sys.argv[2], sys.argv[3]
     lines = open(header, encoding="utf-8").read().split("\n")
     bases = dict(EXTRA_BASES)
@@ -83,16 +180,13 @@ def main():
             "# Family conditionals: the IT8320 side. INTC base 0x00F01100 from the chip config\n"
             "# (CHIP_EC_INTC_BASE). `source` is the header's line.\n" % revision)
     registers.sort(key=lambda r: (r[1], r[0]))
-    with open(out + "/it83xx-registers.tsv", "w", encoding="utf-8") as f:
-        f.write(head + "# width is in bytes.\nname\taddress\twidth\tblock\tdescription\tsource\n")
-        for name, address, width, block, note, source in registers:
-            f.write("%s\t0x%08X\t%d\t%s\t%s\t%s\n" % (name, address, width, block, note.replace("\t", " "), source))
+    write_registers(out, head + "# width is in bytes.\n", registers)
     irqs.sort()
     with open(out + "/it83xx-irqs.tsv", "w", encoding="utf-8") as f:
         f.write(head + "# The INTC interrupt numbers (IVCT - 0x10).\nirq\tname\tsource\n")
         for irq, name, source in irqs:
             f.write("%d\t%s\t%s\n" % (irq, name, source))
-    print("registers %d, irqs %d" % (len(registers), len(irqs)))
+    print("irqs %d" % len(irqs))
 
 
 if __name__ == "__main__":

@@ -260,6 +260,7 @@ extension GhidraHost {
                 var row: [String: Any] = ["name": register.name, "address": register.address, "width": register.width,
                                           "block": register.block, "source": register.source]
                 if let note = register.description { row["description"] = note }
+                if let status = register.status { row["status"] = status }
                 return row
             }
             if FileManager.default.fileExists(atPath: irqs.path) {

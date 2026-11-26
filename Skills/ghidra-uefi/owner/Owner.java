@@ -352,6 +352,7 @@ public class Owner {
                 if (path.startsWith("/v1/function/")) { json(exchange, 200, function(path.substring(13), query)); return; }
                 if (path.startsWith("/v1/disassembly/")) { json(exchange, 200, disassembly(path.substring(16), query)); return; }
                 if (path.equals("/v1/xrefs")) { json(exchange, 200, xrefs(query)); return; }
+                if (path.equals("/v1/bytes")) { json(exchange, 200, bytes(query)); return; }
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
@@ -1188,12 +1189,19 @@ public class Owner {
                 if (symbol.isParameter()) continue;
                 // An equate's name lives in the local map too: it is a constant, not a local.
                 if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                // An unnamed temporary of the decompiler's (`HASH:00000000:1`)
+                // can be one symbol over many values — each read of a port in
+                // a read-modify-write — and naming it names one of them. Each
+                // is listed by where it is written, so one `items` call names
+                // them all (issue cf7016bd).
+                java.util.Collection<Address> starts = tempPieces(high, symbol).keySet();
+                if (starts.size() < 2) starts = java.util.Collections.singletonList(symbol.getPCAddress());
+                for (Address first : starts) {
                 JsonObject item = new JsonObject();
                 item.addProperty("name", symbol.getName());
                 DataType type = symbol.getDataType();
                 item.addProperty("type", type == null ? null : type.getDisplayName());
                 item.addProperty("storage", symbol.getStorage().toString());
-                Address first = symbol.getPCAddress();
                 item.addProperty("first_use", first == null ? null : hex(first));
                 // Ghidra's names for unnamed locals renumber when another is
                 // named; a client addresses a local by storage and first use.
@@ -1206,6 +1214,7 @@ public class Owner {
                     item.addProperty("nameable_reason", unnameable);
                 }
                 locals.add(item);
+                }
             }
         }
         answer.add("locals", locals);
@@ -1709,6 +1718,74 @@ public class Owner {
         }
         JsonObject answer = identity();
         answer.add("references", list);
+        return answer;
+    }
+
+    /** The most `/v1/bytes` reads at once. */
+    private static final int BYTES_CAP = 4096;
+
+    /**
+     * The program's bytes from `address`, `length` of them (at most 4096), in
+     * one initialized block: a range that starts outside memory or in an
+     * uninitialized block is refused, one that runs past its block's end
+     * stops there with `truncated`. With `unit` 2, 4 or 8 it also answers
+     * the values in the program's byte order, each with the symbol at the
+     * address it names when that address is in memory.
+     */
+    private JsonObject bytes(Map<String, String> query) throws Failure {
+        String at = query.get("address");
+        if (at == null) throw new Failure(400, "bytes needs address=");
+        Address start = address(at);
+        int length;
+        int unit;
+        try {
+            length = Integer.decode(query.getOrDefault("length", "16"));
+            unit = Integer.decode(query.getOrDefault("unit", "1"));
+        } catch (NumberFormatException error) {
+            throw new Failure(400, "length and unit are numbers");
+        }
+        if (length <= 0) throw new Failure(400, "length must be positive");
+        if (length > BYTES_CAP) throw new Failure(400, "length " + length + " is over the cap of " + BYTES_CAP + " bytes");
+        if (unit != 1 && unit != 2 && unit != 4 && unit != 8) throw new Failure(400, "unit must be 1, 2, 4 or 8");
+        ghidra.program.model.mem.MemoryBlock block = program.getMemory().getBlock(start);
+        if (block == null) throw new Failure(400, at + " is not in the program's memory");
+        if (!block.isInitialized()) throw new Failure(400, at + " is in " + block.getName() + ", a block with no bytes (uninitialized)");
+        long left = block.getEnd().subtract(start) + 1;
+        boolean truncated = left < length;
+        int count = (int) Math.min(length, left);
+        byte[] bytes = new byte[count];
+        try {
+            int read = block.getBytes(start, bytes);
+            if (read < count) throw new Failure(400, at + ": only " + read + " bytes could be read");
+        } catch (ghidra.program.model.mem.MemoryAccessException error) {
+            throw new Failure(400, at + " cannot be read: " + error.getMessage());
+        }
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(start));
+        answer.addProperty("length", count);
+        answer.addProperty("hex", hexBytes(bytes));
+        if (truncated) answer.addProperty("truncated", true);
+        if (unit > 1) {
+            boolean big = program.getLanguage().isBigEndian();
+            answer.addProperty("endian", big ? "big" : "little");
+            JsonArray values = new JsonArray();
+            JsonObject symbols = new JsonObject();
+            for (int offset = 0; offset + unit <= count; offset += unit) {
+                long value = 0;
+                for (int index = 0; index < unit; index++) {
+                    int b = bytes[offset + (big ? index : unit - 1 - index)] & 0xFF;
+                    value = (value << 8) | b;
+                }
+                String text = String.format("0x%0" + (unit * 2) + "X", value);
+                values.add(text);
+                Address named = imageAddress(value);
+                if (named == null) continue;
+                ghidra.program.model.symbol.Symbol symbol = program.getSymbolTable().getPrimarySymbol(named);
+                if (symbol != null) symbols.addProperty(text, symbol.getName());
+            }
+            answer.add("values", values);
+            if (symbols.size() > 0) answer.add("symbols", symbols);
+        }
         return answer;
     }
 
@@ -7791,11 +7868,17 @@ public class Owner {
             return answer;
         }
         HighSymbol match = null;
+        // One value of an unnamed temporary that holds several (`tempPieces`),
+        // asked for by where it is written: named on its own hash.
+        ghidra.program.model.pcode.Varnode piece = null;
+        Address pieceAt = null;
         Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
         while (symbols.hasNext()) {
             HighSymbol symbol = symbols.next();
             if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
             boolean fits;
+            ghidra.program.model.pcode.Varnode value = null;
+            Address valueAt = null;
             if (ordinal != null) {
                 fits = symbol.isParameter() && symbol.getCategoryIndex() == ordinal;
             } else {
@@ -7804,8 +7887,25 @@ public class Owner {
                 fits = symbol.getStorage().toString().equals(storage)
                     && (firstUse == null
                         || (symbol.getPCAddress() != null && hex(symbol.getPCAddress()).equalsIgnoreCase(firstUse)));
+                // A temporary holding several values is asked for by one of
+                // them, its own start included: that value is the one named.
+                if (firstUse != null && symbol.getStorage().toString().equals(storage)
+                        && !tempPieces(high, symbol).isEmpty()) {
+                    fits = false;
+                    for (java.util.Map.Entry<Address, ghidra.program.model.pcode.Varnode> each
+                            : tempPieces(high, symbol).entrySet()) {
+                        if (!hex(each.getKey()).equalsIgnoreCase(firstUse)) continue;
+                        fits = true;
+                        value = each.getValue();
+                        valueAt = each.getKey();
+                    }
+                }
             }
             if (!fits) continue;
+            if (match == null) {
+                piece = value;
+                pieceAt = valueAt;
+            }
             if (match != null) {
                 // Two decompiler pieces can share a storage and a first use —
                 // one byte read twice, say. A function holds one variable per
@@ -7820,6 +7920,27 @@ public class Owner {
                         + " — say what each is in the plate comment");
             }
             match = symbol;
+        }
+        if (match == null && storage != null && storage.startsWith("HASH:") && firstUse != null) {
+            // A value of a temporary listed with others (`tempPieces`) that
+            // the decompiler joined to one named earlier in the same batch:
+            // it is that variable now, and its name is the one it shows.
+            HighSymbol holder = valueHolder(high, firstUse);
+            if (holder != null && !placeholder(holder.getName())) {
+                if (name != null && !name.equals(holder.getName())) {
+                    throw new Failure(409, "the value written at " + firstUse + " is part of " + holder.getName()
+                        + " (" + holder.getStorage() + ") now: the decompiler joined it to that variable when it was"
+                        + " named, so it cannot take a name of its own. Nothing was changed");
+                }
+                JsonObject answer = identity();
+                answer.addProperty("function", hex(function.getEntryPoint()));
+                answer.addProperty("name", holder.getName());
+                answer.addProperty("storage", holder.getStorage().toString());
+                answer.addProperty("first_use", firstUse);
+                answer.addProperty("joined", true);
+                answer.addProperty("unchanged", type == null);
+                if (type == null) return answer;
+            }
         }
         if (match == null) {
             // A variable the decompiler no longer shows — left behind by a
@@ -7917,13 +8038,14 @@ public class Owner {
         String askedStorage = match.getStorage().toString();
         java.util.Set<String> localsBefore = type != null ? storedLocals(function) : null;
         // Counted before the write: it gives the symbol its new key in place.
-        Address askedFirstUse = match.getPCAddress();
+        Address askedFirstUse = piece != null ? pieceAt : match.getPCAddress();
         boolean byPlace = askedFirstUse != null && !match.isNameLocked();
         int unnamedBefore = byPlace ? unnamedAt(high, askedStorage, askedFirstUse, applied) : 0;
         java.util.Map<String, String> namedBefore = userNamedLocals(function);
         java.util.List<String> parametersBefore = parameterPlaces(function);
         try {
-            HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
+            if (piece != null) nameTempPiece(function, high, piece, applied, type);
+            else HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (NullPointerException error) {
             // Ghidra's own state, not the request: never a Java message for
             // the caller (issue 29280951).
@@ -8188,10 +8310,81 @@ public class Owner {
             HighSymbol symbol = scan.next();
             if (symbol.isParameter() || symbol.getName().equals(name)) continue;
             if (!symbol.getStorage().toString().equals(storage)) continue;
-            if (firstUse == null ? symbol.getPCAddress() != null : !firstUse.equals(symbol.getPCAddress())) continue;
+            boolean there = firstUse == null ? symbol.getPCAddress() == null : firstUse.equals(symbol.getPCAddress());
+            // A temporary holding several values is there at each of their starts.
+            if (!there && firstUse != null) there = tempPieces(high, symbol).containsKey(firstUse);
+            if (!there) continue;
             if (!symbol.isNameLocked()) count++;
         }
         return count;
+    }
+
+    /**
+     * The values one unnamed decompiler temporary holds, by the address each
+     * is written at, when it holds more than one. The decompiler gives such a
+     * temporary no hash of its own (`HASH:00000000:1`) and one symbol over
+     * values it merged — each read of a port in a read-modify-write — and
+     * naming the symbol names one of them. Each value's address is where its
+     * own hash places it, which is where it is written: it stays the same as
+     * the others are named, so it tells one value from the next across a
+     * batch. A value with no hash of its own is left out. Empty for anything
+     * else.
+     */
+    private static java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> tempPieces(
+            HighFunction high, HighSymbol symbol) {
+        java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> pieces = new java.util.TreeMap<>();
+        if (high == null || symbol.isParameter() || symbol.isNameLocked()) return pieces;
+        ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
+        if (!storage.isHashStorage() || storage.getFirstVarnode().getOffset() != 0) return pieces;
+        ghidra.program.model.pcode.HighVariable variable = symbol.getHighVariable();
+        if (variable == null || variable.getInstances() == null) return pieces;
+        for (ghidra.program.model.pcode.Varnode value : variable.getInstances()) {
+            ghidra.program.model.pcode.PcodeOp def = value.getDef();
+            if (def == null || def.getOpcode() == ghidra.program.model.pcode.PcodeOp.MULTIEQUAL
+                    || def.getOpcode() == ghidra.program.model.pcode.PcodeOp.INDIRECT) continue;
+            ghidra.program.model.pcode.DynamicHash hash = new ghidra.program.model.pcode.DynamicHash(value, high);
+            if (hash.getHash() == 0 || hash.getAddress() == null) continue;
+            pieces.putIfAbsent(hash.getAddress(), value);
+        }
+        if (pieces.size() < 2) pieces.clear();
+        return pieces;
+    }
+
+    /** The local symbol whose variable holds a value written at `at` (by its own hash's address). */
+    private static HighSymbol valueHolder(HighFunction high, String at) {
+        for (Iterator<HighSymbol> scan = high.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
+            HighSymbol symbol = scan.next();
+            if (symbol.isParameter() || symbol.getHighVariable() == null) continue;
+            if (symbol.getHighVariable().getInstances() == null) continue;
+            for (ghidra.program.model.pcode.Varnode value : symbol.getHighVariable().getInstances()) {
+                if (value.getDef() == null) continue;
+                ghidra.program.model.pcode.DynamicHash hash = new ghidra.program.model.pcode.DynamicHash(value, high);
+                if (hash.getAddress() != null && hex(hash.getAddress()).equalsIgnoreCase(at)) return symbol;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Names one value of a temporary that holds several (`tempPieces`): a
+     * local on that value's own hash, at the address it is written — what
+     * Ghidra commits for a temporary it names, but for the value asked for
+     * rather than the one the decompiler took to stand for them all.
+     */
+    private void nameTempPiece(Function function, HighFunction high, ghidra.program.model.pcode.Varnode piece,
+                               String name, DataType type) throws Exception {
+        ghidra.program.model.pcode.DynamicHash hash = new ghidra.program.model.pcode.DynamicHash(piece, high);
+        DataType held = type != null ? type : ghidra.program.model.data.Undefined.getUndefinedDataType(piece.getSize());
+        held = held.clone(program.getDataTypeManager());
+        if (held.getLength() != piece.getSize()) {
+            throw new Failure(400, "the value is " + piece.getSize() + " bytes and " + held.getDisplayName() + " is "
+                + held.getLength() + ": a temporary's size cannot change. Nothing was changed");
+        }
+        ghidra.program.model.listing.VariableStorage storage = new ghidra.program.model.listing.VariableStorage(
+            program, ghidra.program.model.address.AddressSpace.HASH_SPACE.getAddress(hash.getHash()), piece.getSize());
+        int offset = (int) hash.getAddress().subtract(function.getEntryPoint());
+        function.addLocalVariable(new ghidra.program.model.listing.LocalVariableImpl(name, offset, held, storage, program),
+                                  SourceType.USER_DEFINED);
     }
 
     /** The same type by the name the C prints as well as by its layout. */
@@ -8269,7 +8462,7 @@ public class Owner {
             signature = CParserUtils.parseSignature((ghidra.app.services.DataTypeManagerService) null,
                                                     program, parsed, false);
         } catch (Exception error) {
-            throw new Failure(400, "the signature does not parse: " + error.getMessage());
+            throw new Failure(400, "the signature does not parse: " + parseRefusal(error.getMessage(), parsed));
         }
         if (signature == null) throw new Failure(400, "the signature does not parse");
         signature.setName(name);
@@ -10039,6 +10232,7 @@ public class Owner {
      * so a signature or a variable can be written the way EDK2 spells it.
      */
     private void importTypes(String text) {
+        ecBaseTypes();
         if (archive == null && reviewArchive == null) return;
         java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(text);
         while (words.find()) {
@@ -10057,6 +10251,75 @@ public class Owner {
                 }
             }
         }
+    }
+
+    /**
+     * An EC (NDS32) program has no EDK2 archive: its base types (`UINT8`,
+     * `BOOLEAN`, `UINTN`…) are typedefs at the root, which the EC pass adds as
+     * the module is made. A project made before that gets them here, at its
+     * first write that reads a type — in the write's transaction, never from
+     * a read.
+     */
+    private void ecBaseTypes() {
+        if (!"NDS32".equalsIgnoreCase(program.getLanguage().getProcessor().toString())) return;
+        if (program.getCurrentTransactionInfo() == null) return;
+        ApplyItEc.baseTypes(program);
+    }
+
+    /** The EDK2 base names a C parse can read in this program: held, or in an archive it imports from. */
+    private java.util.List<String> baseTypeNames() {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (String[] base : ApplyItEc.BASE_TYPES) {
+            boolean known = find(program.getDataTypeManager(), base[0]) != null;
+            for (FileDataTypeManager source : new FileDataTypeManager[] {reviewArchive, archive}) {
+                if (!known && source != null) known = find(source, base[0]) != null;
+            }
+            if (known) names.add(base[0]);
+        }
+        names.add("VOID");
+        return names;
+    }
+
+    /**
+     * The words of a parse refusal: the parser stops at a type it does not
+     * know with `Encountered <IDENTIFIER> "BOOL"`, which says nothing of a
+     * type; when that word is no type here, the refusal says so and lists the
+     * base names that are.
+     */
+    private static final java.util.Set<String> C_WORDS = java.util.Set.of("void", "char", "short", "int", "long",
+        "float", "double", "bool", "_Bool", "signed", "unsigned", "const", "volatile", "struct", "union", "enum");
+
+    /** A type by that name in the program or an archive it imports from. */
+    private boolean knownType(String name) {
+        if (C_WORDS.contains(name)) return true;
+        if (find(program.getDataTypeManager(), name) != null) return true;
+        for (FileDataTypeManager source : new FileDataTypeManager[] {reviewArchive, archive}) {
+            if (source != null && find(source, name) != null) return true;
+        }
+        return false;
+    }
+
+    private String parseRefusal(String message, String text) {
+        String said = message == null ? "" : message.replaceAll("\\s+", " ").trim();
+        java.util.regex.Matcher word = java.util.regex.Pattern
+            .compile("<IDENTIFIER>\\W*\"\\s*([A-Za-z_][A-Za-z0-9_]*)").matcher(said);
+        String name = word.find() ? word.group(1) : null;
+        // A type the parser does not know before a `*` reads to it as a
+        // parameter's name, and it stops at the `*`: the words where a
+        // type stands are looked up instead.
+        if (name == null || knownType(name)) {
+            name = null;
+            java.util.regex.Matcher place = java.util.regex.Pattern
+                .compile("(?:^|[(,])\\s*(?:(?:const|volatile|struct|union|enum|signed|unsigned)\\s+)*([A-Za-z_][A-Za-z0-9_]*)")
+                .matcher(text);
+            while (name == null && place.find()) {
+                if (!knownType(place.group(1)) && !C_WORDS.contains(place.group(1))) name = place.group(1);
+            }
+            if (name == null) return said;
+        }
+        return "unknown type `" + name + "` (" + said + "). The base types this module has: "
+            + String.join(", ", baseTypeNames())
+            + ", and C's own (void, char, short, int, long, long long, their unsigned forms, bool)";
     }
 
     /**

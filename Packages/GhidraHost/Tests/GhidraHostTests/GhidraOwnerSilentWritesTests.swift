@@ -262,6 +262,8 @@ final class GhidraOwnerSilentWritesTests: XCTestCase {
             func number(_ local: [String: Any]) -> Int { Int((local["name"] as? String ?? "").filter(\.isNumber)) ?? 0 }
             guard let kind = kinds.values.first(where: {
                       $0.count >= 2 && Set($0.compactMap { $0["first_use"] as? String }).count == $0.count
+                          // Two temporaries, not two values of one (issue cf7016bd lists those apart).
+                          && Set($0.compactMap { $0["name"] as? String }).count == $0.count
                   }),
                   let first = kind.min(by: { number($0) < number($1) }),
                   let storage = first["storage"] as? String, let use = first["first_use"] as? String else { continue }

@@ -75,4 +75,41 @@ final class GhidraHostECReadTests: XCTestCase {
         XCTAssertTrue("\(c)".contains("DLMB_BASE_80000_ENABLE"), "\(c)")
         XCTAssertFalse("\(c)".contains("TaskEventPending + 1"), "\(c)")
     }
+
+    /// Issue 3fcfda14: a rodata table reads as bytes and as 32-bit values,
+    /// the cap holds, and an address outside memory is refused.
+    func testBytesReadsATableAsValues() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        guard (try? GhidraInstall.find()) != nil else { throw XCTSkip("no Ghidra on this machine") }
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostECReadTests-\(UUID().uuidString)", isDirectory: true)
+        self.directory = directory
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostECReadTests"), writer: store)
+        let module = GhidraHost.moduleDigest(of: image)
+        _ = try await host.create(module: image, name: "ItEcNmD562", source: .init(document: "dump", node: "0.0.3"))
+        defer { Task { await host.stop(module) } }
+
+        let data = try await host.read(module, "/v1/bytes?address=0x239F8&length=0x2C&unit=4")
+        let answer = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(answer["address"] as? String, "0x239F8", "\(answer)")
+        XCTAssertEqual(answer["length"] as? Int, 0x2C, "\(answer)")
+        XCTAssertNil(answer["truncated"], "\(answer)")
+        XCTAssertEqual((answer["hex"] as? String)?.split(separator: " ").count, 0x2C, "\(answer)")
+        let values = answer["values"] as? [String] ?? []
+        XCTAssertEqual(values.count, 11, "\(answer)")
+        XCTAssertEqual(Array(values.prefix(4)), ["0x00F01C01", "0x00F01C03", "0x00F01C02", "0x00F01C00"], "\(answer)")
+
+        func refused(_ call: String) async -> String? {
+            do { _ = try await host.read(module, call); return nil } catch { return "\(error)" }
+        }
+        let over = await refused("/v1/bytes?address=0x239F8&length=4097")
+        XCTAssertTrue(over?.contains("4096") == true, "the cap: \(over ?? "answered")")
+        let outside = await refused("/v1/bytes?address=0xFFFFFFF0&length=4")
+        XCTAssertTrue(outside?.contains("not in the program's memory") == true, "\(outside ?? "answered")")
+    }
 }
