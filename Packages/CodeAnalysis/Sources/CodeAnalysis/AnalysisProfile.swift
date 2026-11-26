@@ -176,7 +176,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
     public static let ecIteNds32 = AnalysisProfile(
         id: "ec-ite-nds32", version: 1, title: "ITE EC firmware (NDS32)", skill: "ghidra-ec",
         typeGroups: ["Nds32"], libraryKinds: [.toolchain, .ite],
-        references: ["ghidra-ec/reference/it83xx-registers.tsv", "ghidra-ec/reference/it83xx-irqs.tsv",
+        references: ["ghidra-uefi/SKILL.md", "ghidra-ec/reference/it83xx-registers.tsv", "ghidra-ec/reference/it83xx-irqs.tsv",
                      "ghidra-uefi/reference/description.md"],
         records: [
             Record(id: "irq_map", title: "Interrupts",
@@ -191,18 +191,28 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                    unansweredGate: true),
             Record(id: "gpio", title: "GPIO",
                    summary: "Pin, direction and its function in this firmware.", unansweredGate: true),
-            Record(id: "eflash_area", title: "eFlash areas",
-                   summary: "The flash ranges the firmware reads or writes past its code, and what they hold.",
+            Record(id: "eflash_area", title: "Flash data area",
+                   summary: "The EC's flash data area past the image extent: every range or address the code "
+                      + "reads, writes or erases there; the function that does it; the record format; and what "
+                      + "it holds (state bytes, logs, settings). Write the meaning only from the code. A dump's "
+                      + "contents are never the meaning, because they differ between reads and a host update "
+                      + "rewrites them up to host_update_size.",
                    unansweredGate: true)
         ],
         gates: [
             Gate(id: "levels", summary: "Every function full, linked to the registry or bodiless."),
             Gate(id: "x1_sweep", summary: "The X1 sweep clean in the module's own functions."),
             Gate(id: "records_answered", summary: "Every record answered: filled in, or none with the reason."),
-            Gate(id: "description", summary: "The eight description sections, with the EC subsections of Interactions."),
-            Gate(id: "origin", summary: "The module's origin set.")
+            Gate(id: "description", summary: "The eight description sections; Interactions describes the records in prose."),
+            Gate(id: "origin", summary: "The module's origin set."),
+            Gate(id: "isr_numbers", summary: "Every function in IsrIrqTable keeps its Isr_Irq<NNN> or "
+                    + "Isr_IrqShared_<NNN> prefix with the number the import gave it.")
         ],
         inapplicableTools: [
+            InapplicableTool(tool: "ghidra_code_mode",
+                             hint: "NDS32 has a single code mode; the language is fixed by the profile."),
+            InapplicableTool(tool: "code_query:post_codes",
+                             hint: "An EC has no port-0x80 POST codes; what it sends the host is in host_commands."),
             InapplicableTool(tool: "ghidra_set_interfaces",
                              hint: "An EC module has no PPIs or protocols: its records are irq_map, host_commands, "
                                 + "ec_ram, smbus_peers, gpio and eflash_area, kept for now as ### subsections of "
