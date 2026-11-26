@@ -1336,9 +1336,36 @@ extension ContentStore {
             // gave, and must record the entry it becomes, whichever of the two
             // the loop reaches first (issue 38a7f82b).
             var ownIdentity: [String: LibraryBody] = [:]
+            // A short body bound to an entry, with the entry's instructions
+            // and only its references' addresses other, reaching data of the
+            // same names: another variant of the entry (issue 33cc22d2). It
+            // comes as its code (`ModuleFormat.shortVariants`).
+            func joinsShort(_ proposal: LibraryProposal) throws -> String? {
+                guard proposal.teachesBytesOnly == true, let code = proposal.code,
+                      let based = proposal.basedOn, let held = index.entries[based],
+                      !held.variants.contains(where: { $0.body.key == proposal.body.key }),
+                      let ours = LibraryShortShape.shape(ofCode: code) else { return nil }
+                let labels = LibraryShortShape.labels(ofCode: code)
+                let coded = held.variants.compactMap { $0.code }.compactMap { try? object($0) }
+                if !coded.isEmpty {
+                    return coded.contains {
+                        LibraryShortShape.shape(ofCode: $0) == ours && LibraryShortShape.labels(ofCode: $0) == labels
+                    } ? based : nil
+                }
+                // No body of the entry has its code yet: the function its review holds.
+                func names(_ globals: [LibraryGlobal]?) -> [String] { (globals ?? []).compactMap(\.name).sorted() }
+                guard LibraryShortShape.shape(ofEntry: try object(held.entry)) == ours,
+                      held.variants.contains(where: { names($0.globals) == names(proposal.globals) }) else { return nil }
+                return based
+            }
+            var shortJoins: [String: String] = [:]
             for proposal in proposals where proposal.body.isShort {
                 if let based = proposal.basedOn,
                    index.entries[based]?.variants.contains(where: { $0.body.shape == proposal.body.shape }) == true {
+                    continue
+                }
+                if let id = try joinsShort(proposal) {
+                    shortJoins[proposal.body.key] = id
                     continue
                 }
                 ownIdentity[proposal.body.key] = proposal.body.withOwnIdentity()
@@ -1356,6 +1383,28 @@ extension ContentStore {
                     if let based = proposal.basedOn,
                        let held = index.entries[based]?.variants.first(where: { $0.body.shape == proposal.body.shape }) {
                         proposal.body = held.body
+                    } else if let id = shortJoins[proposal.body.key], var held = index.entries[id] {
+                        // Its own body, held by the entry beside the others, with its code.
+                        held.variants.append(LibraryVariant(body: proposal.body, module: module,
+                                                            referenceBytes: proposal.referenceBytes,
+                                                            code: dryRun ? nil : try proposal.code.map(putObject),
+                                                            callees: proposal.calls(in: index),
+                                                            globals: LibraryGlobal.kept(proposal.globals)))
+                        index.entries[id] = held
+                        index.hold(proposal.body.key, by: id)
+                        let joined = "the short body \(proposal.body.key) joins the entry as a variant: "
+                            + "the same instructions, its globals at other addresses"
+                        result.variants = (result.variants ?? []) + [.init(
+                            id: id, name: held.name, version: held.version, module: module, reason: joined)]
+                        var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                        history.versions.append(LibraryVersion(
+                            version: held.version, entry: held.entry,
+                            source: LibrarySource(module: module, address: proposal.address, rev: rev, by: by),
+                            reason: joined, recordedAt: now))
+                        histories[id] = history
+                        settled[id] = "this publish joins it as a variant of version \(held.version)"
+                        changedIndex = true
+                        continue
                     } else {
                         proposal.body = ownIdentity[proposal.body.key] ?? proposal.body.withOwnIdentity()
                     }

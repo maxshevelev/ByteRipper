@@ -414,6 +414,123 @@ final class GhidraHostCandidateTests: XCTestCase {
         XCTAssertEqual(there?.name, "ShortBodyRenamed")
     }
 
+    /// A short body reaching its global at another address in another module
+    /// (issue 33cc22d2): its bytes differ only in the reference's operand. It is
+    /// a short candidate for the entry, bound by a review, and its module's
+    /// publish keeps it the same entry: no refusal, no new entry. No module at
+    /// hand holds such a pair, so two are made of `GHIDRA_X64_MODULE`: one
+    /// function's start becomes `MOV [RIP + d], EDX; XOR EAX, EAX; RET`, its
+    /// global at another place of `.data` in each.
+    func testAShortBodyWithItsGlobalElsewhereIsBoundToTheSameEntry() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_X64_MODULE"] else {
+            throw XCTSkip("GHIDRA_X64_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostCandidateTests-masked-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostCandidateTests",
+                                                   ticketsFile: directory.appendingPathComponent("private/tickets.json")),
+                              writer: store)
+        let original = try Data(contentsOf: URL(fileURLWithPath: path))
+        let bytes = [UInt8](original)
+        func u16(_ at: Int) -> Int { Int(bytes[at]) | Int(bytes[at + 1]) << 8 }
+        func u32(_ at: Int) -> Int { u16(at) | u16(at + 2) << 16 }
+        // The PE's sections: an RVA's file offset, and where `.data` is.
+        let pe = u32(0x3C), count = u16(pe + 6), optional = u16(pe + 20)
+        var sections: [(name: String, rva: Int, size: Int, raw: Int)] = []
+        for index in 0..<count {
+            let at = pe + 24 + optional + 40 * index
+            let name = String(decoding: bytes[at..<at + 8].prefix { $0 != 0 }, as: UTF8.self)
+            sections.append((name, u32(at + 12), u32(at + 8), u32(at + 20)))
+        }
+        let data = try XCTUnwrap(sections.first { $0.name == ".data" }, "\(sections)")
+        let text = try XCTUnwrap(sections.first { $0.name == ".text" }, "\(sections)")
+
+        // A function of the module long enough to take the nine bytes.
+        let source = SHA256Digest(data: original)
+        _ = try await host.createCached(module: original, name: "Source")
+        let rows = try await functions(host, source)
+        await host.stop(source)
+        let start = try XCTUnwrap(rows.lazy.compactMap { row -> Int? in
+            guard row["thunk"] as? Bool != true, (row["size"] as? Int ?? 0) >= 16,
+                  let entry = (row["entry"] as? String).flatMap({ Int($0.dropFirst(2), radix: 16) }),
+                  entry >= text.rva, entry + 16 <= text.rva + text.size else { return nil }
+            return entry
+        }.first)
+        func made(_ global: Int) -> Data {
+            var copy = bytes
+            let at = start - text.rva + text.raw
+            let displacement = UInt32(truncatingIfNeeded: global - (start + 6))
+            copy.replaceSubrange(at..<at + 9, with: [0x89, 0x15] + (0..<4).map {
+                UInt8(truncatingIfNeeded: displacement >> (8 * UInt32($0))) } + [0x33, 0xC0, 0xC3])
+            return Data(copy)
+        }
+        let globals = [data.rva + data.size - 0x40, data.rva + data.size - 0x88]
+        let images = globals.map(made)
+        let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.createCached(module: images[0], name: "Reviewed")
+        try await host.take(reviewed)
+        _ = try await host.createCached(module: images[1], name: "Other")
+        try await host.take(other)
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+        // The global, named and typed by each module's review alike.
+        for (module, global) in zip([reviewed, other], globals) {
+            _ = try await host.write(module, "/v1/set/data", body: body([
+                "address": "0x" + String(global, radix: 16, uppercase: true), "name": "mShortGlobalForTheTest",
+                "type": "UINT32", "by": "agent", "reason": "the test's"]))
+        }
+        let entry = "0x" + String(start, radix: 16, uppercase: true)
+        let pair = (entry, entry)
+        for module in [reviewed, other] {
+            let read = try json(await host.read(module, "/v1/disassembly/\(entry)?limit=4"))
+            let units = read["instructions"] as? [[String: Any]] ?? []
+            XCTAssertEqual(units.first?["bytes"] as? String == nil, false, "\(read)")
+            XCTAssertFalse((units.first?["references"] as? [Any] ?? []).isEmpty, "no reference: \(read)")
+        }
+
+        _ = try await host.write(reviewed, "/v1/rename/function", body: body([
+            "address": pair.0, "name": "ShortGlobalForTheTest", "by": "agent", "reason": "named for the test"]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": pair.0, "kind": "plate", "text": "A short library routine with a global, for the test."]))
+        _ = try await host.write(reviewed, "/v1/set/signature", body: body([
+            "address": pair.0, "by": "agent", "reason": "the test's",
+            "signature": "UINTN ShortGlobalForTheTest(VOID *Context, UINT32 Mask)"]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": pair.0, "kind": "pre", "text": "Its one step."]))
+        let moved = try await move(host, reviewed, pair.0)
+        let id = try XCTUnwrap(moved.added.first { $0.name == "ShortGlobalForTheTest" }?.id, "\(moved)")
+        let entriesBefore = try store.libraryIndex().entries.count
+
+        // A candidate, and nothing links by itself.
+        let status = try json(await host.library(other, .init(action: .status)))
+        let candidate = (status["candidates"] as? [[String: Any]] ?? []).first {
+            $0["address"] as? String == pair.1 && $0["id"] as? String == id
+        }
+        XCTAssertEqual(candidate?["state"] as? String, "short_candidate", "\(status)")
+
+        let bound = try json(await host.library(other, .init(action: .apply, address: pair.1, id: id)))
+        XCTAssertEqual((bound["results"] as? [[String: Any]] ?? []).first?["marked"] as? Bool, true, "\(bound)")
+
+        // The publish keeps it the entry's: no refusal, no new entry.
+        let published = try await host.publish(other, by: "agent")
+        XCTAssertTrue(published.library?.added.isEmpty ?? true, "\(String(describing: published.library))")
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entries.count, entriesBefore, "a new entry was made")
+        XCTAssertEqual(index.entries[id]?.name, "ShortGlobalForTheTest")
+        XCTAssertEqual(index.entries[id]?.variants.count, 2, "\(String(describing: published.library))")
+        XCTAssertEqual(published.library?.variants?.map(\.id), [id], "\(String(describing: published.library))")
+        let storedLink = try storedRow(of: pair.1, in: store, module: other)
+        XCTAssertEqual(storedLink?["registry"] as? String, id, "\(String(describing: storedLink)) \(index.entries[id].map { "\($0.variants)" } ?? "")")
+        let shown = try store.artifactToShow(for: try XCTUnwrap(try store.analysis(module: other)))
+        XCTAssertEqual(shown.functions.first { $0.entry == CodeAddress(hex: pair.1) }?.name, "ShortGlobalForTheTest")
+        // Applied, and the next look says so.
+        let after = try json(await host.library(other, .init(action: .status)))
+        let applied = (after["applied"] as? [[String: Any]] ?? []).first { $0["address"] as? String == pair.1 }
+        XCTAssertEqual(applied?["id"] as? String, id, "\(after)")
+    }
+
     /// A struct passed by value is copied onto the outgoing stack with REP
     /// MOVSD, and the decompiler shows the copy's dwords as `in_stack_…`
     /// slots of the frame that the function reads and never writes. Ghidra

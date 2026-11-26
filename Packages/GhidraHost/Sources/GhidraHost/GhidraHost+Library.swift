@@ -98,9 +98,11 @@ extension GhidraHost {
         var referenceBytes: String?
         /// The globals the body reads, with their types (`LibraryGlobal`).
         var globals: [LibraryGlobal]?
+        /// A short body's instructions, for its masked shape (`LibraryShortShape`).
+        var instructions: [LibraryShortShape.Row]?
 
         private enum CodingKeys: String, CodingKey {
-            case address, name, named, key, exact, near, mark, declined, globals
+            case address, name, named, key, exact, near, mark, declined, globals, instructions
             case referenceBytes = "reference_bytes"
         }
     }
@@ -211,6 +213,38 @@ extension GhidraHost {
         return (bodies, shapes.mapValues { $0.sorted() })
     }
 
+    /// The masked shape of every short body the registry holds, with the
+    /// entries that have one: what a short function of another module, whose
+    /// references sit elsewhere, is near to.
+    func shortShapes(_ index: LibraryIndex) async -> [String: [String]] {
+        var shapes: [String: [String]] = [:]
+        for (id, entry) in index.entries {
+            for variant in entry.variants where LibraryBody.isShort(key: variant.body.key) {
+                guard let digest = variant.code, let code = try? await writer.readObject(digest),
+                      let read = try? JSONDecoder().decode(LibraryShortShape.Code.self, from: code),
+                      let shape = LibraryShortShape.shape(read.instructions) else { continue }
+                if !(shapes[shape] ?? []).contains(id) { shapes[shape, default: []].append(id) }
+            }
+        }
+        return shapes.mapValues { $0.sorted() }
+    }
+
+    /// The matches with each short body's entries of its masked shape among
+    /// its near ones, and without the rows the owner sent only for that.
+    static func withShortShapes(_ matches: [LibraryMatch], entries shapes: [String: [String]]) -> [LibraryMatch] {
+        matches.compactMap { match in
+            var match = match
+            if match.exact == nil, LibraryBody.isShort(key: match.key),
+               let rows = match.instructions, let shape = LibraryShortShape.shape(rows) {
+                var near = match.near ?? []
+                for id in shapes[shape] ?? [] where !near.contains(id) { near.append(id) }
+                match.near = near.isEmpty ? nil : near
+            }
+            match.instructions = nil
+            return match.exact == nil && match.near == nil && match.mark == nil ? nil : match
+        }
+    }
+
     /// The pairs of a function and an entry of its shape that the owner is
     /// asked to compare: bodies with no exact match, not yet the entry's.
     static func comparisons(_ matches: [LibraryMatch]) -> [(address: String, id: String)] {
@@ -308,7 +342,7 @@ extension GhidraHost {
                 if LibraryBody.isShort(key: match.key) {
                     if match.mark == nil {
                         plan.candidates.append(step(id, held, mode: "link", state: "short_candidate",
-                                                    why: "the same bytes as this entry: bind it if the calls show it is that function"))
+                                                    why: "the same instructions as this entry: bind it if the calls show it is that function"))
                     }
                     continue
                 }
@@ -547,8 +581,11 @@ extension GhidraHost {
                             take: LibraryTake, writer: any AnalysisWriter) async throws
         -> (proposals: [LibraryProposal], refused: [LibraryRefusal.Row]) {
         let index = try await writer.readLibraryIndex()
+        // A short body bound to an entry with its data elsewhere offers its
+        // code, which the registry joins to the entry as a variant.
+        let joining = ModuleFormat.shortVariants(raw, index: index).map(\.proposal)
         let links = await Self.stored(raw, writer: writer).entries
-        guard !links.isEmpty else { return ([], []) }
+        guard !links.isEmpty else { return (joining, []) }
         var names: [UInt64: String] = [:]
         if let read = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any] {
             for function in read["functions"] as? [[String: Any]] ?? [] {
@@ -595,7 +632,7 @@ extension GhidraHost {
                 + "take the entry's text with `ghidra_library_apply` and `take_text`, or, if the entry is the "
                 + "wrong one, propose this module's review with `ghidra_type_propose`", entry: id))
         }
-        return (proposals, refused)
+        return (joining + proposals, refused)
     }
 
     /// Whether the entry `id` holds its function's C; true for no such entry.
@@ -723,10 +760,12 @@ extension GhidraHost {
         guard !index.entries.isEmpty || index.takenOut?.isEmpty == false else { return (LibraryPlan(entries: 0, hashed: 0), index) }
         let record = try await owner(of: module)
         let keys = Self.libraryKeys(index)
-        let request = try JSONSerialization.data(withJSONObject: ["bodies": keys.bodies, "shapes": keys.shapes])
+        let request = try JSONSerialization.data(withJSONObject: ["bodies": keys.bodies, "shapes": keys.shapes,
+                                                                  "short_instructions": true])
         let data = try await Self.call(record.port, "POST", "/v1/library/match", body: request, timeout: 600).data
         struct Answer: Decodable { var hashed: Int; var matches: [LibraryMatch] }
         var answer = try JSONDecoder().decode(Answer.self, from: data)
+        answer.matches = Self.withShortShapes(answer.matches, entries: await shortShapes(index))
         answer.matches = Self.withoutForeign(answer.matches, foreign: foreignEntries(index, for: module))
         let asserts = index.entries.filter { $0.value.role == "assert" }
         let assertKeys = asserts.values.flatMap { $0.variants.map(\.body.key) }.sorted()

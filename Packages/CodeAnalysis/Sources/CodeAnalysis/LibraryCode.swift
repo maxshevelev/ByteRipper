@@ -272,7 +272,7 @@ extension LibraryIndex {
     /// The body of entry `id` a function with body `key` reads through, whether
     /// the entry holds it or it was taken out. A short body's key keeps the
     /// entry's own identity, not the function's: its shape, the bytes, says it.
-    func variant(ofEntry id: String, body key: String?) -> LibraryVariant? {
+    public func variant(ofEntry id: String, body key: String?) -> LibraryVariant? {
         guard let key else { return nil }
         let held = entries[id]?.variants ?? (takenOut ?? [:]).values.filter { $0.id == id }.map(\.variant)
         if let exact = held.first(where: { $0.body.key == key }) { return exact }

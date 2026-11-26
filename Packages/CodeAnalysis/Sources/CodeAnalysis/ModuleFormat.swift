@@ -219,6 +219,34 @@ public enum ModuleFormat {
         return found
     }
 
+    /// The short bodies this artifact binds to an entry none of whose bodies
+    /// they are — the entry's instructions with a datum elsewhere (issue
+    /// 33cc22d2) — each with its code, as the registry is offered it: it
+    /// joins the entry as a variant when the code says it is the same
+    /// function (`LibraryShortShape`), and the function is then a link.
+    public static func shortVariants(_ raw: Data, index: LibraryIndex) -> [Teaching] {
+        guard let object = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any],
+              let functions = object["functions"] as? [[String: Any]] else { return [] }
+        var found: [Teaching] = []
+        for function in functions where function["instructions"] != nil {
+            guard let key = function["body"] as? String, LibraryBody.isShort(key: key),
+                  let id = (function["library_entry"] as? [String: Any])?["id"] as? String ?? function["registry"] as? String,
+                  let held = index.entries[id], index.variant(ofEntry: id, body: key) == nil,
+                  let text = function["entry"] as? String else { continue }
+            let parts = key.split(separator: "-").map(String.init)
+            guard parts.count == 3, let size = Int(parts[0], radix: 16) else { continue }
+            let body = LibraryBody(size: size, full: parts[1], specific: parts[2])
+            // Read as if the entry held the body: the code a link would read.
+            var trial = index
+            trial.entries[id]?.variants.append(LibraryVariant(body: body, module: held.source.module))
+            trial.hold(key, by: id)
+            if let teaching = teachings(raw, index: trial).first(where: { $0.address == text && $0.id == id }) {
+                found.append(teaching)
+            }
+        }
+        return found
+    }
+
     public static func stored(_ raw: Data, index: LibraryIndex, code: [SHA256Digest: Data] = [:]) -> Stored {
         let same = Stored(artifact: raw, functions: [], addresses: [])
         guard var object = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any],

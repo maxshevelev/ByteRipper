@@ -352,7 +352,8 @@ public enum GhidraTools {
                     name and signature, and what the project wrote on it stays. A body that differs from an \
                     entry only in the codes an assert routine is called with links as a variant of it. \
                     `edited`: linked and dirty, written on since: the next publish offers it to the entry. \
-                    `short_candidate`: a body under four instructions with the same bytes as an entry: \
+                    `short_candidate`: a body under four instructions with the same bytes as an entry, the bytes \
+                    that encode a reference aside: \
                     nothing links by itself, and a review binds it with `ghidra_library_apply` from how it \
                     is called, or names it and proposes it as a new entry. \
                     `candidates`: bodies of an entry's shape with other constants, \
