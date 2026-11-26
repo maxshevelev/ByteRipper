@@ -56,13 +56,14 @@ public struct TypeArchiveIndex: Codable, Equatable, Sendable {
     }
 }
 
-/// The shared review-types archives, one per pointer size, kept by the server
+/// The shared review-types archives, one per type group — the x86 pointer
+/// sizes and the NDS32 EC processor — kept by the server
 /// in versions: a publish that adds or amends a type makes the next one, and
 /// a publish that would replace one is refused before it writes anything. A
 /// version is never rewritten; the files beside the projects are a copy of
 /// the current one, for the owners to read.
 extension ContentStore {
-    public static let typeArchiveBits = ["Ia32", "X64"]
+    public static let typeArchiveBits = ["Ia32", "X64", "Nds32"]
 
     var typesURL: URL { privateURL.appendingPathComponent("types", isDirectory: true) }
 
@@ -77,7 +78,7 @@ extension ContentStore {
 
     func checkBits(_ bits: String) throws {
         guard Self.typeArchiveBits.contains(bits) else {
-            throw CodeAnalysisError.invalidName("\(bits) is not a type archive's pointer size: Ia32 or X64")
+            throw CodeAnalysisError.invalidName("\(bits) is not a type archive's group: Ia32, X64 or Nds32")
         }
     }
 

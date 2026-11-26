@@ -49,7 +49,7 @@ refused, never dropped.
   private/projects/<module-sha>/record.json   # which revision it is, and what made it
   private/journal/<id>.json                   # a publish that has not finished
   private/publish.lock                        # flock one publish holds from its decision to its end
-  private/types/<bits>/index.json             # the shared review types' versions, Ia32 or X64, current last
+  private/types/<bits>/index.json             # the shared review types' versions, Ia32, X64 or Nds32, current last
   private/types/<bits>/<version>/archive.gdt  # one version: the Ghidra archive,
   private/types/<bits>/<version>/origin.json  #   the module that wrote each type,
   private/types/<bits>/<version>/withdrawn.json  # and the names taken out, with who and why

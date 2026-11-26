@@ -221,7 +221,10 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(try store.typeArchive(bits: "Ia32")?.current?.version, 2)
         XCTAssertEqual(try Data(contentsOf: store.typeArchiveFolder(bits: "Ia32", version: 2)
                                     .appendingPathComponent("archive.gdt")), Data("another one".utf8))
-        XCTAssertThrowsError(try store.typeArchive(bits: "../x"), "a size names one of the two")
+        XCTAssertThrowsError(try store.typeArchive(bits: "../x"), "a group names one of the three")
+        // An EC module's types (NDS32) are kept in their own archive.
+        try store.putTypeArchive(bits: "Nds32", version: first)
+        XCTAssertEqual(try store.typeArchive(bits: "Nds32")?.current?.version, 1)
         XCTAssertEqual(store.verify(), [])
         // Kept outside objects/: a collection takes the objects, the versions stay.
         try store.collectGarbage(dryRun: false)
