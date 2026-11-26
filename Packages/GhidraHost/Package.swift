@@ -33,7 +33,8 @@ let package = Package(
         .testTarget(name: "GhidraHostTests", dependencies: [
             "GhidraHost",
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "ECImage", package: "ECImage")
         ])
     ]
 )

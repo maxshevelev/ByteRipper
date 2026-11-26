@@ -1,4 +1,5 @@
 import CodeAnalysis
+import ECImage
 import Foundation
 import XCTest
 @testable import GhidraHost
@@ -74,6 +75,19 @@ final class GhidraHostECTests: XCTestCase {
             else { return false }
             return name.hasPrefix("GPIO_") && (0xF01600..<0xF01700).contains(address.value)
         }, "\(data.prefix(20))")
+
+        // The flash past the extent the code points at: in the pass's input,
+        // and labelled with its plate.
+        let input = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: try GhidraHost.ecPassInput(try ECFirmware(slice: image), reference: nil)) as? [String: Any])
+        let references = try XCTUnwrap(input["refs_past_extent"] as? [[String: Int]])
+        XCTAssertTrue(references.contains(["address": 0x249F0, "from": 0x15424]), "\(references)")
+        // The label: the C of the function that builds the address names it.
+        let user = try await read("/v1/function/0x15324")
+        XCTAssertTrue("\(user)".contains("FlashRef_249F0"), "\(user)")
+        let xrefs = try await read("/v1/xrefs?to=0x249F0")
+        let from = (xrefs["references"] as? [[String: Any]] ?? []).compactMap { $0["from"] as? String }
+        XCTAssertTrue(from.contains { CodeAddress(hex: $0)?.value == 0x15424 }, "\(xrefs)")
 
         try await host.take(module)
         let published = try await host.publish(module, by: "agent")

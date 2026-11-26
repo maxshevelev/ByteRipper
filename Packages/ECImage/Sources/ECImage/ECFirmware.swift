@@ -123,6 +123,62 @@ public struct ECFirmware: Equatable, Sendable {
         return name.isEmpty ? "EC" : name
     }
 
+    /// A constant the code builds that points past the image's extent but
+    /// still inside the flash slice: `address`, and `from`, the instruction
+    /// that completes it (the `ori`/`addi` after a `sethi`, or the load or
+    /// store whose base and offset reach it).
+    public struct FlashReference: Codable, Equatable, Sendable {
+        public let address: Int
+        public let from: Int
+    }
+
+    /// Every such reference, found by a straight walk of the code — from
+    /// the vectors' end to the `.data` copy's source, or the extent — with
+    /// the register constants `sethi`/`ori`/`movi`/`addi` leave. A value is
+    /// taken when it is complete: not while the next instruction still adds
+    /// to the same register. Sorted by address, then by `from`.
+    public var referencesPastExtent: [FlashReference] {
+        let base = Int(family.flashBase)
+        let target = (base + extent)..<(base + sliceSize)
+        let end = startup?.dataSource.map { min(Int($0), extent) } ?? extent
+        var constants = NDS32.Constants()
+        var found = Set<[Int]>()
+        var pending: (register: Int, address: Int, from: Int)?
+        var offset = 0x100
+        while offset < end, let instruction = NDS32.decode(image, at: offset, base: family.flashBase) {
+            let op = instruction.op
+            if let held = pending {
+                let extends: Bool
+                switch op {
+                case let .or(rt, ra, _), let .add(rt, ra, _): extends = ra == held.register && rt == held.register
+                default: extends = false
+                }
+                if !extends { found.insert([held.address, held.from]) }
+                pending = nil
+            }
+            switch op {
+            case let .load(_, ra, imm, _), let .store(_, ra, imm, _):
+                if let value = constants[ra] {
+                    let at = Int(Int64(value) + Int64(imm))
+                    if target.contains(at) { found.insert([at, Int(instruction.address)]) }
+                }
+            default: break
+            }
+            constants.step(op)
+            switch op {
+            case let .constant(rt, _), let .or(rt, _, _), let .add(rt, _, _):
+                if let value = constants[rt], target.contains(Int(value)) {
+                    pending = (rt, Int(value), Int(instruction.address))
+                }
+            default: break
+            }
+            offset += instruction.length
+        }
+        if let held = pending { found.insert([held.address, held.from]) }
+        return found.sorted { $0[0] != $1[0] ? $0[0] < $1[0] : $0[1] < $1[1] }
+            .map { FlashReference(address: $0[0], from: $0[1]) }
+    }
+
     /// The layout the review pass names, read from the image.
     public var layout: ECLayout { ECLayout(image, family: family, startup: startup) }
 

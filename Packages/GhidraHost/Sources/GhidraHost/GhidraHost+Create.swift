@@ -222,12 +222,14 @@ extension GhidraHost {
         var input: [String: Any] = [
             "family": family.id,
             "extent": firmware.extent,
+            "host_update_size": family.hostUpdateSize,
             "flash_base": family.flashBase,
             "ram": [family.ram.lowerBound, family.ram.upperBound],
             "regs": [family.registers.lowerBound, family.registers.upperBound],
             "signature": family.signatureForm(of: firmware.image) == 2 ? family.textSignatureOffset : family.signatureOffset,
             "version": family.signatureForm(of: firmware.image) == 2 ? family.textSignatureOffset : family.versionOffset,
-            "known_labels": (ecKnownLabels[firmware.sha256] ?? []).map { ["name": $0.name, "address": $0.address] }
+            "known_labels": (ecKnownLabels[firmware.sha256] ?? []).map { ["name": $0.name, "address": $0.address] },
+            "refs_past_extent": firmware.referencesPastExtent.map { ["address": $0.address, "from": $0.from] }
         ]
         input["layout"] = try JSONSerialization.jsonObject(with: try firmware.layout.json())
         if let reference {

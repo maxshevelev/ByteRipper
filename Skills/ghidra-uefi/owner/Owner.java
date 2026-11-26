@@ -144,6 +144,17 @@ public class Owner {
     private File savedFile;
     private File lostFile;
     private long writesWritten;
+    /**
+     * The writes since the last publish, by where they went (`unpublished()`):
+     * group (a function's entry, an address outside any function, or
+     * `module`) to kind to count. Kept in `writes-journal` beside the project
+     * on every change, so an owner restart keeps it; a publish clears it.
+     */
+    private File journalFile;
+    private final java.util.TreeMap<String, java.util.TreeMap<String, Long>> journal = new java.util.TreeMap<>();
+    /** The kind and the places of the write in progress; null kind outside a request. */
+    private String journalKind;
+    private java.util.List<String> journalPlaces;
     private volatile long lastRequest = System.currentTimeMillis();
     // The write lease (§7.3): one holder at a time, renewed by every write.
     private String leaseToken;
@@ -243,6 +254,8 @@ public class Owner {
         lostFile = new File(options.get("project-dir"), "writes-lost");
         savedFile = new File(options.get("project-dir"), "writes-saved");
         noteLostWrites();
+        journalFile = new File(options.get("project-dir"), "writes-journal");
+        readJournal();
 
         int port = Integer.parseInt(options.getOrDefault("port", "0"));
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
@@ -328,8 +341,11 @@ public class Owner {
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
         Map<String, String> query = query(exchange.getRequestURI().getRawQuery());
+        journalKind = method.equals("GET") ? null : journalKindOf(path);
+        journalPlaces = null;
         try {
             if (method.equals("GET")) {
+                if (path.equals("/v1/unpublished")) { json(exchange, 200, unpublished(query)); return; }
                 if (path.equals("/v1/hello")) { json(exchange, 200, hello()); return; }
                 if (path.equals("/v1/functions")) { json(exchange, 200, functions(query)); return; }
                 if (path.equals("/v1/gaps")) { json(exchange, 200, gaps(query)); return; }
@@ -1901,6 +1917,7 @@ public class Owner {
             }
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
+            if (!dryRun) clearJournal();
         } finally {
             if (dryRun) endTransaction(transaction, false, before);
         }
@@ -5400,6 +5417,7 @@ public class Owner {
             hexUint8(program);
         }
         program.endTransaction(transaction, commit);
+        if (commit && program.getModificationNumber() != before) noteJournal();
         if (commit) keepWrites();
         else rolledBack += program.getModificationNumber() - before;
     }
@@ -5517,6 +5535,125 @@ public class Owner {
         }
     }
 
+    /** `/v1/rename/function` → `rename_function`; a request that is no review write has no kind. */
+    private static String journalKindOf(String path) {
+        if (!path.startsWith("/v1/") || path.equals("/v1/publish") || path.equals("/v1/lease")
+            || path.equals("/v1/save") || path.equals("/v1/stop") || path.startsWith("/v1/preview/")
+            || path.equals("/v1/export")) return null;
+        return path.substring(4).replace('/', '_').replace('-', '_');
+    }
+
+    /**
+     * One committed change of the request in progress, under each place its
+     * body named — the function holding it, or the address when no function
+     * does — or under `module` when it named none (a type, the description).
+     * The places are the ones the call was asked for: what a lead assigned.
+     */
+    private void noteJournal() {
+        if (journalKind == null) return;
+        java.util.LinkedHashSet<String> groups = new java.util.LinkedHashSet<>();
+        if (journalPlaces != null) {
+            for (String place : journalPlaces) {
+                try {
+                    Address at = address(place);
+                    Function function = program.getFunctionManager().getFunctionContaining(at);
+                    groups.add(hex(function != null ? function.getEntryPoint() : at));
+                } catch (Exception error) {
+                    // not an address: counted under the module below
+                }
+            }
+        }
+        if (groups.isEmpty()) groups.add("module");
+        for (String group : groups) {
+            journal.computeIfAbsent(group, key -> new java.util.TreeMap<>()).merge(journalKind, 1L, Long::sum);
+        }
+        keepJournal();
+    }
+
+    private void clearJournal() {
+        journal.clear();
+        keepJournal();
+    }
+
+    private void keepJournal() {
+        if (journalFile == null) return;
+        try {
+            File next = new File(journalFile.getPath() + ".new");
+            Files.writeString(next.toPath(), COMPACT.toJson(journal));
+            Files.move(next.toPath(), journalFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                       StandardCopyOption.ATOMIC_MOVE);
+        } catch (Exception error) {
+            System.err.println("OWNER journal: " + error);
+        }
+    }
+
+    private void readJournal() {
+        try {
+            if (!journalFile.isFile()) return;
+            JsonObject kept = JsonParser.parseString(Files.readString(journalFile.toPath())).getAsJsonObject();
+            for (Map.Entry<String, JsonElement> group : kept.entrySet()) {
+                java.util.TreeMap<String, Long> kinds = new java.util.TreeMap<>();
+                for (Map.Entry<String, JsonElement> kind : group.getValue().getAsJsonObject().entrySet()) {
+                    kinds.put(kind.getKey(), kind.getValue().getAsLong());
+                }
+                journal.put(group.getKey(), kinds);
+            }
+        } catch (Exception error) {
+            System.err.println("OWNER journal: " + error);
+        }
+    }
+
+    /**
+     * `GET /v1/unpublished`: the writes since the last publish, grouped by
+     * function (entry and current name), by address outside any function, and
+     * `module` for those of no address. `function=` or `addresses=a,b` keeps
+     * the groups of those places only.
+     */
+    private JsonObject unpublished(Map<String, String> query) throws Exception {
+        java.util.Set<String> only = null;
+        String asked = query.getOrDefault("function", query.get("addresses"));
+        if (asked != null && !asked.isEmpty()) {
+            only = new java.util.HashSet<>();
+            for (String place : asked.split(",")) {
+                place = place.trim();
+                if (place.isEmpty()) continue;
+                if (place.equals("module")) { only.add("module"); continue; }
+                Address at = address(place);
+                Function function = program.getFunctionManager().getFunctionContaining(at);
+                only.add(hex(function != null ? function.getEntryPoint() : at));
+            }
+        }
+        JsonArray groups = new JsonArray();
+        long total = 0;
+        for (Map.Entry<String, java.util.TreeMap<String, Long>> group : journal.entrySet()) {
+            if (only != null && !only.contains(group.getKey())) continue;
+            JsonObject item = new JsonObject();
+            if (group.getKey().equals("module")) {
+                item.addProperty("module", true);
+            } else {
+                Address at = address(group.getKey());
+                Function function = program.getFunctionManager().getFunctionAt(at);
+                if (function != null) {
+                    item.addProperty("entry", group.getKey());
+                    item.addProperty("name", function.getName());
+                } else {
+                    item.addProperty("address", group.getKey());
+                }
+            }
+            JsonObject kinds = new JsonObject();
+            for (Map.Entry<String, Long> kind : group.getValue().entrySet()) {
+                kinds.addProperty(kind.getKey(), kind.getValue());
+                total += kind.getValue();
+            }
+            item.add("writes", kinds);
+            groups.add(item);
+        }
+        JsonObject answer = identity();
+        answer.addProperty("total", total);
+        answer.add("groups", groups);
+        return answer;
+    }
+
     private long readWrites() {
         try {
             return writesFile.isFile() ? Long.parseLong(Files.readString(writesFile.toPath()).trim()) : 0;
@@ -5547,6 +5684,7 @@ public class Owner {
         requireLease(exchange);
         JsonObject body = body(exchange);
         requireEntryText(exchange, body);
+        journalPlaces = writePlaces(body);
         long before = program.getModificationNumber();
         int transaction = program.startTransaction(exchange.getRequestURI().getPath());
         boolean done = false;
@@ -5605,6 +5743,7 @@ public class Owner {
                 answers.add(refused);
                 continue;
             }
+            journalPlaces = writePlaces(element.getAsJsonObject());
             long before = program.getModificationNumber();
             int transaction = program.startTransaction("batch item");
             boolean done = false;

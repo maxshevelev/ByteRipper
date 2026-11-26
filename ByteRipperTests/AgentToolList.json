@@ -1457,6 +1457,42 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
+    "description" : "The writes the module's program took since its last publish, by where they went: `groups`, each a function (`entry` and its current `name`), an `address` outside any function, or `module: true` for writes of no address (a type, the description, registry calls); each with `writes`, the kinds of write and how many (`rename_function`, `rename_label`, `rename_variable`, `set_signature`, `set_comment`, `set_data`, `set_equate`, `create_function`, `set_code_mode`, `set_description`, `type`, …). A write counts under the places its call named. `total` adds them up. Survives an owner restart; a publish empties it. Check before a publish that every write is where it was meant to go. `function` or `addresses` keeps only those places' groups (`module` names the module group). Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "addresses" : {
+          "description" : "Comma-separated addresses (or `module`): only their groups.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "An address in one function: only its group.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_unpublished",
+    "title" : "List the writes since the last publish"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
     "description" : "The type `name` three ways: as the module's program holds it (`program`), as the shared review archive holds it now (`shared`, what another review published), and as the EDK2 archive holds it (`edk2`); each is null where that place has no such type. Each has its C, `size`, and for a structure or union every field's `offset`, `size`, `name`, `type` and `comment`, with `packing` and `packing_value`; for a function type, or a pointer typedef of one, its calling `convention` (`__cdecl` is EFIAPI on IA32; `unknown` reads as the program's default). `same` says whether the program's and the shared one agree. A name and its tag find each other — `NAME` finds `_NAME` and the other way round; `resolved` gives the name that answered. `found` says whether any of the three has the type, and `near` lists close names when none does. Read the types `ghidra_publish` reports in `type_conflicts` with it, and bring yours in line with `ghidra_type`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,

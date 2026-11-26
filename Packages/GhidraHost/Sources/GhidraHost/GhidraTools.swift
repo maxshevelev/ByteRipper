@@ -859,6 +859,34 @@ public enum GhidraTools {
                 return try await answer { try await backend.readCall(module, "interfaces", query: [:]) }
             },
             AgentTool(
+                name: "ghidra_unpublished",
+                title: "List the writes since the last publish",
+                description: """
+                    The writes the module's program took since its last publish, by where they went: \
+                    `groups`, each a function (`entry` and its current `name`), an `address` outside any \
+                    function, or `module: true` for writes of no address (a type, the description, \
+                    registry calls); each with `writes`, the kinds of write and how many \
+                    (`rename_function`, `rename_label`, `rename_variable`, `set_signature`, `set_comment`, \
+                    `set_data`, `set_equate`, `create_function`, `set_code_mode`, `set_description`, `type`, …). \
+                    A write counts under the places its call named. `total` adds them up. Survives an owner \
+                    restart; a publish empties it. Check before a publish that every write is where it was \
+                    meant to go. `function` or `addresses` keeps only those places' groups (`module` \
+                    names the module group).
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "function": AgentSchema.string("An address in one function: only its group."),
+                    "addresses": AgentSchema.string("Comma-separated addresses (or `module`): only their groups.")
+                ], required: ["module"])
+            ) { call in
+                let module = try module(call.arguments)
+                var query: [String: String] = [:]
+                if let function = try call.arguments.optionalString("function") { query["function"] = function }
+                if let addresses = try call.arguments.optionalString("addresses") { query["addresses"] = addresses }
+                let asked = query
+                return try await answer { try await backend.readCall(module, "unpublished", query: asked) }
+            },
+            AgentTool(
                 name: "ghidra_type_definition",
                 title: "Read a type's definition",
                 description: """

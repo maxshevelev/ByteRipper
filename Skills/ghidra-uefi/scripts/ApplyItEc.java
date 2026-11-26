@@ -195,6 +195,36 @@ public class ApplyItEc extends GhidraScript {
                 label(known.get("address").getAsLong(), known.get("name").getAsString());
             }
         }
+        // The flash past the extent the code points at: a label, no type, and
+        // a plate saying what is known of it (the server finds the
+        // references in Swift, ECImage's `referencesPastExtent`).
+        if (input.has("refs_past_extent")) {
+            java.util.Set<Long> placed = new java.util.HashSet<>();
+            for (JsonElement each : input.getAsJsonArray("refs_past_extent")) {
+                long address = each.getAsJsonObject().get("address").getAsLong();
+                long from = each.getAsJsonObject().get("from").getAsLong();
+                // The reference itself, so `xrefs` finds the code that uses it.
+                currentProgram.getReferenceManager().addMemoryReference(at(from), at(address),
+                    ghidra.program.model.symbol.RefType.DATA, SourceType.IMPORTED,
+                    ghidra.program.model.listing.CodeUnit.MNEMONIC);
+                if (!placed.add(address)) continue;
+                label(address, String.format("FlashRef_%X", address));
+                try {
+                    // Only what this module's bytes and family say: the plate
+                    // is keyed by the module and shows in every dump.
+                    long hostUpdate = input.has("host_update_size") ? input.get("host_update_size").getAsLong() : 0;
+                    String rewrite = hostUpdate > 0 && address < hostUpdate
+                        ? String.format(" A host update (host_update_size 0x%X) rewrites [0x%X, 0x%X) from the host's copy.", hostUpdate, extent, hostUpdate)
+                        : " Outside the range a host update rewrites.";
+                    currentProgram.getListing().setComment(at(address), CommentType.PLATE, String.format(
+                        "Referenced past the image extent (0x%X): the EC's flash data area, not part of this module."
+                        + " Its contents are whatever the EC wrote there at run time.%s"
+                        + " The meaning comes from the code that reads or writes it.", extent, rewrite));
+                } catch (Exception e) {
+                    println("ApplyItEc: no plate at 0x" + Long.toHexString(address) + ": " + e.getMessage());
+                }
+            }
+        }
         println("ApplyItEc done: " + functions + " functions, " + labels + " labels, " + registers + " registers");
     }
 

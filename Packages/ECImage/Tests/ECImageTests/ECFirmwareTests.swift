@@ -105,6 +105,15 @@ final class ECFirmwareTests: XCTestCase {
         XCTAssertNoThrow(try layout.json())
     }
 
+    /// The flash past the extent the code points at: 0x249F0, built at 0x15424.
+    func testReferencesPastTheExtent() throws {
+        let firmware = try ECFirmware(slice: try image())
+        let references = firmware.referencesPastExtent
+        print("refs past extent:", references.map { String(format: "0x%X<-0x%X", $0.address, $0.from) })
+        XCTAssertTrue(references.contains(.init(address: 0x249F0, from: 0x15424)), "\(references)")
+        XCTAssertTrue(references.allSatisfy { $0.address >= firmware.extent && $0.address < firmware.sliceSize })
+    }
+
     func testRegisterMap() throws {
         let text = """
         # header
@@ -132,5 +141,35 @@ final class ECFirmwareTests: XCTestCase {
         let irqs = try ECInterruptMap(tsv: String(contentsOf: root.appendingPathComponent(
             "Skills/ghidra-ec/reference/it83xx-irqs.tsv"), encoding: .utf8))
         XCTAssertEqual(irqs.source(of: 1), "WKO20")
+    }
+
+    /// The parts the UEFI tree shows, over a real BIOS copy: no gap, no
+    /// overlap, the `.data` initializer where the reset code copies from.
+    func testParts() throws {
+        let firmware = try ECFirmware(slice: try image())
+        XCTAssertEqual(firmware.parts.map(\.kind), [.vectors, .signature, .code, .dataInitializer, .free])
+        XCTAssertEqual(firmware.parts.map(\.range), [0..<0x80, 0x80..<0xA0, 0xA0..<0x24974, 0x24974..<0x2497C,
+                                                     0x2497C..<0x30000])
+    }
+
+    /// A slice built byte by byte: no start-up code to read, so no `.data`
+    /// part; a chip read ends in the run-time data area.
+    func testPartsOfASyntheticImage() throws {
+        var data = Data(repeating: 0xFF, count: 0x2C000)
+        data.replaceSubrange(0..<4, with: [0x48, 0x00, 0x00, 0x00])
+        data.replaceSubrange(0x80..<0x90, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x94, 0x85, 0x12,
+                                                 0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55])
+        data.replaceSubrange(0x90..<0xA0, with: Array("ITE8380-EC-V9.99".utf8))
+        for at in 0x100..<0x1FE { data[at] = 0x11 }
+        let copy = try ECFirmware(slice: data)
+        XCTAssertEqual(copy.extentSource, .heuristic)
+        XCTAssertEqual(copy.parts.map(\.kind), [.vectors, .signature, .code, .free])
+        XCTAssertEqual(copy.parts.last?.range, 0x200..<0x2C000)
+
+        data[0x2A010] = 0x00
+        let read = try ECFirmware(slice: data)
+        XCTAssertTrue(read.chipRead)
+        XCTAssertEqual(read.parts.map(\.kind), [.vectors, .signature, .code, .free, .runtimeData])
+        XCTAssertEqual(read.parts.suffix(2).map(\.range), [0x200..<0x2A000, 0x2A000..<0x2C000])
     }
 }
