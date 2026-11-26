@@ -48,6 +48,8 @@ public enum CodeNavigatorTab: Equatable, Sendable {
             guard let panel = record.panel else { return nil }
             return .record(id: record.id, title: record.title, symbol: panel.symbol)
         }
-        return shown + added
+        // Search stays last, after the profile's own sections.
+        let search = shown.filter { $0 == .search }
+        return shown.filter { $0 != .search } + added + search
     }
 }
