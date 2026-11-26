@@ -105,4 +105,26 @@ final class ECSignatureAndTempsTests: XCTestCase {
         let named = Set(after.compactMap { $0["name"] as? String })
         for index in items.indices { XCTAssertTrue(named.contains("PortRead\(index)"), "PortRead\(index): \(after)") }
     }
+
+    /// Issue 1df1ef78: two copies of different globals that meet in one
+    /// read (`x = A;` on one path, `x = B;` on the other, then `*p = y | x`)
+    /// are one variable: listed once, named and typed by either value's
+    /// address, and the type taken.
+    func testJoinedValuesAreOneVariableAndTakeAType() async throws {
+        let (host, module) = try await made()
+        defer { Task { await host.stop(module) } }
+        func function() async throws -> [String: Any] { try json(try await host.read(module, "/v1/function/0x7200")) }
+        let temps = (try await function()["locals"] as? [[String: Any]] ?? [])
+            .filter { ($0["storage"] as? String) == "HASH:00000000:1" }
+        XCTAssertEqual(temps.count, 1, "joined values are one local: \(temps)")
+        let answer = try json(try await host.write(module, "/v1/rename/variables", body: try JSONSerialization.data(
+            withJSONObject: ["items": [
+                ["function": "0x7200", "storage": "HASH:00000000:1", "first_use": "0x723C", "name": "Ram44D", "type": "UINT8"],
+                ["function": "0x7200", "storage": "HASH:00000000:1", "first_use": "0x725A", "name": "Ram44D"]]])))
+        let items = answer["items"] as? [[String: Any]] ?? []
+        XCTAssertTrue(items.count == 2 && items.allSatisfy { $0["ok"] as? Bool == true }, "\(answer)")
+        let c = try await function()["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("UINT8 Ram44D;"), c)
+        XCTAssertFalse(c.contains("Unable to use type"), c)
+    }
 }

@@ -12,7 +12,12 @@ import XCTest
 /// renamed, keeps a reviewer's name for a place and every other edit,
 /// adds nothing a second time, and is refused without the lease and for a
 /// module that is no EC; the facts reach the next publish. A run without the
-/// image or Ghidra skips.
+/// image or Ghidra skips. The project is made with the register and IRQ
+/// maps as they were before the IT8227E overlays: the step renames the
+/// register labels the pass gave from the old map (`SMB_4P7USL` at
+/// 0xF01C00), adds the new ones, rewrites the ISR plates (`Isr_Irq160`'s
+/// PECI) keeping a reviewer's line after the pass's, keeps a label and a
+/// plate a reviewer changed, and changes nothing a second time.
 final class GhidraHostECReapplyTests: XCTestCase {
     private var directory: URL?
 
@@ -77,6 +82,17 @@ final class GhidraHostECReapplyTests: XCTestCase {
         _ = try await post("/v1/rename/function", ["address": "0x15324", "name": "ReviewerFlashReader"])
         _ = try await post("/v1/set/comment", ["address": "0x15424", "kind": "eol", "text": "reviewer note kept"])
         _ = try await post("/v1/set/data", ["address": "0x2A600", "name": "EflashState_2A600"])
+        // Names the maps before the IT8227E overlays gave: a register label a
+        // reviewer renamed, a plate a reviewer wrote, one the pass wrote
+        // with a reviewer's line after it.
+        _ = try await post("/v1/set/data", ["address": "0xF01C01", "name": "ReviewerHostCtl"])
+        _ = try await post("/v1/set/comment", ["address": "0x5A28", "kind": "plate", "text": "Reviewer: PM2 input."])
+        let oldIsr160 = try await read("/v1/function/0x53E8")
+        XCTAssertTrue("\(oldIsr160)".contains("IT83XX_IRQ_PECI"), "\(oldIsr160)")
+        _ = try await post("/v1/set/comment", ["address": "0x53E8", "kind": "plate", "text":
+            "INTC interrupt 160, source PECI (the register map's IT83XX_IRQ_PECI).\nReviewer line kept."])
+        let oldData = try await read("/v1/data?limit=5000")
+        XCTAssertTrue("\(oldData)".contains("SMB_4P7USL"), "the old map's name at 0xF01C00")
         // What the earlier rule (by value) left: FlashRef_249F0 from the
         // timer's `movi` at 0x15424, and one at 0x2A400 a reviewer renamed.
         let byValue: [String: Any] = ["extent": 0x249F0, "host_update_size": 0,
@@ -105,6 +121,33 @@ final class GhidraHostECReapplyTests: XCTestCase {
         XCTAssertTrue(kept.contains { $0["address"] as? String == "0x2A600" && $0["name"] as? String == "EflashState_2A600" },
                       "\(first)")
         XCTAssertEqual((first["facts"] as? [String: Any])?["refs_past_extent"] as? String, "added", "\(first)")
+
+        // The names: the old map's register labels renamed, the new
+        // IT8227E ones added, the ISR plates rewritten; a reviewer's kept.
+        XCTAssertEqual(first["registers_renamed"] as? Int, 9, "\(first)")
+        XCTAssertEqual(first["registers_added"] as? Int, 40, "\(first)")
+        XCTAssertGreaterThan(first["isr_plates_refreshed"] as? Int ?? 0, 100, "\(first)")
+        let renames = first["register_renames"] as? [[String: Any]] ?? []
+        XCTAssertTrue(renames.contains { $0["was"] as? String == "SMB_4P7USL" && $0["name"] as? String == "SMB_HOSTA_A" },
+                      "\(renames)")
+        let namesKept = first["kept"] as? [[String: Any]] ?? []
+        XCTAssertTrue(namesKept.contains { $0["address"] as? String == "0xF01C01" && $0["name"] as? String == "ReviewerHostCtl" },
+                      "\(namesKept)")
+        XCTAssertTrue(namesKept.contains { $0["address"] as? String == "0x5A28" && $0["irq"] as? Int == 27 }, "\(namesKept)")
+        let platesRefreshed = first["isr_plates"] as? [[String: Any]] ?? []
+        XCTAssertTrue(platesRefreshed.contains { $0["irq"] as? Int == 160 }, "\(platesRefreshed)")
+        let isr160 = "\(try await read("/v1/function/0x53E8"))"
+        XCTAssertTrue(isr160.contains("source SMB_E") && isr160.contains("from the firmware: IT8227E fw"), isr160)
+        XCTAssertTrue(isr160.contains("Reviewer line kept"), isr160)
+        XCTAssertFalse(isr160.contains("IT83XX_IRQ_PECI"), isr160)
+        let isr027 = "\(try await read("/v1/function/0x5A28"))"
+        XCTAssertTrue(isr027.contains("Reviewer: PM2 input."), isr027)
+        let isr152 = "\(try await read("/v1/function/0x53C8"))"
+        XCTAssertTrue(isr152.contains("not verified for IT8227E"), isr152)
+        let newData = "\(try await read("/v1/data?limit=5000"))"
+        XCTAssertTrue(newData.contains("SMB_HOSTA_A") && newData.contains("SMB_HOCTL2_E"), "the new map's names")
+        XCTAssertFalse(newData.contains("SMB_4P7USL"), "the old map's name is gone")
+        XCTAssertTrue(newData.contains("ReviewerHostCtl"), "the reviewer's name stays")
 
         // 3. What it added, and what it kept.
         let to2A600 = try await xrefs(to: "0x2A600")
@@ -139,6 +182,10 @@ final class GhidraHostECReapplyTests: XCTestCase {
         XCTAssertEqual((second["labels_removed"] as? [Any])?.count, 0, "\(second)")
         XCTAssertEqual((second["eflash_data"] as? [String: Any])?["block"] as? String, "kept", "\(second)")
         XCTAssertEqual((second["facts"] as? [String: Any])?["refs_past_extent"] as? String, "kept", "\(second)")
+        for count in ["registers_renamed", "registers_added", "register_notes_refreshed", "isr_plates_refreshed"] {
+            XCTAssertEqual(second[count] as? Int, 0, "\(count): \(second)")
+        }
+        XCTAssertEqual((second["kept"] as? [Any])?.count, namesKept.count, "\(second)")
 
         // 5. A module that is no EC: refused before anything is asked of an owner.
         let other = SHA256Digest(data: Data("not an EC module".utf8))

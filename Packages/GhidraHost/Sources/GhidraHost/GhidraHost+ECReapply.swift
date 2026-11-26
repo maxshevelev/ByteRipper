@@ -6,11 +6,14 @@ import Foundation
 /// added to a project made before it did (builds before 866): the DATA
 /// references from the code, the `FlashRef_<ADDR>` labels with their plates
 /// (`ApplyItEc.flashReferences`, the same code creation runs), and
-/// `refs_past_extent` in the module's facts. On a Ghidra whose language
+/// `refs_past_extent` in the module's facts. The register labels and the
+/// plates of the single-interrupt ISRs the pass placed are brought to the
+/// maps as they are now (`ApplyItEc.refreshNames`), unless a review changed
+/// them. On a Ghidra whose language
 /// carries nds32-standby-1, also the code a stock analysis never read after
 /// each `standby`, and the bodies of the functions it cut
 /// (`ApplyItEc.standbySites`). Nothing else of the review is touched, and a
-/// second run adds nothing.
+/// second run adds and changes nothing.
 extension GhidraHost {
     static let ecReapplyPath = "/v1/ec/reapply"
 
@@ -43,8 +46,14 @@ extension GhidraHost {
                                   + "(identity \(firmware.sha256), extent \(firmware.extent)): nothing was added",
                                   status: 409)
         }
-        let body = try JSONSerialization.data(withJSONObject: Self.ecFlashReferenceInput(firmware),
-                                              options: [.sortedKeys])
+        var input = Self.ecFlashReferenceInput(firmware)
+        // The names: the register labels and ISR plates the pass placed,
+        // refreshed from the maps as they are now (`ApplyItEc.refreshNames`).
+        if let reference = configuration.ecReference {
+            input.merge(try Self.ecMapInput(reference: reference)) { _, new in new }
+            input["irq_handlers"] = firmware.layout.irqHandlers.map { ["number": $0.number, "target": $0.target] }
+        }
+        let body = try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])
         let answered = try await write(module, Self.ecReapplyPath, body: body, holder: holder, byHost: true)
         noteActivity(module, holder: holder, call: Self.callName(Self.ecReapplyPath), kind: .write)
 

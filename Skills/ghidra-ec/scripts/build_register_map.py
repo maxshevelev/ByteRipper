@@ -20,9 +20,16 @@ code) removes every published entry at its address and takes its place; a
 status. Each removed entry is kept as a `# replaced:` comment line in the
 output, so the history stays in the table.
 
-`--overlay <reference-dir>` re-applies the overlay without registers.h: it
-rebuilds the published part from the existing `it83xx-registers.tsv` (its
-non-firmware rows plus its `# replaced:` lines, statuses reset to
+The IRQ list is built the same way (`it83xx-irqs.tsv`: irq, name,
+description, source, status) with its own overlay `it8227e-irq-overrides.tsv`
+(irq, name, description, source, status, replaces): every published IRQ is
+`unverified`; an overlay entry that is not `published` removes the published
+entries at its number (`replaces` lists them; an entry may replace one of the
+same name, to give it a description) and is kept as a `# replaced:` line.
+
+`--overlay <reference-dir>` re-applies both overlays without registers.h: it
+rebuilds the published part of each table from the existing file (its
+published rows plus its `# replaced:` lines, statuses reset to
 `unverified`) and keeps the table's header. Both modes give the same file.
 Stdlib only; a run is a diff to review.
 """
@@ -94,6 +101,84 @@ def write_registers(out, head, published):
     print("registers %d (%s)" % (len(rows), ", ".join("%s %d" % kv for kv in sorted(counts.items()))))
 
 
+IRQ_COLUMNS = "irq\tname\tdescription\tsource\tstatus\n"
+IRQ_STATUS_NOTE = ("# status: published = registers.h, confirmed for IT8227E; firmware = derived from the\n"
+                   "# IT8227E firmware's code (it8227e-irq-overrides.tsv); unverified = an IT8320 name not checked\n"
+                   "# for IT8227E (its description may still be a fact from the firmware: its source says so).\n"
+                   "# `# replaced:` lines are published entries an overlay entry removed.\n")
+
+
+def irq_text(irq, name, note, source, status):
+    return "%d\t%s\t%s\t%s\t%s" % (irq, name, note.replace("\t", " "), source, status)
+
+
+def write_irqs(out, head, published):
+    """published: (irq, name, note, source) rows."""
+    overrides = []
+    for line in open(os.path.join(out, "it8227e-irq-overrides.tsv"), encoding="utf-8"):
+        line = line.rstrip("\n")
+        if not line or line.startswith("#") or line.startswith("irq\t"):
+            continue
+        r = line.split("\t")
+        overrides.append((int(r[0]), r[1], r[2], r[3], r[4], r[5] if len(r) > 5 else "-"))
+    rows = [list(r) + ["unverified"] for r in published]
+    replaced, added = [], []
+    for irq, name, note, source, status, replaces in overrides:
+        if status == "published":
+            hits = [r for r in rows if r[0] == irq and r[1] == name]
+            if not hits:
+                sys.exit("irq override %s at %d: no such published entry" % (name, irq))
+            for r in hits:
+                r[4] = "published"
+            continue
+        gone = [r for r in rows if r[0] == irq]
+        listed = set(x for x in replaces.split(",") if x and x != "-")
+        if listed != set(r[1] for r in gone):
+            sys.exit("irq override %s at %d: replaces %s, the list has %s"
+                     % (name, irq, sorted(listed), sorted(r[1] for r in gone)))
+        for r in gone:
+            rows.remove(r)
+            replaced.append((r, name))
+        added.append([irq, name, note, source, status])
+    rows += added
+    rows.sort(key=lambda r: (r[0], r[1]))
+    replaced.sort(key=lambda x: (x[0][0], x[0][1]))
+    with open(os.path.join(out, "it83xx-irqs.tsv"), "w", encoding="utf-8") as f:
+        f.write(head + IRQ_STATUS_NOTE)
+        for r, by in replaced:
+            f.write("# replaced: %s\t(by %s)\n" % (irq_text(*r[:4], "unverified"), by))
+        f.write(IRQ_COLUMNS)
+        for r in rows:
+            f.write(irq_text(*r) + "\n")
+    for r, by in replaced:
+        print("replaced irq %d %s by %s" % (r[0], r[1], by))
+    counts = {}
+    for r in rows:
+        counts[r[4]] = counts.get(r[4], 0) + 1
+    print("irqs %d (%s)" % (len(rows), ", ".join("%s %d" % kv for kv in sorted(counts.items()))))
+
+
+def overlay_irqs(out):
+    head, published = "", []
+    for line in open(os.path.join(out, "it83xx-irqs.tsv"), encoding="utf-8"):
+        line = line.rstrip("\n")
+        if line.startswith("# replaced: "):
+            r = line[len("# replaced: "):].split("\t")
+            published.append((int(r[0]), r[1], r[2], r[3]))
+        elif line.startswith("#"):
+            head += line + "\n"
+        elif line and not line.startswith("irq\t"):
+            r = line.split("\t")
+            if len(r) == 3:
+                # A list from before the status column: irq, name, source.
+                published.append((int(r[0]), r[1], "-", r[2]))
+            elif r[3].startswith("registers.h:"):
+                published.append((int(r[0]), r[1], r[2], r[3]))
+    head = "".join(l + "\n" for l in head.split("\n") if l and l not in IRQ_STATUS_NOTE.split("\n"))
+    published.sort(key=lambda r: (r[0], r[1]))
+    write_irqs(out, head, published)
+
+
 def overlay(out):
     head, published = "", []
     for line in open(os.path.join(out, "it83xx-registers.tsv"), encoding="utf-8"):
@@ -116,6 +201,7 @@ def overlay(out):
 def main():
     if sys.argv[1] == "--overlay":
         overlay(sys.argv[2])
+        overlay_irqs(sys.argv[2])
         return
     header, revision, out = sys.argv[1], sys.argv[2], sys.argv[3]
     lines = open(header, encoding="utf-8").read().split("\n")
@@ -182,11 +268,8 @@ def main():
     registers.sort(key=lambda r: (r[1], r[0]))
     write_registers(out, head + "# width is in bytes.\n", registers)
     irqs.sort()
-    with open(out + "/it83xx-irqs.tsv", "w", encoding="utf-8") as f:
-        f.write(head + "# The INTC interrupt numbers (IVCT - 0x10).\nirq\tname\tsource\n")
-        for irq, name, source in irqs:
-            f.write("%d\t%s\t%s\n" % (irq, name, source))
-    print("irqs %d" % len(irqs))
+    write_irqs(out, head + "# The INTC interrupt numbers (IVCT - 0x10).\n",
+               [(irq, name, "-", source) for irq, name, source in irqs])
 
 
 if __name__ == "__main__":

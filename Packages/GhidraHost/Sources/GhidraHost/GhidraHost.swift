@@ -208,8 +208,9 @@ public actor GhidraHost {
     var retypeRows: [RetypeRow] = []
     var retypeRunning = false
     /// A test's: EC modules are made as a build before 866 made them — no
-    /// flash references past the extent, no `refs_past_extent` in the facts —
-    /// for `ecReapply` to add them to.
+    /// flash references past the extent, no `refs_past_extent` in the facts,
+    /// the register and IRQ maps without their IT8227E overlays —
+    /// for `ecReapply` to add and refresh them.
     var ecCreatesAsBefore866 = false
     func setECCreatesAsBefore866(_ value: Bool) { ecCreatesAsBefore866 = value }
     var leaseBaselines: [SHA256Digest: (writes: Int?, content: LeaseBaseline)] = [:]

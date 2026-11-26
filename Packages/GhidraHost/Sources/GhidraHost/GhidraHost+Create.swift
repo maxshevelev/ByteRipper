@@ -187,6 +187,8 @@ extension GhidraHost {
             // Nor the eflash_data block, which ApplyItEc makes only up to
             // host_update_size.
             object["host_update_size"] = nil
+            // Nor the IT8227E overlays of the register and IRQ maps.
+            object = Self.ecMapInputBeforeOverlays(object)
             passInput = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted])
         }
         try passInput.write(to: layoutURL)
@@ -255,26 +257,76 @@ extension GhidraHost {
         ]) { _, new in new }
         input["layout"] = try JSONSerialization.jsonObject(with: try firmware.layout.json())
         if let reference {
-            let registers = reference.appendingPathComponent("it83xx-registers.tsv")
-            let irqs = reference.appendingPathComponent("it83xx-irqs.tsv")
-            guard FileManager.default.fileExists(atPath: registers.path) else {
-                throw GhidraHostError(.install, "\(registers.path): the EC register map is missing")
-            }
-            let map = try ECRegisterMap(tsv: String(contentsOf: registers, encoding: .utf8))
-            input["registers"] = map.registers.map { register -> [String: Any] in
-                var row: [String: Any] = ["name": register.name, "address": register.address, "width": register.width,
-                                          "block": register.block, "source": register.source]
-                if let note = register.description { row["description"] = note }
-                if let status = register.status { row["status"] = status }
-                return row
-            }
-            if FileManager.default.fileExists(atPath: irqs.path) {
-                let names = try ECInterruptMap(tsv: String(contentsOf: irqs, encoding: .utf8))
-                input["irq_sources"] = Dictionary(uniqueKeysWithValues: names.names.keys.compactMap { irq in
-                    names.source(of: irq).map { (String(irq), $0) }
-                })
-            }
+            input.merge(try ecMapInput(reference: reference)) { _, new in new }
         }
         return try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys, .prettyPrinted])
+    }
+
+    /// The register and interrupt maps as the EC pass reads them, at
+    /// creation and in `ecReapply` alike: `registers` (each with its status),
+    /// `registers_replaced` (the `# replaced:` names an earlier map gave),
+    /// `irq_sources` (the one name the list gives an interrupt), `irq_notes`
+    /// (that entry's description, source and status) and `irqs_replaced`.
+    static func ecMapInput(reference: URL) throws -> [String: Any] {
+        var input: [String: Any] = [:]
+        let registers = reference.appendingPathComponent("it83xx-registers.tsv")
+        let irqs = reference.appendingPathComponent("it83xx-irqs.tsv")
+        guard FileManager.default.fileExists(atPath: registers.path) else {
+            throw GhidraHostError(.install, "\(registers.path): the EC register map is missing")
+        }
+        let map = try ECRegisterMap(tsv: String(contentsOf: registers, encoding: .utf8))
+        func row(_ register: ECRegisterMap.Register) -> [String: Any] {
+            var row: [String: Any] = ["name": register.name, "address": register.address, "width": register.width,
+                                      "block": register.block, "source": register.source]
+            if let note = register.description { row["description"] = note }
+            if let status = register.status { row["status"] = status }
+            return row
+        }
+        input["registers"] = map.registers.map(row)
+        input["registers_replaced"] = map.replaced.map(row)
+        if FileManager.default.fileExists(atPath: irqs.path) {
+            let names = try ECInterruptMap(tsv: String(contentsOf: irqs, encoding: .utf8))
+            input["irq_sources"] = Dictionary(uniqueKeysWithValues: names.names.keys.compactMap { irq in
+                names.source(of: irq).map { (String(irq), $0) }
+            })
+            func note(_ entry: ECInterruptMap.Entry) -> [String: Any] {
+                var note: [String: Any] = ["irq": entry.irq, "name": entry.name, "source": entry.source]
+                if let text = entry.description { note["description"] = text }
+                if let status = entry.status { note["status"] = status }
+                return note
+            }
+            input["irq_notes"] = Dictionary(uniqueKeysWithValues: names.names.keys.compactMap { irq in
+                names.entry(of: irq).map { (String(irq), note($0)) }
+            })
+            input["irqs_replaced"] = names.replaced.map(note)
+        }
+        return input
+    }
+
+    /// The maps as a build before the IT8227E overlays gave them, for a
+    /// test's project (`ecCreatesAsBefore866`): every register the IT8320
+    /// header names, no status; every interrupt its IT8320 name, no note.
+    static func ecMapInputBeforeOverlays(_ input: [String: Any]) -> [String: Any] {
+        var input = input
+        let replaced = input["registers_replaced"] as? [[String: Any]] ?? []
+        let replacedAt = Set(replaced.compactMap { $0["address"] as? UInt64 })
+        var registers = (input["registers"] as? [[String: Any]] ?? [])
+            .filter { !replacedAt.contains($0["address"] as? UInt64 ?? 0) && $0["status"] as? String != "firmware" }
+        registers += replaced
+        registers = registers.map { row in
+            var row = row
+            row["status"] = nil
+            return row
+        }.sorted { ($0["address"] as? UInt64 ?? 0, $0["name"] as? String ?? "") < ($1["address"] as? UInt64 ?? 0, $1["name"] as? String ?? "") }
+        input["registers"] = registers
+        input["registers_replaced"] = nil
+        var sources = input["irq_sources"] as? [String: String] ?? [:]
+        for entry in input["irqs_replaced"] as? [[String: Any]] ?? [] {
+            if let irq = entry["irq"] as? Int, let name = entry["name"] as? String { sources[String(irq)] = name }
+        }
+        input["irq_sources"] = sources
+        input["irq_notes"] = nil
+        input["irqs_replaced"] = nil
+        return input
     }
 }

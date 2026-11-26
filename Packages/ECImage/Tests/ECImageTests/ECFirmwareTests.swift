@@ -150,6 +150,29 @@ final class ECFirmwareTests: XCTestCase {
         let irqs = try ECInterruptMap(tsv: String(contentsOf: root.appendingPathComponent(
             "Skills/ghidra-ec/reference/it83xx-irqs.tsv"), encoding: .utf8))
         XCTAssertEqual(irqs.source(of: 1), "WKO20")
+        XCTAssertEqual(map.replaced.first { $0.address == 0xF01C00 }?.name, "SMB_4P7USL")
+        XCTAssertEqual(map.register(at: 0xF01C00)?.name, "SMB_HOSTA_A")
+        // IT8227E: IRQ 160 is SMBus channel E, from the firmware; IT8320's
+        // SMB_E stays unverified; PECI is a replaced line.
+        XCTAssertEqual(irqs.entry(of: 160)?.name, "SMB_E")
+        XCTAssertEqual(irqs.entry(of: 160)?.status, "firmware")
+        XCTAssertTrue(irqs.entry(of: 160)?.source.contains("0xF01155") ?? false)
+        XCTAssertEqual(irqs.entry(of: 152)?.status, "unverified")
+        XCTAssertEqual(irqs.entry(of: 25)?.status, "firmware")
+        XCTAssertEqual(irqs.entry(of: 27)?.name, "PMC2_IN")
+        XCTAssertEqual(irqs.entry(of: 27)?.status, "unverified")
+        XCTAssertNotNil(irqs.entry(of: 27)?.description)
+        XCTAssertEqual(irqs.replaced.map(\.name), ["PMC_IN", "PMC2_IN", "PECI"])
+        XCTAssertEqual(Set(irqs.entries.compactMap(\.status)), ["firmware", "unverified"])
+        XCTAssertEqual(irqs.entries.filter { $0.status == "firmware" }.map(\.irq), [25, 160])
+    }
+
+    /// A list from before the status column (`irq name source`) still reads.
+    func testInterruptListWithoutStatusReads() throws {
+        let irqs = try ECInterruptMap(tsv: "# c\nirq\tname\tsource\n160\tPECI\tregisters.h:195\n")
+        XCTAssertEqual(irqs.entry(of: 160)?.name, "PECI")
+        XCTAssertNil(irqs.entry(of: 160)?.status)
+        XCTAssertEqual(irqs.entry(of: 160)?.source, "registers.h:195")
     }
 
     /// The parts the UEFI tree shows, over a real BIOS copy: no gap, no

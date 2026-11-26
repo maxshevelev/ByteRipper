@@ -5370,7 +5370,9 @@ public class Owner {
      * a project made before it did, by the same code (`ApplyItEc.flashReferences`).
      * `{extent, host_update_size, refs_past_extent: [{address, from}]}`, as
      * the host computes it from the image. It only adds; the answer lists
-     * what it added and what it kept, and why.
+     * what it added and what it kept, and why. With the maps (`registers`,
+     * `registers_replaced`, `irq_notes`, `irq_handlers`), also the names
+     * and plates the pass placed (`ApplyItEc.refreshNames`).
      */
     private JsonObject ecReapply(JsonObject body) throws Exception {
         if (!body.has("extent") || !body.has("refs_past_extent") || !body.get("refs_past_extent").isJsonArray()) {
@@ -5382,6 +5384,12 @@ public class Owner {
         answer.add("eflash_data", ApplyItEc.eflashDataBlock(program, body));
         JsonObject applied = ApplyItEc.flashReferences(program, body);
         for (String key : applied.keySet()) answer.add(key, applied.get(key));
+        // The register labels and ISR plates the pass placed, brought to
+        // the maps as they are now, unless a review changed them.
+        if (body.has("registers") || body.has("irq_handlers")) {
+            JsonObject names = ApplyItEc.refreshNames(program, body);
+            for (String key : names.keySet()) answer.add(key, names.get(key));
+        }
         // The standby sites: only a Ghidra whose NDS32 language goes on after
         // standby (nds32-standby-1) reads code past them.
         String patch = languagePatch();
@@ -7913,15 +7921,20 @@ public class Owner {
                         || (symbol.getPCAddress() != null && hex(symbol.getPCAddress()).equalsIgnoreCase(firstUse)));
                 // A temporary holding several values is asked for by one of
                 // them, its own start included: that value is the one named.
-                if (firstUse != null && symbol.getStorage().toString().equals(storage)
-                        && !tempPieces(high, symbol).isEmpty()) {
-                    fits = false;
-                    for (java.util.Map.Entry<Address, ghidra.program.model.pcode.Varnode> each
-                            : tempPieces(high, symbol).entrySet()) {
-                        if (!hex(each.getKey()).equalsIgnoreCase(firstUse)) continue;
+                // Any value of a web (joined values) asks for the web.
+                TempWebs webs = firstUse != null && symbol.getStorage().toString().equals(storage)
+                    ? tempWebs(high, symbol) : null;
+                if (webs != null && !webs.startOf().isEmpty()) {
+                    Address start = null;
+                    for (java.util.Map.Entry<Address, Address> each : webs.startOf().entrySet()) {
+                        if (hex(each.getKey()).equalsIgnoreCase(firstUse)) start = each.getValue();
+                    }
+                    if (webs.starts().size() >= 2) {
+                        fits = start != null;
+                        value = start == null ? null : webs.starts().get(start);
+                        valueAt = start;
+                    } else if (start != null) {
                         fits = true;
-                        value = each.getValue();
-                        valueAt = each.getKey();
                     }
                 }
             }
@@ -8356,22 +8369,69 @@ public class Owner {
      */
     private static java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> tempPieces(
             HighFunction high, HighSymbol symbol) {
+        java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> pieces = tempWebs(high, symbol).starts();
+        if (pieces.size() < 2) pieces.clear();
+        return pieces;
+    }
+
+    /**
+     * An unnamed zero-hash temporary's values, by web: `starts` holds each
+     * web's first value by its address, `startOf` maps every value's address
+     * to its web's start. Empty for anything else.
+     */
+    private record TempWebs(java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> starts,
+                            java.util.Map<Address, Address> startOf) {}
+
+    private static TempWebs tempWebs(HighFunction high, HighSymbol symbol) {
         java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> pieces = new java.util.TreeMap<>();
-        if (high == null || symbol.isParameter() || symbol.isNameLocked()) return pieces;
+        java.util.Map<Address, Address> startOf = new java.util.HashMap<>();
+        TempWebs none = new TempWebs(pieces, startOf);
+        if (high == null || symbol.isParameter() || symbol.isNameLocked()) return none;
         ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
-        if (!storage.isHashStorage() || storage.getFirstVarnode().getOffset() != 0) return pieces;
+        if (!storage.isHashStorage() || storage.getFirstVarnode().getOffset() != 0) return none;
         ghidra.program.model.pcode.HighVariable variable = symbol.getHighVariable();
-        if (variable == null || variable.getInstances() == null) return pieces;
-        for (ghidra.program.model.pcode.Varnode value : variable.getInstances()) {
+        if (variable == null || variable.getInstances() == null) return none;
+        // Values that meet at a join (a MULTIEQUAL or INDIRECT whose result
+        // is the same variable) are one variable in the C — `x = A;` on one
+        // path, `x = B;` on the other, then a read of x — and the decompiler
+        // puts them back together however they are named (issue 1df1ef78).
+        // Such a web is one piece, listed at its first value.
+        ghidra.program.model.pcode.Varnode[] values = variable.getInstances();
+        java.util.Map<ghidra.program.model.pcode.Varnode, Integer> index = new java.util.IdentityHashMap<>();
+        for (int i = 0; i < values.length; i++) index.put(values[i], i);
+        int[] web = new int[values.length];
+        for (int i = 0; i < web.length; i++) web[i] = i;
+        java.util.function.IntUnaryOperator root = i -> { while (web[i] != i) i = web[i]; return i; };
+        for (int i = 0; i < values.length; i++) {
+            ghidra.program.model.pcode.PcodeOp def = values[i].getDef();
+            if (def == null || (def.getOpcode() != ghidra.program.model.pcode.PcodeOp.MULTIEQUAL
+                    && def.getOpcode() != ghidra.program.model.pcode.PcodeOp.INDIRECT)) continue;
+            for (ghidra.program.model.pcode.Varnode input : def.getInputs()) {
+                Integer j = index.get(input);
+                if (j != null) web[root.applyAsInt(j)] = root.applyAsInt(i);
+            }
+        }
+        java.util.Map<Integer, Address> webStart = new java.util.HashMap<>();
+        java.util.Map<Address, Integer> valueWeb = new java.util.HashMap<>();
+        for (int i = 0; i < values.length; i++) {
+            ghidra.program.model.pcode.Varnode value = values[i];
             ghidra.program.model.pcode.PcodeOp def = value.getDef();
             if (def == null || def.getOpcode() == ghidra.program.model.pcode.PcodeOp.MULTIEQUAL
                     || def.getOpcode() == ghidra.program.model.pcode.PcodeOp.INDIRECT) continue;
             ghidra.program.model.pcode.DynamicHash hash = new ghidra.program.model.pcode.DynamicHash(value, high);
             if (hash.getHash() == 0 || hash.getAddress() == null) continue;
-            pieces.putIfAbsent(hash.getAddress(), value);
+            int w = root.applyAsInt(i);
+            valueWeb.put(hash.getAddress(), w);
+            Address held = webStart.get(w);
+            if (held != null && held.compareTo(hash.getAddress()) <= 0) continue;
+            if (held != null) pieces.remove(held);
+            webStart.put(w, hash.getAddress());
+            pieces.put(hash.getAddress(), value);
         }
-        if (pieces.size() < 2) pieces.clear();
-        return pieces;
+        for (java.util.Map.Entry<Address, Integer> each : valueWeb.entrySet()) {
+            startOf.put(each.getKey(), webStart.get(each.getValue()));
+        }
+        return none;
     }
 
     /** The local symbol whose variable holds a value written at `at` (by its own hash's address). */
@@ -10386,6 +10446,8 @@ public class Owner {
         text = edk2(text);
         if (text.startsWith("/")) return typeAtPath(text);
         importTypes(text);
+        String paired = pointerTypedefPath(text);
+        if (paired != null) return typeAtPath(paired);
         try {
             DataType type = new DataTypeParser(program.getDataTypeManager(), program.getDataTypeManager(),
                                                null, DataTypeParser.AllowedDataTypes.ALL).parse(text);
@@ -10404,7 +10466,8 @@ public class Owner {
      * only the path says which is meant. The parser does not read paths.
      */
     private DataType typeAtPath(String text) throws Failure {
-        java.util.regex.Matcher parts = java.util.regex.Pattern.compile("^(/[^*]*?)\\s*((?:\\*\\s*)*)$").matcher(text);
+        java.util.regex.Matcher parts = java.util.regex.Pattern
+            .compile("^(/[^*\\[]*?)\\s*((?:\\*\\s*)*)((?:\\[\\s*[0-9A-Fa-fxX]+\\s*\\]\\s*)*)$").matcher(text);
         if (!parts.matches()) throw new Failure(400, "no type " + text);
         ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
         DataType type = manager.getDataType(parts.group(1));
@@ -10417,7 +10480,46 @@ public class Owner {
         for (char mark : parts.group(2).toCharArray()) {
             if (mark == '*') type = new ghidra.program.model.data.PointerDataType(type, manager);
         }
+        // `T[2][3]` is two of three T: the last bound is the innermost.
+        java.util.List<Integer> bounds = new java.util.ArrayList<>();
+        java.util.regex.Matcher bound = java.util.regex.Pattern.compile("\\[\\s*([0-9A-Fa-fxX]+)\\s*\\]").matcher(parts.group(3));
+        while (bound.find()) {
+            int count;
+            try { count = Integer.decode(bound.group(1)); } catch (NumberFormatException error) { count = 0; }
+            if (count <= 0) throw new Failure(400, "no type " + text + ": an array of " + bound.group(1));
+            bounds.add(count);
+        }
+        for (int at = bounds.size() - 1; at >= 0; at--) {
+            type = new ghidra.program.model.data.ArrayDataType(type, bounds.get(at), type.getLength(), manager);
+        }
         return type;
+    }
+
+    /**
+     * `typedef R (*X)(…)` holds X twice: the pointer typedef and the function
+     * definition it points to, under /functions. That pair is no ambiguity —
+     * the bare name means the typedef (issue 50d8733a). Answers the text with
+     * the typedef's path in place of the name, or null when the name is not
+     * such a pair or the text is not `X`, `*`s and `[N]`s.
+     */
+    private String pointerTypedefPath(String text) {
+        java.util.regex.Matcher parts = java.util.regex.Pattern
+            .compile("^([A-Za-z_][A-Za-z0-9_]*)(\\s*(?:\\*\\s*)*(?:\\[\\s*[0-9A-Fa-fxX]+\\s*\\]\\s*)*)$").matcher(text);
+        if (!parts.matches()) return null;
+        java.util.List<DataType> held = new java.util.ArrayList<>();
+        program.getDataTypeManager().findDataTypes(parts.group(1), held);
+        if (held.size() != 2) return null;
+        for (int at = 0; at < 2; at++) {
+            DataType one = held.get(at), other = held.get(1 - at);
+            if (one instanceof ghidra.program.model.data.TypeDef def
+                && def.getDataType() instanceof ghidra.program.model.data.Pointer pointer
+                && other instanceof ghidra.program.model.data.FunctionDefinition
+                && pointer.getDataType() != null
+                && pointer.getDataType().isEquivalent(other)) {
+                return def.getPathName() + parts.group(2).trim();
+            }
+        }
+        return null;
     }
 
     /**

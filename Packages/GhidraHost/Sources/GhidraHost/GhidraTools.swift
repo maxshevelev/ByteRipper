@@ -1498,13 +1498,19 @@ public enum GhidraTools {
                 if let section = try arguments.optionalString("section") { body["section"] = .string(section) }
                 return body
             },
-            write("ghidra_ec_reapply", "ec/reapply", "Add the flash references to an older EC module",
+            write("ghidra_ec_reapply", "ec/reapply", "Bring an older EC module up to the EC pass",
                   "EC only: adds to a module created before these were part of creation the flash references "
                   + "past the image extent, their FlashRef_ labels and plates, the eflash_data block over the flash "
                   + "data area, and refs_past_extent in the facts; removes a FlashRef_ label, its reference and plate "
                   + "an earlier rule made from a value the code never uses as an address, unless a review renamed it; "
                   + "on a Ghidra with nds32-standby-1 also disassembles the code after each standby and gives the "
                   + "functions it cut their whole body (standby_* in the answer); "
+                  + "brings the register labels and the plates of single-interrupt ISRs the EC pass placed to the "
+                  + "register and IRQ maps as they are now (IT8227E names from the firmware, IT8320 names marked "
+                  + "unverified): a label is the pass's while it is IMPORTED and carries a name the map gives or gave "
+                  + "that address (its # replaced: lines), a plate while its first line is the pass's; a label or "
+                  + "plate a review changed is kept and listed in `kept` (registers_renamed, registers_added, "
+                  + "register_notes_refreshed, isr_plates_refreshed count the rest); "
                   + "touches nothing else; safe to repeat.",
                   [:], required: []) { _ in [:] },
             AgentTool(

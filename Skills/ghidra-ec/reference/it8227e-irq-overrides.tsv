@@ -1,0 +1,11 @@
+# IT8227E entries that override, describe or confirm the IT8320 IRQ list (it83xx-irqs.tsv).
+# Applied by Skills/ghidra-ec/scripts/build_register_map.py after the published part.
+# status: firmware = derived from the IT8227E firmware's code (ItEcNmD562: IsrIrqTable at
+#   0x5000, one u32 per IRQ; SmbChanRegsTable at 0x239F8, 11 u32 per channel, +0x1C IER,
+#   +0x20 ISR, +0x24 mask; addresses read from the bytes); unverified = the IT8320 name
+#   kept, the description a fact from the firmware; published = an IT8320 entry confirmed.
+# replaces: the IT8320 names at the same number this entry removes (`-` for none).
+irq	name	description	source	status	replaces
+25	PMC_IN	PMC input buffer full; the handler serves PM1 and PM2 together (it also checks PM2STS 0xF01510 bit 1)	IT8227E fw IsrIrqTable 0x5000+0x64 -> Isr_Irq025 0x5A38, PM2STS read at 0x5A3E	firmware	PMC_IN
+27	PMC2_IN	in this firmware an empty stub: the handler only calls an empty function (0x5E74), nothing is masked, acknowledged or served; PM2 is served by IRQ 25	IT8227E fw IsrIrqTable 0x5000+0x6C -> Isr_Irq027 0x5A28 -> 0x5E74 (push25/pop25 only)	unverified	PMC2_IN
+160	SMB_E	SMBus channel E (IER20/ISR20 bit 0); IT8320's IRQ 160 is PECI and its SMB_E is IRQ 152	IT8227E fw SmbChanRegsTable 0x239F8+4*0x2C: IER20 0xF01155 (+0x1C), ISR20 0xF01154 (+0x20), mask 1 (+0x24); IsrIrqTable 0x5000+0x280 -> Isr_Irq160 0x53E8 -> IntcIrq160_MaskAck 0x608E	firmware	PECI

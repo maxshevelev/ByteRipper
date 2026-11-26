@@ -152,7 +152,6 @@ public class ApplyItEc extends GhidraScript {
                 "Reads the INTC's vector register (IVCT) and calls the handler of interrupt IVCT - 0x10 "
                 + "from IsrIrqTable.");
         }
-        JsonObject sources = input.has("irq_sources") ? input.getAsJsonObject("irq_sources") : new JsonObject();
         if (has(layout, "irqTable")) {
             label(layout.get("irqTable").getAsLong(), "IsrIrqTable");
             Map<Long, List<Integer>> byTarget = new TreeMap<>();
@@ -169,10 +168,7 @@ public class ApplyItEc extends GhidraScript {
                 String name;
                 if (irqs.size() == 1) {
                     name = String.format("Isr_Irq%03d", first);
-                    String source = sources.has(String.valueOf(first)) ? sources.get(String.valueOf(first)).getAsString() : null;
-                    plate = "INTC interrupt " + first
-                        + (source != null ? ", source " + source + " (the register map's IT83XX_IRQ_" + source + ")" : "")
-                        + ".";
+                    plate = irqPlate(first, input);
                 } else {
                     name = String.format("Isr_IrqShared_%03d", first);
                     StringBuilder list = new StringBuilder();
@@ -195,12 +191,7 @@ public class ApplyItEc extends GhidraScript {
                 int width = register.get("width").getAsInt();
                 DataType type = width == 4 ? DWordDataType.dataType : width == 2 ? WordDataType.dataType : ByteDataType.dataType;
                 data(address, type);
-                String note = register.get("block").getAsString()
-                    + (register.has("description") ? ": " + register.get("description").getAsString() : "");
-                String status = register.has("status") ? register.get("status").getAsString() : "";
-                if (status.equals("unverified")) note += " (IT8320 name, not verified for IT8227E)";
-                else if (status.equals("firmware")) note += " (from the firmware: " + register.get("source").getAsString() + ")";
-                currentProgram.getListing().setComment(at(address), CommentType.EOL, note);
+                currentProgram.getListing().setComment(at(address), CommentType.EOL, registerNote(register));
                 registers++;
             }
         }
@@ -227,6 +218,237 @@ public class ApplyItEc extends GhidraScript {
         int based = baseTypes(currentProgram);
         println("ApplyItEc: " + based + " base types in " + BASE_CATEGORY);
         println("ApplyItEc done: " + functions + " functions, " + labels + " labels, " + registers + " registers");
+    }
+
+    /**
+     * A register's EOL note: its block, its description, and where the name
+     * comes from — `(IT8320 name, not verified for IT8227E)` or
+     * `(from the firmware: <source>)` by the map's status.
+     */
+    public static String registerNote(JsonObject register) {
+        String note = register.get("block").getAsString()
+            + (has(register, "description") ? ": " + register.get("description").getAsString() : "");
+        String status = has(register, "status") ? register.get("status").getAsString() : "";
+        if (status.equals("unverified")) note += " (IT8320 name, not verified for IT8227E)";
+        else if (status.equals("firmware")) note += " (from the firmware: " + register.get("source").getAsString() + ")";
+        return note;
+    }
+
+    /**
+     * The plate of an ISR that serves one INTC interrupt, one line: the
+     * interrupt, the source the IRQ list gives it, the list's description,
+     * and where it comes from by the list's status, as a register's EOL note
+     * says it. Without `irq_notes` (a build before the IRQ list had them) the
+     * older form `(the register map's IT83XX_IRQ_<name>)`.
+     */
+    public static String irqPlate(int irq, JsonObject input) {
+        String key = String.valueOf(irq);
+        JsonObject notes = has(input, "irq_notes") ? input.getAsJsonObject("irq_notes") : null;
+        if (notes != null && notes.has(key)) {
+            JsonObject note = notes.getAsJsonObject(key);
+            String name = note.get("name").getAsString();
+            String status = has(note, "status") ? note.get("status").getAsString() : "";
+            String source = has(note, "source") ? note.get("source").getAsString() : "";
+            boolean fromFirmware = !source.isEmpty() && !source.startsWith("registers.h");
+            String where;
+            if (status.equals("firmware")) where = "from the firmware: " + source;
+            else if (status.equals("published")) where = "IT83XX_IRQ_" + name + ", verified for IT8227E";
+            else where = "IT8320 name, not verified for IT8227E"
+                + (fromFirmware ? "; the note from the firmware: " + source : "");
+            return "INTC interrupt " + irq + ", source " + name
+                + (has(note, "description") ? ": " + note.get("description").getAsString() : "")
+                + " (" + where + ").";
+        }
+        JsonObject sources = has(input, "irq_sources") ? input.getAsJsonObject("irq_sources") : new JsonObject();
+        String source = sources.has(key) ? sources.get(key).getAsString() : null;
+        return "INTC interrupt " + irq
+            + (source != null ? ", source " + source + " (the register map's IT83XX_IRQ_" + source + ")" : "")
+            + ".";
+    }
+
+    /**
+     * Whether `line` is a first plate line this pass wrote for interrupt
+     * `irq`, under any map: `INTC interrupt <irq>.`, the older
+     * `…, source <name> (the register map's IT83XX_IRQ_<name>).`, or
+     * `…, source <name>[: <description>] (<where>).` with one of the `where`
+     * forms `irqPlate` writes.
+     */
+    static boolean isPassIrqLine(int irq, String line) {
+        String head = "INTC interrupt " + irq;
+        if (line.equals(head + ".")) return true;
+        if (!line.startsWith(head + ", source ")) return false;
+        String rest = line.substring((head + ", source ").length());
+        if (rest.matches("[A-Za-z0-9_]+ \\(the register map's IT83XX_IRQ_[A-Za-z0-9_]+\\)\\.")) return true;
+        return rest.matches("[A-Za-z0-9_]+(: .*)? \\((IT8320 name, not verified for IT8227E(; the note from the firmware: .*)?"
+            + "|from the firmware: .*|IT83XX_IRQ_[A-Za-z0-9_]+, verified for IT8227E)\\)\\.");
+    }
+
+    /**
+     * The register labels and the single-interrupt ISR plates this pass
+     * placed, brought to the maps as they are now (the owner's
+     * `/v1/ec/reapply`, for a project made with an earlier map). What is
+     * this pass's own is recognised without a record of the old map:
+     *
+     * - a register label is the pass's when it is the primary symbol at the
+     *   address, IMPORTED (as the pass makes it; a review's label is
+     *   USER_DEFINED), and named as the map names that address now or named
+     *   it before (`registers` and `registers_replaced`, the `# replaced:`
+     *   lines); it is renamed to the first name the map gives the address
+     *   now. An address with no symbol gets the label, its data and note.
+     *   The EOL note is rewritten when it is empty or one the pass wrote
+     *   for any of those names (`registerNote`, with or without a status),
+     *   or any `<block>[: …] (from the firmware: …)`.
+     * - an ISR plate is the pass's when its first line is (`isPassIrqLine`);
+     *   that line is replaced, the lines a review added after it stay.
+     *
+     * Anything else at those places was a review's: it stays, listed in
+     * `kept` with why. In the caller's transaction; a second run changes
+     * nothing.
+     */
+    public static JsonObject refreshNames(ghidra.program.model.listing.Program program, JsonObject input) {
+        JsonObject answer = new JsonObject();
+        JsonArray renamed = new JsonArray();
+        JsonArray added = new JsonArray();
+        JsonArray kept = new JsonArray();
+        JsonArray plates = new JsonArray();
+        int notes = 0;
+        AddressSpace space = program.getAddressFactory().getDefaultAddressSpace();
+        MemoryBlock regs = program.getMemory().getBlock("regs");
+        SymbolTable symbols = program.getSymbolTable();
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        if (regs != null && has(input, "registers")) {
+            // Every name the map gives or gave an address, and the notes the
+            // pass wrote for them.
+            Map<Long, List<JsonObject>> now = new TreeMap<>();
+            Map<Long, List<JsonObject>> ever = new TreeMap<>();
+            for (JsonElement each : input.getAsJsonArray("registers")) {
+                JsonObject register = each.getAsJsonObject();
+                long address = register.get("address").getAsLong();
+                now.computeIfAbsent(address, k -> new ArrayList<>()).add(register);
+                ever.computeIfAbsent(address, k -> new ArrayList<>()).add(register);
+            }
+            if (has(input, "registers_replaced")) {
+                for (JsonElement each : input.getAsJsonArray("registers_replaced")) {
+                    JsonObject register = each.getAsJsonObject();
+                    ever.computeIfAbsent(register.get("address").getAsLong(), k -> new ArrayList<>()).add(register);
+                }
+            }
+            for (Map.Entry<Long, List<JsonObject>> entry : now.entrySet()) {
+                Address at = space.getAddress(entry.getKey());
+                if (!regs.contains(at)) continue;
+                JsonObject register = entry.getValue().get(0);
+                String name = register.get("name").getAsString();
+                java.util.Set<String> names = new java.util.HashSet<>();
+                java.util.Set<String> passNotes = new java.util.HashSet<>();
+                for (JsonObject was : ever.get(entry.getKey())) {
+                    names.add(was.get("name").getAsString());
+                    for (String status : new String[] {null, "unverified", "published", "firmware"}) {
+                        JsonObject variant = was.deepCopy();
+                        variant.remove("status");
+                        if (status != null) variant.addProperty("status", status);
+                        passNotes.add(registerNote(variant));
+                    }
+                }
+                ghidra.program.model.symbol.Symbol primary = symbols.getPrimarySymbol(at);
+                boolean ours;
+                try {
+                    if (primary == null || primary.isDynamic()) {
+                        symbols.createLabel(at, name, SourceType.IMPORTED).setPrimary();
+                        int width = register.get("width").getAsInt();
+                        DataType type = width == 4 ? DWordDataType.dataType : width == 2 ? WordDataType.dataType : ByteDataType.dataType;
+                        try {
+                            DataUtilities.createData(program, at, type, -1,
+                                DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA);
+                        } catch (Exception e) {
+                            // A review's data at the address stays.
+                        }
+                        JsonObject row = new JsonObject();
+                        row.addProperty("address", "0x" + Long.toHexString(entry.getKey()).toUpperCase());
+                        row.addProperty("name", name);
+                        added.add(row);
+                        ours = true;
+                    } else if (primary.getName().equals(name)) {
+                        ours = primary.getSource() == SourceType.IMPORTED;
+                    } else if (primary.getSource() == SourceType.IMPORTED && names.contains(primary.getName())) {
+                        JsonObject row = new JsonObject();
+                        row.addProperty("address", "0x" + Long.toHexString(entry.getKey()).toUpperCase());
+                        row.addProperty("was", primary.getName());
+                        row.addProperty("name", name);
+                        primary.setName(name, SourceType.IMPORTED);
+                        renamed.add(row);
+                        ours = true;
+                    } else {
+                        JsonObject row = new JsonObject();
+                        row.addProperty("address", "0x" + Long.toHexString(entry.getKey()).toUpperCase());
+                        row.addProperty("name", primary.getName());
+                        row.addProperty("map", name);
+                        row.addProperty("why", primary.getSource() == SourceType.IMPORTED
+                            ? "a name the register map never gave this address" : "a review's name");
+                        kept.add(row);
+                        ours = false;
+                    }
+                } catch (Exception error) {
+                    JsonObject row = new JsonObject();
+                    row.addProperty("address", "0x" + Long.toHexString(entry.getKey()).toUpperCase());
+                    row.addProperty("map", name);
+                    row.addProperty("why", String.valueOf(error.getMessage()));
+                    kept.add(row);
+                    continue;
+                }
+                if (!ours) continue;
+                String note = registerNote(register);
+                String eol = listing.getComment(CommentType.EOL, at);
+                boolean passNote = eol == null || passNotes.contains(eol)
+                    || eol.matches(java.util.regex.Pattern.quote(register.get("block").getAsString())
+                        + "(: .*)? \\(from the firmware: .*\\)");
+                if (!note.equals(eol) && passNote) {
+                    listing.setComment(at, CommentType.EOL, note);
+                    notes++;
+                }
+            }
+        }
+        // The ISR plates.
+        if (has(input, "irq_handlers")) {
+            Map<Long, List<Integer>> byTarget = new TreeMap<>();
+            for (JsonElement each : input.getAsJsonArray("irq_handlers")) {
+                JsonObject handler = each.getAsJsonObject();
+                byTarget.computeIfAbsent(handler.get("target").getAsLong(), k -> new ArrayList<>())
+                    .add(handler.get("number").getAsInt());
+            }
+            for (Map.Entry<Long, List<Integer>> entry : byTarget.entrySet()) {
+                if (entry.getValue().size() != 1) continue;
+                int irq = entry.getValue().get(0);
+                Function function = program.getFunctionManager().getFunctionAt(space.getAddress(entry.getKey()));
+                if (function == null) continue;
+                String plate = irqPlate(irq, input);
+                String old = function.getComment();
+                String first = old == null ? null : old.split("\n", 2)[0];
+                if (plate.equals(first)) continue;
+                JsonObject row = new JsonObject();
+                row.addProperty("address", "0x" + Long.toHexString(entry.getKey()).toUpperCase());
+                row.addProperty("irq", irq);
+                row.addProperty("function", function.getName());
+                if (first != null && isPassIrqLine(irq, first)) {
+                    String rest = old.indexOf('\n') < 0 ? "" : old.substring(old.indexOf('\n'));
+                    function.setComment(plate + rest);
+                    row.addProperty("was", first);
+                    plates.add(row);
+                } else {
+                    row.addProperty("plate", first == null ? "" : first);
+                    row.addProperty("why", first == null ? "the plate was removed in a review" : "a review's plate");
+                    kept.add(row);
+                }
+            }
+        }
+        answer.addProperty("registers_renamed", renamed.size());
+        answer.addProperty("registers_added", added.size());
+        answer.addProperty("register_notes_refreshed", notes);
+        answer.addProperty("isr_plates_refreshed", plates.size());
+        answer.add("register_renames", renamed);
+        answer.add("register_labels_added", added);
+        answer.add("isr_plates", plates);
+        answer.add("kept", kept);
+        return answer;
     }
 
     /**

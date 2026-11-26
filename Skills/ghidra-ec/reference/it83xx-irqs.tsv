@@ -5,178 +5,185 @@
 # Family conditionals: the IT8320 side. INTC base 0x00F01100 from the chip config
 # (CHIP_EC_INTC_BASE). `source` is the header's line.
 # The INTC interrupt numbers (IVCT - 0x10).
-irq	name	source
-1	WKO20	registers.h:18
-2	KBC_OUT	registers.h:19
-3	PMC_OUT	registers.h:20
-4	SMB_D	registers.h:21
-5	WKINTAD	registers.h:22
-6	WKO23	registers.h:23
-7	PWM	registers.h:24
-8	ADC	registers.h:26
-9	SMB_A	registers.h:27
-10	SMB_B	registers.h:28
-11	KB_MATRIX	registers.h:29
-12	WKO26	registers.h:30
-13	WKINTC	registers.h:31
-14	WKO25	registers.h:32
-15	CIR	registers.h:33
-16	SMB_C	registers.h:35
-17	WKO24	registers.h:36
-18	PS2_2	registers.h:37
-19	PS2_1	registers.h:38
-20	PS2_0	registers.h:39
-21	WKO22	registers.h:40
-22	SMFI	registers.h:41
-23	USB	registers.h:42
-24	KBC_IN	registers.h:44
-25	PMC_IN	registers.h:45
-26	PMC2_OUT	registers.h:46
-27	PMC2_IN	registers.h:47
-28	GINT	registers.h:48
-29	EGPC	registers.h:49
-30	EXT_TIMER1	registers.h:50
-31	WKO21	registers.h:51
-32	GPINT0	registers.h:53
-33	GPINT1	registers.h:54
-34	GPINT2	registers.h:55
-35	GPINT3	registers.h:56
-36	CIR_GPINT	registers.h:57
-37	SSPI	registers.h:58
-38	UART1	registers.h:59
-39	UART2	registers.h:60
-40	WKO50	registers.h:62
-41	WKO51	registers.h:63
-42	WKO52	registers.h:64
-43	WKO53	registers.h:65
-44	WKO54	registers.h:66
-45	WKO55	registers.h:67
-46	WKO56	registers.h:68
-47	WKO57	registers.h:69
-48	WKO60	registers.h:71
-49	WKO61	registers.h:72
-50	WKO62	registers.h:73
-51	WKO63	registers.h:74
-52	WKO64	registers.h:75
-53	WKO65	registers.h:76
-54	WKO66	registers.h:77
-55	WKO67	registers.h:78
-56	RTCT_ALARM1	registers.h:80
-57	RTCT_ALARM2	registers.h:81
-58	EXT_TIMER2	registers.h:82
-59	DEFERRED_SPI	registers.h:83
-60	TMR_A0	registers.h:84
-61	TMR_A1	registers.h:85
-62	TMR_B0	registers.h:86
-63	TMR_B1	registers.h:87
-64	PMC2EX_OUT	registers.h:89
-65	PMC2EX_IN	registers.h:90
-66	PMC3_OUT	registers.h:91
-67	PMC3_IN	registers.h:92
-68	PMC4_OUT	registers.h:93
-69	PMC4_IN	registers.h:94
-71	I2BRAM	registers.h:95
-72	WKO70	registers.h:97
-73	WKO71	registers.h:98
-74	WKO72	registers.h:99
-75	WKO73	registers.h:100
-76	WKO74	registers.h:101
-77	WKO75	registers.h:102
-78	WKO76	registers.h:103
-79	WKO77	registers.h:104
-80	EXT_TMR8	registers.h:106
-81	SMB_CLOCK_HELD	registers.h:107
-82	CEC	registers.h:108
-83	H2RAM_LPC	registers.h:109
-84	HW_KB_SCAN	registers.h:110
-85	WKO88	registers.h:111
-86	WKO89	registers.h:112
-87	WKO90	registers.h:113
-88	WKO80	registers.h:115
-89	WKO81	registers.h:116
-90	WKO82	registers.h:117
-91	WKO83	registers.h:118
-92	WKO84	registers.h:119
-93	WKO85	registers.h:120
-94	WKO86	registers.h:121
-95	WKO87	registers.h:122
-96	WKO91	registers.h:124
-97	WKO92	registers.h:125
-98	WKO93	registers.h:126
-99	WKO94	registers.h:127
-100	WKO95	registers.h:128
-101	WKO96	registers.h:129
-102	WKO97	registers.h:130
-103	WKO98	registers.h:131
-104	WKO99	registers.h:133
-105	WKO100	registers.h:134
-106	WKO101	registers.h:135
-107	WKO102	registers.h:136
-108	WKO103	registers.h:137
-109	WKO104	registers.h:138
-110	WKO105	registers.h:139
-111	WKO106	registers.h:140
-112	WKO107	registers.h:142
-113	WKO108	registers.h:143
-114	WKO109	registers.h:144
-115	WKO110	registers.h:145
-116	WKO111	registers.h:146
-117	WKO112	registers.h:147
-118	WKO113	registers.h:148
-119	WKO114	registers.h:149
-120	WKO115	registers.h:151
-121	WKO116	registers.h:152
-122	WKO117	registers.h:153
-123	WKO118	registers.h:154
-124	WKO119	registers.h:155
-125	WKO120	registers.h:156
-126	WKO121	registers.h:157
-127	WKO122	registers.h:158
-128	WKO128	registers.h:160
-129	WKO129	registers.h:161
-130	WKO130	registers.h:162
-131	WKO131	registers.h:163
-132	WKO132	registers.h:164
-133	WKO133	registers.h:165
-134	WKO134	registers.h:166
-135	WKO135	registers.h:167
-136	WKO136	registers.h:169
-137	WKO137	registers.h:170
-138	WKO138	registers.h:171
-139	WKO139	registers.h:172
-140	WKO140	registers.h:173
-141	WKO141	registers.h:174
-142	WKO142	registers.h:175
-143	WKO143	registers.h:176
-144	WKO123	registers.h:178
-145	WKO124	registers.h:179
-146	WKO125	registers.h:180
-147	WKO126	registers.h:181
-149	PMC5_OUT	registers.h:182
-150	PMC5_IN	registers.h:183
-151	V_COMP	registers.h:184
-152	SMB_E	registers.h:186
-153	SMB_F	registers.h:187
-154	OSC_DMA	registers.h:188
-155	EXT_TIMER3	registers.h:189
-156	EXT_TIMER4	registers.h:190
-157	EXT_TIMER5	registers.h:191
-158	EXT_TIMER6	registers.h:192
-159	EXT_TIMER7	registers.h:193
-160	PECI	registers.h:195
-161	SOFTWARE	registers.h:196
-162	ESPI	registers.h:197
-163	ESPI_VW	registers.h:198
-164	PCH_P80	registers.h:199
-165	USBPD0	registers.h:200
-166	USBPD1	registers.h:201
-168	WKO40	registers.h:204
-169	WKO45	registers.h:205
-170	WKO46	registers.h:206
-171	WKO144	registers.h:207
-172	WKO145	registers.h:208
-173	WKO146	registers.h:209
-174	WKO147	registers.h:210
-175	WKO148	registers.h:211
-176	WKO149	registers.h:213
-177	WKO150	registers.h:214
+# status: published = registers.h, confirmed for IT8227E; firmware = derived from the
+# IT8227E firmware's code (it8227e-irq-overrides.tsv); unverified = an IT8320 name not checked
+# for IT8227E (its description may still be a fact from the firmware: its source says so).
+# `# replaced:` lines are published entries an overlay entry removed.
+# replaced: 25	PMC_IN	-	registers.h:45	unverified	(by PMC_IN)
+# replaced: 27	PMC2_IN	-	registers.h:47	unverified	(by PMC2_IN)
+# replaced: 160	PECI	-	registers.h:195	unverified	(by SMB_E)
+irq	name	description	source	status
+1	WKO20	-	registers.h:18	unverified
+2	KBC_OUT	-	registers.h:19	unverified
+3	PMC_OUT	-	registers.h:20	unverified
+4	SMB_D	-	registers.h:21	unverified
+5	WKINTAD	-	registers.h:22	unverified
+6	WKO23	-	registers.h:23	unverified
+7	PWM	-	registers.h:24	unverified
+8	ADC	-	registers.h:26	unverified
+9	SMB_A	-	registers.h:27	unverified
+10	SMB_B	-	registers.h:28	unverified
+11	KB_MATRIX	-	registers.h:29	unverified
+12	WKO26	-	registers.h:30	unverified
+13	WKINTC	-	registers.h:31	unverified
+14	WKO25	-	registers.h:32	unverified
+15	CIR	-	registers.h:33	unverified
+16	SMB_C	-	registers.h:35	unverified
+17	WKO24	-	registers.h:36	unverified
+18	PS2_2	-	registers.h:37	unverified
+19	PS2_1	-	registers.h:38	unverified
+20	PS2_0	-	registers.h:39	unverified
+21	WKO22	-	registers.h:40	unverified
+22	SMFI	-	registers.h:41	unverified
+23	USB	-	registers.h:42	unverified
+24	KBC_IN	-	registers.h:44	unverified
+25	PMC_IN	PMC input buffer full; the handler serves PM1 and PM2 together (it also checks PM2STS 0xF01510 bit 1)	IT8227E fw IsrIrqTable 0x5000+0x64 -> Isr_Irq025 0x5A38, PM2STS read at 0x5A3E	firmware
+26	PMC2_OUT	-	registers.h:46	unverified
+27	PMC2_IN	in this firmware an empty stub: the handler only calls an empty function (0x5E74), nothing is masked, acknowledged or served; PM2 is served by IRQ 25	IT8227E fw IsrIrqTable 0x5000+0x6C -> Isr_Irq027 0x5A28 -> 0x5E74 (push25/pop25 only)	unverified
+28	GINT	-	registers.h:48	unverified
+29	EGPC	-	registers.h:49	unverified
+30	EXT_TIMER1	-	registers.h:50	unverified
+31	WKO21	-	registers.h:51	unverified
+32	GPINT0	-	registers.h:53	unverified
+33	GPINT1	-	registers.h:54	unverified
+34	GPINT2	-	registers.h:55	unverified
+35	GPINT3	-	registers.h:56	unverified
+36	CIR_GPINT	-	registers.h:57	unverified
+37	SSPI	-	registers.h:58	unverified
+38	UART1	-	registers.h:59	unverified
+39	UART2	-	registers.h:60	unverified
+40	WKO50	-	registers.h:62	unverified
+41	WKO51	-	registers.h:63	unverified
+42	WKO52	-	registers.h:64	unverified
+43	WKO53	-	registers.h:65	unverified
+44	WKO54	-	registers.h:66	unverified
+45	WKO55	-	registers.h:67	unverified
+46	WKO56	-	registers.h:68	unverified
+47	WKO57	-	registers.h:69	unverified
+48	WKO60	-	registers.h:71	unverified
+49	WKO61	-	registers.h:72	unverified
+50	WKO62	-	registers.h:73	unverified
+51	WKO63	-	registers.h:74	unverified
+52	WKO64	-	registers.h:75	unverified
+53	WKO65	-	registers.h:76	unverified
+54	WKO66	-	registers.h:77	unverified
+55	WKO67	-	registers.h:78	unverified
+56	RTCT_ALARM1	-	registers.h:80	unverified
+57	RTCT_ALARM2	-	registers.h:81	unverified
+58	EXT_TIMER2	-	registers.h:82	unverified
+59	DEFERRED_SPI	-	registers.h:83	unverified
+60	TMR_A0	-	registers.h:84	unverified
+61	TMR_A1	-	registers.h:85	unverified
+62	TMR_B0	-	registers.h:86	unverified
+63	TMR_B1	-	registers.h:87	unverified
+64	PMC2EX_OUT	-	registers.h:89	unverified
+65	PMC2EX_IN	-	registers.h:90	unverified
+66	PMC3_OUT	-	registers.h:91	unverified
+67	PMC3_IN	-	registers.h:92	unverified
+68	PMC4_OUT	-	registers.h:93	unverified
+69	PMC4_IN	-	registers.h:94	unverified
+71	I2BRAM	-	registers.h:95	unverified
+72	WKO70	-	registers.h:97	unverified
+73	WKO71	-	registers.h:98	unverified
+74	WKO72	-	registers.h:99	unverified
+75	WKO73	-	registers.h:100	unverified
+76	WKO74	-	registers.h:101	unverified
+77	WKO75	-	registers.h:102	unverified
+78	WKO76	-	registers.h:103	unverified
+79	WKO77	-	registers.h:104	unverified
+80	EXT_TMR8	-	registers.h:106	unverified
+81	SMB_CLOCK_HELD	-	registers.h:107	unverified
+82	CEC	-	registers.h:108	unverified
+83	H2RAM_LPC	-	registers.h:109	unverified
+84	HW_KB_SCAN	-	registers.h:110	unverified
+85	WKO88	-	registers.h:111	unverified
+86	WKO89	-	registers.h:112	unverified
+87	WKO90	-	registers.h:113	unverified
+88	WKO80	-	registers.h:115	unverified
+89	WKO81	-	registers.h:116	unverified
+90	WKO82	-	registers.h:117	unverified
+91	WKO83	-	registers.h:118	unverified
+92	WKO84	-	registers.h:119	unverified
+93	WKO85	-	registers.h:120	unverified
+94	WKO86	-	registers.h:121	unverified
+95	WKO87	-	registers.h:122	unverified
+96	WKO91	-	registers.h:124	unverified
+97	WKO92	-	registers.h:125	unverified
+98	WKO93	-	registers.h:126	unverified
+99	WKO94	-	registers.h:127	unverified
+100	WKO95	-	registers.h:128	unverified
+101	WKO96	-	registers.h:129	unverified
+102	WKO97	-	registers.h:130	unverified
+103	WKO98	-	registers.h:131	unverified
+104	WKO99	-	registers.h:133	unverified
+105	WKO100	-	registers.h:134	unverified
+106	WKO101	-	registers.h:135	unverified
+107	WKO102	-	registers.h:136	unverified
+108	WKO103	-	registers.h:137	unverified
+109	WKO104	-	registers.h:138	unverified
+110	WKO105	-	registers.h:139	unverified
+111	WKO106	-	registers.h:140	unverified
+112	WKO107	-	registers.h:142	unverified
+113	WKO108	-	registers.h:143	unverified
+114	WKO109	-	registers.h:144	unverified
+115	WKO110	-	registers.h:145	unverified
+116	WKO111	-	registers.h:146	unverified
+117	WKO112	-	registers.h:147	unverified
+118	WKO113	-	registers.h:148	unverified
+119	WKO114	-	registers.h:149	unverified
+120	WKO115	-	registers.h:151	unverified
+121	WKO116	-	registers.h:152	unverified
+122	WKO117	-	registers.h:153	unverified
+123	WKO118	-	registers.h:154	unverified
+124	WKO119	-	registers.h:155	unverified
+125	WKO120	-	registers.h:156	unverified
+126	WKO121	-	registers.h:157	unverified
+127	WKO122	-	registers.h:158	unverified
+128	WKO128	-	registers.h:160	unverified
+129	WKO129	-	registers.h:161	unverified
+130	WKO130	-	registers.h:162	unverified
+131	WKO131	-	registers.h:163	unverified
+132	WKO132	-	registers.h:164	unverified
+133	WKO133	-	registers.h:165	unverified
+134	WKO134	-	registers.h:166	unverified
+135	WKO135	-	registers.h:167	unverified
+136	WKO136	-	registers.h:169	unverified
+137	WKO137	-	registers.h:170	unverified
+138	WKO138	-	registers.h:171	unverified
+139	WKO139	-	registers.h:172	unverified
+140	WKO140	-	registers.h:173	unverified
+141	WKO141	-	registers.h:174	unverified
+142	WKO142	-	registers.h:175	unverified
+143	WKO143	-	registers.h:176	unverified
+144	WKO123	-	registers.h:178	unverified
+145	WKO124	-	registers.h:179	unverified
+146	WKO125	-	registers.h:180	unverified
+147	WKO126	-	registers.h:181	unverified
+149	PMC5_OUT	-	registers.h:182	unverified
+150	PMC5_IN	-	registers.h:183	unverified
+151	V_COMP	-	registers.h:184	unverified
+152	SMB_E	-	registers.h:186	unverified
+153	SMB_F	-	registers.h:187	unverified
+154	OSC_DMA	-	registers.h:188	unverified
+155	EXT_TIMER3	-	registers.h:189	unverified
+156	EXT_TIMER4	-	registers.h:190	unverified
+157	EXT_TIMER5	-	registers.h:191	unverified
+158	EXT_TIMER6	-	registers.h:192	unverified
+159	EXT_TIMER7	-	registers.h:193	unverified
+160	SMB_E	SMBus channel E (IER20/ISR20 bit 0); IT8320's IRQ 160 is PECI and its SMB_E is IRQ 152	IT8227E fw SmbChanRegsTable 0x239F8+4*0x2C: IER20 0xF01155 (+0x1C), ISR20 0xF01154 (+0x20), mask 1 (+0x24); IsrIrqTable 0x5000+0x280 -> Isr_Irq160 0x53E8 -> IntcIrq160_MaskAck 0x608E	firmware
+161	SOFTWARE	-	registers.h:196	unverified
+162	ESPI	-	registers.h:197	unverified
+163	ESPI_VW	-	registers.h:198	unverified
+164	PCH_P80	-	registers.h:199	unverified
+165	USBPD0	-	registers.h:200	unverified
+166	USBPD1	-	registers.h:201	unverified
+168	WKO40	-	registers.h:204	unverified
+169	WKO45	-	registers.h:205	unverified
+170	WKO46	-	registers.h:206	unverified
+171	WKO144	-	registers.h:207	unverified
+172	WKO145	-	registers.h:208	unverified
+173	WKO146	-	registers.h:209	unverified
+174	WKO147	-	registers.h:210	unverified
+175	WKO148	-	registers.h:211	unverified
+176	WKO149	-	registers.h:213	unverified
+177	WKO150	-	registers.h:214	unverified
