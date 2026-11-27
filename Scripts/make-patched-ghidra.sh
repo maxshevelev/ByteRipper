@@ -1,7 +1,8 @@
 #!/bin/bash
 # Makes the Ghidra the analyses run on: a copy of a stock install with the x86
 # language and the NDS32 `standby` patched and compiled, and the decompiler's 32-bit x86 stack
-# parameters and its reading of named constants corrected and rebuilt; the
+# parameters, its reading of named constants and its printing of enum values
+# that are no member corrected and rebuilt; the
 # stock install left as it was.
 #
 #   Scripts/make-patched-ghidra.sh <stock ghidra home> <new folder>
@@ -28,6 +29,7 @@ id=descriptor-tables-1
 decompiler_id=stack-params-1
 equates_id=equates-1
 nds32_id=nds32-standby-1
+enum_id=enum-complement-1
 languages=Ghidra/Processors/x86/data/languages
 nds32=Ghidra/Processors/NDS32/data/languages
 cpp=Ghidra/Features/Decompiler/src/decompile/cpp
@@ -57,6 +59,13 @@ if [ "$have" != "$coreaction_sha" ]; then
     echo "$stock/$cpp/coreaction.cc is not the file $equates_id was made against: read the patch against it first" >&2
     exit 1
 fi
+# The decompiler's type.cc the fifth patch was made against.
+type_sha=9f9be61b6026add7e79ad5afde3f459d839898e50b743d0980ba1103b42aeacf
+have="$(shasum -a 256 "$stock/$cpp/type.cc" | cut -d' ' -f1)"
+if [ "$have" != "$type_sha" ]; then
+    echo "$stock/$cpp/type.cc is not the file $enum_id was made against: read the patch against it first" >&2
+    exit 1
+fi
 # The NDS32 nds32.sinc the fourth patch was made against.
 nds32_sha=b045960a0ca508dd2162bf577e0e3727a5e4933d6c9684acd7b02cdae33fff63
 have="$(shasum -a 256 "$stock/$nds32/nds32.sinc" | cut -d' ' -f1)"
@@ -81,6 +90,7 @@ unzip -q -o "$stock/Ghidra/Framework/SoftwareModeling/lib/SoftwareModeling-src.z
     ghidra/program/model/lang/ParamEntry.java -d "$copy/$java"
 patch -s -p1 -d "$copy" < "$patches/$decompiler_id.patch"
 patch -s -p1 -d "$copy" < "$patches/$equates_id.patch"
+patch -s -p1 -d "$copy" < "$patches/$enum_id.patch"
 build="$(mktemp -d)"
 cp -R "$copy/$cpp/" "$build/"
 make -s -C "$build" -j8 ghidra_opt CXX="clang++ -std=c++11" >/dev/null
@@ -94,7 +104,7 @@ classes="$(mktemp -d)"
 (cd "$classes" && "$JAVA_HOME/bin/jar" uf "$copy/$modeling" ghidra/program/model/lang/ParamEntry*.class)
 rm -rf "$classes"
 {
-    echo "$decompiler_id+$equates_id"
+    echo "$decompiler_id+$equates_id+$enum_id"
     (cd "$copy" && shasum -a 256 "Ghidra/Features/Decompiler/os/$os/decompile" "$modeling")
 } > "$copy/byteripper-decompiler-patch"
 for spec in x86.slaspec x86-64.slaspec; do
@@ -107,6 +117,6 @@ done
     echo "x86:$id+NDS32:$nds32_id"
     (cd "$copy" && shasum -a 256 "$languages/x86.sla" "$languages/x86-64.sla" "$nds32/nds32le.sla" "$nds32/nds32be.sla")
 } > "$copy/byteripper-language-patch"
-echo "made $copy: $id, $nds32_id, $decompiler_id, $equates_id"
+echo "made $copy: $id, $nds32_id, $decompiler_id, $equates_id, $enum_id"
 sed -n '2,$p' "$copy/byteripper-language-patch"
 sed -n '2,$p' "$copy/byteripper-decompiler-patch"

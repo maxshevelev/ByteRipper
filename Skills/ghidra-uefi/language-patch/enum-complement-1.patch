@@ -1,0 +1,20 @@
+--- a/Ghidra/Features/Decompiler/src/decompile/cpp/type.cc
++++ b/Ghidra/Features/Decompiler/src/decompile/cpp/type.cc
+@@ -1639,6 +1639,17 @@
+       rep.complement = (count==1);	// Set whether we represented original value or complement
+       return;
+     }
++    // ByteRipper enum-complement-1: the complement of named values reads right only for an
++    // enumeration of flags; a value no member of a code enumeration names prints as a number
++    if (count == 0) {
++      bool flags = true;
++      for(iter=namemap.begin();iter!=namemap.end();++iter)
++	if (popcount((*iter).first) > 1) { flags = false; break; }
++      if (!flags) {
++	rep.matchname.clear();	// Drop the partial attempt: no representation
++	break;
++      }
++    }
+     val = val ^ calc_mask(size);	// Switch value we are trying to represent (to complement)
+     rep.matchname.clear();		// Clear out old attempt
+   }

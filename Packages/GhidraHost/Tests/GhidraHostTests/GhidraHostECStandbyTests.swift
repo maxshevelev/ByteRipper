@@ -71,7 +71,7 @@ final class GhidraHostECStandbyTests: XCTestCase {
         XCTAssertTrue("\(caller)".contains("20cd2") || "\(caller)".contains("20CD2"), "the caller reads past the call: \(caller)")
         try await host.take(module)
         let published = try await host.publish(module, by: "t")
-        XCTAssertTrue(published.manifest.recipe.id.hasSuffix("-lang-nds32-standby-1-decomp-stack-params-1-equates-1"),
+        XCTAssertTrue(published.manifest.recipe.id.hasSuffix("-lang-nds32-standby-1-decomp-stack-params-1-equates-1-enum-complement-1"),
                       published.manifest.recipe.id)
         XCTAssertFalse(published.manifest.recipe.id.contains("descriptor-tables"), published.manifest.recipe.id)
     }

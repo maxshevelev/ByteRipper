@@ -120,12 +120,45 @@ globals, and pointers in modules based at their link address, do not change.
 
 ## What depends on it
 
-- The marker `byteripper-decompiler-patch` names both decompiler patches on
-  its first line, `stack-params-1+equates-1`. `decompiler_patch` in the owner's
-  `hello` and in the artifact carries the same text, and the recipe id reads
-  `-decomp-stack-params-1-equates-1`.
+- The marker `byteripper-decompiler-patch` names the decompiler patches on
+  its first line, `stack-params-1+equates-1+enum-complement-1`.
+  `decompiler_patch` in the owner's `hello` and in the artifact carries the
+  same text, and the recipe id reads
+  `-decomp-stack-params-1-equates-1-enum-complement-1`.
 - Like `stack-params-1`, it changes the C printed, not the program kept.
 - At a new Ghidra version the script stops, because `coreaction.cc` is another
+  file: read the patch against it, then make a new patch and a new id.
+
+# The decompiler patch: enum values that are no member
+
+`enum-complement-1.patch` changes `TypeEnum::getMatches` in
+`Ghidra/Features/Decompiler/src/decompile/cpp/type.cc`. It is built into the
+same `decompile` as `stack-params-1` and `equates-1`, for every processor.
+
+## What it corrects
+
+When a value is neither a member of its enum nor an OR of members, the
+decompiler tries the value's bitwise complement and, if that is named, prints
+`~Member`. That reads right for an enum of flags and wrong for one of codes:
+an EC's 1-byte host-command enum printed the bound 0x85 as
+`~EcCmd_Flags80302_7A`, since 0x7A is a member and `~0x7A` is 0x85
+(issue 54161725).
+
+With the patch the complement is tried only when every member of the enum is a
+single bit (zero allowed). Otherwise a value no member names prints as a
+number, in the type's display format. Members and ORs of members print as
+before.
+
+| enum, value | stock | patched |
+|---|---|---|
+| command codes, 0x85 | `~EcCmd_Flags80302_7A` | `0x85` |
+| single-bit flags 0x02..0x40, 0x85 | `~(F40\|F20\|F10\|F08\|F02)` | `~(F40\|F20\|F10\|F08\|F02)` |
+
+## What depends on it
+
+- The decompiler marker and the recipe id name it after `equates-1` (above).
+- It changes the C printed, not the program kept.
+- At a new Ghidra version the script stops, because `type.cc` is another
   file: read the patch against it, then make a new patch and a new id.
 
 # The NDS32 language patch: standby

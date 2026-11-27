@@ -60,8 +60,8 @@ public struct GhidraInstall: Equatable, Sendable {
         LanguagePatches.for(processor, in: languagePatch)
     }
 
-    /// The decompiler patch this install was built with (`stack-params-1`:
-    /// 32-bit x86 stack parameters in 4-byte slots); nil for a stock Ghidra.
+    /// The decompiler patches this install was built with, joined by `+`
+    /// (`stack-params-1+equates-1+enum-complement-1`); nil for a stock Ghidra.
     /// Not part of a project's environment: it changes the C printed, not the
     /// program kept.
     public var decompilerPatch: String? { patch("byteripper-decompiler-patch") }
