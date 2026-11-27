@@ -6629,7 +6629,7 @@ final class CodeNavigatorRowView: NSTableRowView {
 /// and one whose calls the tree holds carries the triangle that opens them.
 /// A function that changed in a revision the panel received reads bold, with
 /// **New** in a capsule until the reader opens it and moves off it.
-final class CodeNavigatorCell: NSTableCellView {
+class CodeNavigatorCell: NSTableCellView {
     let disclosure = CodeDisclosureButton()
     let icon = NSImageView()
     let badge = PartBadgeView(text: "")
@@ -6648,6 +6648,11 @@ final class CodeNavigatorCell: NSTableCellView {
     /// How far the row starts past the cell's own edge, in points.
     var indent: CGFloat = 0 {
         didSet { leading.constant = 4 + indent }
+    }
+    /// Room kept after the name at the row's trailing edge, for a control a
+    /// row lays there — the (i) of a record's branch.
+    var trailingRoom: CGFloat = 0 {
+        didSet { fieldToEdge.constant = -4 - trailingRoom }
     }
 
     init(identifier: NSUserInterfaceItemIdentifier) {

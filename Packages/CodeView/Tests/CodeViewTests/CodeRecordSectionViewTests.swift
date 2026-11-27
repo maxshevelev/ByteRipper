@@ -190,7 +190,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
             let group = try XCTUnwrap(panel.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? RecordGroupCell)
             group.layoutSubtreeIfNeeded()
             // A field's frame stands 2 pt past its text on each side.
-            XCTAssertEqual(group.count.frame.minX, group.label.frame.maxX, accuracy: 2, "the count after the name")
+            XCTAssertTrue(group.label.stringValue.hasSuffix(")"), "the count after the name")
             XCTAssertGreaterThanOrEqual(group.label.frame.width + 0.5,
                                         min(group.label.intrinsicContentSize.width, group.info.frame.minX - group.label.frame.minX - 40),
                                         "the name takes the room there is, at \(width)")
@@ -213,16 +213,17 @@ final class CodeRecordSectionViewTests: XCTestCase {
             }
             let cell = try XCTUnwrap(view as? RecordRowCell)
             let line = cell.textField?.stringValue ?? ""
-            let tip = cell.textField?.toolTip
+            let tip = cell.toolTip
             XCTAssertNotEqual(tip, line)
             if let tip { XCTAssertFalse(line.contains(tip), tip) }
         }
-        let flash = try XCTUnwrap(panel.cell(row: try row(panel, "0x10  Enter flash mode"))?.textField)
-        XCTAssertTrue(flash.stringValue.contains(CodeRecordSectionView.valueTitle("flash")))
+        let flashCell = try XCTUnwrap(panel.cell(row: try row(panel, "0x10  Enter flash mode")))
+        XCTAssertTrue(flashCell.textField?.stringValue.contains(CodeRecordSectionView.valueTitle("flash")) ?? false)
+        let flash = flashCell
         XCTAssertEqual(flash.toolTip, "seen in the update tool", "a note the line does not show")
         let inferred = try XCTUnwrap(panel.cell(row: try row(panel, "0x80  Shipping mode flag of the battery pack")) as? RecordRowCell)
-        XCTAssertNil(inferred.textField?.toolTip, "the mark says the note")
-        XCTAssertEqual(inferred.markView.toolTip, CodeRecordSectionView.inferenceToolTip(note: "from the ACPI spec"))
+        XCTAssertNil(inferred.textField?.toolTip)
+        XCTAssertEqual(inferred.toolTip, CodeRecordSectionView.inferenceToolTip(note: "from the ACPI spec"))
     }
 
     /// The branch a row stands in is not a field of its details.
@@ -336,8 +337,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
         let inferred = try XCTUnwrap(panel.table.view(atColumn: 0, row: 2, makeIfNecessary: true) as? RecordRowCell)
         inferred.layoutSubtreeIfNeeded()
         XCTAssertEqual(inferred.shownMark, CodeRecordSectionView.inferenceToolTip(note: "named by its use"))
-        XCTAssertGreaterThan(inferred.markView.frame.minX, inferred.textField?.frame.maxX ?? .infinity,
-                             "the mark stands after the line")
+        XCTAssertTrue(inferred.textField?.attributedStringValue.containsAttachments ?? false, "the mark stands after the key")
         XCTAssertTrue(inferred.textField?.font.map { _ in
             (inferred.textField?.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?
                 .fontDescriptor.symbolicTraits.contains(.italic) ?? false } ?? false)
@@ -355,7 +355,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
             "62/66  " + CodeRecordSectionView.valueTitle("ACPI EC"),
             "68/6C  " + CodeRecordSectionView.valueTitle("OEM channel")])
         let group = try XCTUnwrap(panel.table.view(atColumn: 0, row: 1, makeIfNecessary: true) as? RecordGroupCell)
-        XCTAssertEqual(group.count.stringValue, "(2)")
+        XCTAssertTrue(group.label.stringValue.hasSuffix(" (2)"))
         XCTAssertFalse(group.info.isHidden)
         group.info.performClick(nil)
         XCTAssertEqual(panel.shownPopoverText, CodeRecordSectionView.valueSummary(AnalysisProfile.acpiPortsSummary))

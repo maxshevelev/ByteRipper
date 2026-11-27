@@ -132,7 +132,12 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         table.headerView = nil
         table.dataSource = self
         table.delegate = self
-        table.style = .plain
+        // The inset list of the Functions and Interfaces tabs: the selection is
+        // the system's rounded block, clear of the panel's edges.
+        table.style = .inset
+        table.backgroundColor = .clear
+        table.rowHeight = CodePaneView.navigatorRowHeight
+        table.intercellSpacing = NSSize(width: 0, height: 0)
         table.rowSizeStyle = .custom
         table.floatsGroupRows = false
         table.indentationPerLevel = 0
@@ -574,13 +579,13 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let row = table.row(forItem: group)
         guard row >= 0, let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? RecordGroupCell
         else { return }
-        cell.disclosure.setOpen(table.isItemExpanded(group), animated: false)
+        cell.showsCalls(expandable: !group.children.isEmpty, expanded: table.isItemExpanded(group))
     }
 
     /// The row's one mark, in the cell's marker slot: the `?` of an inferred
     /// row; otherwise a pin's direction — up for out, down for in.
     private func mark(_ row: [String: RecordValue]) -> (symbol: String, tip: String)? {
-        if Self.isInference(row) { return ("questionmark.circle", Self.inferenceToolTip(note: row["note"]?.string)) }
+        if Self.isInference(row) { return ("circle.dashed", Self.inferenceToolTip(note: row["note"]?.string)) }
         guard record?.id == "gpio" else { return nil }
         let direction = row["direction"]?.string ?? ""
         let symbol: String? = switch direction {
@@ -603,6 +608,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         }
     }
 
+    /// Whether the rows stand under branches.
+    private var isGrouped: Bool { items.first is RecordGroupItem }
+
     /// Where a row's label starts: past the widest key and its tag.
     private var keyColumnWidth: CGFloat = 0
 
@@ -612,6 +620,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         keyColumnWidth = allRows.map { row -> CGFloat in
             var width = (keyDisplay(row) as NSString).size(withAttributes: [.font: mono]).width
             if let tag = tag(row) { width += (" " + tag as NSString).size(withAttributes: [.font: tagFont]).width }
+            if mark(row) != nil { width += CodePaneView.navigatorSize + 4 }
             return width
         }.max().map { ($0 + 8).rounded(.up) } ?? 0
     }
@@ -649,23 +658,36 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
                 .foregroundColor: NSColor.systemOrange
             ]))
         }
+        // The row's one mark stands after the key, in grey, as the Interfaces
+        // tab writes an interface's marks after its name.
+        let mark = mark(values)
+        if let mark, let image = NSImage(systemSymbolName: mark.symbol, accessibilityDescription: mark.tip)?
+            .withSymbolConfiguration(.init(pointSize: CodePaneView.navigatorSize - 2, weight: .regular)
+                .applying(.init(hierarchicalColor: .secondaryLabelColor))) {
+            let attachment = NSTextAttachment()
+            attachment.image = image
+            let font = CodePaneView.navigatorFont()
+            attachment.bounds = NSRect(x: 0, y: (font.capHeight - image.size.height) / 2,
+                                       width: image.size.width, height: image.size.height)
+            line.append(NSAttributedString(string: " "))
+            line.append(NSAttributedString(attachment: attachment))
+        }
         let label = label(values)
         if !label.isEmpty {
             line.append(NSAttributedString(string: "\t" + label, attributes: [.font: body, .foregroundColor: ink]))
         }
-        // The labels start in one column, past the widest key, as the
-        // Functions list's names stand past their addresses.
+        // The labels start in one column, past the widest key and its mark.
         let paragraph = NSMutableParagraphStyle()
         paragraph.tabStops = [NSTextTab(textAlignment: .left, location: keyColumnWidth)]
         paragraph.lineBreakMode = .byTruncatingTail
         line.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: line.length))
-        cell.textField?.font = body
-        cell.textField?.textColor = ink
-        cell.textField?.attributedStringValue = line
+        cell.showsDisclosure(isGrouped)
+        cell.showsCalls(expandable: false, expanded: false)
+        cell.indent = isGrouped ? CodeNavigatorCell.disclosureRoom - 2 : 0
+        cell.show(line: line, mark: Self.rowMark(record?.id), said: mark?.tip)
         // No pointer words that repeat the line: the note only, which the
-        // line does not show, and not on an inferred row, whose mark says it.
-        cell.textField?.toolTip = inference ? nil : values["note"]?.string
-        cell.setMark(mark(values))
+        // line does not show, and on a marked row what the mark says.
+        cell.toolTip = mark?.tip ?? values["note"]?.string
         return cell
     }
 
@@ -675,14 +697,34 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let id = NSUserInterfaceItemIdentifier("record.group")
         let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? RecordGroupCell
             ?? RecordGroupCell(identifier: id)
-        cell.disclosure.isHidden = group.children.isEmpty
-        cell.disclosure.setOpen(outlineView.isItemExpanded(group), animated: false)
+        cell.showsDisclosure(true)
+        cell.showsCalls(expandable: !group.children.isEmpty, expanded: outlineView.isItemExpanded(group))
         cell.onToggle = { [weak self] in self?.toggle(group) }
-        cell.show(group)
+        cell.show(group, mark: Self.groupMark(record))
         cell.info.target = self
         cell.info.action = #selector(groupInfoClicked(_:))
-        cell.info.isHidden = group.summary == nil
         return cell
+    }
+
+    /// A record row's mark: a letter on the record's colour, as an interface
+    /// carries its `G`.
+    static func rowMark(_ record: String?) -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? {
+        switch record {
+        case "irq_map": (.letter("I"), .systemOrange)
+        case "host_commands": (.letter("C"), .systemTeal)
+        case "ec_ram": (.letter("R"), .systemGreen)
+        case "smbus_peers": (.letter("S"), .systemIndigo)
+        case "gpio": (.letter("P"), .systemBrown)
+        case "eflash_area": (.letter("F"), .systemPink)
+        default: nil
+        }
+    }
+
+    /// A branch's mark: the record's own sign on its colour, as the
+    /// Interfaces tab's headings carry theirs.
+    static func groupMark(_ record: AnalysisProfile.Record?) -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? {
+        guard let symbol = record?.panel?.symbol, let color = rowMark(record?.id)?.color else { return nil }
+        return (.symbol(symbol), color)
     }
 
     /// Opens or closes a branch, as the Interfaces tab's kinds do.
@@ -1204,47 +1246,22 @@ final class RecordRowItem {
     init(_ values: [String: RecordValue]) { self.values = values }
 }
 
-/// A branch's row. Its words are in a field of its own, not the cell's
-/// `textField`: AppKit draws a group row's `textField` in its own small bold
-/// font until the row is made again, and the branch then changed its font as
-/// it was closed and opened (measured: 11 pt semibold, then 13 pt).
-final class RecordGroupCell: NSTableCellView {
-    let disclosure = CodeDisclosureButton()
-    let label = NSTextField(labelWithString: "")
-    /// The branch's row count, kept whole while its words are cut.
-    let count = NSTextField(labelWithString: "")
+/// A branch's row, drawn as the Interfaces tab draws its headings
+/// (`CodeNavigatorCell`): the chevron, the record's sign on a coloured
+/// square, the words one weight up in grey with the number of rows, and an
+/// (i) at the trailing edge for the branch's long words.
+final class RecordGroupCell: CodeNavigatorCell {
     let info = ToolPanelInfoButton()
-    var onToggle: (() -> Void)?
+    /// The branch's words, for tests.
+    var label: NSTextField { textField! }
 
-    init(identifier: NSUserInterfaceItemIdentifier) {
-        super.init(frame: .zero)
-        self.identifier = identifier
-        count.translatesAutoresizingMaskIntoConstraints = false
-        count.setContentCompressionResistancePriority(.required, for: .horizontal)
-        count.setContentHuggingPriority(.required, for: .horizontal)
-        count.textColor = .secondaryLabelColor
-        disclosure.target = self
-        disclosure.action = #selector(toggle)
-        disclosure.translatesAutoresizingMaskIntoConstraints = false
-        label.lineBreakMode = .byTruncatingTail
-        label.maximumNumberOfLines = 1
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        // As wide as its words, so the count stands just after them.
-        label.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+    override init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(identifier: identifier)
+        info.translatesAutoresizingMaskIntoConstraints = false
         // help: panel.code.record-sections
         ControlHelp.describe(info, L("What these ports are"))
-        for view in [disclosure, label, count, info] { addSubview(view) }
+        addSubview(info)
         NSLayoutConstraint.activate([
-            disclosure.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            disclosure.widthAnchor.constraint(equalToConstant: 13),
-            disclosure.heightAnchor.constraint(equalToConstant: 13),
-            disclosure.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: disclosure.trailingAnchor, constant: 4),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            count.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 3),
-            count.centerYAnchor.constraint(equalTo: centerYAnchor),
-            count.trailingAnchor.constraint(lessThanOrEqualTo: info.leadingAnchor, constant: -4),
             info.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             info.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
@@ -1253,81 +1270,33 @@ final class RecordGroupCell: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func show(_ group: RecordGroupItem) {
-        // Cut with an ellipsis: an attributed string with no paragraph style
-        // wraps at a word and was clipped there, "Keyboard" with no mark.
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
-        let line = NSMutableAttributedString(string: group.label, attributes: [
-            .font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
-            .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph
-        ])
-        label.attributedStringValue = line
-        count.font = CodePaneView.navigatorFont()
-        count.stringValue = "(\(group.children.count))"
+    func show(_ group: RecordGroupItem, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?) {
+        showsMark(mark, named: "record.group")
+        textField?.attributedStringValue = NSAttributedString(
+            string: group.label + " (\(group.children.count))",
+            attributes: [.font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
+                         .foregroundColor: NSColor.secondaryLabelColor])
+        info.isHidden = group.summary == nil
+        trailingRoom = info.isHidden ? 0 : info.intrinsicContentSize.width + 6
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {
         didSet { info.backgroundStyle = backgroundStyle }
     }
-
-    @objc private func toggle() { onToggle?() }
 }
 
-/// A record's row in the list: its line, and at the trailing edge at most
-/// one mark — the `?` of an inferred row, or a pin's direction.
-final class RecordRowCell: NSTableCellView {
-    let markView = NSImageView()
-    private var markWidth: NSLayoutConstraint!
+/// A record's row, drawn as an interface of the Interfaces tab or a function
+/// of the list (`CodeNavigatorCell`): the record's mark, the key, a pin's
+/// arrow or an inferred row's `?` after it, and the label.
+final class RecordRowCell: CodeNavigatorCell {
+    /// What the row's one mark says — an inferred row's or a pin's — for
+    /// tests and for the pointer over the line.
+    private(set) var shownMark: String?
 
-    init(identifier: NSUserInterfaceItemIdentifier) {
-        super.init(frame: .zero)
-        self.identifier = identifier
-        let field = NSTextField(labelWithString: "")
-        field.lineBreakMode = .byTruncatingTail
-        field.maximumNumberOfLines = 1
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        textField = field
-        markView.translatesAutoresizingMaskIntoConstraints = false
-        markView.contentTintColor = .secondaryLabelColor
-        markView.setContentHuggingPriority(.required, for: .horizontal)
-        for view in [field, markView] { addSubview(view) }
-        markWidth = markView.widthAnchor.constraint(equalToConstant: 0)
-        NSLayoutConstraint.activate([
-            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            field.centerYAnchor.constraint(equalTo: centerYAnchor),
-            // Equal, not at most: a field as wide as its text sat at half
-            // points, and its text was drawn blurred, reading as bold
-            // (measured: the rows of width 170.5 and 152.5).
-            field.trailingAnchor.constraint(equalTo: markView.leadingAnchor, constant: -4),
-            markView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            markView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            markWidth
-        ])
+    func show(line: NSAttributedString, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?,
+              said: String?) {
+        showsMark(mark, named: "record.row")
+        textField?.attributedStringValue = line
+        shownMark = said
     }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    /// Shows `mark`, or none. The view is sized from the image, not from its
-    /// intrinsic size, which is wrong for a configured symbol.
-    func setMark(_ mark: (symbol: String, tip: String)?) {
-        guard let mark else {
-            markView.image = nil
-            markView.toolTip = nil
-            markView.isHidden = true
-            markWidth.constant = 0
-            return
-        }
-        let config = NSImage.SymbolConfiguration(pointSize: CodePaneView.navigatorSize, weight: .regular)
-        let image = NSImage(systemSymbolName: mark.symbol, accessibilityDescription: mark.tip)?
-            .withSymbolConfiguration(config)
-        markView.image = image
-        markView.toolTip = mark.tip
-        markView.isHidden = false
-        markWidth.constant = (image?.size.width ?? 0).rounded(.up)
-    }
-
-    var shownMark: String? { markView.isHidden ? nil : markView.image?.accessibilityDescription }
 }
