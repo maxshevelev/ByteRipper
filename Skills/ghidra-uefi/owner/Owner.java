@@ -5448,7 +5448,7 @@ public class Owner {
 
     /** The fields `ghidra_set_record` takes; `schema` is the host's. */
     private static final java.util.List<String> RECORD_FIELDS =
-        java.util.List.of("record", "schema", "status", "note", "rows", "upsert", "delete");
+        java.util.List.of("record", "schema", "status", "note", "branch_notes", "rows", "upsert", "delete");
     private static final java.util.List<String> RECORD_STATUSES = java.util.List.of("partial", "complete", "none");
     private static final java.util.List<String> ROW_CONFIDENCES = java.util.List.of("established", "inference");
 
@@ -5483,7 +5483,7 @@ public class Owner {
         String id = required(body, "record");
         for (String field : body.keySet()) {
             if (!RECORD_FIELDS.contains(field)) {
-                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, rows, upsert, delete");
+                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, branch_notes, rows, upsert, delete");
             }
         }
         if (!body.has("schema") || !body.get("schema").isJsonObject()) {
@@ -5511,14 +5511,16 @@ public class Owner {
             Harvest.setRecords(program, all);
             return records(Map.of());
         }
-        if (!body.has("status") && !body.has("note") && !replaces && !edits) {
-            throw new Failure(400, id + ": give status, note, rows, or upsert/delete");
+        if (!body.has("status") && !body.has("note") && !body.has("branch_notes") && !replaces && !edits) {
+            throw new Failure(400, id + ": give status, note, branch_notes, rows, or upsert/delete");
         }
 
         JsonObject stored = all.has(id) && all.get(id).isJsonObject() ? all.getAsJsonObject(id) : null;
         String status = stored != null && stored.has("status") ? stored.get("status").getAsString() : "unanswered";
         String note = stored != null && stored.has("note") && !stored.get("note").isJsonNull()
             ? stored.get("note").getAsString() : null;
+        JsonObject branchNotes = stored != null && stored.has("branch_notes") && stored.get("branch_notes").isJsonObject()
+            ? stored.getAsJsonObject("branch_notes").deepCopy() : new JsonObject();
         java.util.Map<String, JsonObject> rows = new java.util.LinkedHashMap<>();
         if (stored != null && stored.has("rows")) {
             for (JsonElement row : stored.getAsJsonArray("rows")) {
@@ -5581,6 +5583,32 @@ public class Owner {
                 throw new Failure(400, id + ".note: expected text");
             } else note = given.getAsString().trim().isEmpty() ? null : given.getAsString();
         }
+        // A note per branch of the list — a value of the record's group
+        // column: what the review covered and left out there. Given by
+        // branch, merged into the stored ones; null or empty text takes one out.
+        if (body.has("branch_notes")) {
+            JsonArray branches = schema.has("branches") && schema.get("branches").isJsonArray()
+                ? schema.getAsJsonArray("branches") : null;
+            if (branches == null) throw new Failure(400, id + ".branch_notes: the record has no branches");
+            java.util.List<String> allowed = new java.util.ArrayList<>();
+            for (JsonElement branch : branches) allowed.add(branch.getAsString());
+            JsonElement given = body.get("branch_notes");
+            if (!given.isJsonObject()) throw new Failure(400, id + ".branch_notes: expected an object of branch: text");
+            for (String branch : given.getAsJsonObject().keySet()) {
+                if (!allowed.contains(branch)) {
+                    throw new Failure(400, id + ".branch_notes." + branch + ": expected one of " + allowed);
+                }
+                JsonElement text = given.getAsJsonObject().get(branch);
+                if (text.isJsonNull() || (text.isJsonPrimitive() && text.getAsJsonPrimitive().isString()
+                        && text.getAsString().trim().isEmpty())) {
+                    branchNotes.remove(branch);
+                } else if (!text.isJsonPrimitive() || !text.getAsJsonPrimitive().isString()) {
+                    throw new Failure(400, id + ".branch_notes." + branch + ": expected text");
+                } else {
+                    branchNotes.addProperty(branch, text.getAsString());
+                }
+            }
+        }
         // Rows written to a record nobody answered yet: the review goes on.
         if (status.equals("unanswered") && (replaces || edits) && !rows.isEmpty()) {
             status = "partial";
@@ -5599,12 +5627,13 @@ public class Owner {
 
         java.util.List<JsonObject> sorted = new java.util.ArrayList<>(rows.values());
         sorted.sort((a, b) -> compareKeys(a, b, key));
-        if (status.equals("unanswered") && sorted.isEmpty() && note == null) {
+        if (status.equals("unanswered") && sorted.isEmpty() && note == null && branchNotes.size() == 0) {
             all.remove(id);
         } else {
             JsonObject record = new JsonObject();
             record.addProperty("status", status);
             if (note != null) record.addProperty("note", note);
+            if (branchNotes.size() > 0) record.add("branch_notes", branchNotes);
             JsonArray table = new JsonArray();
             for (JsonObject row : sorted) table.add(row);
             record.add("rows", table);

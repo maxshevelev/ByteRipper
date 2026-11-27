@@ -62,8 +62,14 @@ extension GhidraHost {
             }
         }
         try collect(record.columns)
-        return ["key": record.key, "columns": try json(record.columns), "parameters": record.parameters,
-                "ref_keys": refKeys]
+        var schema: [String: Any] = ["key": record.key, "columns": try json(record.columns),
+                                     "parameters": record.parameters, "ref_keys": refKeys]
+        // The branches a note may be given for: the values of the column
+        // the list groups by.
+        if let group = record.groupBy, let values = record.column(group)?.values, !values.isEmpty {
+            schema["branches"] = values
+        }
+        return schema
     }
 
     /// The owner's `records` answer as `ghidra_records` gives it: every
@@ -94,6 +100,7 @@ extension GhidraHost {
             var entry: [String: Any] = ["id": record.id, "title": record.title, "status": status,
                                         "gate": record.unansweredGate, "rows": set?["rows"] ?? []]
             if let note = set?["note"] { entry["note"] = note }
+            if let notes = set?["branch_notes"] { entry["branch_notes"] = notes }
             if only != nil {
                 entry["key"] = record.key
                 entry["columns"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(record.columns))

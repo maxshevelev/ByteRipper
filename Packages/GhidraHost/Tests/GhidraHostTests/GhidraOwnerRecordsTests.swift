@@ -110,17 +110,31 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         let (code, _) = try await entries()
         var row = irq(4, code)
         row["label"] = "1 ms tick"
-        try await set(["record": "irq_map", "status": "partial", "upsert": [row]])
+        try await set(["record": "irq_map", "status": "partial", "note": "others not read", "upsert": [row]])
         let answer = try await read("irq_map")
         let rows = try XCTUnwrap(try record(answer, "irq_map")["rows"] as? [[String: Any]])
         XCTAssertEqual(rows.first?["label"] as? String, "1 ms tick")
         row["label"] = String(repeating: "x", count: 41)
         await refused(["record": "irq_map", "upsert": [row]], saying: "label")
-        try await set(["record": "gpio", "status": "partial", "upsert": [[
+        try await set(["record": "gpio", "status": "partial", "note": "others not read", "upsert": [[
             "pin": "GPA3", "direction": "out", "function": "Power LED.", "group": "indicator", "confidence": "established"]]])
         await refused(["record": "gpio", "upsert": [[
             "pin": "GPA4", "direction": "out", "function": "x", "group": "lights", "confidence": "established"]]],
                       saying: "group")
+    }
+
+    /// A branch of a grouped list takes a note of its own, merged by branch;
+    /// a record with no branches, or a branch that is not one, is refused.
+    func testABranchTakesANoteOfItsOwn() async throws {
+        try await open()
+        try await set(["record": "host_commands", "status": "partial", "note": "shared helpers: PMC1 stage",
+                       "branch_notes": ["60/64": "0x59 sub-commands: only 0x50", "62/66": "0x45/0x47 not reviewed"]])
+        try await set(["record": "host_commands", "branch_notes": ["62/66": NSNull(), "68/6C": "flash bytes left out"]])
+        let answer = try await read("host_commands")
+        let notes = try XCTUnwrap(try record(answer, "host_commands")["branch_notes"] as? [String: String])
+        XCTAssertEqual(notes, ["60/64": "0x59 sub-commands: only 0x50", "68/6C": "flash bytes left out"])
+        await refused(["record": "host_commands", "branch_notes": ["70/74": "x"]], saying: "branch_notes.70/74")
+        await refused(["record": "ec_ram", "branch_notes": ["a": "x"]], saying: "has no branches")
     }
 
     // MARK: - Refusals

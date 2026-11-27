@@ -1645,7 +1645,9 @@ public enum GhidraTools {
                     `partial` (with a `note` saying what is left), `complete` (at least one row), `none` (no \
                     rows, with a `note` saying why); null takes the record back to unanswered and empty. \
                     Rows written to an unanswered record without a status make it partial, noted "review \
-                    continues". Every value is checked first and one wrong value refuses the whole call, \
+                    continues". In a record whose list groups its rows into branches (host commands by port \
+                    pair), `branch_notes` gives a branch its own note — what the review covered and left out \
+                    there — shown with that branch; `note` keeps what holds for the whole record. Every value is checked first and one wrong value refuses the whole call, \
                     naming it as `record[row i].column: expected …`. The answer is the record as \
                     `ghidra_records` reads it.
                     """,
@@ -1658,6 +1660,10 @@ public enum GhidraTools {
                         "description": "partial, complete or none; null takes the record back to unanswered."
                     ],
                     "note": AgentSchema.string("The record's note: what is left (partial), why there are none (none), what the rows leave out."),
+                    "branch_notes": [
+                        "type": "object", "additionalProperties": ["type": ["string", "null"]],
+                        "description": "A note per branch, by its value (\"62/66\"); merged into the stored ones, null removes one."
+                    ],
                     "rows": [
                         "type": "array", "items": ["type": "object"],
                         "description": "The whole table: each row its columns, `confidence` and an optional `note`."
@@ -1675,11 +1681,11 @@ public enum GhidraTools {
             ) { call in
                 let module = try module(call.arguments)
                 var fields: [String: JSONValue] = ["record": .string(try call.arguments.string("record"))]
-                for field in ["status", "note", "rows", "upsert", "delete"] {
+                for field in ["status", "note", "branch_notes", "rows", "upsert", "delete"] {
                     if let given = call.arguments.values[field] { fields[field] = given }
                 }
                 guard fields.count > 1 else {
-                    throw AgentToolError("Give status, note, rows, or upsert/delete.")
+                    throw AgentToolError("Give status, note, branch_notes, rows, or upsert/delete.")
                 }
                 let payload = JSONValue.object(fields).encoded()
                 return try await answer { try await backend.writeCall(module, "set/record", body: payload) }
