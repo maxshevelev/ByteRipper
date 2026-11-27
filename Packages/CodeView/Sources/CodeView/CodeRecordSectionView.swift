@@ -638,21 +638,27 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             inference ? NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) : font
         }
         let body = styled(CodePaneView.navigatorFont())
-        let line = NSMutableAttributedString(string: keyDisplay(values), attributes: [
+        let mark = mark(values)
+        let key = keyDisplay(values), tag = tag(values), label = label(values), tabStop = keyColumnWidth
+        // The line for a row on the selection's fill (`on`) or off it: on it
+        // every colour — the tag's orange, the mark's grey — takes the
+        // selection's text colour, as a function's name does.
+        let draw: (Bool) -> NSAttributedString = { on in
+        let ink = on ? NSColor.alternateSelectedControlTextColor : ink
+        let line = NSMutableAttributedString(string: key, attributes: [
             .font: styled(CodePaneView.navigatorCodeFont()), .foregroundColor: ink
         ])
-        if let tag = tag(values) {
+        if let tag {
             line.append(NSAttributedString(string: " " + tag, attributes: [
                 .font: NSFont.systemFont(ofSize: max(CodePaneView.navigatorSize - 2, 9), weight: .bold),
-                .foregroundColor: NSColor.systemOrange
+                .foregroundColor: on ? ink : NSColor.systemOrange
             ]))
         }
         // The row's one mark stands after the key, in grey, as the Interfaces
         // tab writes an interface's marks after its name.
-        let mark = mark(values)
         if let mark, let image = NSImage(systemSymbolName: mark.symbol, accessibilityDescription: mark.tip)?
             .withSymbolConfiguration(.init(pointSize: CodePaneView.navigatorSize - 2, weight: .regular)
-                .applying(.init(hierarchicalColor: .secondaryLabelColor))) {
+                .applying(.init(hierarchicalColor: on ? ink : .secondaryLabelColor))) {
             let attachment = NSTextAttachment()
             attachment.image = image
             let font = CodePaneView.navigatorFont()
@@ -661,19 +667,20 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             line.append(NSAttributedString(string: " "))
             line.append(NSAttributedString(attachment: attachment))
         }
-        let label = label(values)
         if !label.isEmpty {
             line.append(NSAttributedString(string: "\t" + label, attributes: [.font: body, .foregroundColor: ink]))
         }
         // The labels start in one column, past the widest key and its mark.
         let paragraph = NSMutableParagraphStyle()
-        paragraph.tabStops = [NSTextTab(textAlignment: .left, location: keyColumnWidth)]
+        paragraph.tabStops = [NSTextTab(textAlignment: .left, location: tabStop)]
         paragraph.lineBreakMode = .byTruncatingTail
         line.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: line.length))
+        return line
+        }
         cell.showsDisclosure(isGrouped)
         cell.showsCalls(expandable: false, expanded: false)
         cell.indent = isGrouped ? CodeNavigatorCell.disclosureRoom - 2 : 0
-        cell.show(line: line, mark: Self.rowMark(record?.id), said: mark?.tip)
+        cell.show(line: draw, mark: Self.rowMark(record?.id), said: mark?.tip)
         // No pointer words that repeat the line: the note only, which the
         // line does not show, and on a marked row what the mark says.
         cell.toolTip = mark?.tip ?? values["note"]?.string
@@ -1280,10 +1287,22 @@ final class RecordRowCell: CodeNavigatorCell {
     /// tests and for the pointer over the line.
     private(set) var shownMark: String?
 
-    func show(line: NSAttributedString, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?,
+    private var draw: ((Bool) -> NSAttributedString)?
+
+    func show(line: @escaping (Bool) -> NSAttributedString, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?,
               said: String?) {
         showsMark(mark, named: "record.row")
-        textField?.attributedStringValue = line
+        draw = line
         shownMark = said
+        redraw()
+    }
+
+    /// On the selection's fill the line is drawn again in its colour.
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { if backgroundStyle != oldValue { redraw() } }
+    }
+
+    private func redraw() {
+        textField?.attributedStringValue = draw?(backgroundStyle == .emphasized) ?? NSAttributedString()
     }
 }

@@ -358,6 +358,23 @@ final class CodeRecordSectionViewTests: XCTestCase {
                        CodeRecordSectionView.valueSummary(AnalysisProfile.acpiPortsSummary) + "\n\n0x45/0x47 not reviewed")
     }
 
+    /// On the selection's fill the tag and the mark take its colour too.
+    func testASelectedRowInvertsItsTagAndMark() throws {
+        let panel = try self.panel(["host_commands": longCommands], show: "host_commands", width: 340)
+        let cell = try XCTUnwrap(panel.cell(row: try row(panel, "0x10  Enter flash mode")))
+        let text = { cell.textField?.attributedStringValue ?? NSAttributedString() }
+        func colors() -> Set<NSColor> {
+            var found = Set<NSColor>()
+            text().enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: text().length)) { color, _, _ in
+                if let color = color as? NSColor { found.insert(color) }
+            }
+            return found
+        }
+        XCTAssertTrue(colors().contains(.systemOrange))
+        cell.backgroundStyle = .emphasized
+        XCTAssertEqual(colors(), [.alternateSelectedControlTextColor])
+    }
+
     func testHostCommandsStandUnderTheirPortPairs() throws {
         let panel = try self.panel(["host_commands": commands], show: "host_commands")
         XCTAssertEqual(panel.shownGroups.map(\.value), ["60/64", "62/66", "68/6C"])
