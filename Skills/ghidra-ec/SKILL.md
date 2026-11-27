@@ -62,7 +62,7 @@ The code that keeps running while the host reflashes the EC is mapped from flash
 - Arguments go in $r0–$r5 and the result in $r0 ($r0:$r1 for 64 bits). $r6 and up are callee-saved through `push25`/`smw`. $gp is $r29, $lp $r30, $sp $r31. **TBD**: whether the core uses the reduced register set (push25 in this build saves only s0–s2).
 - A function starts with `calling_convention: unknown`. `ghidra_signature` sets it to `default` and renames the function from the signature, so no separate `ghidra_rename` is needed.
 - A 1-byte enum is written `typedef enum TAG : unsigned char { … } NAME;`. Without `: unsigned char` it is 4 bytes and breaks every byte-wide carrier.
-- **E5.** A 32-bit constant is built from `sethi` + `ori`/`addi`, sometimes in a chain of three. Give `ghidra_equate` the whole value the C prints, at the last instruction of the chain. After a `slt`/`slti` bound that is the bound plus one (0x1B7741 for `< 0x1B7741`). The name lands on the C's folded constant (`in_c_only: true`). Read `in_c` in the answer. If it is refused, explain the constant in a `pre` comment at the `sethi` (N3, N5). A `movi` constant that carries meaning, such as a GPCR mode or an SMBus HOCTL value, takes an equate too. A negative `movi` (0xFFFFFF80) may apply but print `not_in_c`: then the `eol` comment names the value.
+- **E5.** A 32-bit constant is built from `sethi` + `ori`/`addi`, sometimes in a chain of three. Give `ghidra_equate` the whole value the C prints, at the last instruction of the chain. After a `slt`/`slti` bound that is the bound plus one (0x1B7741 for `< 0x1B7741`). The name lands on the C's folded constant (`in_c_only: true`). Read `in_c` in the answer. If it is refused, explain the constant in a `pre` comment at the `sethi` (N3, N5). A `movi` constant that carries meaning, such as a GPCR mode or an SMBus HOCTL value, takes an equate too. A negative `movi` followed by a byte store (`movi -0x80` + `sbi`) goes into the enum at its byte value (0x80) and the name shows at the store. ITE pin control (GPCRxn): bit 7 = input, bit 6 = output, 0x00 = alternate function (pull-up/down in bits 2 and 1); so 0x80 makes a pin an input and 0x40 an output. Check it against the code before writing a direction: an output is followed by data writes to the pin.
   Why: no single operand holds the whole value. A `sethi`/`ori` pair that builds a register address or a named RAM datum already prints by its label and needs no equate. E5 is for values.
 - **E5a.** Once the first byte of `ram` (0x80000) is named as a byte array, a constant 0x80000+n can print as `Name + n` even when it is no part of that datum. UINT8 is a char type, and the decompiler lets a constant point into a char array. Read such an expression at the instructions. Where it is a value, not an access, equate it (E5) or comment it.
   Why: the DLMB value 0x80001 printed as `TaskEventPending + 1`.
@@ -93,15 +93,13 @@ The code that keeps running while the host reflashes the EC is mapped from flash
 
 **Rule 7: the description.** It keeps the eight fixed sections of `ghidra-uefi` reference/description.md and is written for a bench technician.
 
-**Rule 8 becomes the EC map.** Until the server stores it as a record, `Interactions` holds these six `###` subsections, and each is answered, either filled in or "none" with the reason. The review is not complete while one is missing.
-1. `### Interrupts`: IRQ → handler → source → what it does.
-2. `### Host commands`: port pair, command byte → handler → effect, data in and out.
-3. `### EC RAM`: offset → width → name → writer (EC or host) → meaning.
-4. `### SMBus and I2C`: channel and address → device → the commands and registers used.
-5. `### GPIO`: pin → direction → its function in this firmware. Board nets come later, from the board table.
-6. `### Flash data area`: every range or address past the extent that the code reads, writes or erases → the function that does it → the record format → what it holds (state bytes, logs, settings). Write the meaning only from the code (E2).
-
-These are the profile's records (`ghidra_profile`: irq_map, host_commands, ec_ram, smbus_peers, gpio, eflash_area). Once the server stores records, fill them in, and `Interactions` describes them in prose.
+**Rule 8: records.** The six records — irq_map, host_commands, ec_ram, smbus_peers, gpio, eflash_area — are tables written with `ghidra_set_record`, never `###` subsections of the description; `Interactions` describes them in prose only (what talks to what, and what the tables leave out). Read a record's columns with `ghidra_records {record}`. Every row carries confidence: `established` when the code shows it, `inference` otherwise, with a note saying what it rests on. Code columns take an address inside a function, data columns an address in memory; computed columns (ec_ram.address, smbus_peers.address_8bit) are never written. Refs name rows by key; a ref to a row not yet written is a warning. Fill a record as you go with `upsert`; rows without a status leave it partial. Close each as `complete` (plus a note for what the rows leave out) or `none` with the reason. The review is not complete while a record is neither.
+1. irq_map: IRQ → handler (and body) → source → enabled → task slot → what it does.
+2. host_commands: port pair, mode, command byte (and sub-command) → handler → effect, data in and out, events raised, EC RAM rows touched.
+3. ec_ram: offset → width → name → writer → meaning → values → code that reads or writes it.
+4. smbus_peers: channel and 7-bit address (`mailbox` or `runtime` with a note when there is none fixed) → device → PEC → commands.
+5. gpio: the pin by port and bit as its registers address it (`GPD3` = GPDRD bit 3), never read as a BGA ball; a keyboard-scan pin used as GPIO by its scan name (`KSO7`, `KSI0`). The package pin and the board's net are not columns: they belong to the board, not the firmware; give them in the row's note, from the schematic and boardview, said as the board's.
+6. eflash_area: every address past the extent that the code reads, writes or erases → writers, readers → format → host commands that reach it → meaning, only from the code (E2).
 
 ## 5. Library functions
 
