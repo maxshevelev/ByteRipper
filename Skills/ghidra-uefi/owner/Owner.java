@@ -672,13 +672,15 @@ public class Owner {
         JsonArray matched = new JsonArray();
         int scanned = 0;
         for (Function function : program.getFunctionManager().getFunctions(true)) {
-            scanned++;
             if (contains != null && !function.getName().toLowerCase(java.util.Locale.ROOT)
                     .contains(contains.toLowerCase(java.util.Locale.ROOT))) continue;
             if (source != null && !function.getSymbol().getSource().toString().equalsIgnoreCase(source)) continue;
             long entry = function.getEntryPoint().getOffset();
             if (from != null && entry < from) continue;
             if (to != null && entry > to) continue;
+            // Counted inside the range and the name filters: `summary.functions`
+            // is how many were checked, not the module's whole count.
+            scanned++;
             JsonObject leftovers = unfinished || withFragments ? leftovers(function) : null;
             if (leftovers != null && !unfinished(leftovers) && leftovers.has("fragments")) fragmentsOnly++;
             if (unfinished && (leftovers == null || !unfinished(leftovers))) continue;
@@ -1210,6 +1212,17 @@ public class Owner {
                 // is listed by where it is written, so one `items` call names
                 // them all (issue cf7016bd).
                 java.util.Collection<Address> starts = tempPieces(high, symbol).keySet();
+                final java.util.Collection<Address> starts0 = starts;
+                // A named temporary still holding values the decompiler merged
+                // into it by type alone — named before a name took the value's
+                // type with it — is listed by each of them too: each can take
+                // a name of its own (issue d132224e).
+                if (starts.size() < 2 && symbol.getStorage().isHashStorage() && !placeholder(symbol.getName())) {
+                    java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> held =
+                        valueWebs(high, symbol.getHighVariable()).starts();
+                    if (held.size() >= 2) starts = held.keySet();
+                }
+                final java.util.Collection<Address> group = starts;
                 if (starts.size() < 2) starts = java.util.Collections.singletonList(symbol.getPCAddress());
                 for (Address first : starts) {
                 JsonObject item = new JsonObject();
@@ -1218,6 +1231,8 @@ public class Owner {
                 item.addProperty("type", type == null ? null : type.getDisplayName());
                 item.addProperty("storage", symbol.getStorage().toString());
                 item.addProperty("first_use", first == null ? null : hex(first));
+                // A value a named temporary took in by type, not its own.
+                if (group != starts0 && !first.equals(symbol.getPCAddress())) item.addProperty("joined", true);
                 // Ghidra's names for unnamed locals renumber when another is
                 // named; a client addresses a local by storage and first use.
                 // A name Ghidra still made up is not one — typing a local
@@ -7370,6 +7385,15 @@ public class Owner {
         }
         long held = scalar.getUnsignedValue();
         long signed = scalar.getSignedValue();
+        // `movi a0,-0x80` whose register a byte store (`sbi`) writes out is
+        // the byte 0x80 the C prints, whatever the enum's width or members:
+        // a new or empty four-byte enum would otherwise take 0xFFFFFF80.
+        long stored = held, storedSigned = signed;
+        int storeWidth = signed < 0 ? storeWidth(instruction) : 0;
+        if (storeWidth > 0 && signed >= -(1L << (storeWidth * 8 - 1))) {
+            stored = held & ((1L << (storeWidth * 8)) - 1);
+            storedSigned = stored;
+        }
 
         ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
         JsonObject answer = identity();
@@ -7400,12 +7424,12 @@ public class Owner {
             // when it stands for the same value, or its other operands would
             // read as a value they do not hold.
             ghidra.program.model.symbol.Equate same = table.getEquate(name);
-            if (same != null && same.getValue() != held && same.getValue() != signed) {
+            if (same != null && same.getValue() != held && same.getValue() != signed && same.getValue() != stored) {
                 throw new Failure(409, name + " already stands for 0x" + Long.toHexString(same.getValue()).toUpperCase()
                     + " on " + same.getReferenceCount() + " operand(s), not 0x" + Long.toHexString(held).toUpperCase()
                     + "; nothing was changed");
             }
-            long member = member(owner, name, held, signed, comment);
+            long member = member(owner, name, stored, storedSigned, comment);
             if (enumComment != null) owner.setDescription(enumComment.isBlank() ? null : enumComment);
             Harvest.recordType(program, owner.getName(), ExportCode.typeC(owner));
             String formatted = ghidra.program.database.symbol.EquateManager
@@ -7702,6 +7726,62 @@ public class Owner {
      * One value, one name in an enum: an equate shows the first name of its
      * value, so a second would show as the first.
      */
+    /**
+     * The width of the store that writes out the one register `load` sets,
+     * when that store is narrower than the register: 1 for `movi a0,-0x80`
+     * followed by `sbi a0,[a1]`. Follows the fall-through a few instructions
+     * and gives up (0) where the register is read otherwise, rewritten, or
+     * the flow leaves the straight line.
+     */
+    private int storeWidth(Instruction load) {
+        ghidra.program.model.lang.Register register = null;
+        for (ghidra.program.model.pcode.PcodeOp op : load.getPcode()) {
+            ghidra.program.model.pcode.Varnode out = op.getOutput();
+            if (out == null || !out.isRegister()) continue;
+            ghidra.program.model.lang.Register written = program.getRegister(out.getAddress(), out.getSize());
+            if (written == null) return 0;
+            if (register != null && !register.equals(written.getBaseRegister())) return 0;
+            register = written.getBaseRegister();
+        }
+        if (register == null) return 0;
+        Instruction next = load;
+        for (int step = 0; step < 12; step++) {
+            if (!next.getFlowType().isFallthrough() || next.getFallThrough() == null) return 0;
+            next = program.getListing().getInstructionAt(next.getFallThrough());
+            if (next == null) return 0;
+            java.util.Set<ghidra.program.model.pcode.Varnode> derived = new java.util.HashSet<>();
+            boolean read = false, rewritten = false;
+            for (ghidra.program.model.pcode.PcodeOp op : next.getPcode()) {
+                boolean fromIt = false;
+                for (int index = 0; index < op.getNumInputs(); index++) {
+                    ghidra.program.model.pcode.Varnode input = op.getInput(index);
+                    if (op.getOpcode() == ghidra.program.model.pcode.PcodeOp.STORE && index == 2) continue;
+                    if (derived.contains(input) || holds(register, input)) fromIt = true;
+                }
+                if (op.getOpcode() == ghidra.program.model.pcode.PcodeOp.STORE) {
+                    ghidra.program.model.pcode.Varnode value = op.getInput(2);
+                    if (derived.contains(value) || holds(register, value)) {
+                        return value.getSize() < register.getMinimumByteSize() ? value.getSize() : 0;
+                    }
+                }
+                ghidra.program.model.pcode.Varnode out = op.getOutput();
+                if (fromIt) {
+                    if (out != null && out.isUnique()) derived.add(out);
+                    else read = true;
+                }
+                if (out != null && holds(register, out)) rewritten = true;
+            }
+            if (read || rewritten) return 0;
+        }
+        return 0;
+    }
+
+    private boolean holds(ghidra.program.model.lang.Register register, ghidra.program.model.pcode.Varnode varnode) {
+        if (varnode == null || !varnode.isRegister()) return false;
+        ghidra.program.model.lang.Register at = program.getRegister(varnode.getAddress(), varnode.getSize());
+        return at != null && register.equals(at.getBaseRegister());
+    }
+
     private long member(ghidra.program.model.data.Enum owner, String name, long held, long signed,
                         String comment) throws Exception {
         // In the enum's own width: X64 sign-extends `MOV RCX,-2` to 64 bits,
@@ -8436,6 +8516,9 @@ public class Owner {
             return answer;
         }
         HighSymbol match = null;
+        // A value set apart from the named variable it was merged into: that
+        // variable keeps its name over the rest, as it should.
+        boolean takenFromHolder = false;
         // One value of an unnamed temporary that holds several (`tempPieces`),
         // asked for by where it is written: named on its own hash.
         ghidra.program.model.pcode.Varnode piece = null;
@@ -8499,7 +8582,29 @@ public class Owner {
             // the decompiler joined to one named earlier in the same batch:
             // it is that variable now, and its name is the one it shows.
             HighSymbol holder = valueHolder(high, firstUse);
-            if (holder != null && !placeholder(holder.getName())) {
+            // A value the decompiler only merged by type (`valueWebs`) is
+            // not bound to the holder: a name of its own sets it apart on its
+            // own hash, its type locked, as a listed value of the unnamed
+            // temporary is. A value of the holder's own web is the holder,
+            // renamed as a whole (issue d132224e).
+            TempWebs holderWebs = holder == null || placeholder(holder.getName()) ? null
+                : valueWebs(high, holder.getHighVariable());
+            Address valueStart = null;
+            if (holderWebs != null) {
+                for (java.util.Map.Entry<Address, Address> each : holderWebs.startOf().entrySet()) {
+                    if (hex(each.getKey()).equalsIgnoreCase(firstUse)) valueStart = each.getValue();
+                }
+            }
+            Address holderStart = holderWebs == null || holder.getPCAddress() == null ? null
+                : holderWebs.startOf().get(holder.getPCAddress());
+            if (name != null && valueStart != null && !name.equals(holder.getName())) {
+                match = holder;
+                if (holderStart != null && !holderStart.equals(valueStart)) {
+                    piece = holderWebs.starts().get(valueStart);
+                    pieceAt = valueStart;
+                    takenFromHolder = true;
+                }
+            } else if (holder != null && !placeholder(holder.getName())) {
                 if (name != null && !name.equals(holder.getName())) {
                     throw new Failure(409, "the value written at " + firstUse + " is part of " + holder.getName()
                         + " (" + holder.getStorage() + ") now: the decompiler joined it to that variable when it was"
@@ -8621,7 +8726,10 @@ public class Owner {
         java.util.Map<String, String> namedBefore = userNamedLocals(function);
         java.util.List<String> parametersBefore = parameterPlaces(function);
         try {
-            if (piece != null) nameTempPiece(function, high, piece, applied, type);
+            // A value's own type goes with a name alone: unlocked, the
+            // decompiler merges it by type with the values it was listed
+            // apart from, under whichever name it meets first (issue d132224e).
+            if (piece != null) nameTempPiece(function, high, piece, applied, type != null ? type : match.getDataType());
             else HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (NullPointerException error) {
             // Ghidra's own state, not the request: never a Java message for
@@ -8731,7 +8839,7 @@ public class Owner {
             // sits on that storage at that first use. A name a review gave,
             // and a stack local named by its offset, keep their names, and
             // are told by them.
-            if (!applied.equals(asked)) {
+            if (!applied.equals(asked) && !takenFromHolder) {
                 String holder = null;
                 boolean still = byPlace
                     ? unnamedAt(after, askedStorage, askedFirstUse, applied) >= unnamedBefore
@@ -8929,7 +9037,23 @@ public class Owner {
         if (high == null || symbol.isParameter() || symbol.isNameLocked()) return none;
         ghidra.program.model.listing.VariableStorage storage = symbol.getStorage();
         if (!storage.isHashStorage() || storage.getFirstVarnode().getOffset() != 0) return none;
-        ghidra.program.model.pcode.HighVariable variable = symbol.getHighVariable();
+        return valueWebs(high, symbol.getHighVariable());
+    }
+
+    /**
+     * The webs of one decompiler variable's values, as `tempWebs` tells them,
+     * for any variable: values in different webs of one variable are there
+     * only because the decompiler merges unrelated temporaries of one type
+     * whose lives do not overlap (its merge by data type, issue d132224e).
+     * Such a merge is not required, and the decompiler does not weigh names
+     * in it: a value named on its own hash stays apart only with its type
+     * locked; named alone, it takes in every value of its type it may, and a
+     * second name on one of them loses to the first.
+     */
+    private static TempWebs valueWebs(HighFunction high, ghidra.program.model.pcode.HighVariable variable) {
+        java.util.TreeMap<Address, ghidra.program.model.pcode.Varnode> pieces = new java.util.TreeMap<>();
+        java.util.Map<Address, Address> startOf = new java.util.HashMap<>();
+        TempWebs none = new TempWebs(pieces, startOf);
         if (variable == null || variable.getInstances() == null) return none;
         // Values that meet at a join (a MULTIEQUAL or INDIRECT whose result
         // is the same variable) are one variable in the C — `x = A;` on one

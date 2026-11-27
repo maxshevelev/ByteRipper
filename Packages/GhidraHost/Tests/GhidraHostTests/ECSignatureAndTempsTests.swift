@@ -149,4 +149,59 @@ final class ECSignatureAndTempsTests: XCTestCase {
         let again = try await write([["function": "0x7200", "storage": storage, "first_use": "0x725A", "type": "UINT8"]])
         XCTAssertEqual(again.first?["ok"] as? Bool, true, "by the named storage too: \(again)")
     }
+
+    /// Issue d132224e: four reads of unrelated registers at 0x15FFC are one
+    /// temporary only because the decompiler merges unnamed values of one
+    /// type. Each listed value takes a name of its own with no type given.
+    func testValuesMergedByTypeTakeNamesOfTheirOwn() async throws {
+        let (host, module) = try await made()
+        defer { Task { await host.stop(module) } }
+        func function() async throws -> [String: Any] { try json(try await host.read(module, "/v1/function/0x15FFC")) }
+        let starts = ["0x16002", "0x16014", "0x16030", "0x16052"]
+        let listed = (try await function()["locals"] as? [[String: Any]] ?? [])
+            .filter { ($0["storage"] as? String) == "HASH:00000000:1" }.compactMap { $0["first_use"] as? String }
+        XCTAssertEqual(Set(listed), Set(starts), "each read by where it is written")
+        let names = ["KbsKsol", "GpdrB", "GpdrBAgain", "GpdrF"]
+        let answer = try json(try await host.write(module, "/v1/rename/variables", body: try JSONSerialization.data(
+            withJSONObject: ["items": zip(starts, names).map {
+                ["function": "0x15FFC", "storage": "HASH:00000000:1", "first_use": $0, "name": $1]
+            }])))
+        let items = answer["items"] as? [[String: Any]] ?? []
+        XCTAssertTrue(items.count == 4 && items.allSatisfy { $0["ok"] as? Bool == true }, "\(answer)")
+        let c = try await function()["c"] as? String ?? ""
+        for name in names { XCTAssertTrue(c.contains("\(name) = "), "\(name): \(c)") }
+        XCTAssertFalse(c.contains("bVar1"), c)
+    }
+
+    /// The other half: a name given to the temporary as a whole (as before
+    /// the fix, a name alone) joins every value; a listed value is still
+    /// named by its (storage, first_use) afterwards — apart, or the holder
+    /// itself when it is the holder's own.
+    func testAValueJoinedByTypeIsNamedByItsListedPlace() async throws {
+        let (host, module) = try await made()
+        defer { Task { await host.stop(module) } }
+        func function() async throws -> [String: Any] { try json(try await host.read(module, "/v1/function/0x15FFC")) }
+        func rename(_ body: [String: Any]) async throws -> [String: Any] {
+            try json(try await host.write(module, "/v1/rename/variable", body: try JSONSerialization.data(
+                withJSONObject: body.merging(["function": "0x15FFC"]) { a, _ in a })))
+        }
+        _ = try await rename(["storage": "HASH:00000000:1", "name": "KsolKso7"])
+        let joined = try await function()
+        let locals = joined["locals"] as? [[String: Any]] ?? []
+        XCTAssertEqual(locals.filter { $0["name"] as? String == "KsolKso7" }.count, 4,
+                       "the joined variable is listed by each value: \(locals)")
+        let own = try XCTUnwrap(locals.first { $0["name"] as? String == "KsolKso7" && $0["joined"] == nil },
+                                "the holder's own value: \(locals)")["first_use"] as? String
+        let taken = try XCTUnwrap(locals.first { $0["joined"] as? Bool == true }, "\(locals)")["first_use"] as? String
+        XCTAssertEqual(locals.filter { $0["joined"] as? Bool == true }.count, 3, "\(locals)")
+        let apart = try await rename(["storage": "HASH:00000000:1", "first_use": taken!, "name": "TakenApart"])
+        XCTAssertEqual(apart["name"] as? String, "TakenApart", "\(apart)")
+        XCTAssertEqual(apart["first_use"] as? String, taken, "\(apart)")
+        let whole = try await rename(["storage": "HASH:00000000:1", "first_use": own!, "name": "PortValue"])
+        XCTAssertEqual(whole["name"] as? String, "PortValue", "\(whole)")
+        let c = try await function()["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("TakenApart = "), c)
+        XCTAssertTrue(c.contains("PortValue = "), c)
+        XCTAssertFalse(c.contains("KsolKso7"), c)
+    }
 }

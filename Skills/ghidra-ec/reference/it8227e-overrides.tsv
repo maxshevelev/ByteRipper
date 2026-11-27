@@ -56,3 +56,10 @@ SMB_HOBDB_E	0x00F01CA7	1	SMB	channel E host block data byte	IT8227E fw 0x239F8+0
 SMB_PECERC_E	0x00F01CA8	1	SMB	channel E PEC	IT8227E fw 0x239F8+0xD8; code 0x3C5A, 0x3C48, 0x3CDE, 0x3D66, 0x3EA6, 0x4022	firmware	-
 SMB_SMBPCTL_E	0x00F01CA9	1	SMB	channel E pin control: bits 1:0 line levels (3 = idle); written 3 then 7 in recovery	IT8227E fw 0x23AD4+0x88; code 0x3A46, 0x3A98, 0x3AEE, 0x3BF6	firmware	-
 SMB_HOCTL2_E	0x00F01CAA	1	SMB	channel E host control 2	IT8227E fw 0x23AD4+0x84; code 0x3A46, 0x3A98, 0x3AEE, 0x3BF6	firmware	-
+GPIO_GPDRD	0x00F01604	1	GPIO	port D data (GPDRA+3); not in registers.h's list	IT8227E code 0xEA8C, 0x17A60, 0xADE6 (44 refs)	firmware	-
+GPIO_GPDRG	0x00F01607	1	GPIO	port G data (GPDRA+6); not in registers.h's list	IT8227E code 0xAB42, 0xAB66 (13 refs)	firmware	-
+GPIO_GPDRI	0x00F01609	1	GPIO	port I data (GPDRA+8); not in registers.h's list	IT8227E code 0x16828, 0xA866, 0xE1CE (31 refs)	firmware	-
+GPIO_GPDRJ	0x00F0160A	1	GPIO	port J data (GPDRA+9); not in registers.h's list	IT8227E code 0x16100, 0x6192 (67 refs)	firmware	-
+GPIO_GPCRD5	0x00F0162D	1	GPIO	pin D5 control (GPCRA0+0x18+5); written 0x80 (input)	IT8227E code 0xADE0, 0xAE96, 0xEA86, 0x17386 (12 refs)	firmware	-
+GPIO_GPCRD6	0x00F0162E	1	GPIO	pin D6 control (GPCRA0+0x18+6)	IT8227E code 0x75BA, 0x1776E, 0x15FA8	firmware	-
+GPIO_GPCRD7	0x00F0162F	1	GPIO	pin D7 control (GPCRA0+0x18+7)	IT8227E code 0x758A, 0x17778, 0x15FBA	firmware	-

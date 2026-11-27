@@ -255,9 +255,13 @@ GPIO_GCR	0x00F01600	1	GPIO	-	registers.h:742	unverified
 GPIO_GPDRA	0x00F01601	1	GPIO	-	registers.h:748	unverified
 GPIO_GPDRB	0x00F01602	1	GPIO	-	registers.h:749	unverified
 GPIO_GPDRC	0x00F01603	1	GPIO	-	registers.h:750	unverified
+GPIO_GPDRD	0x00F01604	1	GPIO	port D data (GPDRA+3); not in registers.h's list	IT8227E code 0xEA8C, 0x17A60, 0xADE6 (44 refs)	firmware
 GPIO_GPDRE	0x00F01605	1	GPIO	-	registers.h:751	unverified
 GPIO_GPDRF	0x00F01606	1	GPIO	-	registers.h:752	unverified
+GPIO_GPDRG	0x00F01607	1	GPIO	port G data (GPDRA+6); not in registers.h's list	IT8227E code 0xAB42, 0xAB66 (13 refs)	firmware
 GPIO_GPDRH	0x00F01608	1	GPIO	-	registers.h:753	unverified
+GPIO_GPDRI	0x00F01609	1	GPIO	port I data (GPDRA+8); not in registers.h's list	IT8227E code 0x16828, 0xA866, 0xE1CE (31 refs)	firmware
+GPIO_GPDRJ	0x00F0160A	1	GPIO	port J data (GPDRA+9); not in registers.h's list	IT8227E code 0x16100, 0x6192 (67 refs)	firmware
 GPIO_GPCRA0	0x00F01610	1	GPIO	-	registers.h:755	unverified
 GPIO_GPCRA1	0x00F01611	1	GPIO	-	registers.h:756	unverified
 GPIO_GPCRA2	0x00F01612	1	GPIO	-	registers.h:757	unverified
@@ -282,6 +286,9 @@ GPIO_GPCRC4	0x00F01624	1	GPIO	-	registers.h:777	unverified
 GPIO_GPCRC5	0x00F01625	1	GPIO	-	registers.h:778	unverified
 GPIO_GPCRC6	0x00F01626	1	GPIO	-	registers.h:779	unverified
 GPIO_GPCRC7	0x00F01627	1	GPIO	-	registers.h:780	unverified
+GPIO_GPCRD5	0x00F0162D	1	GPIO	pin D5 control (GPCRA0+0x18+5); written 0x80 (input)	IT8227E code 0xADE0, 0xAE96, 0xEA86, 0x17386 (12 refs)	firmware
+GPIO_GPCRD6	0x00F0162E	1	GPIO	pin D6 control (GPCRA0+0x18+6)	IT8227E code 0x75BA, 0x1776E, 0x15FA8	firmware
+GPIO_GPCRD7	0x00F0162F	1	GPIO	pin D7 control (GPCRA0+0x18+7)	IT8227E code 0x758A, 0x17778, 0x15FBA	firmware
 GPIO_GPCRE0	0x00F01630	1	GPIO	-	registers.h:782	unverified
 GPIO_GPCRE1	0x00F01631	1	GPIO	-	registers.h:783	unverified
 GPIO_GPCRE2	0x00F01632	1	GPIO	-	registers.h:784	unverified
