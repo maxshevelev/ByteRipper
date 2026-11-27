@@ -19,6 +19,8 @@ enum CodeNavigatorIcon {
         case framedLetter(String)
         /// A white symbol on the filled square.
         case symbol(String)
+        /// A symbol in the colour, the whole square's size, with no square.
+        case bareSymbol(String)
         /// A short name in a frame as wide as the name: a library function's
         /// kind — EDK2, AMD, Intel — drawn as the function stands to the
         /// library registry.
@@ -142,7 +144,10 @@ enum CodeNavigatorIcon {
                 drawLetter(letter, color: color, in: rect)
             case let .symbol(name):
                 square(rect, radius: radius, color: color, onPlate: inverted)
-                drawSymbol(name, color: .white, scale: name == "cpu.fill" ? 0.84 : 0.7, in: rect)
+                drawSymbol(name, color: .white, scale: 0.7, in: rect)
+            case let .bareSymbol(name):
+                if inverted { plate(rect, radius: radius) }
+                drawSymbol(name, color: color, scale: inverted ? 0.84 : 1, in: rect)
             case let .badge(name):
                 // A badge keeps its own colours on a selected row, on a white plate.
                 if inverted {

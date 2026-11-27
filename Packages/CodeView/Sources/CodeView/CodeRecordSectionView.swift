@@ -685,7 +685,12 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         switch record {
         case "irq_map": (.letter("I"), .systemOrange)
         case "host_commands": (.letter("C"), .systemTeal)
-        case "ec_ram": (.symbol("cpu.fill"), .systemGreen)
+        case "ec_ram": (.bareSymbol("cpu.fill"), NSColor(name: nil) { appearance in
+            // Dark green on a light list; the system's green on a dark one,
+            // where a darker one would sink into the background.
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ? .systemGreen : NSColor(srgbRed: 0.10, green: 0.50, blue: 0.20, alpha: 1)
+        })
         case "smbus_peers": (.letter("S"), .systemIndigo)
         case "gpio": (.letter("P"), .systemBrown)
         case "eflash_area": (.letter("F"), .systemPink)
