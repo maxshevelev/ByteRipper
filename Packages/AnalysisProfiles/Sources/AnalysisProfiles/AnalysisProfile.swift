@@ -174,6 +174,11 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         /// group of a `groupBy` record carries (English; the app localises
         /// them). Nil or empty for none.
         public var valueSummaries: [String: String]?
+        /// A short name for each of `values`, keyed by the value: the title of
+        /// a `groupBy` record's branch ("62/66  ACPI EC", "Enabled"; English,
+        /// the app localises them). `valueSummaries` is the long text behind
+        /// the branch's (i).
+        public var valueTitles: [String: String]?
         public var summary: String
 
         public init(_ id: String, _ title: String, _ kind: ColumnKind, required: Bool = false,
@@ -181,6 +186,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                     pattern: String? = nil, of: ColumnKind? = nil, columns: [Column]? = nil,
                     ref: String? = nil, compute: String? = nil, noteFor: [String]? = nil,
                     optionalWhen: [String: [String]]? = nil, valueSummaries: [String: String]? = nil,
+                    valueTitles: [String: String]? = nil,
                     summary: String) {
             self.id = id
             self.title = title
@@ -198,6 +204,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             self.noteFor = noteFor
             self.optionalWhen = optionalWhen
             self.valueSummaries = valueSummaries
+            self.valueTitles = valueTitles
             self.summary = summary
         }
 
@@ -206,6 +213,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             case noteFor = "note_for"
             case optionalWhen = "optional_when"
             case valueSummaries = "value_summaries"
+            case valueTitles = "value_titles"
         }
 
         public init(from decoder: Decoder) throws {
@@ -226,6 +234,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             noteFor = try c.decodeIfPresent([String].self, forKey: .noteFor)
             optionalWhen = try c.decodeIfPresent([String: [String]].self, forKey: .optionalWhen)
             valueSummaries = try c.decodeIfPresent([String: String].self, forKey: .valueSummaries)
+            valueTitles = try c.decodeIfPresent([String: String].self, forKey: .valueTitles)
             summary = try c.decode(String.self, forKey: .summary)
         }
 
@@ -250,6 +259,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             if let valueSummaries, !valueSummaries.isEmpty {
                 try c.encode(valueSummaries, forKey: .valueSummaries)
             }
+            if let valueTitles, !valueTitles.isEmpty { try c.encode(valueTitles, forKey: .valueTitles) }
             try c.encode(summary, forKey: .summary)
         }
     }
@@ -529,7 +539,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
 
     /// An ITE EC firmware on an Andes NDS32 core.
     public static let ecIteNds32 = AnalysisProfile(
-        id: "ec-ite-nds32", version: 2, title: "ITE EC firmware (NDS32)", skill: "ghidra-ec",
+        id: "ec-ite-nds32", version: 3, title: "ITE EC firmware (NDS32)", skill: "ghidra-ec",
         typeGroups: ["Nds32"], libraryKinds: ["toolchain", "ite"],
         references: ["ghidra-uefi/SKILL.md", "ghidra-ec/reference/it83xx-registers.tsv", "ghidra-ec/reference/it83xx-irqs.tsv",
                      "ghidra-uefi/reference/description.md"],
@@ -568,8 +578,17 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
     /// What host commands are, above the Host commands table.
     public static let hostCommandsHeader = "Host commands are commands the host — the BIOS, SMM or the operating "
         + "system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over "
-        + "LPC or, on eSPI, over the peripheral channel; in the EC the KBC and PMC blocks take them. Each port "
-        + "pair is a data port and a command port; the command byte is written to the command port."
+        + "LPC or, on eSPI, over the peripheral channel. Each port pair is a data port and a command port; the "
+        + "command byte is written to the command port, the data bytes go through the data port."
+
+    /// What each port pair of host commands is, behind its branch's (i).
+    public static let kbcPortsSummary = "Ports 0x60 (data) and 0x64 (command): the keyboard controller interface "
+        + "(KBC, i8042) — keyboard, touchpad and the legacy commands. In the EC the KBC block takes them."
+    public static let acpiPortsSummary = "Ports 0x62 (data) and 0x66 (command): the standard ACPI embedded "
+        + "controller interface — EC RAM read and write (0x80/0x81), query 0x84 and the SCI. In the EC the first "
+        + "PMC channel (PMC1) takes them."
+    public static let oemPortsSummary = "Ports 0x68 (data) and 0x6C (command): the second PMC channel (PMC2), "
+        + "usually the manufacturer's (OEM) commands — modes, flash mode, service functions."
 
     static let ecRecords: [Record] = [
         Record(id: "irq_map", title: "Interrupts",
@@ -578,6 +597,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                unansweredGate: true, panel: PanelSection(order: 0, symbol: "bolt"),
                key: ["irq"],
                columns: [
+                Column("label", "Label", .text, pattern: ".{1,40}",
+                       summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("irq", "IRQ", .int, required: true, min: 0, max: 239, summary: "The interrupt number, 0…239."),
                 Column("handler", "Handler", .code, required: true, summary: "The ISR the table calls (Isr_IrqNNN)."),
                 Column("body", "Body", .code, summary: "The function doing the work (IntcIrqNNN_…), when not the handler."),
@@ -585,24 +606,27 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                 Column("source_status", "Source known from", .enum, required: true, values: ["firmware", "unverified"],
                        summary: "firmware: the code shows the source; unverified: from a datasheet or another chip."),
                 Column("enabled_by_firmware", "Enabled", .bool, required: true,
+                       valueTitles: ["true": "Enabled", "false": "Not enabled"],
                        summary: "Whether the firmware enables the interrupt."),
                 Column("task_slot", "Task slot", .int, min: 0, summary: "The task slot the handler sets, if any."),
                 Column("purpose", "Purpose", .text, required: true, summary: "What the handler does.")
-               ]),
+               ],
+               groupBy: "enabled_by_firmware"),
         Record(id: "host_commands", title: "Host commands",
                summary: "Port pair and command byte, the handler, its effect, data in and out. A command on two "
                   + "port pairs is two rows.",
                unansweredGate: true, panel: PanelSection(order: 1, symbol: "arrow.left.arrow.right"),
                key: ["ports", "cmd", "sub", "mode"],
                columns: [
+                Column("label", "Label", .text, pattern: ".{1,40}",
+                       summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("ports", "Ports", .enum, required: true, values: ["60/64", "62/66", "68/6C"],
                        valueSummaries: [
-                        "60/64": "Keyboard controller interface (KBC, i8042): keyboard, touchpad, legacy commands.",
-                        "62/66": "The standard ACPI embedded controller (PMC1): EC RAM read and write (0x80/0x81), "
-                            + "query 0x84, SCI.",
-                        "68/6C": "The second PMC channel, usually the manufacturer's (OEM) commands: modes, "
-                            + "flash mode, service functions."
+                        "60/64": AnalysisProfile.kbcPortsSummary,
+                        "62/66": AnalysisProfile.acpiPortsSummary,
+                        "68/6C": AnalysisProfile.oemPortsSummary
                        ],
+                       valueTitles: ["60/64": "Keyboard controller", "62/66": "ACPI EC", "68/6C": "OEM channel"],
                        summary: "The port pair the command is written to."),
                 Column("mode", "Mode", .enum, required: true, values: ["normal", "flash"],
                        summary: "normal, or the flash (update) mode the command is taken in."),
@@ -623,6 +647,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                unansweredGate: true, panel: PanelSection(order: 2, symbol: "memorychip"),
                key: ["offset"],
                columns: [
+                Column("label", "Label", .text, pattern: ".{1,40}",
+                       summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("offset", "Offset", .int, required: true, min: 0, max: 0xFF, hex: true,
                        summary: "The offset in the host's EC RAM window, 0x00…0xFF."),
                 Column("width", "Width", .int, required: true, min: 1, summary: "The width in bytes."),
@@ -641,6 +667,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                unansweredGate: true, panel: PanelSection(order: 3, symbol: "point.3.connected.trianglepath.dotted"),
                key: ["channel", "address"],
                columns: [
+                Column("label", "Label", .text, pattern: ".{1,40}",
+                       summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("channel", "Channel", .enum, required: true, values: ["A", "B", "C", "D", "E"],
                        summary: "The SMBus channel."),
                 Column("address", "Address", .int, required: true, values: ["runtime", "mailbox"], min: 0, max: 0x7F, hex: true,
@@ -666,15 +694,22 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                unansweredGate: true, panel: PanelSection(order: 4, symbol: "cable.connector"),
                key: ["pin"],
                columns: [
+                Column("label", "Label", .text, pattern: ".{1,40}",
+                       summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("pin", "Pin", .pattern, required: true, pattern: "GP[A-M][0-7]|KSO([0-9]|1[0-7])|KSI[0-7]",
                        summary: "The GPIO pin as the chip names it: GPA0…GPM7, or a keyboard-scan pin used as GPIO, KSO0…KSO17 or KSI0…KSI7 (not a package ball)."),
                 Column("direction", "Direction", .enum, required: true, values: ["in", "out", "alt", "bidir"],
                        summary: "How the firmware sets it."),
                 Column("function", "Function", .text, required: true, summary: "What the pin does in this firmware."),
+                Column("group", "Group", .enum, values: ["power", "chipset", "input", "indicator", "usb", "other"],
+                       valueTitles: ["power": "Power", "chipset": "Chipset", "input": "Input", "indicator": "Indicators",
+                                     "usb": "USB", "other": "Other"],
+                       summary: "What the pin serves, for the panel's grouping: power, chipset, input, indicator, usb or other."),
                 Column("active_level", "Active level", .enum, values: ["high", "low"], summary: "The level that asserts it."),
                 Column("init", "Initial state", .text, summary: "How the firmware sets it up."),
                 Column("accessed_by", "Accessed by", .list, of: .code, summary: "The code that reads or drives it.")
-               ]),
+               ],
+               groupBy: "group"),
         Record(id: "eflash_area", title: "Flash data area",
                summary: "The EC's flash data area past the image extent: every range or address the code "
                   + "reads, writes or erases there; the function that does it; the record format; and what "
@@ -685,6 +720,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                unansweredGate: true, panel: PanelSection(order: 5, symbol: "internaldrive"),
                key: ["address"],
                columns: [
+                Column("label", "Label", .text, pattern: ".{1,40}",
+                       summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("address", "Address", .data, required: true,
                        summary: "Where the area starts (its label in eflash_data)."),
                 Column("size", "Size", .int, required: true, min: 1, hex: true, summary: "Its size in bytes."),

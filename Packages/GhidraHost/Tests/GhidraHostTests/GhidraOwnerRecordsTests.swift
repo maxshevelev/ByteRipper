@@ -90,7 +90,8 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         let sent = try object(try await host.recordWriteBody(module, body: body))
         let schema = try XCTUnwrap(sent["schema"] as? [String: Any])
         XCTAssertEqual(schema["key"] as? [String], ["ports", "cmd", "sub", "mode"])
-        XCTAssertEqual((schema["columns"] as? [[String: Any]])?.first?["id"] as? String, "ports")
+        XCTAssertEqual((schema["columns"] as? [[String: Any]])?.compactMap { $0["id"] as? String }.prefix(2),
+                       ["label", "ports"])
         let refKeys = try XCTUnwrap(schema["ref_keys"] as? [String: Any])
         XCTAssertEqual((refKeys["ec_ram"] as? [[String: Any]])?.compactMap { $0["id"] as? String }, ["offset"])
 
@@ -102,12 +103,32 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         XCTAssertEqual(((flash["schema"] as? [String: Any])?["ref_keys"] as? [String: Any])?.keys.sorted(), ["host_commands"])
     }
 
+    /// Profile 3's `label` (every record) and GPIO's `group`: a column the
+    /// schema names is taken, a label past 40 characters is refused.
+    func testALabelAndAGroupAreTaken() async throws {
+        try await open()
+        let (code, _) = try await entries()
+        var row = irq(4, code)
+        row["label"] = "1 ms tick"
+        try await set(["record": "irq_map", "status": "partial", "upsert": [row]])
+        let answer = try await read("irq_map")
+        let rows = try XCTUnwrap(try record(answer, "irq_map")["rows"] as? [[String: Any]])
+        XCTAssertEqual(rows.first?["label"] as? String, "1 ms tick")
+        row["label"] = String(repeating: "x", count: 41)
+        await refused(["record": "irq_map", "upsert": [row]], saying: "label")
+        try await set(["record": "gpio", "status": "partial", "upsert": [[
+            "pin": "GPA3", "direction": "out", "function": "Power LED.", "group": "indicator", "confidence": "established"]]])
+        await refused(["record": "gpio", "upsert": [[
+            "pin": "GPA4", "direction": "out", "function": "x", "group": "lights", "confidence": "established"]]],
+                      saying: "group")
+    }
+
     // MARK: - Refusals
 
     func testEveryKindOfWrongValueIsRefused() async throws {
         try await open()
         let (code, _) = try await entries()
-        await refused(["record": "nope", "status": "none", "note": "x"], saying: "is not a record of ec-ite-nds32@2")
+        await refused(["record": "nope", "status": "none", "note": "x"], saying: "is not a record of ec-ite-nds32@3")
         await refused(["record": "irq_map", "rows": [irq(4, code).merging(["colour": "red"]) { $1 }]],
                       saying: "irq_map[row 0].colour: expected one of the record's columns")
         var missing = irq(4, code)
@@ -370,7 +391,7 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         let publication = try await host.publish(module, by: "GhidraOwnerRecordsTests")
         let reading = try XCTUnwrap(publication.manifest.reading)
         XCTAssertEqual(reading.records, ["irq_map": "complete", "gpio": "none", "ec_ram": "partial"])
-        XCTAssertEqual(reading.profile, "ec-ite-nds32@2")
+        XCTAssertEqual(reading.profile, "ec-ite-nds32@3")
         XCTAssertNotEqual(publication.manifest.reviewProgress, .complete)
 
         let answer = try object(try JSONEncoder().encode(PublishAnswer(publication)))

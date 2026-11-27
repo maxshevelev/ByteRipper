@@ -82,25 +82,22 @@ The tabs of the switch depend on the kind of module the panel reads. A UEFI modu
 
 ## Records of an EC image
 
-Each EC section is a table, one row per thing the review found: an interrupt, a host command, a field of EC RAM, a device on the SMBus, a pin, an area of flash. The columns are the record's own; a header's tooltip says what its column holds. The rows are those of the revision the panel shows.
+Each EC section is a list, one line per thing the review found: an interrupt, a host command, a field of EC RAM, a device on the SMBus, a pin, an area of flash. A line gives the thing's key and a short name: **IRQ 24**, the command byte with its subcommand after a slash (**0x59/0x02**), the range of an EC RAM field wider than a byte (**0x2A–0x2B**), the 7-bit address of an SMBus device, the pin, the start of a flash area. Where the review gave no short name, the line shows the first sentence of what the thing does. The rows are those of the revision the panel shows.
 
-Some sections begin with a few lines on what their subject is. **Host commands** explains what a host command is and where it travels from the host to the EC.
+A line carries at most one mark at its end. A **?** marks a row the review concluded rather than read directly from the code, and the line is in italics; the pointer over the **?** shows the reason. A pin carries an arrow for its direction: up for an output, down for an input. An interrupt the firmware does not enable is in grey. **flash** after a command's byte marks a command the EC takes only in flash (update) mode; **PEC** after an SMBus address marks a device whose transfers carry a PEC byte.
 
-Some sections are a tree rather than a flat table: the rows stand under the value they share. **Host commands** are grouped by port pair — 60/64, 62/66 and 68/6C — each branch with a line on what that pair is used for, and every pair is shown even when the review found no commands on it; **SMBus and I2C** are grouped by channel. The arrow before a branch opens and closes it; every branch is open when the section is shown.
+Some sections are a tree, and each branch shows how many rows it holds. **Host commands** stand under their port pair, each named by its purpose — **60/64 Keyboard controller**, **62/66 ACPI EC**, **68/6C OEM channel** — and every pair is shown even when the review found no commands on it; the (i) on a branch opens a popover with the ports and what they are used for. A command the EC takes on two port pairs appears under both. **Interrupts** are divided into **Enabled** and **Not enabled**, **SMBus and I2C** stand under their channel, and **GPIO** under what the pin serves — power, chipset, input, indicators, USB — with **Other** for a pin the review has not placed. The arrow before a branch opens and closes it.
 
-The line over the table says how far the review has got with the record:
+The selected row's details are under the list: its key and short name, a sentence on what it does, and then its fields, each once: the facts first, then the places it leads to, and last whether the review read it from the code or concluded it, with the review's note. An SMBus device's commands are a small table of command, read or write, size and meaning. An address in blue is a link: a click on a handler or on a function in **Accessed by**, **Callers**, **Readers** or **Writers** opens that place in the code; a click on an address of data opens the instruction that uses it. A value that names a row of another record — the EC RAM fields of a host command, the host commands that reach a flash area — switches to that record's tab and selects the row. The details also list the rows of other records that name this one: for an EC RAM field the host commands that read or write it, for a host command the flash data areas it reaches.
 
-- **Not answered yet.** The review has not dealt with this record; the table is empty.
-- **Review continues.** The rows so far, and below them the review's note on what is still missing.
-- **Complete.** Every row the code gives; a note under the line, when there is one, says what is outside the table, such as "all other IRQs: empty stub".
+The line over the list gives the section's name and how far the review has got with the record. The arrow before it opens the legend: what the record is and, when the review left one, its note on the record. The legend is shut until it is opened, and stays open or shut for that section. The states are:
+
+- **Not answered yet.** The review has not dealt with this record; the list is empty.
+- **Review continues.** The rows so far; the note says what is still missing.
+- **Complete.** Every row the code gives; the note, when there is one, says what is outside the list, such as "all other IRQs: empty stub".
 - **None** with the reason: the firmware has nothing of this kind.
 
-A row the review concluded rather than read directly from the code is in italics, with a **?** before it; the pointer over the **?** shows the reason. The pointer over any cell of a row shows the row's note.
-
-An address in blue is a link: a click on a handler or on a function in **Accessed by**, **Callers**, **Readers** or **Writers** opens that place in the code; a click on an address of data opens the instruction that uses it. A cell that names a row of another record — the EC RAM fields of a host command, the host commands that reach a flash area — switches to that record's tab and selects the row. Where a cell holds several addresses or rows, the click offers them in a menu. The commands an SMBus device is sent are counted in their cell, and the pointer over it lists them.
-
-The field above the table filters the rows by any text in them, and in a tree hides a branch with no matching row; a click on a column's header sorts by it, within each branch in a tree. **Copy Row as TSV** in the right-click menu copies the selected rows, tab-separated, for a spreadsheet or a report.
-
+The **Filter** field at the foot of the panel, where the Functions list has its own, filters the rows by their key and short name, and in a tree hides a branch with no matching row. **Copy Row as TSV** in the right-click menu copies the selected rows with all their fields, tab-separated, for a spreadsheet or a report.
 ## Copying a name
 
 The module's name at the top of the code panel can be selected and copied, and so can a function's name in the list of functions: **Copy Name** in the row's right-click menu, or **Edit ▸ Copy** (**⌘C**) while the list has the keyboard.

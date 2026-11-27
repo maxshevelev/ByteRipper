@@ -27,7 +27,7 @@ final class ECRegisterSeedTests: XCTestCase {
     func testADryRunWritesNothing() throws {
         let report = try ECRegisterSeed.run(store: store, chip: "it8227e", reference: reference, apply: false)
         XCTAssertFalse(report.applied)
-        XCTAssertEqual(report.registers.added + report.registers.aliases, 664)
+        XCTAssertEqual(report.registers.added + report.registers.aliases, 671)
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.registersURL.appendingPathComponent("it8227e.json").path))
         XCTAssertEqual(try store.registerFile("it8227e").version, 0)
     }
@@ -36,8 +36,8 @@ final class ECRegisterSeedTests: XCTestCase {
         let report = try ECRegisterSeed.run(store: store, chip: "it8227e", reference: reference, apply: true)
         XCTAssertTrue(report.applied)
         XCTAssertEqual(report.versionAfter, 1)
-        // 664 register rows: 663 addresses, one with an alias.
-        XCTAssertEqual(report.registers.added, 663)
+        // 671 register rows: 670 addresses, one with an alias.
+        XCTAssertEqual(report.registers.added, 670)
         XCTAssertEqual(report.registers.aliases, 1)
         XCTAssertEqual(report.registers.history, 10)
         XCTAssertEqual(report.irqs.added, 174)
@@ -46,7 +46,7 @@ final class ECRegisterSeedTests: XCTestCase {
 
         let file = try store.registerFile("it8227e")
         XCTAssertEqual(file.version, 1)
-        XCTAssertEqual(file.registers.count, 663)
+        XCTAssertEqual(file.registers.count, 670)
         XCTAssertEqual(file.irqs.count, 174)
         let spi = try XCTUnwrap(file.registers["0x00F03A08"])
         XCTAssertEqual(spi.current.names.count, 2)
@@ -66,7 +66,7 @@ final class ECRegisterSeedTests: XCTestCase {
 
         let again = try ECRegisterSeed.run(store: store, chip: "it8227e", reference: reference, apply: true)
         XCTAssertEqual(again.registers.added + again.irqs.added, 0)
-        XCTAssertEqual(again.registers.same, 663)
+        XCTAssertEqual(again.registers.same, 670)
         XCTAssertFalse(again.applied)
         XCTAssertEqual(try store.registerFile("it8227e").version, 1, "a seed that adds nothing is no version")
     }

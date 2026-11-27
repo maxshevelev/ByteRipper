@@ -12,7 +12,7 @@ final class AnalysisProfileTests: XCTestCase {
 
     func testAnITEECModuleIsEcIteNds32() {
         XCTAssertEqual(AnalysisProfile.derive(kind: "EC", ecFamily: "ite-nds32"), .ecIteNds32)
-        XCTAssertEqual(AnalysisProfile.derive(kind: "EC", ecFamily: "ite-nds32")?.stamp, "ec-ite-nds32@2")
+        XCTAssertEqual(AnalysisProfile.derive(kind: "EC", ecFamily: "ite-nds32")?.stamp, "ec-ite-nds32@3")
     }
 
     /// An unknown kind is refused, never given UEFI's rules.
@@ -27,7 +27,7 @@ final class AnalysisProfileTests: XCTestCase {
 
     func testTheCatalogue() {
         let catalogue = AnalysisProfile.catalogue
-        XCTAssertEqual(catalogue.map(\.stamp), ["uefi@1", "ec-ite-nds32@2"])
+        XCTAssertEqual(catalogue.map(\.stamp), ["uefi@1", "ec-ite-nds32@3"])
         XCTAssertEqual(Set(catalogue.map(\.id)).count, catalogue.count)
         for profile in catalogue {
             XCTAssertEqual(Set(profile.records.map(\.id)).count, profile.records.count, profile.id)
@@ -151,7 +151,9 @@ final class AnalysisProfileTests: XCTestCase {
         let irq = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "irq_map" })
         let plain = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(irq)) as? [String: Any])
         XCTAssertNil(plain["header"])
-        XCTAssertNil(plain["group_by"])
+        let ram = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "ec_ram" })
+        let flat = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(ram)) as? [String: Any])
+        XCTAssertNil(flat["group_by"])
 
         let old = #"{"id":"r","title":"R","summary":"s","unanswered_gate":true,"key":["a"],"#
             + #""columns":[{"id":"a","title":"A","kind":"enum","required":true,"values":["x"],"summary":"a"}]}"#
@@ -159,6 +161,37 @@ final class AnalysisProfileTests: XCTestCase {
         XCTAssertNil(read.header)
         XCTAssertNil(read.groupBy)
         XCTAssertNil(read.columns.first?.valueSummaries)
+        XCTAssertNil(read.columns.first?.valueTitles)
+    }
+
+    /// Every EC record takes a short `label` for the panel's list; GPIO a
+    /// `group`; the records the panel groups name their branches.
+    func testLabelsGroupsAndBranchTitles() throws {
+        func record(_ id: String) throws -> AnalysisProfile.Record {
+            try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == id })
+        }
+        for record in AnalysisProfile.ecIteNds32.records {
+            let label = try XCTUnwrap(record.column("label"), record.id)
+            XCTAssertEqual(label.kind, .text)
+            XCTAssertFalse(label.required)
+            XCTAssertFalse(record.key.contains("label"))
+        }
+        XCTAssertEqual(try record("gpio").column("group")?.values,
+                       ["power", "chipset", "input", "indicator", "usb", "other"])
+        XCTAssertEqual(try record("gpio").groupBy, "group")
+        XCTAssertEqual(try record("irq_map").groupBy, "enabled_by_firmware")
+        XCTAssertEqual(try record("irq_map").column("enabled_by_firmware")?.valueTitles,
+                       ["true": "Enabled", "false": "Not enabled"])
+        XCTAssertNil(try record("ec_ram").groupBy)
+        XCTAssertNil(try record("eflash_area").groupBy)
+        let host = try record("host_commands")
+        XCTAssertEqual(host.column("ports")?.valueTitles, ["60/64": "Keyboard controller", "62/66": "ACPI EC",
+                                                          "68/6C": "OEM channel"])
+        XCTAssertFalse(host.header?.contains("PMC") ?? true, "the port pairs' words are their own")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(host)) as? [String: Any])
+        let ports = try XCTUnwrap((object["columns"] as? [[String: Any]])?.first { $0["id"] as? String == "ports" })
+        XCTAssertEqual((ports["value_titles"] as? [String: String])?.count, 3)
+        XCTAssertEqual(try JSONDecoder().decode(AnalysisProfile.Record.self, from: JSONEncoder().encode(host)), host)
     }
 
     // MARK: - The Code panel
@@ -199,7 +232,7 @@ final class AnalysisProfileTests: XCTestCase {
     /// declared twice.
     func testTheECRecordsHaveTables() throws {
         let ec = AnalysisProfile.ecIteNds32
-        XCTAssertEqual(ec.version, 2)
+        XCTAssertEqual(ec.version, 3)
         let ids = Set(ec.records.map(\.id))
         for record in ec.records {
             XCTAssertFalse(record.columns.isEmpty, record.id)

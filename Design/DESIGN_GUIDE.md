@@ -137,9 +137,23 @@ a cut's offset and description.
   with confidence `inference`) is drawn in italics, with `questionmark.circle`
   in the secondary colour in its first cell — the marker slot of
   `ToolPanelTable.makeCell(marker:)` set with `setMarker`; the pointer on it
-  reads "Inference: <the row's note>" (`CodeRecordSectionView`). A nested
-  list in a cell (an SMBus device's commands) is a count in the cell and the
-  full list in its tooltip, not a popover: it leads nowhere.
+  reads "Inference: <the row's note>" (`CodeRecordSectionView`).
+- **A record tab in the navigator** is a list and details, as Functions:
+  one column, a line of key in monospace and a short label (the `label`
+  column, else the first sentence of the main text), labels aligned past the
+  widest key by a tab stop, no sideways scroll. A line carries at most one
+  mark, at its trailing edge: the inference **?**, a pin's direction arrow,
+  or grey text for an interrupt left off — the record list's one deviation
+  from the marker slot before the name. A branch shows its row count and,
+  for a port pair, an (i) with a popover; its words are not in its cell's
+  `textField`, since AppKit draws a group row's `textField` in its own font
+  until the row is made again. The selected row's details are a
+  `ToolDetailScroll` under the list: title, one sentence, each field once,
+  links, back-references, confidence and note. Over the list stands a legend
+  built as `ToolRowMarksLegend`'s: a disclosure, one line of name and status,
+  the record's description and note under it, shut by default and
+  remembered per record in `ToolPanelFont.defaults`. The filter is at the
+  foot, as the Functions list has it (`CodePaneView.dressFilter`).
 
 ## 4a. The reader's line in read-only text
 

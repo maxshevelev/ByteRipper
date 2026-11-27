@@ -129,4 +129,35 @@ final class CodeNavigatorTabsTests: XCTestCase {
         XCTAssertTrue(pane.recordPanel === section, "the section is not rebuilt")
         XCTAssertEqual(pane.manifest.reading?.rev, 2)
     }
+
+    /// A function's tooltip never shows over another tab: the Functions list
+    /// is hidden, not only covered, while Search, Interfaces or a record is in
+    /// front, on every way there and back.
+    func testTheFunctionsListIsHiddenUnderEveryTab() throws {
+        let pane = try self.pane(kind: "EC", ecFamily: "ite-nds32")
+        pane.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        pane.layoutSubtreeIfNeeded()
+        XCTAssertFalse(pane.functionScroll.isHidden)
+        func underRecordRow() -> NSView? {
+            let point = pane.recordPanel.convert(NSPoint(x: 20, y: pane.recordPanel.bounds.midY), to: pane)
+            return pane.hitTest(point)
+        }
+        pane.showRecordSection("irq_map")
+        XCTAssertTrue(pane.functionScroll.isHidden)
+        XCTAssertFalse(underRecordRow()?.isDescendant(of: pane.functionTable) ?? false)
+        pane.showSearchTab(true)
+        XCTAssertTrue(pane.functionScroll.isHidden)
+        pane.showSearchTab(false)
+        XCTAssertFalse(pane.functionScroll.isHidden, "back to the list")
+        pane.showRecordSection("gpio")
+        XCTAssertTrue(pane.functionScroll.isHidden)
+        pane.showRecordSection(nil)
+        XCTAssertFalse(pane.functionScroll.isHidden)
+
+        let uefi = try self.pane(kind: "PE32")
+        uefi.showInterfacesTab(true)
+        XCTAssertTrue(uefi.functionScroll.isHidden)
+        uefi.showInterfacesTab(false)
+        XCTAssertFalse(uefi.functionScroll.isHidden)
+    }
 }

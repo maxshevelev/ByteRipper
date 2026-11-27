@@ -1,4 +1,4 @@
-@source-sha 36b2e7f4eddf863e8b68afaf126441e186c6784224d74cd70eb30adca2eed421
+@source-sha 97e0a0a258cbeb30111e8e4bdc184a795e5cb77742b64adf20a3fd80bf12de66
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -57,25 +57,22 @@ Welche Tabs der Umschalter zeigt, hängt vom Typ des Moduls ab. Ein UEFI-Modul h
 
 ## Einträge eines EC-Images
 
-Jeder EC-Abschnitt ist eine Tabelle mit einer Zeile für jedes Element, das die Analyse gefunden hat: ein Interrupt, ein Host-Befehl, ein Feld des EC-RAM, ein Gerät am SMBus, ein Pin, ein Bereich im Flash. Die Spalten sind die des jeweiligen Eintrags; der Tooltip eines Spaltenkopfs gibt an, was die Spalte enthält. Die Zeilen gehören zu der Revision, die der Bereich anzeigt.
+Jeder EC-Abschnitt ist eine Liste mit einer Zeile für jedes Element, das die Analyse gefunden hat: ein Interrupt, ein Host-Befehl, ein Feld des EC-RAM, ein Gerät am SMBus, ein Pin, ein Bereich im Flash. Eine Zeile nennt den Schlüssel des Elements und einen Kurznamen: **IRQ 24**, das Befehlsbyte mit dem Unterbefehl nach einem Schrägstrich (**0x59/0x02**), den Adressbereich eines EC-RAM-Felds, das breiter als ein Byte ist (**0x2A–0x2B**), die 7-Bit-Adresse eines SMBus-Geräts, den Pin, den Anfang eines Flash-Bereichs. Hat die Analyse keinen Kurznamen vergeben, zeigt die Zeile den ersten Satz der Beschreibung. Die Zeilen gehören zu der Revision, die der Bereich anzeigt.
 
-Manche Abschnitte beginnen mit einigen Zeilen zu ihrem Gegenstand. **Host-Befehle** erläutert, was ein Host-Befehl ist und auf welchem Weg er vom Host zum EC gelangt.
+Eine Zeile trägt am Ende höchstens eine Markierung. Ein **?** kennzeichnet eine Zeile, die die Analyse erschlossen und nicht unmittelbar aus dem Code gelesen hat; sie steht kursiv, und der Zeiger auf dem **?** zeigt die Begründung. Ein Pin trägt einen Pfeil für seine Richtung: nach oben für einen Ausgang, nach unten für einen Eingang. Ein Interrupt, den die Firmware nicht aktiviert, steht grau. **Flash** nach dem Befehlsbyte kennzeichnet einen Befehl, den der EC nur im Flash-Modus (Update) annimmt; **PEC** nach einer SMBus-Adresse ein Gerät, dessen Übertragungen ein PEC-Byte tragen.
 
-Manche Abschnitte sind statt einer flachen Tabelle ein Baum: Die Zeilen stehen unter dem Wert, den sie gemeinsam haben. **Host-Befehle** sind nach Portpaaren gruppiert – 60/64, 62/66 und 68/6C –, jeder Zweig mit einer Zeile dazu, wofür das Paar dient; jedes Paar erscheint auch dann, wenn die Analyse dort keinen Befehl gefunden hat. **SMBus und I2C** ist nach Kanälen gruppiert. Der Pfeil vor einem Zweig klappt ihn auf und zu; beim Anzeigen des Abschnitts sind alle Zweige aufgeklappt.
+Manche Abschnitte sind ein Baum, und jeder Zweig gibt an, wie viele Zeilen er enthält. **Host-Befehle** stehen unter ihrem Portpaar, jedes nach seinem Zweck benannt – **60/64 Tastaturcontroller**, **62/66 ACPI-EC**, **68/6C OEM-Kanal** –; jedes Paar erscheint auch dann, wenn die Analyse dort keinen Befehl gefunden hat. Das (i) an einem Zweig öffnet ein Popover mit den Ports und ihrem Zweck. Ein Befehl, den der EC an zwei Portpaaren annimmt, erscheint unter beiden. **Interrupts** sind in **Aktiviert** und **Nicht aktiviert** geteilt, **SMBus und I2C** stehen unter ihrem Kanal, **GPIO** unter dem Zweck des Pins – Stromversorgung, Chipsatz, Eingang, Anzeigen, USB –, ein Pin ohne Zuordnung unter **Sonstige**. Der Pfeil vor einem Zweig klappt ihn auf und zu.
 
-Die Zeile über der Tabelle gibt den Stand des Eintrags an:
+Unter der Liste stehen die Details der ausgewählten Zeile: Schlüssel und Kurzname, ein Satz dazu, was das Element tut, und dann seine Felder, jedes einmal: zuerst die Angaben, dann die Links, zuletzt, ob die Analyse die Zeile aus dem Code gelesen oder erschlossen hat, mit ihrem Hinweis. Die Befehle eines SMBus-Geräts stehen in einer kleinen Tabelle: Befehl, Lesen oder Schreiben, Größe und Bedeutung. Eine blaue Adresse ist ein Link: Ein Klick auf einen Handler oder auf eine Funktion in **Zugriff durch**, **Aufrufer**, **Leser** oder **Schreiber** öffnet diese Stelle im Code; ein Klick auf eine Datenadresse öffnet die Instruktion, die sie verwendet. Ein Wert, der eine Zeile eines anderen Eintrags nennt – die EC-RAM-Felder eines Host-Befehls, die Host-Befehle eines Flash-Bereichs –, wechselt zum Tab dieses Eintrags und wählt die Zeile aus. Die Details listen auch die Zeilen anderer Einträge auf, die diese nennen: bei einem EC-RAM-Feld die Host-Befehle, die es lesen oder schreiben, bei einem Host-Befehl die Flash-Datenbereiche, die er erreicht.
 
-- **Noch nicht bearbeitet.** Die Analyse hat diesen Eintrag noch nicht behandelt; die Tabelle ist leer.
-- **Analyse läuft.** Die bisherigen Zeilen, darunter der Hinweis der Analyse, was noch fehlt.
-- **Vollständig.** Alle Zeilen, die sich aus dem Code ergeben; ein Hinweis unter der Zeile gibt gegebenenfalls an, was außerhalb der Tabelle liegt, etwa „all other IRQs: empty stub“.
+Die Zeile über der Liste nennt den Abschnitt und den Stand des Eintrags. Der Pfeil davor öffnet die Erläuterung: was der Eintrag enthält und, falls die Analyse einen hinterlassen hat, ihren Hinweis dazu. Die Erläuterung ist zugeklappt, bis sie geöffnet wird, und bleibt für jeden Abschnitt offen oder zu. Die Stände sind:
+
+- **Noch nicht bearbeitet.** Die Analyse hat diesen Eintrag noch nicht behandelt; die Liste ist leer.
+- **Analyse läuft.** Die bisherigen Zeilen; der Hinweis gibt an, was noch fehlt.
+- **Vollständig.** Alle Zeilen, die sich aus dem Code ergeben; der Hinweis gibt gegebenenfalls an, was außerhalb der Liste liegt, etwa „all other IRQs: empty stub“.
 - **Keine** mit Begründung: Die Firmware enthält nichts dieser Art.
 
-Eine Zeile, die die Analyse erschlossen und nicht unmittelbar aus dem Code gelesen hat, steht kursiv und trägt ein **?**; der Zeiger auf dem **?** zeigt die Begründung. Der Zeiger auf einer beliebigen Zelle zeigt den Hinweis der Zeile.
-
-Eine blaue Adresse ist ein Link: Ein Klick auf einen Handler oder auf eine Funktion in **Zugriff durch**, **Aufrufer**, **Leser** oder **Schreiber** öffnet diese Stelle im Code; ein Klick auf eine Datenadresse öffnet die Instruktion, die sie verwendet. Eine Zelle, die eine Zeile eines anderen Eintrags nennt – die EC-RAM-Felder eines Host-Befehls, die Host-Befehle eines Flash-Bereichs –, wechselt zum Tab dieses Eintrags und wählt die Zeile aus. Enthält eine Zelle mehrere Adressen oder Zeilen, bietet der Klick sie in einem Menü an. Die Befehle eines SMBus-Geräts sind in ihrer Zelle gezählt; der Zeiger darauf listet sie auf.
-
-Das Feld über der Tabelle filtert die Zeilen nach beliebigem Text darin und blendet in einem Baum Zweige ohne passende Zeile aus; ein Klick auf einen Spaltenkopf sortiert danach, in einem Baum innerhalb jedes Zweigs. **Zeile als TSV kopieren** im Kontextmenü kopiert die ausgewählten Zeilen tabulatorgetrennt, etwa für eine Tabellenkalkulation oder einen Bericht.
-
+Das Feld **Filter** am Fuß des Bereichs, an derselben Stelle wie bei der Funktionsliste, filtert die Zeilen nach Schlüssel und Kurzname und blendet in einem Baum Zweige ohne passende Zeile aus. **Zeile als TSV kopieren** im Kontextmenü kopiert die ausgewählten Zeilen mit allen Feldern tabulatorgetrennt, etwa für eine Tabellenkalkulation oder einen Bericht.
 ## Einen Namen kopieren
 
 Den Namen des Moduls oben im Code-Bereich kann man auswählen und kopieren, ebenso den Namen einer Funktion in der Funktionsliste: mit **Namen kopieren** im Kontextmenü der Zeile oder mit **Bearbeiten ▸ Kopieren** (**⌘C**), solange die Liste die Tastatur hat.

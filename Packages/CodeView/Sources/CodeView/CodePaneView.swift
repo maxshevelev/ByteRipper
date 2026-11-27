@@ -63,9 +63,9 @@ import ToolModuleKit
     /// entry is the ordinary case; more makes the header offer the others.
     private var recipes: [AnalysisManifest]
 
-    private let functionTable = NSTableView()
+    private(set) var functionTable = NSTableView()
     var functionTableForTests: NSTableView { functionTable }
-    private let functionScroll = NSScrollView()
+    private(set) var functionScroll = NSScrollView()
     /// The band under the list's switch: the review's groups as a strip, each
     /// as wide as its share of the module's functions.
     private let readinessBar = CodeReviewReadinessBar()
@@ -326,7 +326,7 @@ import ToolModuleKit
     /// filter at the standard size and this room around it, since the standard
     /// size is the system's to change from one macOS to the next. Then how far
     /// a call tree's row is set in per level.
-    private static let navigatorBarRoom: CGFloat = 6
+    static let navigatorBarRoom: CGFloat = 6
     /// A function-view button: the square each symbol sits in, and the room
     /// between two of them — enough that three read as three buttons.
     private static let orderButtonWidth: CGFloat = 24
@@ -1800,7 +1800,7 @@ import ToolModuleKit
         var counts: [CodeReaderState.FunctionGroup: Int] = [:]
         for index in model.functions.indices { counts[state.group(of: index), default: 0] += 1 }
         readinessBar.show(counts)
-        readinessBar.isHidden = !showsOrder
+        readinessBar.isHidden = !showsOrder || showsNavigatorTab
         readinessHeight.constant = showsOrder ? CodeReviewReadinessBar.height : 0
         markChosenOrder(state.functionOrder)
         layOutNavigatorColumns()
@@ -2701,10 +2701,10 @@ import ToolModuleKit
     /// `ReportStatusCode` calls only through the 32-bit PEI services table.
     private func drawEmptyList() {
         emptyListLabel.font = Self.navigatorFont()
-        emptyListLabel.isHidden = state.rowCount > 0
+        emptyListLabel.isHidden = state.rowCount > 0 || showsNavigatorTab
         // An empty list shows no table: its column headers over nothing ran
         // into the sentence that stands in for the rows.
-        functionScroll.isHidden = state.rowCount == 0
+        functionScroll.isHidden = state.rowCount == 0 || showsNavigatorTab
         guard state.rowCount == 0 else { return }
         if !state.searchText.isEmpty {
             emptyListLabel.stringValue = L("Nothing matches the search.")
@@ -3067,14 +3067,23 @@ import ToolModuleKit
     /// The switch says which tab is in front: a list, or Search. The list's
     /// filter bar goes while the tab is up — the keyboard with it, or its
     /// focus ring would be drawn over the tab.
+    /// Whether a tab stands over the lists: Search, Interfaces or a record.
+    var showsNavigatorTab: Bool { showsSearchTab || showsInterfacesTab || shownRecordSection != nil }
+
     func drawListSwitch() {
         listControl.selectedSegment = shownSegment
-        let showsTab = showsSearchTab || showsInterfacesTab || shownRecordSection != nil
+        let showsTab = showsNavigatorTab
         if showsTab, let responder = window?.firstResponder as? NSView,
-           responder.isDescendant(of: navigatorBar) {
-            window?.makeFirstResponder(functionTable)
+           responder.isDescendant(of: navigatorBar) || responder.isDescendant(of: functionScroll) {
+            window?.makeFirstResponder(nil)
         }
         navigatorBar.isHidden = showsTab
+        // The lists under a tab are hidden, not only covered: a covered row
+        // still answers the pointer with its tooltip, and a function's showed
+        // over a record's rows.
+        functionScroll.isHidden = showsTab || state.rowCount == 0
+        readinessBar.isHidden = showsTab || readinessHeight.constant == 0
+        emptyListLabel.isHidden = showsTab || state.rowCount > 0
     }
 
     /// What the Search tab searches in its scope: the description as the
@@ -3969,11 +3978,7 @@ import ToolModuleKit
         listControl.setContentHuggingPriority(.defaultLow, for: .horizontal)
         listControl.translatesAutoresizingMaskIntoConstraints = false
 
-        searchField.placeholderString = L("Filter")
-        // Xcode's filter mark in place of the magnifier: the field narrows the
-        // list, it does not go looking.
-        (searchField.cell as? NSSearchFieldCell)?.searchButtonCell?.image =
-            NSImage(systemSymbolName: "line.3.horizontal.decrease.circle", accessibilityDescription: nil)
+        Self.dressFilter(searchField)
         searchField.target = self
         searchField.action = #selector(searchChanged)
         searchField.sendsSearchStringImmediately = true
@@ -4632,6 +4637,17 @@ import ToolModuleKit
     /// follows the zoom.
     static var navigatorSize: CGFloat {
         max(ToolPanelFont.sizeRange.lowerBound, ToolPanelFont.size - 1.5)
+    }
+
+    /// The navigator's filter, as every tab at the foot of the panel has it:
+    /// Xcode's filter mark in place of the magnifier — the field narrows the
+    /// list, it does not go looking.
+    static var filterPlaceholder: String { L("Filter") }
+
+    static func dressFilter(_ field: NSSearchField) {
+        field.placeholderString = filterPlaceholder
+        (field.cell as? NSSearchFieldCell)?.searchButtonCell?.image =
+            NSImage(systemSymbolName: "line.3.horizontal.decrease.circle", accessibilityDescription: nil)
     }
 
     static func navigatorFont() -> NSFont { .systemFont(ofSize: navigatorSize) }

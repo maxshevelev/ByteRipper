@@ -22,7 +22,7 @@ final class AnalysisProfileModuleTests: XCTestCase {
         let identity = ModuleIdentity(sha256: SHA256Digest(data: Data("ec".utf8)), size: 2, name: "m",
                                       kind: "EC", ec: ec("ite-nds32"))
         XCTAssertEqual(AnalysisProfile.derive(for: identity), .ecIteNds32)
-        XCTAssertEqual(AnalysisProfile.derive(for: identity)?.stamp, "ec-ite-nds32@2")
+        XCTAssertEqual(AnalysisProfile.derive(for: identity)?.stamp, "ec-ite-nds32@3")
     }
 
     func testTheLibraryKindsAreTheStoresKinds() {
