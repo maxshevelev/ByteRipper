@@ -1,4 +1,4 @@
-@source-sha 565ad9f78f965d3a636122ba119501b2a61a810b14fa7b176a42397e7fb59ab6
+@source-sha 36b2e7f4eddf863e8b68afaf126441e186c6784224d74cd70eb30adca2eed421
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -59,6 +59,10 @@ Welche Tabs der Umschalter zeigt, hängt vom Typ des Moduls ab. Ein UEFI-Modul h
 
 Jeder EC-Abschnitt ist eine Tabelle mit einer Zeile für jedes Element, das die Analyse gefunden hat: ein Interrupt, ein Host-Befehl, ein Feld des EC-RAM, ein Gerät am SMBus, ein Pin, ein Bereich im Flash. Die Spalten sind die des jeweiligen Eintrags; der Tooltip eines Spaltenkopfs gibt an, was die Spalte enthält. Die Zeilen gehören zu der Revision, die der Bereich anzeigt.
 
+Manche Abschnitte beginnen mit einigen Zeilen zu ihrem Gegenstand. **Host-Befehle** erläutert, was ein Host-Befehl ist und auf welchem Weg er vom Host zum EC gelangt.
+
+Manche Abschnitte sind statt einer flachen Tabelle ein Baum: Die Zeilen stehen unter dem Wert, den sie gemeinsam haben. **Host-Befehle** sind nach Portpaaren gruppiert – 60/64, 62/66 und 68/6C –, jeder Zweig mit einer Zeile dazu, wofür das Paar dient; jedes Paar erscheint auch dann, wenn die Analyse dort keinen Befehl gefunden hat. **SMBus und I2C** ist nach Kanälen gruppiert. Der Pfeil vor einem Zweig klappt ihn auf und zu; beim Anzeigen des Abschnitts sind alle Zweige aufgeklappt.
+
 Die Zeile über der Tabelle gibt den Stand des Eintrags an:
 
 - **Noch nicht bearbeitet.** Die Analyse hat diesen Eintrag noch nicht behandelt; die Tabelle ist leer.
@@ -70,7 +74,7 @@ Eine Zeile, die die Analyse erschlossen und nicht unmittelbar aus dem Code geles
 
 Eine blaue Adresse ist ein Link: Ein Klick auf einen Handler oder auf eine Funktion in **Zugriff durch**, **Aufrufer**, **Leser** oder **Schreiber** öffnet diese Stelle im Code; ein Klick auf eine Datenadresse öffnet die Instruktion, die sie verwendet. Eine Zelle, die eine Zeile eines anderen Eintrags nennt – die EC-RAM-Felder eines Host-Befehls, die Host-Befehle eines Flash-Bereichs –, wechselt zum Tab dieses Eintrags und wählt die Zeile aus. Enthält eine Zelle mehrere Adressen oder Zeilen, bietet der Klick sie in einem Menü an. Die Befehle eines SMBus-Geräts sind in ihrer Zelle gezählt; der Zeiger darauf listet sie auf.
 
-Das Feld über der Tabelle filtert die Zeilen nach beliebigem Text darin; ein Klick auf einen Spaltenkopf sortiert danach. **Zeile als TSV kopieren** im Kontextmenü kopiert die ausgewählten Zeilen tabulatorgetrennt, etwa für eine Tabellenkalkulation oder einen Bericht.
+Das Feld über der Tabelle filtert die Zeilen nach beliebigem Text darin und blendet in einem Baum Zweige ohne passende Zeile aus; ein Klick auf einen Spaltenkopf sortiert danach, in einem Baum innerhalb jedes Zweigs. **Zeile als TSV kopieren** im Kontextmenü kopiert die ausgewählten Zeilen tabulatorgetrennt, etwa für eine Tabellenkalkulation oder einen Bericht.
 
 ## Einen Namen kopieren
 

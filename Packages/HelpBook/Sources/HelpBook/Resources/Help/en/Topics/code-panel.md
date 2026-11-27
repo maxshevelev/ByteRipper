@@ -84,6 +84,10 @@ The tabs of the switch depend on the kind of module the panel reads. A UEFI modu
 
 Each EC section is a table, one row per thing the review found: an interrupt, a host command, a field of EC RAM, a device on the SMBus, a pin, an area of flash. The columns are the record's own; a header's tooltip says what its column holds. The rows are those of the revision the panel shows.
 
+Some sections begin with a few lines on what their subject is. **Host commands** explains what a host command is and where it travels from the host to the EC.
+
+Some sections are a tree rather than a flat table: the rows stand under the value they share. **Host commands** are grouped by port pair — 60/64, 62/66 and 68/6C — each branch with a line on what that pair is used for, and every pair is shown even when the review found no commands on it; **SMBus and I2C** are grouped by channel. The arrow before a branch opens and closes it; every branch is open when the section is shown.
+
 The line over the table says how far the review has got with the record:
 
 - **Not answered yet.** The review has not dealt with this record; the table is empty.
@@ -95,7 +99,7 @@ A row the review concluded rather than read directly from the code is in italics
 
 An address in blue is a link: a click on a handler or on a function in **Accessed by**, **Callers**, **Readers** or **Writers** opens that place in the code; a click on an address of data opens the instruction that uses it. A cell that names a row of another record — the EC RAM fields of a host command, the host commands that reach a flash area — switches to that record's tab and selects the row. Where a cell holds several addresses or rows, the click offers them in a menu. The commands an SMBus device is sent are counted in their cell, and the pointer over it lists them.
 
-The field above the table filters the rows by any text in them; a click on a column's header sorts by it. **Copy Row as TSV** in the right-click menu copies the selected rows, tab-separated, for a spreadsheet or a report.
+The field above the table filters the rows by any text in them, and in a tree hides a branch with no matching row; a click on a column's header sorts by it, within each branch in a tree. **Copy Row as TSV** in the right-click menu copies the selected rows, tab-separated, for a spreadsheet or a report.
 
 ## Copying a name
 

@@ -14,15 +14,25 @@ import ToolModuleKit
 /// (`setRecords`); until it is read, the manifest's statuses stand for it.
 /// An address cell is a link (`onOpenAddress`); a cell naming a row of
 /// another record switches to that record and selects the row.
+///
+/// A record with a `header` says above its status line what its subject is;
+/// one with `groupBy` is a tree: a branch per value of that column — the
+/// value in bold with what it stands for (`valueSummaries`) — and the rows
+/// under it. A value with words of its own is a branch even with no rows,
+/// so the reader sees every port pair; a filter hides a branch none of
+/// whose rows match.
 // help: panel.code.record-sections
-final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDelegate {
+final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
     /// The record id the section shows, nil before the first `show`.
     private(set) var recordID: String?
     private let titleLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
+    private let headerLabel = NSTextField(wrappingLabelWithString: "")
     private let searchField = NSSearchField()
-    let table = NSTableView()
+    /// The rows, a tree for a grouped record and a flat list otherwise. The
+    /// outline draws no triangle of its own: a branch carries its chevron.
+    let table = SearchOutlineView()
     private let tableScroll = NSScrollView()
     private let emptyLabel = NSTextField(wrappingLabelWithString: "")
 
@@ -40,8 +50,13 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
     private var fallbackTitle = ""
     /// Every row of the record, in the document's (key) order.
     private var allRows: [[String: RecordValue]] = []
-    /// The rows shown: filtered and sorted.
+    /// The rows shown: filtered and sorted, branch after branch for a
+    /// grouped record.
     private(set) var shownRows: [[String: RecordValue]] = []
+    /// The outline's items: branches for a grouped record, rows otherwise.
+    private var items: [AnyObject] = []
+    /// The branches the reader closed, by value; every other one is open.
+    private var collapsedGroups: Set<String> = []
     /// The key text of a row to select once the record is shown.
     private var pendingSelection: String?
 
@@ -53,6 +68,8 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
             label.isSelectable = true
             label.textColor = .secondaryLabelColor
         }
+        headerLabel.isSelectable = true
+        headerLabel.textColor = .labelColor
         // The same quiet, centred words as the navigator's empty lists.
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center
@@ -67,6 +84,9 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
 
         table.dataSource = self
         table.delegate = self
+        table.floatsGroupRows = false
+        table.indentationPerLevel = 0
+        table.autoresizesOutlineColumn = false
         table.usesAlternatingRowBackgroundColors = true
         table.allowsMultipleSelection = true
         table.columnAutoresizingStyle = .noColumnAutoresizing
@@ -81,22 +101,28 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
         tableScroll.hasHorizontalScroller = true
         tableScroll.autohidesScrollers = true
 
-        let column = [titleLabel, statusLabel, noteLabel, searchField, tableScroll, emptyLabel]
+        // The words over the table stand in a stack, so a header or a note
+        // the record has not got takes no room.
+        let words = NSStackView(views: [titleLabel, headerLabel, statusLabel, noteLabel])
+        words.orientation = .vertical
+        words.alignment = .leading
+        words.spacing = 4
+        words.setCustomSpacing(2, after: statusLabel)
+        words.detachesHiddenViews = true
+        let column = [words, searchField, tableScroll, emptyLabel]
         for view in column {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
-            statusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
-            statusLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            statusLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            noteLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 2),
-            noteLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            noteLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            searchField.topAnchor.constraint(equalTo: noteLabel.bottomAnchor, constant: 6),
+            words.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            words.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            words.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: words.trailingAnchor),
+            headerLabel.widthAnchor.constraint(equalTo: words.widthAnchor),
+            statusLabel.widthAnchor.constraint(equalTo: words.widthAnchor),
+            noteLabel.widthAnchor.constraint(equalTo: words.widthAnchor),
+            searchField.topAnchor.constraint(equalTo: words.bottomAnchor, constant: 6),
             searchField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             searchField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             tableScroll.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
@@ -139,7 +165,13 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
         record = profile?.records.first { $0.id == id }
         titleLabel.stringValue = Self.title(of: id, fallback: fallbackTitle)
         emptyLabel.font = font
-        if changed { searchField.stringValue = "" }
+        if changed {
+            searchField.stringValue = ""
+            collapsedGroups = []
+        }
+        let header = record?.header.map(Self.header) ?? ""
+        headerLabel.stringValue = header
+        headerLabel.isHidden = header.isEmpty
 
         let stored = records[id]
         let status = stored?.status
@@ -177,32 +209,57 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
     var shownTitle: String { titleLabel.stringValue }
     var shownStatus: String { statusLabel.stringValue }
     var shownNote: String { noteLabel.isHidden ? "" : noteLabel.stringValue }
+    var shownHeader: String { headerLabel.isHidden ? "" : headerLabel.stringValue }
+    /// The branches shown, in order: the value and its words.
+    var shownGroups: [(value: String, summary: String?, rows: Int)] {
+        items.compactMap { $0 as? RecordGroupItem }.map { ($0.value, $0.summary, $0.children.count) }
+    }
+    /// The outline's row of the data row whose key text is `key`.
+    func tableRow(key: String) -> Int? {
+        for item in items {
+            let rows: [AnyObject] = (item as? RecordGroupItem)?.children ?? [item]
+            for case let row as RecordRowItem in rows where keyText(row.values) == key {
+                let index = table.row(forItem: row)
+                return index >= 0 ? index : nil
+            }
+        }
+        return nil
+    }
     var shownEmptyText: String { emptyLabel.isHidden ? "" : emptyLabel.stringValue }
     var columnTitles: [String] { table.tableColumns.map(\.title) }
     func setFilter(_ text: String) {
         searchField.stringValue = text
         filterChanged()
     }
-    /// The text of the cell at `row`, column `id`, as drawn.
+    /// The text of the cell at `row` of the outline, column `id`, as drawn;
+    /// empty on a branch.
     func cellText(row: Int, column id: String) -> String {
-        guard let column = columns.first(where: { $0.id == id }) else { return "" }
-        return text(of: shownRows[row], column)
+        guard let column = columns.first(where: { $0.id == id }), let values = values(atRow: row) else { return "" }
+        return text(of: values, column)
     }
     /// The cell view at `row`, column `id`, as the table makes it.
     func cell(row: Int, column id: String) -> NSTableCellView? {
-        guard let index = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == id }) else { return nil }
-        return tableView(table, viewFor: table.tableColumns[index], row: row) as? NSTableCellView
+        guard let index = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == id }),
+              let item = table.item(atRow: row) else { return nil }
+        return outlineView(table, viewFor: table.tableColumns[index], item: item) as? NSTableCellView
     }
     /// Clicks the cell at `row`, column `id`, as the reader would.
     func click(row: Int, column id: String) {
         guard let index = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == id }) else { return }
         follow(row: row, column: index)
     }
-    /// The selected rows' TSV, as Copy Row puts it on the pasteboard.
+    /// The selected rows' TSV, as Copy Row puts it on the pasteboard; a
+    /// branch's own row adds nothing, its rows carry its value.
     func tsv(rows: IndexSet) -> String {
-        rows.filter { shownRows.indices.contains($0) }.map { row in
-            columns.map { text(of: shownRows[row], $0) }.joined(separator: "\t")
+        rows.compactMap { values(atRow: $0) }.map { values in
+            columns.map { text(of: values, $0) }.joined(separator: "\t")
         }.joined(separator: "\n")
+    }
+
+    /// The data row at the outline's `row`; nil for a branch.
+    private func values(atRow row: Int) -> [String: RecordValue]? {
+        guard row >= 0, row < table.numberOfRows else { return nil }
+        return (table.item(atRow: row) as? RecordRowItem)?.values
     }
 
     // MARK: - Columns and cells
@@ -227,6 +284,7 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
             }
             table.addTableColumn(tableColumn)
         }
+        table.outlineTableColumn = table.tableColumns.first
         table.sortDescriptors = []
         ToolPanelTable.apply(to: table)
     }
@@ -367,16 +425,43 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
         return L("Inference: %1$@", note)
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { shownRows.count }
+    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        guard let item else { return items.count }
+        return (item as? RecordGroupItem)?.children.count ?? 0
+    }
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let tableColumn, shownRows.indices.contains(row),
+    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        guard let group = item as? RecordGroupItem else { return items[index] }
+        return group.children[index]
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        !((item as? RecordGroupItem)?.children.isEmpty ?? true)
+    }
+
+    /// A branch spans the row: its value and what the value stands for.
+    func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool { item is RecordGroupItem }
+
+    func outlineViewItemDidCollapse(_ notification: Notification) {
+        guard let group = notification.userInfo?["NSObject"] as? RecordGroupItem else { return }
+        collapsedGroups.insert(group.value)
+        table.reloadItem(group)
+    }
+
+    func outlineViewItemDidExpand(_ notification: Notification) {
+        guard let group = notification.userInfo?["NSObject"] as? RecordGroupItem else { return }
+        collapsedGroups.remove(group.value)
+        table.reloadItem(group)
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        if let group = item as? RecordGroupItem { return groupCell(group, in: outlineView) }
+        guard let tableColumn, let values = (item as? RecordRowItem)?.values,
               let column = columns.first(where: { $0.id == tableColumn.identifier.rawValue }) else { return nil }
-        let first = tableColumn === tableView.tableColumns.first
+        let first = tableColumn === outlineView.tableColumns.first
         let identifier = NSUserInterfaceItemIdentifier(first ? "record.first" : "record.cell")
-        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView
+        let cell = outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView
             ?? ToolPanelTable.makeCell(identifier: identifier, marker: first)
-        let values = shownRows[row]
         let inference = Self.isInference(values)
         let note = values["note"]?.string
         let isLink = [.code, .data, .ref].contains(column.kind)
@@ -400,6 +485,40 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
                                      toolTip: inference ? Self.inferenceToolTip(note: note) : nil, on: cell)
         }
         return cell
+    }
+
+    /// A branch's row, as the Interfaces tab draws a kind: its own chevron,
+    /// the value one weight up with the number of its rows, then what the
+    /// value stands for in grey.
+    private func groupCell(_ group: RecordGroupItem, in outlineView: NSOutlineView) -> NSView {
+        let id = NSUserInterfaceItemIdentifier("record.group")
+        let cell = outlineView.makeView(withIdentifier: id, owner: nil) as? CodeNavigatorCell
+            ?? CodeNavigatorCell(identifier: id)
+        cell.showsDisclosure(true)
+        cell.showsCalls(expandable: !group.children.isEmpty, expanded: outlineView.isItemExpanded(group))
+        cell.onToggle = { [weak self] in self?.toggle(group) }
+        let size = ToolPanelFont.size
+        let line = NSMutableAttributedString(string: "\(group.value) (\(group.children.count))", attributes: [
+            .font: NSFont.systemFont(ofSize: size, weight: .semibold), .foregroundColor: NSColor.labelColor
+        ])
+        if let summary = group.summary {
+            line.append(NSAttributedString(string: "  " + summary, attributes: [
+                .font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor
+            ]))
+        }
+        cell.textField?.attributedStringValue = line
+        cell.textField?.lineBreakMode = .byTruncatingTail
+        cell.toolTip = group.summary
+        return cell
+    }
+
+    /// Opens or closes a branch, as the Interfaces tab's kinds do.
+    private func toggle(_ group: RecordGroupItem) {
+        if table.isItemExpanded(group) {
+            table.collapseItem(group)
+        } else {
+            table.expandItem(group)
+        }
     }
 
     /// A nested table's rows, one a line, for the cell's tooltip.
@@ -438,13 +557,66 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
                 return sort.ascending ? before(a, b) : before(b, a)
             }
         }
-        shownRows = rows
+        if let groupBy = record?.groupBy, let groupColumn = record?.column(groupBy) {
+            if table.sortDescriptors.isEmpty { rows.sort(by: keyOrder) }
+            let groups = Self.groups(of: rows, by: groupColumn, keepEmpty: query.isEmpty)
+            items = groups
+            shownRows = groups.flatMap { $0.children.map(\.values) }
+        } else {
+            items = rows.map(RecordRowItem.init)
+            shownRows = rows
+        }
         table.reloadData()
+        for case let group as RecordGroupItem in items where !collapsedGroups.contains(group.value) {
+            table.expandItem(group)
+        }
         let empty = allRows.isEmpty
         tableScroll.isHidden = shownRows.isEmpty
         searchField.isHidden = empty
         emptyLabel.isHidden = !shownRows.isEmpty || (empty && records[recordID ?? ""]?.status == AnalysisProfile.RecordStatus.none)
         emptyLabel.stringValue = empty ? Self.emptyText : L("Nothing matches the search.")
+    }
+
+    /// The branches of a grouped record: one per value of `column` in the
+    /// order it declares them, then any other value the rows hold. A value
+    /// with words of its own is a branch with no rows too, unless a filter
+    /// is on.
+    private static func groups(of rows: [[String: RecordValue]], by column: AnalysisProfile.Column,
+                               keepEmpty: Bool) -> [RecordGroupItem] {
+        func value(_ row: [String: RecordValue]) -> String { row[column.id]?.text ?? "" }
+        let declared = column.values ?? []
+        let found = Set(rows.map(value))
+        let others = found.subtracting(declared).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        return (declared + others).compactMap { name in
+            let children = rows.filter { value($0) == name }.map(RecordRowItem.init)
+            let english = column.valueSummaries?[name]
+            guard !children.isEmpty || (keepEmpty && english != nil) else { return nil }
+            return RecordGroupItem(value: name, summary: english.map(valueSummary), children: children)
+        }
+    }
+
+    /// Rows in key order, the grouping column aside: an enum by the order
+    /// its values are declared (normal before flash), a number as a number.
+    private func keyOrder(_ left: [String: RecordValue], _ right: [String: RecordValue]) -> Bool {
+        for id in record?.key ?? [] where id != record?.groupBy {
+            guard let column = record?.column(id) else { continue }
+            let a = keyRank(left, column), b = keyRank(right, column)
+            if let x = a.number, let y = b.number {
+                if x != y { return x < y }
+                continue
+            }
+            if a.number != nil || b.number != nil { return a.number != nil }
+            let order = a.text.localizedStandardCompare(b.text)
+            if order != .orderedSame { return order == .orderedAscending }
+        }
+        return false
+    }
+
+    private func keyRank(_ row: [String: RecordValue], _ column: AnalysisProfile.Column) -> (number: Int?, text: String) {
+        if column.kind == .enum, let value = row[column.id]?.text, let index = column.values?.firstIndex(of: value) {
+            return (index, value)
+        }
+        return sortKey(row, column)
     }
 
     private func sortKey(_ row: [String: RecordValue], _ column: AnalysisProfile.Column) -> (number: Int?, text: String) {
@@ -456,7 +628,7 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
         return (number, text(of: row, column))
     }
 
-    func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+    func outlineView(_ outlineView: NSOutlineView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
         applyFilter()
     }
 
@@ -468,9 +640,9 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
     }
 
     private func follow(row: Int, column index: Int) {
-        guard shownRows.indices.contains(row), table.tableColumns.indices.contains(index),
+        guard let shown = values(atRow: row), table.tableColumns.indices.contains(index),
               let column = columns.first(where: { $0.id == table.tableColumns[index].identifier.rawValue }),
-              let value = shownRows[row][column.id] else { return }
+              let value = shown[column.id] else { return }
         let kind = column.kind == .list ? (column.of ?? .text) : column.kind
         let values = column.kind == .list ? (value.array ?? []) : [value]
         switch kind {
@@ -521,13 +693,18 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
         }
     }
 
-    /// Selects the row whose key text is `key`, clearing a filter that hides it.
+    /// Selects the row whose key text is `key`, clearing a filter that hides
+    /// it and opening the branch it stands in.
     func select(key: String) {
         if !shownRows.contains(where: { keyText($0) == key }), !searchField.stringValue.isEmpty {
             searchField.stringValue = ""
             applyFilter()
         }
-        guard let row = shownRows.firstIndex(where: { keyText($0) == key }) else { return }
+        for case let group as RecordGroupItem in items
+        where group.children.contains(where: { keyText($0.values) == key }) && !table.isItemExpanded(group) {
+            table.expandItem(group)
+        }
+        guard let row = tableRow(key: key) else { return }
         table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         table.scrollRowToVisible(row)
     }
@@ -556,6 +733,50 @@ final class CodeRecordSectionView: NSView, NSTableViewDataSource, NSTableViewDel
         default: fallback
         }
     }
+}
+
+extension CodeRecordSectionView {
+    /// A record's header in the reader's language: the profiles carry
+    /// English, and words not listed here stay the profile's.
+    static func header(_ english: String) -> String {
+        switch english {
+        case AnalysisProfile.hostCommandsHeader:
+            L("Host commands are commands the host — the BIOS, SMM or the operating system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over LPC or, on eSPI, over the peripheral channel; in the EC the KBC and PMC blocks take them. Each port pair is a data port and a command port; the command byte is written to the command port.")
+        default: english
+        }
+    }
+
+    /// What a branch's value stands for, in the reader's language.
+    static func valueSummary(_ english: String) -> String {
+        switch english {
+        case "Keyboard controller interface (KBC, i8042): keyboard, touchpad, legacy commands.":
+            L("Keyboard controller interface (KBC, i8042): keyboard, touchpad, legacy commands.")
+        case "The standard ACPI embedded controller (PMC1): EC RAM read and write (0x80/0x81), query 0x84, SCI.":
+            L("The standard ACPI embedded controller (PMC1): EC RAM read and write (0x80/0x81), query 0x84, SCI.")
+        case "The second PMC channel, usually the manufacturer's (OEM) commands: modes, flash mode, service functions.":
+            L("The second PMC channel, usually the manufacturer's (OEM) commands: modes, flash mode, service functions.")
+        default: english
+        }
+    }
+}
+
+/// A branch of a grouped record: a value of its `groupBy` column.
+final class RecordGroupItem {
+    let value: String
+    let summary: String?
+    let children: [RecordRowItem]
+
+    init(value: String, summary: String?, children: [RecordRowItem]) {
+        self.value = value
+        self.summary = summary
+        self.children = children
+    }
+}
+
+/// A row of a record, as the outline holds it.
+final class RecordRowItem {
+    let values: [String: RecordValue]
+    init(_ values: [String: RecordValue]) { self.values = values }
 }
 
 /// A menu item that runs a closure: one of several places a cell names.

@@ -2148,6 +2148,10 @@
 "Inference: %1$@" = "Erschlossen: %1$@";
 "Filter rows" = "Zeilen filtern";
 "Filter the record's rows" = "Die Zeilen des Eintrags filtern";
+"Host commands are commands the host — the BIOS, SMM or the operating system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over LPC or, on eSPI, over the peripheral channel; in the EC the KBC and PMC blocks take them. Each port pair is a data port and a command port; the command byte is written to the command port." = "Host-Befehle sind Befehle, die der Host – das BIOS, der SMM oder der ACPI-Treiber des Betriebssystems – in die I/O-Ports des EC schreibt. Auf dem Bus sind das gewöhnliche I/O-Zyklen über LPC oder, bei eSPI, über den Peripheral Channel; im EC nehmen die Blöcke KBC und PMC sie an. Jedes Portpaar besteht aus einem Datenport und einem Befehlsport; das Befehlsbyte wird in den Befehlsport geschrieben.";
+"Keyboard controller interface (KBC, i8042): keyboard, touchpad, legacy commands." = "Schnittstelle des Tastaturcontrollers (KBC, i8042): Tastatur, Touchpad, Legacy-Befehle.";
+"The standard ACPI embedded controller (PMC1): EC RAM read and write (0x80/0x81), query 0x84, SCI." = "Der standardisierte ACPI-Embedded-Controller (PMC1): EC-RAM lesen und schreiben (0x80/0x81), Query 0x84, SCI.";
+"The second PMC channel, usually the manufacturer's (OEM) commands: modes, flash mode, service functions." = "Der zweite PMC-Kanal, meist herstellereigene (OEM-)Befehle: Betriebsarten, Flash-Modus, Servicefunktionen.";
 "Copy Row as TSV" = "Zeile als TSV kopieren";
 "Access" = "Zugriff";
 "Accessed by" = "Zugriff durch";

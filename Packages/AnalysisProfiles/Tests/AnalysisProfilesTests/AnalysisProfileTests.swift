@@ -130,6 +130,37 @@ final class AnalysisProfileTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(AnalysisProfile.self, from: data), .ecIteNds32)
     }
 
+    /// A record's header and grouping and a column's value summaries encode
+    /// snake_case, only where set, and JSON written before them still reads.
+    func testHeaderGroupingAndValueSummariesAreAnAddition() throws {
+        let host = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "host_commands" })
+        XCTAssertEqual(host.groupBy, "ports")
+        XCTAssertFalse(host.header?.isEmpty ?? true)
+        XCTAssertEqual(host.column("ports")?.valueSummaries?.keys.sorted(), ["60/64", "62/66", "68/6C"])
+        XCTAssertEqual(AnalysisProfile.ecIteNds32.records.first { $0.id == "smbus_peers" }?.groupBy, "channel")
+
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(host)) as? [String: Any])
+        XCTAssertEqual(object["group_by"] as? String, "ports")
+        XCTAssertNotNil(object["header"] as? String)
+        let ports = try XCTUnwrap((object["columns"] as? [[String: Any]])?.first { $0["id"] as? String == "ports" })
+        XCTAssertEqual((ports["value_summaries"] as? [String: String])?.count, 3)
+        let mode = try XCTUnwrap((object["columns"] as? [[String: Any]])?.first { $0["id"] as? String == "mode" })
+        XCTAssertNil(mode["value_summaries"], "omitted when there are none")
+        XCTAssertEqual(try JSONDecoder().decode(AnalysisProfile.Record.self, from: JSONEncoder().encode(host)), host)
+
+        let irq = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "irq_map" })
+        let plain = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(irq)) as? [String: Any])
+        XCTAssertNil(plain["header"])
+        XCTAssertNil(plain["group_by"])
+
+        let old = #"{"id":"r","title":"R","summary":"s","unanswered_gate":true,"key":["a"],"#
+            + #""columns":[{"id":"a","title":"A","kind":"enum","required":true,"values":["x"],"summary":"a"}]}"#
+        let read = try JSONDecoder().decode(AnalysisProfile.Record.self, from: Data(old.utf8))
+        XCTAssertNil(read.header)
+        XCTAssertNil(read.groupBy)
+        XCTAssertNil(read.columns.first?.valueSummaries)
+    }
+
     // MARK: - The Code panel
 
     func testUEFIShowsItsBuiltInSections() {

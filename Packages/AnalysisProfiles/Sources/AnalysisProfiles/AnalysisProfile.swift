@@ -41,10 +41,17 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         /// Values a `computed` column reads, as hex or decimal strings
         /// (`ec_ram_base: "0x80400"`).
         public var parameters: [String: String]
+        /// What the record's subject is, for the reader of the panel: the
+        /// words above the table (English; the app localises it). Constant
+        /// chip knowledge, not the review's.
+        public var header: String?
+        /// The column whose values group the rows in the panel: a tree, a
+        /// branch per value. Nil for a flat table.
+        public var groupBy: String?
 
         public init(id: String, title: String, summary: String, unansweredGate: Bool,
                     panel: PanelSection? = nil, key: [String] = [], columns: [Column] = [],
-                    parameters: [String: String] = [:]) {
+                    parameters: [String: String] = [:], header: String? = nil, groupBy: String? = nil) {
             self.id = id
             self.title = title
             self.summary = summary
@@ -53,14 +60,17 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             self.key = key
             self.columns = columns
             self.parameters = parameters
+            self.header = header
+            self.groupBy = groupBy
         }
 
         /// The column `id`, when the record has one.
         public func column(_ id: String) -> Column? { columns.first { $0.id == id } }
 
         private enum CodingKeys: String, CodingKey {
-            case id, title, summary, panel, key, columns, parameters
+            case id, title, summary, panel, key, columns, parameters, header
             case unansweredGate = "unanswered_gate"
+            case groupBy = "group_by"
         }
 
         public init(from decoder: Decoder) throws {
@@ -74,6 +84,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             key = try c.decodeIfPresent([String].self, forKey: .key) ?? []
             columns = try c.decodeIfPresent([Column].self, forKey: .columns) ?? []
             parameters = try c.decodeIfPresent([String: String].self, forKey: .parameters) ?? [:]
+            header = try c.decodeIfPresent(String.self, forKey: .header)
+            groupBy = try c.decodeIfPresent(String.self, forKey: .groupBy)
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -87,6 +99,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             if !key.isEmpty { try c.encode(key, forKey: .key) }
             if !columns.isEmpty { try c.encode(columns, forKey: .columns) }
             if !parameters.isEmpty { try c.encode(parameters, forKey: .parameters) }
+            if let header, !header.isEmpty { try c.encode(header, forKey: .header) }
+            if let groupBy, !groupBy.isEmpty { try c.encode(groupBy, forKey: .groupBy) }
         }
     }
 
@@ -156,13 +170,18 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         /// A required column the row may leave empty or out when another of
         /// its columns holds one of these words: `["address": ["mailbox"]]`.
         public var optionalWhen: [String: [String]]?
+        /// What each of `values` stands for, keyed by the value: the words a
+        /// group of a `groupBy` record carries (English; the app localises
+        /// them). Nil or empty for none.
+        public var valueSummaries: [String: String]?
         public var summary: String
 
         public init(_ id: String, _ title: String, _ kind: ColumnKind, required: Bool = false,
                     values: [String]? = nil, min: Int? = nil, max: Int? = nil, hex: Bool? = nil,
                     pattern: String? = nil, of: ColumnKind? = nil, columns: [Column]? = nil,
                     ref: String? = nil, compute: String? = nil, noteFor: [String]? = nil,
-                    optionalWhen: [String: [String]]? = nil, summary: String) {
+                    optionalWhen: [String: [String]]? = nil, valueSummaries: [String: String]? = nil,
+                    summary: String) {
             self.id = id
             self.title = title
             self.kind = kind
@@ -178,6 +197,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             self.compute = compute
             self.noteFor = noteFor
             self.optionalWhen = optionalWhen
+            self.valueSummaries = valueSummaries
             self.summary = summary
         }
 
@@ -185,6 +205,52 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             case id, title, kind, required, values, min, max, hex, pattern, of, columns, ref, compute, summary
             case noteFor = "note_for"
             case optionalWhen = "optional_when"
+            case valueSummaries = "value_summaries"
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decode(String.self, forKey: .title)
+            kind = try c.decode(ColumnKind.self, forKey: .kind)
+            required = try c.decode(Bool.self, forKey: .required)
+            values = try c.decodeIfPresent([String].self, forKey: .values)
+            min = try c.decodeIfPresent(Int.self, forKey: .min)
+            max = try c.decodeIfPresent(Int.self, forKey: .max)
+            hex = try c.decodeIfPresent(Bool.self, forKey: .hex)
+            pattern = try c.decodeIfPresent(String.self, forKey: .pattern)
+            of = try c.decodeIfPresent(ColumnKind.self, forKey: .of)
+            columns = try c.decodeIfPresent([Column].self, forKey: .columns)
+            ref = try c.decodeIfPresent(String.self, forKey: .ref)
+            compute = try c.decodeIfPresent(String.self, forKey: .compute)
+            noteFor = try c.decodeIfPresent([String].self, forKey: .noteFor)
+            optionalWhen = try c.decodeIfPresent([String: [String]].self, forKey: .optionalWhen)
+            valueSummaries = try c.decodeIfPresent([String: String].self, forKey: .valueSummaries)
+            summary = try c.decode(String.self, forKey: .summary)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(title, forKey: .title)
+            try c.encode(kind, forKey: .kind)
+            try c.encode(required, forKey: .required)
+            try c.encodeIfPresent(values, forKey: .values)
+            try c.encodeIfPresent(min, forKey: .min)
+            try c.encodeIfPresent(max, forKey: .max)
+            try c.encodeIfPresent(hex, forKey: .hex)
+            try c.encodeIfPresent(pattern, forKey: .pattern)
+            try c.encodeIfPresent(of, forKey: .of)
+            try c.encodeIfPresent(columns, forKey: .columns)
+            try c.encodeIfPresent(ref, forKey: .ref)
+            try c.encodeIfPresent(compute, forKey: .compute)
+            try c.encodeIfPresent(noteFor, forKey: .noteFor)
+            try c.encodeIfPresent(optionalWhen, forKey: .optionalWhen)
+            // Only a column that has them: one without encodes as before.
+            if let valueSummaries, !valueSummaries.isEmpty {
+                try c.encode(valueSummaries, forKey: .valueSummaries)
+            }
+            try c.encode(summary, forKey: .summary)
         }
     }
 
@@ -499,6 +565,12 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
     /// The six records of an EC review, each a table (the EC reviewer's
     /// schema, 2026-11-27). A field marked required in the schema is
     /// `required` here; `->code` is `code`, `->data` is `data`.
+    /// What host commands are, above the Host commands table.
+    public static let hostCommandsHeader = "Host commands are commands the host — the BIOS, SMM or the operating "
+        + "system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over "
+        + "LPC or, on eSPI, over the peripheral channel; in the EC the KBC and PMC blocks take them. Each port "
+        + "pair is a data port and a command port; the command byte is written to the command port."
+
     static let ecRecords: [Record] = [
         Record(id: "irq_map", title: "Interrupts",
                summary: "One row per IRQ whose handler is not empty: the handler, its source and what it does. "
@@ -524,6 +596,13 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                key: ["ports", "cmd", "sub", "mode"],
                columns: [
                 Column("ports", "Ports", .enum, required: true, values: ["60/64", "62/66", "68/6C"],
+                       valueSummaries: [
+                        "60/64": "Keyboard controller interface (KBC, i8042): keyboard, touchpad, legacy commands.",
+                        "62/66": "The standard ACPI embedded controller (PMC1): EC RAM read and write (0x80/0x81), "
+                            + "query 0x84, SCI.",
+                        "68/6C": "The second PMC channel, usually the manufacturer's (OEM) commands: modes, "
+                            + "flash mode, service functions."
+                       ],
                        summary: "The port pair the command is written to."),
                 Column("mode", "Mode", .enum, required: true, values: ["normal", "flash"],
                        summary: "normal, or the flash (update) mode the command is taken in."),
@@ -537,7 +616,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                        summary: "Events it raises: SCI, SMI, query N."),
                 Column("ec_ram", "EC RAM", .list, of: .ref, ref: "ec_ram",
                        summary: "The EC RAM offsets it touches (rows of ec_ram).")
-               ]),
+               ],
+               header: AnalysisProfile.hostCommandsHeader, groupBy: "ports"),
         Record(id: "ec_ram", title: "EC RAM",
                summary: "Offset, width, name, writer (EC or host) and meaning.",
                unansweredGate: true, panel: PanelSection(order: 2, symbol: "memorychip"),
@@ -579,7 +659,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                 ], optionalWhen: ["address": ["runtime", "mailbox"]],
                    summary: "The commands the firmware sends the device; empty when the address is runtime or mailbox and the host sets the command byte."),
                 Column("callers", "Callers", .list, of: .code, summary: "The code that talks to the device.")
-               ]),
+               ],
+               groupBy: "channel"),
         Record(id: "gpio", title: "GPIO",
                summary: "Pin, direction and its function in this firmware. The board's net is not written here.",
                unansweredGate: true, panel: PanelSection(order: 4, symbol: "cable.connector"),

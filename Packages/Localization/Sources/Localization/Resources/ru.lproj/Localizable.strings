@@ -2148,6 +2148,10 @@
 "Inference: %1$@" = "Вывод разбора: %1$@";
 "Filter rows" = "Отбор строк";
 "Filter the record's rows" = "Отобрать строки записи";
+"Host commands are commands the host — the BIOS, SMM or the operating system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over LPC or, on eSPI, over the peripheral channel; in the EC the KBC and PMC blocks take them. Each port pair is a data port and a command port; the command byte is written to the command port." = "Команды хоста — это команды, которые хост (BIOS, SMM или ACPI-драйвер операционной системы) записывает в порты ввода-вывода EC. На шине это обычные циклы ввода-вывода по LPC, а на eSPI — по каналу периферии (peripheral channel); в EC их принимают блоки KBC и PMC. Каждая пара портов состоит из порта данных и порта команд; байт команды записывается в порт команд.";
+"Keyboard controller interface (KBC, i8042): keyboard, touchpad, legacy commands." = "Интерфейс контроллера клавиатуры (KBC, i8042): клавиатура, тачпад, унаследованные команды.";
+"The standard ACPI embedded controller (PMC1): EC RAM read and write (0x80/0x81), query 0x84, SCI." = "Стандартный встроенный контроллер ACPI (PMC1): чтение и запись EC RAM (0x80/0x81), запрос 0x84, SCI.";
+"The second PMC channel, usually the manufacturer's (OEM) commands: modes, flash mode, service functions." = "Второй канал PMC, обычно команды производителя (OEM): режимы, режим прошивки, сервисные функции.";
 "Copy Row as TSV" = "Копировать строку как TSV";
 "Access" = "Доступ";
 "Accessed by" = "Обращения";
