@@ -147,9 +147,16 @@ a cut's offset and description.
   from the marker slot before the name. A branch shows its row count and,
   for a port pair, an (i) with a popover; its words are not in its cell's
   `textField`, since AppKit draws a group row's `textField` in its own font
-  until the row is made again. The selected row's details are a
-  `ToolDetailScroll` under the list: title, one sentence, each field once,
-  links, back-references, confidence and note. Over the list stands a legend
+  until the row is made again. The selected row's details are the
+  firmware panels' own: a `ToolDetailPane` under the list in an
+  `ALSplitView`, filled by `ToolDetailScroll.showRows` — title (key, and
+  the review's `label` if any), each field once with the main text whole
+  and no field for the branch, links as `toolFieldLink` runs of a
+  `ToolFieldList` value, back-references, confidence and note; Space or
+  the corner button opens it large. No tooltip repeats what its row,
+  branch or legend line shows. The label is never cut in the text, only
+  by the line at the column's width. Each record keeps its selected row
+  and scroll across tab switches and new revisions. Over the list stands a legend
   built as `ToolRowMarksLegend`'s: a disclosure, one line of name and status,
   the record's description and note under it, shut by default and
   remembered per record in `ToolPanelFont.defaults`. The filter is at the

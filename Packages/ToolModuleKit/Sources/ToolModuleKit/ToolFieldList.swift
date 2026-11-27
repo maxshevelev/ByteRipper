@@ -15,6 +15,14 @@ import HelpUI
 /// that panel knows whose words the button opens ("what Flash Image Tool
 /// says"), and a list shared by every panel must not claim one tool for all
 /// of them.
+extension NSAttributedString.Key {
+    /// A run of a `ToolFieldList` value that is a link: a click on it hands
+    /// the attribute's value to the list's `onLink`, and the pointer over it
+    /// is a hand. The run's look is the panel's — `ToolFieldList.link(_:to:)`
+    /// draws it in the link colour.
+    public static let toolFieldLink = NSAttributedString.Key("ToolModuleKit.fieldLink")
+}
+
 public struct FieldHelp: Sendable, Equatable {
     public var identifier: String
     public var text: String
@@ -91,6 +99,41 @@ public struct FieldHelp: Sendable, Equatable {
     /// nobody set it on shows the buttons and does nothing when they are
     /// pressed.
     public var onHelp: ((FieldHelp, NSView) -> Void)?
+
+    /// The reader clicked a link in a value (`toolFieldLink`): the run's
+    /// attribute value. A click there follows the link and selects nothing.
+    public var onLink: ((Any) -> Void)?
+
+    /// `text` as a link to `target`: in the font every value is drawn in
+    /// (`ToolValueTone`), in the link colour.
+    public static func link(_ text: String, to target: Any) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: ToolValueTone.standard.font(for: text),
+            .foregroundColor: NSColor.linkColor, .toolFieldLink: target,
+        ])
+    }
+
+    /// The link under `point`, in the list's coordinates; nil off a link.
+    public func link(at point: NSPoint) -> Any? {
+        guard let row = rows.first(where: { $0.frame.contains(point) }) else { return nil }
+        return row.link(at: convert(point, to: row))
+    }
+
+    // help: panel.detail-select
+    public override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        guard event.clickCount == 1, let window, let target = link(at: point) else {
+            super.mouseDown(with: event)
+            return
+        }
+        // Followed on the release, and only where it was pressed — as a
+        // button does.
+        while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            guard next.type == .leftMouseUp else { continue }
+            if link(at: convert(next.locationInWindow, from: nil)) != nil { onLink?(target) }
+            return
+        }
+    }
 
     public private(set) var rows: [ToolFieldRow] = []
     private var laidOutWidth: CGFloat = 0
@@ -407,6 +450,21 @@ public struct FieldHelp: Sendable, Equatable {
     /// button is a pointer on something to press, not on text to select.
     public override func resetCursorRects() {
         iBeamRects.forEach { addCursorRect($0, cursor: .iBeam) }
+        linkRects.forEach { addCursorRect($0, cursor: .pointingHand) }
+    }
+
+    /// The link under `point`, in the row's coordinates: a value's run
+    /// carrying `toolFieldLink`. Nil off one.
+    public func link(at point: NSPoint) -> Any? {
+        for block in [value] + (second.map { [$0] } ?? []) {
+            if let target = block.attribute(.toolFieldLink, at: point) { return target }
+        }
+        return nil
+    }
+
+    /// Where the row's links are, in its coordinates.
+    var linkRects: [NSRect] {
+        ([value] + (second.map { [$0] } ?? [])).flatMap { $0.rects(of: .toolFieldLink) }
     }
 
     /// Where the row shows the I-beam: all of it, less its button.
@@ -530,6 +588,29 @@ public struct FieldHelp: Sendable, Equatable {
     func text(from: Int, to: Int) -> String {
         guard to > from else { return "" }
         return Self.plain((storage.string as NSString).substring(with: NSRange(location: from, length: to - from)))
+    }
+
+    /// The value of attribute `key` on the character drawn under `point`, in
+    /// the row's coordinates — on a glyph, not merely nearest one.
+    func attribute(_ key: NSAttributedString.Key, at point: NSPoint) -> Any? {
+        let local = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
+        guard length > 0, local.y >= 0, local.y < height else { return nil }
+        layout.ensureLayout(for: container)
+        let glyph = layout.glyphIndex(for: local, in: container)
+        guard layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+            .contains(local) else { return nil }
+        let index = layout.characterIndexForGlyph(at: glyph)
+        return index < length ? storage.attribute(key, at: index, effectiveRange: nil) : nil
+    }
+
+    /// Where the runs carrying `key` are drawn, in the row's coordinates.
+    func rects(of key: NSAttributedString.Key) -> [NSRect] {
+        var found: [NSRect] = []
+        storage.enumerateAttribute(key, in: NSRange(location: 0, length: length)) { value, range, _ in
+            guard value != nil else { return }
+            found += rects(from: range.location, to: range.location + range.length)
+        }
+        return found
     }
 
     /// What a selection from `from` to `to` covers, line by line, in the row's

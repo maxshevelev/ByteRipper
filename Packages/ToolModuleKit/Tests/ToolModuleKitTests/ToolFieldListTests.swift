@@ -326,4 +326,26 @@ final class ToolFieldListTests: XCTestCase {
         XCTAssertNil(list.rows[0].selectedRange)
         XCTAssertFalse(list.performKeyEquivalent(with: copy), "⌘C is someone else's again")
     }
+
+    /// A value's run marked `toolFieldLink` is a link: found under the
+    /// pointer on its glyphs and nowhere else, drawn in the link colour, and
+    /// copied as plain text.
+    func testALinkRunIsFoundOnItsGlyphsOnly() throws {
+        let value = NSMutableAttributedString(attributedString: plain("at "))
+        value.append(ToolFieldList.link("0x1500", to: 7))
+        let list = self.list([("Handler", value), ("Plain", plain("text"))])
+        let row = list.rows[0]
+        let rects = row.linkRects
+        XCTAssertEqual(rects.count, 1)
+        let inside = list.convert(NSPoint(x: rects[0].midX, y: rects[0].midY), from: row)
+        XCTAssertEqual(list.link(at: inside) as? Int, 7)
+        let before = list.convert(NSPoint(x: rects[0].minX - 8, y: rects[0].midY), from: row)
+        XCTAssertNil(list.link(at: before), "the plain words before it")
+        let past = list.convert(NSPoint(x: rects[0].maxX + 40, y: rects[0].midY), from: row)
+        XCTAssertNil(list.link(at: past), "past its end")
+        XCTAssertTrue(list.rows[1].linkRects.isEmpty)
+        XCTAssertEqual(row.valueText, "at 0x1500")
+        XCTAssertEqual(row.attributedValue.attribute(.foregroundColor, at: 3, effectiveRange: nil) as? NSColor,
+                       .linkColor)
+    }
 }

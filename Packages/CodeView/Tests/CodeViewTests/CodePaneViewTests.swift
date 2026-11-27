@@ -5577,7 +5577,7 @@ final class CodePaneViewTests: XCTestCase {
                                 moduleBytes: moduleBytes, hexView: hex)
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
         view.layoutSubtreeIfNeeded()
-        let split = try XCTUnwrap(first(ALSplitView.self, in: view) { !$0.isVertical })
+        let split = try XCTUnwrap(first(ALSplitView.self, in: view) { !$0.isVertical && !$0.isDescendant(of: view.recordPanel) })
         let button = try XCTUnwrap(first(NSButton.self, in: view) {
             $0.accessibilityLabel() == "Hide hex dump"
         })

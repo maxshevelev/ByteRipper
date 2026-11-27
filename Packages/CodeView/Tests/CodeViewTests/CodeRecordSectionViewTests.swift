@@ -1,6 +1,7 @@
 import AnalysisProfiles
 import AppKit
 import CodeAnalysis
+import ToolModuleKit
 import XCTest
 @testable import CodeView
 
@@ -32,6 +33,21 @@ final class CodeRecordSectionViewTests: XCTestCase {
         panel.layoutSubtreeIfNeeded()
         addTeardownBlock { window.orderOut(nil) }
         return panel
+    }
+
+    /// The links of the details' rows, each with what following it does —
+    /// as the shared list's click hands its run's value to `onLink`.
+    private func links(_ panel: CodeRecordSectionView) -> [(title: String, follow: () -> Void)] {
+        guard let list = panel.details.content.subviewsDeep.compactMap({ $0 as? ToolFieldList }).first else { return [] }
+        return list.rows.flatMap { row -> [(title: String, follow: () -> Void)] in
+            let value = row.attributedValue
+            var found: [(title: String, follow: () -> Void)] = []
+            value.enumerateAttribute(.toolFieldLink, in: NSRange(location: 0, length: value.length)) { target, range, _ in
+                guard let target else { return }
+                found.append(((value.string as NSString).substring(with: range), { list.onLink?(target) }))
+            }
+            return found
+        }
     }
 
     private func lines(_ panel: CodeRecordSectionView) -> [String] {
@@ -133,15 +149,186 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertTrue(flashPanel.shownGroups.isEmpty)
     }
 
-    func testALabelIsCutAtFortyCharacters() {
+    func testALabelIsTheWholeFirstSentenceAndTheListCutsIt() {
         XCTAssertEqual(CodeRecordSectionView.firstSentence("Reads one byte. Then more."), "Reads one byte")
-        let long = String(repeating: "word ", count: 20)
+        let long = String(repeating: "word ", count: 20).trimmingCharacters(in: .whitespaces)
         let section = CodeRecordSectionView(frame: .zero)
         section.setRecords(ModuleRecords(), statuses: nil, profile: .ecIteNds32)
         section.show(id: "gpio", fallbackTitle: "GPIO", font: .systemFont(ofSize: 11))
-        let label = section.label(["function": .string(long)])
-        XCTAssertEqual(label.count, CodeRecordSectionView.labelLimit)
-        XCTAssertTrue(label.hasSuffix("…"))
+        XCTAssertEqual(section.label(["function": .string(long)]), long, "no cut in the text: the cell cuts")
+    }
+
+    // MARK: - Width, pointer words, places
+
+    private let longCommands: [String: Any] = [
+        "status": "partial", "rows": [
+            ["ports": "62/66", "mode": "normal", "cmd": "0x81", "handler": "0x1600",
+             "effect": "Write to the auxiliary keyboard output buffer and raise its interrupt", "confidence": "established"],
+            ["ports": "62/66", "mode": "normal", "cmd": "0x80", "handler": "0x1500", "label": "Shipping mode flag of the battery pack",
+             "effect": "x", "confidence": "inference", "note": "from the ACPI spec"],
+            ["ports": "68/6C", "mode": "flash", "cmd": "0x10", "handler": "0x1700", "effect": "Enter flash mode",
+             "confidence": "established", "note": "seen in the update tool"]
+        ]
+    ]
+
+    /// The one column follows the panel's width, and a line's text widens
+    /// with it: the words are never cut at a fixed length.
+    func testTheColumnAndItsLinesGrowWithThePanel() throws {
+        let panel = try self.panel(["host_commands": longCommands], show: "host_commands", width: 180)
+        var widths: [CGFloat] = []
+        for width in [CGFloat(180), 340, 500] {
+            panel.window?.setContentSize(NSSize(width: width, height: 560))
+            panel.window?.layoutIfNeeded()
+            panel.layoutSubtreeIfNeeded()
+            let column = try XCTUnwrap(panel.table.tableColumns.first).width
+            XCTAssertGreaterThan(column, width - 40, "at \(width)")
+            XCTAssertLessThanOrEqual(panel.table.frame.width, panel.tableScroll.contentSize.width + 0.5)
+            let row = try self.row(panel, "0x81  Write to the auxiliary keyboard output buffer and raise its interrupt")
+            let cell = try XCTUnwrap(panel.table.view(atColumn: 0, row: row, makeIfNecessary: true) as? RecordRowCell)
+            cell.layoutSubtreeIfNeeded()
+            widths.append(cell.textField?.frame.width ?? 0)
+            let group = try XCTUnwrap(panel.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? RecordGroupCell)
+            group.layoutSubtreeIfNeeded()
+            // A field's frame stands 2 pt past its text on each side.
+            XCTAssertEqual(group.count.frame.minX, group.label.frame.maxX, accuracy: 2, "the count after the name")
+            XCTAssertGreaterThanOrEqual(group.label.frame.width + 0.5,
+                                        min(group.label.intrinsicContentSize.width, group.info.frame.minX - group.label.frame.minX - 40),
+                                        "the name takes the room there is, at \(width)")
+        }
+        XCTAssertGreaterThan(widths[1], widths[0] + 100)
+        XCTAssertGreaterThan(widths[2], widths[1] + 100)
+    }
+
+    /// No pointer words that repeat what the row, the branch or the legend
+    /// line already shows.
+    func testNoTooltipRepeatsItsRow() throws {
+        let panel = try self.panel(["host_commands": longCommands], show: "host_commands", width: 340)
+        XCTAssertNil(panel.legendTitle.toolTip)
+        for row in 0..<panel.table.numberOfRows {
+            let view = panel.table.view(atColumn: 0, row: row, makeIfNecessary: true)
+            if let group = view as? RecordGroupCell {
+                XCTAssertNil(group.label.toolTip)
+                XCTAssertNil(group.toolTip)
+                continue
+            }
+            let cell = try XCTUnwrap(view as? RecordRowCell)
+            let line = cell.textField?.stringValue ?? ""
+            let tip = cell.textField?.toolTip
+            XCTAssertNotEqual(tip, line)
+            if let tip { XCTAssertFalse(line.contains(tip), tip) }
+        }
+        let flash = try XCTUnwrap(panel.cell(row: try row(panel, "0x10  Enter flash mode"))?.textField)
+        XCTAssertTrue(flash.stringValue.contains(CodeRecordSectionView.valueTitle("flash")))
+        XCTAssertEqual(flash.toolTip, "seen in the update tool", "a note the line does not show")
+        let inferred = try XCTUnwrap(panel.cell(row: try row(panel, "0x80  Shipping mode flag of the battery pack")) as? RecordRowCell)
+        XCTAssertNil(inferred.textField?.toolTip, "the mark says the note")
+        XCTAssertEqual(inferred.markView.toolTip, CodeRecordSectionView.inferenceToolTip(note: "from the ACPI spec"))
+    }
+
+    /// The branch a row stands in is not a field of its details.
+    func testTheDetailsLeaveOutTheBranch() throws {
+        let panel = try self.panel(["host_commands": commands], show: "host_commands")
+        try select(panel, "0x80  read EC RAM")
+        XCTAssertFalse(panel.shownDetails.map(\.name).contains(CodeRecordSectionView.columnTitle("Ports")))
+        XCTAssertFalse(panel.shownDetails.contains { $0.value == "62/66" })
+        let irq = try self.panel(["irq_map": ["status": "complete", "rows": [
+            ["irq": 4, "handler": "0x1300", "source": "timer", "enabled_by_firmware": true, "purpose": "tick",
+             "confidence": "established"]]]], show: "irq_map")
+        try select(irq, "IRQ 4  tick")
+        let groupBy = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "irq_map" }?.groupBy)
+        let title = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "irq_map" }?.column(groupBy)?.title)
+        XCTAssertFalse(irq.shownDetails.map(\.name).contains(CodeRecordSectionView.columnTitle(title)))
+    }
+
+    /// No text twice in the details: no two blocks equal, none the start of
+    /// another — the title, the main text and every field.
+    func testTheDetailsNeverRepeatAText() throws {
+        let panel = try self.panel(["ec_ram": ram, "host_commands": commands], show: "ec_ram")
+        for key in ["0x2A–0x2B  Fan speed", "0x10  Power state", "0x09  a"] {
+            try select(panel, key)
+            let title = panel.details.content.arrangedSubviews.compactMap { ($0 as? NSTextField)?.stringValue }
+            let values = panel.details.content.subviewsDeep.compactMap { ($0 as? ToolFieldRow)?.valueText }
+            let blocks = (title + values).filter { !$0.isEmpty }
+            XCTAssertEqual(title, [panel.shownDetailTitle], "the shared rows' title")
+            for (i, a) in blocks.enumerated() {
+                for b in blocks[(i + 1)...] {
+                    XCTAssertFalse(a.hasPrefix(b) || b.hasPrefix(a), "\(key): \"\(a)\" / \"\(b)\"")
+                }
+            }
+        }
+        try select(panel, "0x2A–0x2B  Fan speed")
+        XCTAssertEqual(panel.shownDetailTitle, "0x2A–0x2B", "no label: the key alone")
+        XCTAssertEqual(panel.shownDetailSentence, "Fan speed. Little-endian.", "the main text whole, once")
+        try select(panel, "0x10  Power state")
+        XCTAssertEqual(panel.shownDetailTitle, "0x10 · Power state")
+    }
+
+    /// Each record keeps its selected row when another is shown and it comes
+    /// back, and a new revision keeps it while the key is still there.
+    func testEachRecordKeepsItsSelectedRow() throws {
+        let object: [String: Any] = ["host_commands": commands, "ec_ram": ram]
+        let panel = try self.panel(object, show: "host_commands")
+        try select(panel, "0x81  write EC RAM")
+        panel.show(id: "ec_ram", fallbackTitle: "", font: .systemFont(ofSize: 11))
+        XCTAssertEqual(panel.table.selectedRow, -1)
+        try select(panel, "0x10  Power state")
+        panel.show(id: "host_commands", fallbackTitle: "", font: .systemFont(ofSize: 11))
+        XCTAssertEqual(panel.listText(row: panel.table.selectedRow), "0x81  write EC RAM")
+        XCTAssertEqual(panel.shownDetailTitle, "0x81")
+        panel.show(id: "ec_ram", fallbackTitle: "", font: .systemFont(ofSize: 11))
+        XCTAssertEqual(panel.listText(row: panel.table.selectedRow), "0x10  Power state")
+        panel.setRecords(try records(object), statuses: nil, profile: .ecIteNds32)
+        XCTAssertEqual(panel.listText(row: panel.table.selectedRow), "0x10  Power state", "a new revision")
+        var fewer = ram
+        fewer["rows"] = [(ram["rows"] as! [[String: Any]])[0]]
+        panel.setRecords(try records(["ec_ram": fewer]), statuses: nil, profile: .ecIteNds32)
+        XCTAssertEqual(panel.table.selectedRow, -1, "the row is gone")
+    }
+
+    /// Pictures for a person to look at, light and dark, at three widths.
+    func testRenderPictures() throws {
+        guard let folder = ProcessInfo.processInfo.environment["RECORDS_PNG_DIR"] else { return }
+        for dark in [false, true] {
+            for width in [CGFloat(180), 340, 500] {
+                for id in ["host_commands", "ec_ram"] {
+                    let panel = try self.panel(["host_commands": longCommands, "ec_ram": ram], show: id, width: width)
+                    panel.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+                    try select(panel, id == "ec_ram" ? "0x10  Power state"
+                               : "0x81  Write to the auxiliary keyboard output buffer and raise its interrupt")
+                    panel.layoutSubtreeIfNeeded()
+                    panel.displayIfNeeded()
+                    let rep = try XCTUnwrap(panel.bitmapImageRepForCachingDisplay(in: panel.bounds))
+                    panel.cacheDisplay(in: panel.bounds, to: rep)
+                    let data = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+                    try data.write(to: URL(fileURLWithPath: folder)
+                        .appendingPathComponent("\(id)-\(Int(width))-\(dark ? "dark" : "light").png"))
+                }
+            }
+        }
+        // The FIT panel's details at the same width, filled as
+        // `FITToolViewController.renderDetail` fills them, to set beside.
+        for dark in [false, true] {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 340, height: 220), styleMask: [.titled],
+                                  backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            let pane = ToolDetailPane()
+            pane.translatesAutoresizingMaskIntoConstraints = true
+            pane.frame = NSRect(x: 0, y: 0, width: 340, height: 220)
+            window.contentView = pane
+            pane.detail.onExpand = {}
+            pane.detail.showRows(subject: "1", title: "Microcode update", fields: [
+                .init(label: "Address", value: ToolValueTone.standard.attributedValue("0xFFE80000")),
+                .init(label: "Size", value: ToolValueTone.standard.attributedValue("0x19C00")),
+                .init(label: "Version", value: ToolValueTone.standard.attributedValue("0x0100")),
+                .init(label: "Checksum", value: ToolValueTone.bad.attributedValue("0x00 (should be 0x3C)"))])
+            window.orderFront(nil)
+            pane.layoutSubtreeIfNeeded()
+            let rep = try XCTUnwrap(pane.bitmapImageRepForCachingDisplay(in: pane.bounds))
+            pane.cacheDisplay(in: pane.bounds, to: rep)
+            try XCTUnwrap(rep.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: folder)
+                .appendingPathComponent("fit-details-340-\(dark ? "dark" : "light").png"))
+            window.orderOut(nil)
+        }
     }
 
     func testAnInferredRowCarriesOneTrailingMark() throws {
@@ -200,7 +387,8 @@ final class CodeRecordSectionViewTests: XCTestCase {
         let panel = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")
         XCTAssertTrue(panel.shownDetails.isEmpty, "nothing selected")
         try select(panel, "0x80  read EC RAM")
-        XCTAssertEqual(panel.shownDetailTitle, "0x80 · read EC RAM")
+        XCTAssertEqual(panel.shownDetailTitle, "0x80")
+        XCTAssertEqual(panel.shownDetailSentence, "read EC RAM")
         let names = panel.shownDetails.map(\.name)
         XCTAssertEqual(Set(names).count, names.count)
         XCTAssertFalse(names.contains(CodeRecordSectionView.columnTitle("Label")))
@@ -213,11 +401,11 @@ final class CodeRecordSectionViewTests: XCTestCase {
 
         var opened: [CodeAddress] = []
         panel.onOpenAddress = { opened.append($0) }
-        let links = panel.details.content.subviewsDeep.compactMap { $0 as? RecordLinkButton }
+        let links = self.links(panel)
         XCTAssertEqual(links.map(\.title), ["0x1500", "0x2A"])
-        links[0].performClick(nil)
+        links[0].follow()
         XCTAssertEqual(opened, [CodeAddress(0x1500)])
-        links[1].performClick(nil)
+        links[1].follow()
         XCTAssertEqual(panel.recordID, "ec_ram", "a ref switches to its record")
         XCTAssertEqual(panel.listText(row: panel.table.selectedRow), "0x2A–0x2B  Fan speed")
     }
@@ -226,10 +414,8 @@ final class CodeRecordSectionViewTests: XCTestCase {
         let panel = try self.panel(["host_commands": commands, "ec_ram": ram, "eflash_area": flash], show: "ec_ram")
         try select(panel, "0x2A–0x2B  Fan speed")
         let used = try XCTUnwrap(panel.shownDetails.first { $0.name == CodeRecordSectionView.usedByCommandsTitle })
-        XCTAssertEqual(used.value, "0x80  read EC RAM, 0x81  write EC RAM")
-        let back = panel.details.content.subviewsDeep.compactMap { $0 as? RecordLinkButton }
-            .first { $0.title == "0x81  write EC RAM" }
-        back?.performClick(nil)
+        XCTAssertEqual(used.value, "0x80  read EC RAM\n0x81  write EC RAM")
+        try XCTUnwrap(links(panel).first { $0.title == "0x81  write EC RAM" }).follow()
         XCTAssertEqual(panel.recordID, "host_commands")
         XCTAssertEqual(panel.listText(row: panel.table.selectedRow), "0x81  write EC RAM")
 
@@ -277,7 +463,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
     func testTheFilterAtTheFootMatchesKeyAndLabel() throws {
         let panel = try self.panel(["host_commands": commands], show: "host_commands")
         XCTAssertEqual(panel.filterBar.frame.minY, 0)
-        XCTAssertLessThan(panel.filterBar.frame.maxY, panel.tableScroll.frame.minY)
+        XCTAssertLessThanOrEqual(panel.filterBar.frame.maxY, panel.splitter.frame.minY)
         XCTAssertEqual(panel.searchField.placeholderString, CodePaneView.filterPlaceholder)
         panel.setFilter("0x59")
         XCTAssertEqual(panel.shownRows.count, 2)

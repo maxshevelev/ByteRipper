@@ -130,6 +130,42 @@ final class CodeNavigatorTabsTests: XCTestCase {
         XCTAssertEqual(pane.manifest.reading?.rev, 2)
     }
 
+    /// Each tab keeps its selected row: two record tabs and Functions, there
+    /// and back.
+    func testEachTabKeepsItsSelectionAcrossSwitches() throws {
+        let pane = try self.pane(kind: "EC", ecFamily: "ite-nds32")
+        pane.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        pane.layoutSubtreeIfNeeded()
+        pane.setModuleRecords(ModuleRecords([
+            "irq_map": .init(status: .complete, rows: [["irq": .string("4"), "purpose": .string("tick")],
+                                                       ["irq": .string("5"), "purpose": .string("kbc")]]),
+            "gpio": .init(status: .complete, rows: [["pin": .string("GPA3"), "function": .string("LED")],
+                                                    ["pin": .string("GPJ5"), "function": .string("Lid")]])]))
+        pane.selectFunction(at: 0)
+        let section = pane.recordPanel
+        func selected() -> String { section.listText(row: section.table.selectedRow) }
+        func pick(_ text: String) throws {
+            let row = try XCTUnwrap((0..<section.table.numberOfRows).first { section.listText(row: $0) == text }, text)
+            section.table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        pane.showRecordSection("irq_map")
+        try pick("IRQ 5  kbc")
+        pane.showRecordSection("gpio")
+        try pick("GPJ5  Lid")
+        pane.showRecordSection(nil)
+        pane.selectList(.functions)
+        XCTAssertEqual(pane.selectedFunctionIndex, 0)
+        pane.showRecordSection("irq_map")
+        XCTAssertEqual(selected(), "IRQ 5  kbc")
+        pane.showRecordSection("gpio")
+        XCTAssertEqual(selected(), "GPJ5  Lid")
+        XCTAssertFalse(section.shownDetails.isEmpty, "its details too")
+        pane.showRecordSection(nil)
+        XCTAssertEqual(pane.selectedFunctionIndex, 0)
+        pane.showRecordSection("irq_map")
+        XCTAssertEqual(selected(), "IRQ 5  kbc")
+    }
+
     /// A function's tooltip never shows over another tab: the Functions list
     /// is hidden, not only covered, while Search, Interfaces or a record is in
     /// front, on every way there and back.

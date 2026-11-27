@@ -1,4 +1,5 @@
 import AnalysisProfiles
+import ALSplitView
 import AppKit
 import CodeAnalysis
 import HelpUI
@@ -43,9 +44,13 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// outline draws no triangle of its own: a branch carries its chevron.
     let table = SearchOutlineView()
     let tableScroll = NSScrollView()
-    /// The selected row's fields.
-    let details = ToolDetailScroll()
-    private let separator = NSBox()
+    /// The selected row's fields, in the pane the firmware panels' details
+    /// stand in: under the list in a splitter, Space or the corner button
+    /// opening it large (`ToolDetailPane`).
+    let detailPane = ToolDetailPane()
+    var details: ToolDetailScroll { detailPane.detail }
+    /// The list over the details, as the firmware panels have them.
+    let splitter = ALSplitView()
     private let emptyLabel = NSTextField(wrappingLabelWithString: "")
     private let popover = NSPopover()
     /// The words the last (i) showed, for the tests.
@@ -74,6 +79,18 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     private var collapsedGroups: Set<String> = []
     /// The key text of a row to select once the record is shown.
     private var pendingSelection: String?
+    /// Where the reader left each record: the selected row's key and the
+    /// list's scroll, kept while the pane lives, so a tab switched away
+    /// from and back — or a new revision — shows the same row.
+    private var places: [String: (key: String?, scroll: NSPoint)] = [:]
+
+    /// Notes the shown record's selected row and scroll in `places`.
+    private func rememberPlace() {
+        guard let recordID, record != nil else { return }
+        let selected = table.selectedRowIndexes
+        let key = selected.count == 1 ? values(atRow: selected.first!).map(keyText) : nil
+        places[recordID] = (key, tableScroll.contentView.bounds.origin)
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -132,9 +149,14 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         tableScroll.autohidesScrollers = true
         tableScroll.drawsBackground = false
 
-        details.borderType = .noBorder
         details.showPlaceholder(Self.noSelectionText)
-        separator.boxType = .separator
+        detailPane.attach(to: table)
+        splitter.isVertical = false
+        splitter.dividerThickness = 1
+        splitter.addPane(tableScroll)
+        splitter.addPane(detailPane)
+        splitter.setPaneLayout(.fill, at: 0)
+        splitter.setPaneLayout(.proportional(0.4), at: 1)
 
         let heading = NSStackView(views: [legendDisclosure, legendTitle])
         heading.orientation = .horizontal
@@ -154,30 +176,21 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         words.spacing = 4
         words.detachesHiddenViews = true
         filterBar.addSubview(searchField)
-        let parts: [NSView] = [words, tableScroll, separator, details, filterBar, emptyLabel]
+        let parts: [NSView] = [words, splitter, filterBar, emptyLabel]
         for view in parts + [searchField] {
             view.translatesAutoresizingMaskIntoConstraints = false
         }
         for view in parts { addSubview(view) }
-        let detailsHeight = details.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.4)
-        detailsHeight.priority = .defaultHigh
         NSLayoutConstraint.activate([
             words.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             words.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             words.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             heading.trailingAnchor.constraint(lessThanOrEqualTo: words.trailingAnchor),
             legendBody.widthAnchor.constraint(equalTo: words.widthAnchor),
-            tableScroll.topAnchor.constraint(equalTo: words.bottomAnchor, constant: 6),
-            tableScroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-            tableScroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            tableScroll.bottomAnchor.constraint(equalTo: separator.topAnchor),
-            separator.leadingAnchor.constraint(equalTo: leadingAnchor),
-            separator.trailingAnchor.constraint(equalTo: trailingAnchor),
-            separator.bottomAnchor.constraint(equalTo: details.topAnchor),
-            details.leadingAnchor.constraint(equalTo: leadingAnchor),
-            details.trailingAnchor.constraint(equalTo: trailingAnchor),
-            details.bottomAnchor.constraint(equalTo: filterBar.topAnchor),
-            detailsHeight,
+            splitter.topAnchor.constraint(equalTo: words.bottomAnchor, constant: 6),
+            splitter.leadingAnchor.constraint(equalTo: leadingAnchor),
+            splitter.trailingAnchor.constraint(equalTo: trailingAnchor),
+            splitter.bottomAnchor.constraint(equalTo: filterBar.topAnchor),
             filterBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             filterBar.trailingAnchor.constraint(equalTo: trailingAnchor),
             filterBar.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -216,6 +229,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// Shows the section of record `id`, `fallbackTitle` being the profile's
     /// English title for an id the app has no words for.
     func show(id: String, fallbackTitle: String, font: NSFont) {
+        rememberPlace()
         let changed = recordID != id
         recordID = id
         self.fallbackTitle = fallbackTitle
@@ -245,7 +259,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             .font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor
         ]))
         legendTitle.attributedTitle = line
-        legendTitle.toolTip = line.string
         let header = record?.header.map(Self.header) ?? ""
         headerLabel.stringValue = header
         headerLabel.isHidden = header.isEmpty
@@ -259,6 +272,12 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         if let key = pendingSelection {
             pendingSelection = nil
             select(key: key)
+        } else if let place = places[id] {
+            // Back to this record, or a new revision of it: the row the
+            // reader left selected, if its key is still there, and the
+            // scroll where it was.
+            if let key = place.key { select(key: key) }
+            table.scroll(place.scroll)
         }
         showDetails()
     }
@@ -386,17 +405,12 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         return trimmed.hasSuffix(".") ? String(trimmed.dropLast()) : trimmed
     }
 
-    /// The longest label the list writes before it cuts.
-    static let labelLimit = 40
-
     /// The row's short label: the review's `label`, or the first sentence of
-    /// its main text cut at `labelLimit`.
+    /// its main text, whole — the line cuts it at the list's width, not here.
     func label(_ row: [String: RecordValue]) -> String {
         if let label = row["label"]?.string, !label.isEmpty { return label }
         guard let main = mainColumn else { return "" }
-        let sentence = Self.firstSentence(text(of: row, main))
-        guard sentence.count > Self.labelLimit else { return sentence }
-        return String(sentence.prefix(Self.labelLimit - 1)).trimmingCharacters(in: .whitespaces) + "…"
+        return Self.firstSentence(text(of: row, main))
     }
 
     /// The row's key as the list writes it: `IRQ 24`, `0x59/0x02`, the range
@@ -648,7 +662,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         cell.textField?.font = body
         cell.textField?.textColor = ink
         cell.textField?.attributedStringValue = line
-        cell.textField?.toolTip = values["note"]?.string ?? line.string
+        // No pointer words that repeat the line: the note only, which the
+        // line does not show, and not on an inferred row, whose mark says it.
+        cell.textField?.toolTip = inference ? nil : values["note"]?.string
         cell.setMark(mark(values))
         return cell
     }
@@ -740,96 +756,87 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     func outlineViewSelectionDidChange(_ notification: Notification) { showDetails() }
 
-    /// The selected row: its key and label as a title, the first sentence of
-    /// what it does, then its fields in the record's order — facts, then the
-    /// places it leads to, then the rows of other records that name it — and
-    /// last the confidence and the note.
+    /// The selected row, in the rows every firmware panel's details are
+    /// drawn with (`ToolDetailScroll.showRows`): its key and the review's
+    /// label as the title, then its fields in the record's order — facts,
+    /// the main text whole among them, then the places it leads to as links,
+    /// then the rows of other records that name it — and last the confidence
+    /// and the note. Each text once: no first sentence over the text it
+    /// starts, no field for the branch the row stands in.
     private func showDetails() {
         shownDetails = []
         shownDetailTitle = ""
         shownDetailSentence = ""
+        linkActions = []
         let selected = table.selectedRowIndexes
         guard selected.count == 1, let values = values(atRow: selected.first!) else {
             details.showPlaceholder(allRows.isEmpty ? "" : Self.noSelectionText)
             return
         }
-        details.prepareForRows(subject: keyText(values))
-        let size = ToolPanelFont.size
-        let content = details.content
-        func place(_ view: NSView, gap: CGFloat = 4) {
-            let holder = NSStackView(views: [view])
-            holder.orientation = .vertical
-            holder.alignment = .leading
-            holder.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: gap, right: 8)
-            content.addArrangedSubview(holder)
-            holder.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-            view.widthAnchor.constraint(lessThanOrEqualTo: holder.widthAnchor, constant: -16).isActive = true
+        var fields: [ToolFieldList.Field] = []
+        var extras: [NSView] = []
+        func add(_ name: String, _ value: NSAttributedString) {
+            fields.append(.init(label: name, value: value))
+            shownDetails.append((name, value.string))
         }
-        func words(_ text: String, mono: Bool = false, font: NSFont? = nil) -> NSTextField {
-            let field = NSTextField(wrappingLabelWithString: text)
-            field.font = font ?? (mono ? ToolPanelFont.monospaced(size: size) : ToolPanelFont.body())
-            field.isSelectable = true
-            field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            return field
-        }
-        func add(_ name: String, _ value: NSView, text: String) {
-            let label = NSTextField(labelWithString: name)
-            label.font = .systemFont(ofSize: max(size - 2, 9))
-            label.textColor = .secondaryLabelColor
-            let pair = NSStackView(views: [label, value])
-            pair.orientation = .vertical
-            pair.alignment = .leading
-            pair.spacing = 1
-            place(pair)
-            shownDetails.append((name, text))
+        // Every value in the firmware panels' one font (`ToolValueTone`).
+        func plain(_ text: String) -> NSAttributedString { ToolValueTone.standard.attributedValue(text) }
+        func linked(_ places: [(String, () -> Void)], separator: String) -> NSAttributedString {
+            let text = NSMutableAttributedString()
+            for (index, (title, action)) in places.enumerated() {
+                if index > 0 { text.append(plain(separator)) }
+                linkActions.append(action)
+                text.append(ToolFieldList.link(title, to: linkActions.count - 1))
+            }
+            return text
         }
 
-        let label = label(values)
+        let label = values["label"]?.string ?? ""
         shownDetailTitle = label.isEmpty ? keyDisplay(values) : "\(keyDisplay(values)) · \(label)"
-        place(words(shownDetailTitle, font: .systemFont(ofSize: size, weight: .semibold)), gap: 2)
-        if let main = mainColumn {
-            shownDetailSentence = Self.firstSentence(text(of: values, main))
-            if !shownDetailSentence.isEmpty, shownDetailSentence != label { place(words(shownDetailSentence), gap: 8) }
-        }
-
-        // The title and the sentence already say these: the row's own key
-        // (but not the branch it stands in), and a main text that is one
-        // sentence.
         let titled = Set((record?.key ?? []).filter { $0 != record?.groupBy && $0 != "mode" })
         let shown = columns.filter { column in
-            if column.id == "label" || titled.contains(column.id) { return false }
-            if column.id == mainColumn?.id {
-                let whole = text(of: values, column).trimmingCharacters(in: .whitespacesAndNewlines)
-                return Self.firstSentence(whole) != whole && Self.firstSentence(whole) + "." != whole
-            }
-            return true
+            // The branch the row stands in says its value already.
+            !(column.id == "label" || column.id == record?.groupBy || titled.contains(column.id))
         }
         for column in shown where !Self.isLink(column) {
-            let text = text(of: values, column)
-            guard !text.isEmpty else { continue }
+            let text = text(of: values, column).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty, text != label else { continue }
             let name = Self.columnTitle(column.title)
+            if column.id == mainColumn?.id { shownDetailSentence = text }
             if column.kind == .rows {
-                add(name, commandsGrid(values[column.id], column: column), text: text)
+                // A small table of its own, under the rows, as a panel adds
+                // what is its own after the list.
+                shownDetails.append((name, text))
+                let heading = NSTextField(labelWithString: name)
+                heading.font = ToolPanelFont.body()
+                heading.textColor = .secondaryLabelColor
+                extras += [heading, commandsGrid(values[column.id], column: column)]
             } else {
-                let mono = [.byte, .computed].contains(column.kind) || column.hex == true
-                add(name, words(column.kind == .enum ? Self.valueTitle(text) : text, mono: mono), text: text)
+                add(name, plain(column.kind == .enum ? Self.valueTitle(text) : text))
             }
         }
         for column in shown where Self.isLink(column) {
-            let text = text(of: values, column)
-            guard !text.isEmpty else { continue }
-            add(Self.columnTitle(column.title), links(places(values, column)), text: text)
+            let places = places(values, column)
+            guard !places.isEmpty else { continue }
+            add(Self.columnTitle(column.title), linked(places, separator: ", "))
         }
         for (name, places) in backReferences(values) where !places.isEmpty {
-            add(name, links(places, vertical: true), text: places.map(\.0).joined(separator: ", "))
+            add(name, linked(places, separator: "\n"))
         }
         let inference = Self.isInference(values)
-        let confidence = inference ? Self.inferenceTitle : Self.establishedTitle
-        add(Self.confidenceTitle, words(confidence), text: confidence)
-        if let note = values["note"]?.string, !note.isEmpty {
-            add(Self.noteTitle, words(note), text: note)
+        add(Self.confidenceTitle, plain(inference ? Self.inferenceTitle : Self.establishedTitle))
+        if let note = values["note"]?.string, !note.isEmpty { add(Self.noteTitle, plain(note)) }
+
+        let list = details.showRows(subject: keyText(values), title: shownDetailTitle, fields: fields)
+        list.onLink = { [weak self] target in
+            guard let self, let index = target as? Int, self.linkActions.indices.contains(index) else { return }
+            self.linkActions[index]()
         }
+        for view in extras { details.content.addArrangedSubview(view) }
     }
+
+    /// What each link of the details does, by the index its run carries.
+    private var linkActions: [() -> Void] = []
 
     /// Rows of other records that name this one: the host commands that
     /// touch an EC RAM field, the flash areas a host command reaches.
@@ -873,18 +880,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         record = other
         defer { record = saved }
         return Self.line(key: keyDisplay(row), label: label(row))
-    }
-
-    /// The places a value names, each a link that leads there.
-    private func links(_ places: [(String, () -> Void)], vertical: Bool = false) -> NSView {
-        let stack = NSStackView()
-        stack.orientation = vertical ? .vertical : .horizontal
-        stack.spacing = vertical ? 2 : 8
-        stack.alignment = vertical ? .leading : .firstBaseline
-        for (title, action) in places {
-            stack.addArrangedSubview(RecordLinkButton(title: title, mono: !vertical, handler: action))
-        }
-        return stack
     }
 
     /// An SMBus device's commands: a small table of command, R/W, size and
@@ -936,8 +931,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         }
         let empty = allRows.isEmpty
         tableScroll.isHidden = shownRows.isEmpty
-        details.isHidden = empty
-        separator.isHidden = empty
+        splitter.isHidden = empty
         filterBar.isHidden = empty
         emptyLabel.isHidden = !shownRows.isEmpty || (empty && records[recordID ?? ""]?.status == AnalysisProfile.RecordStatus.none)
         emptyLabel.stringValue = empty ? Self.emptyText : L("Nothing matches the search.")
@@ -1260,14 +1254,17 @@ final class RecordGroupCell: NSTableCellView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func show(_ group: RecordGroupItem) {
+        // Cut with an ellipsis: an attributed string with no paragraph style
+        // wraps at a word and was clipped there, "Keyboard" with no mark.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
         let line = NSMutableAttributedString(string: group.label, attributes: [
             .font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph
         ])
         label.attributedStringValue = line
         count.font = CodePaneView.navigatorFont()
         count.stringValue = "(\(group.children.count))"
-        label.toolTip = group.label
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {
@@ -1333,27 +1330,4 @@ final class RecordRowCell: NSTableCellView {
     }
 
     var shownMark: String? { markView.isHidden ? nil : markView.image?.accessibilityDescription }
-}
-
-/// A place in the details: a link's colour, and a click goes there.
-final class RecordLinkButton: NSButton {
-    private var handler: (() -> Void)?
-
-    convenience init(title: String, mono: Bool = true, handler: @escaping () -> Void) {
-        self.init(frame: .zero)
-        self.handler = handler
-        isBordered = false
-        bezelStyle = .inline
-        setButtonType(.momentaryChange)
-        lineBreakMode = .byTruncatingTail
-        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        attributedTitle = NSAttributedString(string: title, attributes: [
-            .font: mono ? ToolPanelFont.monospaced(size: ToolPanelFont.size) : ToolPanelFont.body(),
-            .foregroundColor: NSColor.linkColor
-        ])
-        target = self
-        action = #selector(go)
-    }
-
-    @objc private func go() { handler?() }
 }
