@@ -904,8 +904,11 @@ public class Owner {
         String valueText = required(body, "value");
         long value;
         try {
-            value = valueText.startsWith("0x") || valueText.startsWith("0X")
-                ? Long.parseUnsignedLong(valueText.substring(2), 16) : Long.parseLong(valueText);
+            boolean negative = valueText.startsWith("-");
+            String digits = negative ? valueText.substring(1) : valueText;
+            value = digits.startsWith("0x") || digits.startsWith("0X")
+                ? Long.parseUnsignedLong(digits.substring(2), 16) : Long.parseLong(digits);
+            if (negative) value = -value;
         } catch (NumberFormatException error) {
             throw new Failure(400, valueText + " is not a number");
         }
@@ -7929,9 +7932,12 @@ public class Owner {
     /**
      * The width of the store that writes out the one register `load` sets,
      * when that store is narrower than the register: 1 for `movi a0,-0x80`
-     * followed by `sbi a0,[a1]`. Follows the fall-through a few instructions
-     * and gives up (0) where the register is read otherwise, rewritten, or
-     * the flow leaves the straight line.
+     * followed by `sbi a0,[a1]`, and for a read-modify-write that carries
+     * the value through bitwise operations and a narrowing into the store
+     * (`movi a1,-0x80; or33 a1,a0; zeb33 a1,a1; sbi a1,[a2]`, issue
+     * 3b4c00cb). Follows the fall-through a few instructions and gives up
+     * (0) where the value is read otherwise, every register holding it is
+     * rewritten, or the flow leaves the straight line.
      */
     private int storeWidth(Instruction load) {
         ghidra.program.model.lang.Register register = null;
@@ -7944,36 +7950,68 @@ public class Owner {
             register = written.getBaseRegister();
         }
         if (register == null) return 0;
+        int full = register.getMinimumByteSize();
+        java.util.Set<ghidra.program.model.lang.Register> holding = new java.util.HashSet<>();
+        holding.add(register);
+        int narrowest = full;
         Instruction next = load;
         for (int step = 0; step < 12; step++) {
             if (!next.getFlowType().isFallthrough() || next.getFallThrough() == null) return 0;
             next = program.getListing().getInstructionAt(next.getFallThrough());
             if (next == null) return 0;
-            java.util.Set<ghidra.program.model.pcode.Varnode> derived = new java.util.HashSet<>();
-            boolean read = false, rewritten = false;
+            java.util.Map<ghidra.program.model.pcode.Varnode, Integer> derived = new java.util.HashMap<>();
             for (ghidra.program.model.pcode.PcodeOp op : next.getPcode()) {
-                boolean fromIt = false;
+                int code = op.getOpcode();
+                int width = 0;
                 for (int index = 0; index < op.getNumInputs(); index++) {
+                    if (code == ghidra.program.model.pcode.PcodeOp.STORE && index != 2) continue;
                     ghidra.program.model.pcode.Varnode input = op.getInput(index);
-                    if (op.getOpcode() == ghidra.program.model.pcode.PcodeOp.STORE && index == 2) continue;
-                    if (derived.contains(input) || holds(register, input)) fromIt = true;
-                }
-                if (op.getOpcode() == ghidra.program.model.pcode.PcodeOp.STORE) {
-                    ghidra.program.model.pcode.Varnode value = op.getInput(2);
-                    if (derived.contains(value) || holds(register, value)) {
-                        return value.getSize() < register.getMinimumByteSize() ? value.getSize() : 0;
-                    }
+                    Integer known = derived.get(input);
+                    if (known != null) width = Math.max(width, known);
+                    else if (heldBy(holding, input)) width = Math.max(width, Math.min(input.getSize(), narrowest));
                 }
                 ghidra.program.model.pcode.Varnode out = op.getOutput();
-                if (fromIt) {
-                    if (out != null && out.isUnique()) derived.add(out);
-                    else read = true;
+                if (code == ghidra.program.model.pcode.PcodeOp.STORE) {
+                    if (width > 0) {
+                        int stored = Math.min(width, op.getInput(2).getSize());
+                        return stored < full ? stored : 0;
+                    }
+                    continue;
                 }
-                if (out != null && holds(register, out)) rewritten = true;
+                if (width > 0) {
+                    boolean bitwise = code == ghidra.program.model.pcode.PcodeOp.COPY
+                        || code == ghidra.program.model.pcode.PcodeOp.INT_OR
+                        || code == ghidra.program.model.pcode.PcodeOp.INT_AND
+                        || code == ghidra.program.model.pcode.PcodeOp.INT_XOR
+                        || code == ghidra.program.model.pcode.PcodeOp.INT_ZEXT
+                        || code == ghidra.program.model.pcode.PcodeOp.SUBPIECE
+                           && op.getInput(1).isConstant() && op.getInput(1).getOffset() == 0;
+                    if (!bitwise || out == null) return 0;
+                    int carried = Math.min(width, out.getSize());
+                    if (code == ghidra.program.model.pcode.PcodeOp.INT_ZEXT) carried = Math.min(width, op.getInput(0).getSize());
+                    if (out.isUnique()) {
+                        derived.put(out, carried);
+                    } else if (out.isRegister()) {
+                        ghidra.program.model.lang.Register to = program.getRegister(out.getAddress(), out.getSize());
+                        if (to == null) return 0;
+                        holding.add(to.getBaseRegister());
+                        narrowest = Math.min(narrowest, carried);
+                    } else {
+                        return 0;
+                    }
+                } else if (out != null && out.isRegister()) {
+                    ghidra.program.model.lang.Register to = program.getRegister(out.getAddress(), out.getSize());
+                    if (to != null) holding.remove(to.getBaseRegister());
+                    if (holding.isEmpty()) return 0;
+                }
             }
-            if (read || rewritten) return 0;
         }
         return 0;
+    }
+
+    private boolean heldBy(java.util.Set<ghidra.program.model.lang.Register> holding, ghidra.program.model.pcode.Varnode varnode) {
+        for (ghidra.program.model.lang.Register register : holding) if (holds(register, varnode)) return true;
+        return false;
     }
 
     private boolean holds(ghidra.program.model.lang.Register register, ghidra.program.model.pcode.Varnode varnode) {

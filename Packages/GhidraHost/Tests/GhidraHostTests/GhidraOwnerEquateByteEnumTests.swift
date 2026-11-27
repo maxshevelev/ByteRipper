@@ -150,4 +150,46 @@ final class GhidraOwnerEquateByteEnumTests: XCTestCase {
         XCTAssertTrue(frames.contains { $0.hasPrefix("pop25") }, "\(answer)")
         XCTAssertFalse(applied.isEmpty, "\(answer)")
     }
+
+    /// A byte set by a read-modify-write — `movi a?,-0x80; or33; zeb33; sbi`
+    /// at 0xAA00 — is the byte 0x80 and its name prints in the C (issue
+    /// 3b4c00cb).
+    func testAByteOrredIntoARegisterIsTheByteMember() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        guard (try? GhidraInstall.find()) != nil else { throw XCTSkip("no Ghidra on this machine") }
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerEquateByteEnumTests-\(UUID().uuidString)", isDirectory: true)
+        self.directory = directory
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraOwnerEquateByteEnumTests"),
+                              writer: store)
+        let module = GhidraHost.moduleDigest(of: image)
+        _ = try await host.create(module: image, name: "ItEcNmD562", source: .init(document: "dump", node: "0.0.3"))
+        defer { Task { await host.stop(module) } }
+        try await host.take(module)
+        func post(_ body: [String: Any]) async throws -> [String: Any] {
+            let data = try await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: body))
+            return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        }
+        _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["c": """
+            typedef enum _ADC_TEST_BIT : unsigned char { AdcTestEnable = 0x01 } ADC_TEST_BIT;
+            """]))
+        let answer = try await post(["enum": "ADC_TEST_BIT", "items": [
+            ["address": "0xAA00", "operand": 1, "name": "AdcTestValid"]]])
+        let item = try XCTUnwrap((answer["items"] as? [[String: Any]])?.first)
+        XCTAssertEqual(item["value"] as? String, "0x80", "\(item)")
+        XCTAssertEqual(answer["not_in_c"] as? [String], [], "\(answer)")
+        let code = String(decoding: try await host.read(module, "/v1/function/0xAA00"), as: UTF8.self)
+        XCTAssertTrue(code.contains("| AdcTestValid"), code)
+        let type = String(decoding: try await host.read(module, "/v1/type?name=ADC_TEST_BIT"), as: UTF8.self)
+        XCTAssertFalse(type.contains("FF80"), type)
+
+        // A negative value is a number in `functions` mode too.
+        let negative = try await post(["functions": ["0xAA00"], "value": "-0x80", "name": "AdcTestValid", "dry_run": true])
+        XCTAssertNotNil(negative["applied"], "\(negative)")
+    }
 }
