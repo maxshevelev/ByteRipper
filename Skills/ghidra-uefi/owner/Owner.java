@@ -7151,7 +7151,29 @@ public class Owner {
         if (body.has("items")) return setEquateItems(body);
         JsonObject answer = applyEquate(body);
         String name = string(body, "name", "");
-        if (!name.isEmpty()) noteWhetherCPrintsIt(answer, java.util.List.of(address(required(body, "address"))), name);
+        if (name.isEmpty()) return answer;
+        Address at = address(required(body, "address"));
+        noteWhetherCPrintsIt(answer, java.util.List.of(at), name);
+        // A member narrower than its operand (0x80 for `movi a1,-0x80`) is
+        // the byte the C stores a line later, where the operand's equate does
+        // not reach: the same name goes on that constant of the C too.
+        if (answer.has("in_c") && !answer.get("in_c").getAsBoolean() && answer.has("narrowed_from")) {
+            long member = Long.parseUnsignedLong(answer.get("value").getAsString().substring(2), 16);
+            CConstant constant = null;
+            try {
+                constant = cConstant(at, member);
+            } catch (Failure ambiguous) {
+                answer.addProperty("hint", answer.get("hint").getAsString() + "; " + ambiguous.getMessage());
+            }
+            if (constant != null) {
+                JsonObject onC = applyEquateOnC(body, at, constant, member, name, string(body, "enum", null),
+                                                string(body, "comment", null), string(body, "enum_comment", null));
+                answer.addProperty("c_address", onC.get("address").getAsString());
+                answer.remove("in_c");
+                answer.remove("hint");
+                noteWhetherCPrintsIt(answer, java.util.List.of(at), name);
+            }
+        }
         return answer;
     }
 
@@ -7204,6 +7226,10 @@ public class Owner {
             if (results == null || results.getDecompiledFunction() == null
                     || !word.matcher(results.getDecompiledFunction().getC()).find()) {
                 answer.addProperty("in_c", false);
+                answer.addProperty("hint", "the equate stands on the instruction, but the C of " + function.getName()
+                    + " does not print " + name + ": the decompiler folded that constant into another expression,"
+                    + " printed it as a member of the type it inferred there, or keeps it at another width than"
+                    + " the equate's value; read the C and name the constant it prints (ghidra_equate with `value`)");
                 return;
             }
         }
@@ -7381,6 +7407,10 @@ public class Owner {
                 table.removeEquate(name);
             }
             answer.addProperty("enum", owner.getName());
+            answer.addProperty("value", "0x" + Long.toHexString(equate.getValue()).toUpperCase());
+            if (equate.getValue() != held && equate.getValue() != signed) {
+                answer.addProperty("narrowed_from", "0x" + Long.toHexString(held).toUpperCase());
+            }
             String kept = owner.getComment(name);
             if (kept != null && !kept.isEmpty()) answer.addProperty("comment", kept);
         } else {
@@ -7659,6 +7689,20 @@ public class Owner {
         // and a four-byte enum holds that as 0xFFFFFFFE, as Ia32's operand
         // gives it.
         int width = owner.getLength();
+        // An enum whose members all fit a byte (or two) names byte values
+        // however wide Ghidra made it: NDS32 `movi a0,-0x80` before `sbi`
+        // holds 0xFFFFFFFF80, and the member is 0x80, never 0xFFFFFF80
+        // (issue c81f9348). Only a negative operand is narrowed, and only
+        // where its sign-extension from that width is the operand.
+        if (width > 2 && signed < 0 && owner.getCount() > 0) {
+            long widest = 0;
+            for (long each : owner.getValues()) {
+                long bits = each & ((1L << (width * 8)) - 1);
+                widest = Math.max(widest, width >= 8 ? each : bits);
+            }
+            int fitting = Long.compareUnsigned(widest, 0xFFL) <= 0 ? 1 : Long.compareUnsigned(widest, 0xFFFFL) <= 0 ? 2 : 0;
+            if (fitting > 0 && signed >= -(1L << (fitting * 8 - 1))) width = fitting;
+        }
         long mask = width >= 8 ? -1L : (1L << (width * 8)) - 1;
         long narrow = held & mask;
         boolean fits = width >= 8 || Long.compareUnsigned(held, mask) <= 0
