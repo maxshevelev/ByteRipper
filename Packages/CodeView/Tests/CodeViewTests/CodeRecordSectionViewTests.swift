@@ -485,9 +485,15 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertFalse(again.legendIsOpen, "per record")
         XCTAssertEqual(again.shownNote, "the battery block is not read yet")
         XCTAssertEqual(again.shownHeader, "")
+        // The review's note is behind the (i) after the status, not in the legend.
+        XCTAssertTrue(again.legendDisclosure.isHidden, "no header: nothing to open")
+        XCTAssertFalse(again.statusInfo.isHidden)
+        again.statusInfo.performClick(nil)
+        XCTAssertEqual(again.shownPopoverText, "the battery block is not read yet")
 
         let bare = try self.panel(["gpio": ["status": "complete", "rows": []]], show: "gpio")
         XCTAssertTrue(bare.legendDisclosure.isHidden, "nothing to open")
+        XCTAssertTrue(bare.statusInfo.isHidden, "a complete record with no note has no (i)")
     }
 
     func testTheFilterAtTheFootMatchesKeyAndLabel() throws {

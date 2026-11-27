@@ -35,7 +35,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     let legendTitle = NSButton()
     private let legendBody = NSStackView()
     private let headerLabel = NSTextField(wrappingLabelWithString: "")
-    private let noteLabel = NSTextField(wrappingLabelWithString: "")
+    /// The (i) after the status: the review's note on the record — why it
+    /// is partial — in a popover, not in the legend.
+    let statusInfo = ToolPanelInfoButton()
     private var titleText = ""
     /// At the foot, as the Functions list's filter (`CodePaneView.dressFilter`).
     let searchField = NSSearchField()
@@ -101,18 +103,19 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         legendDisclosure.action = #selector(legendToggled)
         // help: panel.code.record-sections
         ControlHelp.describe(legendDisclosure, name: L("About this record"),
-                             tooltip: L("Show or hide what this record is and the review's note on it"))
+                             tooltip: L("Show or hide what this record is"))
+        // help: panel.code.record-sections
+        ControlHelp.describe(statusInfo, L("The review's note on this record"))
+        statusInfo.target = self
+        statusInfo.action = #selector(statusInfoClicked)
         legendTitle.isBordered = false
         legendTitle.target = self
         legendTitle.action = #selector(legendTitleClicked)
         (legendTitle.cell as? NSButtonCell)?.wraps = false
         legendTitle.cell?.lineBreakMode = .byTruncatingTail
         legendTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        for label in [headerLabel, noteLabel] {
-            label.isSelectable = true
-            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        }
-        noteLabel.textColor = .secondaryLabelColor
+        headerLabel.isSelectable = true
+        headerLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         // The same quiet, centred words as the navigator's empty lists.
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center
@@ -152,7 +155,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(0.4), at: 1)
 
-        let heading = NSStackView(views: [legendDisclosure, legendTitle])
+        let heading = NSStackView(views: [legendDisclosure, legendTitle, statusInfo])
         heading.orientation = .horizontal
         heading.alignment = .centerY
         heading.spacing = 2
@@ -163,7 +166,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         // Under the title, not under the chevron, as the marks legend.
         legendBody.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)
         legendBody.addArrangedSubview(headerLabel)
-        legendBody.addArrangedSubview(noteLabel)
         let words = NSStackView(views: [heading, legendBody])
         words.orientation = .vertical
         words.alignment = .leading
@@ -231,7 +233,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         titleText = Self.title(of: id, fallback: fallbackTitle)
         emptyLabel.font = font
         headerLabel.font = CodePaneView.navigatorFont()
-        noteLabel.font = CodePaneView.navigatorFont()
         table.rowHeight = CodePaneView.navigatorRowHeight
         if changed {
             searchField.stringValue = ""
@@ -256,9 +257,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let header = record?.header.map(Self.header) ?? ""
         headerLabel.stringValue = header
         headerLabel.isHidden = header.isEmpty
-        noteLabel.stringValue = note ?? ""
-        noteLabel.isHidden = (note ?? "").isEmpty
-        legendDisclosure.isHidden = header.isEmpty && (note ?? "").isEmpty
+        statusInfo.isHidden = (note ?? "").isEmpty
+        legendDisclosure.isHidden = header.isEmpty
         applyLegend()
         allRows = (stored?.rows ?? []).sorted(by: keyOrder)
         measureKeys()
@@ -748,6 +748,15 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let shows = open && !legendDisclosure.isHidden
         legendDisclosure.state = shows ? .on : .off
         legendBody.isHidden = !shows
+    }
+
+    @objc private func statusInfoClicked() { showStatusInfo() }
+
+    /// Shows the review's note on the record from the (i) after its status.
+    func showStatusInfo() {
+        guard let note = storedNote, !note.isEmpty else { return }
+        let status = shownStatus.hasSuffix(".") ? String(shownStatus.dropLast()) : shownStatus
+        showInfo(title: status, text: note, relativeTo: statusInfo.bounds, of: statusInfo, edge: .maxY)
     }
 
     @objc private func groupInfoClicked(_ sender: NSButton) {

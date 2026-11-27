@@ -1,4 +1,4 @@
-@source-sha 1f7bb9e49621b6b0fe75f7a5f8d4e8a4a54fe7995f9824e4be36ac675b4d8b40
+@source-sha d35767d2576b57ec1465ceaab865314e9ebe1ed323cd28eb9c42bfc467ad60bc
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -65,7 +65,7 @@ Manche Abschnitte sind ein Baum, und jeder Zweig gibt an, wie viele Zeilen er en
 
 Unter der Liste stehen die Details der ausgewählten Zeile, wie in den [[topic:tools-overview|Werkzeugbereichen]]: Schlüssel und der Kurzname, den die Analyse vergeben hat, und dann die Felder, jedes einmal; der Zweig, in dem die Zeile steht, wird nicht wiederholt. Zuerst die Angaben, darunter die vollständige Beschreibung dessen, was das Element tut, dann die Links, zuletzt, ob die Analyse die Zeile aus dem Code gelesen oder erschlossen hat, mit ihrem Hinweis. Die Befehle eines SMBus-Geräts stehen in einer kleinen Tabelle: Befehl, Lesen oder Schreiben, Größe und Bedeutung. Eine blaue Adresse ist ein Link: Ein Klick auf einen Handler oder auf eine Funktion in **Zugriff durch**, **Aufrufer**, **Leser** oder **Schreiber** öffnet diese Stelle im Code; ein Klick auf eine Datenadresse öffnet die Instruktion, die sie verwendet. Ein Wert, der eine Zeile eines anderen Eintrags nennt – die EC-RAM-Felder eines Host-Befehls, die Host-Befehle eines Flash-Bereichs –, wechselt zum Tab dieses Eintrags und wählt die Zeile aus. Die Details listen auch die Zeilen anderer Einträge auf, die diese nennen: bei einem EC-RAM-Feld die Host-Befehle, die es lesen oder schreiben, bei einem Host-Befehl die Flash-Datenbereiche, die er erreicht. Wie in den Werkzeugbereichen öffnet die **Leertaste** oder die Schaltfläche in der Ecke der Details diese in einer großen Ansicht. Jeder Abschnitt behält seine ausgewählte Zeile: Kehrt man zu seinem Tab zurück oder trifft eine neue Revision ein, ist dieselbe Zeile wieder ausgewählt, solange es sie noch gibt.
 
-Die Zeile über der Liste nennt den Abschnitt und den Stand des Eintrags. Der Pfeil davor öffnet die Erläuterung: was der Eintrag enthält und, falls die Analyse einen hinterlassen hat, ihren Hinweis dazu. Die Erläuterung ist zugeklappt, bis sie geöffnet wird, und bleibt für jeden Abschnitt offen oder zu. Die Stände sind:
+Die Zeile über der Liste nennt den Abschnitt und den Stand des Eintrags. Der Pfeil davor öffnet die Erläuterung: was der Eintrag enthält. Hat die Analyse einen Hinweis zum Eintrag hinterlassen – warum er noch nicht vollständig ist –, zeigt ihn das (i) nach dem Stand. Die Erläuterung ist zugeklappt, bis sie geöffnet wird, und bleibt für jeden Abschnitt offen oder zu. Die Stände sind:
 
 - **Noch nicht bearbeitet.** Die Analyse hat diesen Eintrag noch nicht behandelt; die Liste ist leer.
 - **Analyse läuft.** Die bisherigen Zeilen; der Hinweis gibt an, was noch fehlt.
