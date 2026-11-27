@@ -194,7 +194,7 @@ enum CodeNavigatorIcon {
         // A short word — `I/O` — is drawn smaller until it fits the square.
         var size = rect.height * 0.74
         var drawn = line(size)
-        let room = rect.width * 0.84
+        let room = rect.width * 0.68
         let wide = CTLineGetBoundsWithOptions(drawn, .useGlyphPathBounds).width
         if wide > room {
             size *= room / wide
