@@ -142,7 +142,9 @@ enum CodeNavigatorIcon {
                 drawLetter(letter, color: color, in: rect)
             case let .symbol(name):
                 square(rect, radius: radius, color: color, onPlate: inverted)
-                drawSymbol(name, color: .white, scale: 0.7, in: rect)
+                // A flat symbol — the memory chip — is narrow in height at
+                // the common scale, so it takes more of the square.
+                drawSymbol(name, color: .white, scale: name == "memorychip" ? 0.86 : 0.7, in: rect)
             case let .badge(name):
                 // A badge keeps its own colours on a selected row, on a white plate.
                 if inverted {
@@ -230,8 +232,40 @@ enum CodeNavigatorIcon {
             .withSymbolConfiguration(configuration) else { return }
         let fit = min(rect.width * scale / max(symbol.size.width, 1), rect.height * scale / max(symbol.size.height, 1))
         let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
-        symbol.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2,
+        // Centred by its ink, not its box: a symbol's box carries room for
+        // the baseline, and the glyph sits off-centre in it.
+        var box = NSRect(origin: .zero, size: symbol.size)
+        let picture = symbol.cgImage(forProposedRect: &box, context: nil, hints: nil)
+        let ink = picture.flatMap { image in
+            Self.inkBounds(image).map { pixels in
+                let x = box.width / CGFloat(image.width), y = box.height / CGFloat(image.height)
+                return CGRect(x: pixels.minX * x, y: pixels.minY * y, width: pixels.width * x, height: pixels.height * y)
+            }
+        }
+        let offset = ink.map { CGPoint(x: (box.width / 2 - $0.midX) * fit, y: (box.height / 2 - $0.midY) * fit) } ?? .zero
+        symbol.draw(in: NSRect(x: rect.midX - size.width / 2 + offset.x, y: rect.midY - size.height / 2 + offset.y,
                                width: size.width, height: size.height))
+    }
+
+    /// The bounds of a picture's painted pixels, in pixels, origin at the
+    /// bottom left; nil for an empty one.
+    private static func inkBounds(_ image: CGImage) -> CGRect? {
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var minX = width, maxX = -1, minY = height, maxY = -1
+        for y in 0..<height {
+            for x in 0..<width where pixels[(y * width + x) * 4 + 3] > 24 {
+                minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX else { return nil }
+        // Rows count from the top in memory; the result is bottom-up.
+        return CGRect(x: CGFloat(minX), y: CGFloat(height - 1 - maxY),
+                      width: CGFloat(maxX - minX + 1), height: CGFloat(maxY - minY + 1))
     }
 }
 
