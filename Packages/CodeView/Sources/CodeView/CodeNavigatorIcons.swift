@@ -243,8 +243,15 @@ enum CodeNavigatorIcon {
             }
         }
         let offset = ink.map { CGPoint(x: (box.width / 2 - $0.midX) * fit, y: (box.height / 2 - $0.midY) * fit) } ?? .zero
-        symbol.draw(in: NSRect(x: rect.midX - size.width / 2 + offset.x, y: rect.midY - size.height / 2 + offset.y,
-                               width: size.width, height: size.height))
+        var origin = CGPoint(x: rect.midX - size.width / 2 + offset.x, y: rect.midY - size.height / 2 + offset.y)
+        // On whole device pixels: a symbol's straight edges set between two
+        // pixels draw as a blurred double line on one side and a crisp one on
+        // the other, and the mark reads as off-centre though it is not.
+        if let context = NSGraphicsContext.current?.cgContext {
+            let device = context.convertToDeviceSpace(origin)
+            origin = context.convertToUserSpace(CGPoint(x: device.x.rounded(), y: device.y.rounded()))
+        }
+        symbol.draw(in: NSRect(origin: origin, size: size))
     }
 
     /// The bounds of a picture's painted pixels, in pixels, origin at the
