@@ -7275,9 +7275,18 @@ public class Owner {
         if (name.isEmpty()) return answer;
         Address at = address(required(body, "address"));
         noteWhetherCPrintsIt(answer, java.util.List.of(at), name);
-        // A member narrower than its operand (0x80 for `movi a1,-0x80`) is
-        // the byte the C stores a line later, where the operand's equate does
-        // not reach: the same name goes on that constant of the C too.
+        carryNarrowedToC(body, answer, at, name);
+        return answer;
+    }
+
+    /**
+     * A member narrower than its operand (0x80 for `movi a1,-0x80`) is the
+     * byte the C stores a line later, where the operand's equate does not
+     * reach: the same name goes on that constant of the C too. For one call
+     * and for each item of a list alike (issue f509c69c).
+     */
+    private void carryNarrowedToC(JsonObject body, JsonObject answer, Address at, String name) throws Exception {
+        if (!answer.has("in_c")) noteWhetherCPrintsIt(answer, java.util.List.of(at), name);
         if (answer.has("in_c") && !answer.get("in_c").getAsBoolean() && answer.has("narrowed_from")) {
             long member = Long.parseUnsignedLong(answer.get("value").getAsString().substring(2), 16);
             CConstant constant = null;
@@ -7295,7 +7304,6 @@ public class Owner {
                 noteWhetherCPrintsIt(answer, java.util.List.of(at), name);
             }
         }
-        return answer;
     }
 
     /**
@@ -7312,6 +7320,9 @@ public class Owner {
             JsonObject answer = applyEquate(one);
             answer.addProperty("address", required(one, "address"));
             String name = string(one, "name", "");
+            if (!name.isEmpty() && answer.has("narrowed_from")) {
+                carryNarrowedToC(one, answer, address(required(one, "address")), name);
+            }
             if (!name.isEmpty()) places.computeIfAbsent(name, key -> new java.util.ArrayList<>()).add(address(required(one, "address")));
             answers.add(answer);
         }
@@ -7625,7 +7636,20 @@ public class Owner {
                 if (op.getSeqnum().getTarget().equals(at)) here.add(input);
             }
         }
-        java.util.List<ghidra.program.model.pcode.Varnode> pick = !here.isEmpty() ? here : anywhere;
+        // A constant loaded at `at` (`movi a1,-0x80`) and stored by the next
+        // instruction that reads that register (`sbi a1,[...]`) stands in the
+        // C at the store: that place singles it out when several hold it.
+        java.util.List<ghidra.program.model.pcode.Varnode> used = new java.util.ArrayList<>();
+        if (here.isEmpty() && anywhere.size() > 1) {
+            Address user = firstReaderOfResult(at);
+            if (user != null) {
+                for (ghidra.program.model.pcode.Varnode each : anywhere) {
+                    ghidra.program.model.pcode.PcodeOp op = each.getLoneDescend();
+                    if (op != null && op.getSeqnum().getTarget().equals(user)) used.add(each);
+                }
+            }
+        }
+        java.util.List<ghidra.program.model.pcode.Varnode> pick = !here.isEmpty() ? here : !used.isEmpty() ? used : anywhere;
         if (pick.isEmpty()) return null;
         if (pick.size() > 1) {
             java.util.Set<String> places = new java.util.TreeSet<>();
@@ -7643,6 +7667,38 @@ public class Owner {
                 + " in " + function.getName() + "; nothing was changed");
         }
         return new CConstant(hash.getAddress(), hash.getHash());
+    }
+
+    /**
+     * The first instruction after `at`, in its fall-through, that reads a
+     * register the instruction at `at` writes; null past a few instructions,
+     * a branch, or a write to that register first.
+     */
+    private Address firstReaderOfResult(Address at) {
+        Instruction instruction = program.getListing().getInstructionAt(at);
+        if (instruction == null) return null;
+        java.util.Set<ghidra.program.model.lang.Register> written = new java.util.HashSet<>();
+        for (Object result : instruction.getResultObjects()) {
+            if (result instanceof ghidra.program.model.lang.Register register) written.add(register);
+        }
+        if (written.isEmpty()) return null;
+        Instruction next = instruction;
+        for (int step = 0; step < 8; step++) {
+            Address following = next.getFallThrough();
+            if (following == null) return null;
+            next = program.getListing().getInstructionAt(following);
+            if (next == null) return null;
+            for (Object input : next.getInputObjects()) {
+                if (input instanceof ghidra.program.model.lang.Register register && written.contains(register)) {
+                    return next.getAddress();
+                }
+            }
+            for (Object result : next.getResultObjects()) {
+                if (result instanceof ghidra.program.model.lang.Register register && written.contains(register)) return null;
+            }
+            if (next.getFlowType().isJump() || next.getFlowType().isTerminal()) return null;
+        }
+        return null;
     }
 
     /**

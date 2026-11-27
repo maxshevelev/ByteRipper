@@ -83,4 +83,41 @@ final class GhidraOwnerEquateByteEnumTests: XCTestCase {
         let disassembly = String(decoding: try await host.read(module, "/v1/disassembly/0x1F3E6"), as: UTF8.self)
         XCTAssertFalse(disassembly.contains("KbhisrTooWide"), disassembly)
     }
+
+    /// The same byte named through `items`: the name reaches the store in
+    /// the C, as for one call (issue f509c69c).
+    func testANegativeByteNamedInAListReachesTheC() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        guard (try? GhidraInstall.find()) != nil else { throw XCTSkip("no Ghidra on this machine") }
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerEquateByteEnumTests-\(UUID().uuidString)", isDirectory: true)
+        self.directory = directory
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraOwnerEquateByteEnumTests"),
+                              writer: store)
+        let module = GhidraHost.moduleDigest(of: image)
+        _ = try await host.create(module: image, name: "ItEcNmD562", source: .init(document: "dump", node: "0.0.3"))
+        defer { Task { await host.stop(module) } }
+        try await host.take(module)
+
+        func post(_ call: String, _ body: [String: Any]) async throws -> [String: Any] {
+            let data = try await host.write(module, call, body: try JSONSerialization.data(withJSONObject: body))
+            return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        }
+        _ = try await post("/v1/type", ["c": """
+            typedef enum _GPIO_GPCR_TEST : unsigned char { GpcrTestAlt = 0x00, GpcrTestOutput = 0x40 } GPIO_GPCR_TEST;
+            """])
+        let answer = try await post("/v1/set/equate", ["enum": "GPIO_GPCR_TEST", "items": [
+            ["address": "0x1355C", "operand": 1, "name": "GpcrTestInput"]]])
+        XCTAssertEqual(answer["not_in_c"] as? [String], [], "\(answer)")
+        let item = try XCTUnwrap((answer["items"] as? [[String: Any]])?.first)
+        XCTAssertEqual(item["narrowed_from"] as? String != nil, true, "\(item)")
+        XCTAssertNotNil(item["c_address"], "\(item)")
+        let code = String(decoding: try await host.read(module, "/v1/function/0x1355C"), as: UTF8.self)
+        XCTAssertTrue(code.contains("= GpcrTestInput"), code)
+    }
 }

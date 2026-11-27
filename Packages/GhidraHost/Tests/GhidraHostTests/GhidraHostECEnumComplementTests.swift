@@ -9,8 +9,8 @@ import XCTest
 /// The ITE EC image (`GHIDRA_EC_MODULE`, NDS32) dispatches a host command at
 /// 0x1E42C and bounds it with `< 0x85`. With the parameter an `EC_HOST_CMD`
 /// that holds 0x7A, a stock decompiler prints the bound `~EcCmd_Flags80302_7A`
-/// (0x85 is `~0x7A` in a byte). The decompiler patch enum-complement-1 keeps
-/// the complement for an enum of single-bit flags only. Needs a Ghidra made by
+/// (0x85 is `~0x7A` in a byte). The decompiler patch enum-values-2 keeps the
+/// complement, and an OR of members, for an enum of single-bit flags only. Needs a Ghidra made by
 /// Scripts/make-patched-ghidra.sh; `GHIDRA_STOCK_DECOMPILER=check` runs it on
 /// another, to see it fail there.
 final class GhidraHostECEnumComplementTests: XCTestCase {
@@ -26,9 +26,9 @@ final class GhidraHostECEnumComplementTests: XCTestCase {
             throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
         }
         guard let install = try? GhidraInstall.find() else { throw XCTSkip("no Ghidra on this machine") }
-        guard install.decompilerPatch?.contains("enum-complement-1") == true
+        guard install.decompilerPatch?.contains("enum-values-2") == true
             || ProcessInfo.processInfo.environment["GHIDRA_STOCK_DECOMPILER"] == "check" else {
-            throw XCTSkip("\(install.home.path) has no enum-complement-1 decompiler patch (Scripts/make-patched-ghidra.sh)")
+            throw XCTSkip("\(install.home.path) has no enum-values-2 decompiler patch (Scripts/make-patched-ghidra.sh)")
         }
         let image = try Data(contentsOf: URL(fileURLWithPath: path))
         let directory = FileManager.default.temporaryDirectory
@@ -63,6 +63,18 @@ final class GhidraHostECEnumComplementTests: XCTestCase {
         XCTAssertTrue(codes.contains("EcCmd_AcpiWrEc_81"), "the premise: the enum prints \(codes)")
         XCTAssertFalse(codes.contains("~EcCmd_"), "\(codes)")
         XCTAssertTrue(codes.contains("Command < 0x85"), "\(codes)")
+
+        // A list of values whose members OR to the bound (0x80 | 0x05): still a number, not
+        // two members ORed (issue ed3655a2).
+        try await post("/v1/type", ["c": """
+            typedef enum _EC_TEST_STATE : unsigned char {
+                TestState_05 = 0x05, TestState_80 = 0x80, TestState_7A = 0x7A
+            } EC_TEST_STATE;
+            """])
+        try await post("/v1/set/signature", ["address": "0x1E42C", "signature": "void HostCommand(EC_TEST_STATE Command)"])
+        let states = try await c()
+        XCTAssertFalse(states.contains("TestState_05|") || states.contains("|TestState_05"), "\(states)")
+        XCTAssertTrue(states.contains("Command < 0x85"), "\(states)")
 
         // Single-bit flags whose OR is 0x7A: the bound still reads as their complement.
         try await post("/v1/type", ["c": """

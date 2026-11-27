@@ -121,17 +121,17 @@ globals, and pointers in modules based at their link address, do not change.
 ## What depends on it
 
 - The marker `byteripper-decompiler-patch` names the decompiler patches on
-  its first line, `stack-params-1+equates-1+enum-complement-1`.
+  its first line, `stack-params-1+equates-1+enum-values-2`.
   `decompiler_patch` in the owner's `hello` and in the artifact carries the
   same text, and the recipe id reads
-  `-decomp-stack-params-1-equates-1-enum-complement-1`.
+  `-decomp-stack-params-1-equates-1-enum-values-2`.
 - Like `stack-params-1`, it changes the C printed, not the program kept.
 - At a new Ghidra version the script stops, because `coreaction.cc` is another
   file: read the patch against it, then make a new patch and a new id.
 
-# The decompiler patch: enum values that are no member
+# The decompiler patch: enum values that are no member (enum-values-2)
 
-`enum-complement-1.patch` changes `TypeEnum::getMatches` in
+`enum-values-2.patch` changes `TypeEnum::getMatches` in
 `Ghidra/Features/Decompiler/src/decompile/cpp/type.cc`. It is built into the
 same `decompile` as `stack-params-1` and `equates-1`, for every processor.
 
@@ -144,10 +144,15 @@ an EC's 1-byte host-command enum printed the bound 0x85 as
 `~EcCmd_Flags80302_7A`, since 0x7A is a member and `~0x7A` is 0x85
 (issue 54161725).
 
-With the patch the complement is tried only when every member of the enum is a
-single bit (zero allowed). Otherwise a value no member names prints as a
-number, in the type's display format. Members and ORs of members print as
-before.
+It also printed a value that is an OR of members as that OR for any enum,
+which reads as two codes at once: a power-state enum printed the bound 0x34 as
+`(PwrState_S3ToS0|PwrState_Unused04)` (issue ed3655a2).
+
+With the patch an enum is taken for flags only when every member is a single
+bit (zero allowed). An enum of flags prints as before: a member, an OR of
+members, or the complement of one. Any other enum is a list of values: a value
+prints as a member only when a member equals it, and otherwise as a number, in
+the type's display format.
 
 | enum, value | stock | patched |
 |---|---|---|

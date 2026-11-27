@@ -125,7 +125,7 @@ final class GhidraHostECReapplyTests: XCTestCase {
         // The names: the old map's register labels renamed, the new
         // IT8227E ones added, the ISR plates rewritten; a reviewer's kept.
         XCTAssertEqual(first["registers_renamed"] as? Int, 9, "\(first)")
-        XCTAssertEqual(first["registers_added"] as? Int, 40, "\(first)")
+        XCTAssertEqual(first["registers_added"] as? Int, 47, "\(first)")
         XCTAssertGreaterThan(first["isr_plates_refreshed"] as? Int ?? 0, 100, "\(first)")
         let renames = first["register_renames"] as? [[String: Any]] ?? []
         XCTAssertTrue(renames.contains { $0["was"] as? String == "SMB_4P7USL" && $0["name"] as? String == "SMB_HOSTA_A" },

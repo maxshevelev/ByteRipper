@@ -61,7 +61,7 @@ public struct GhidraInstall: Equatable, Sendable {
     }
 
     /// The decompiler patches this install was built with, joined by `+`
-    /// (`stack-params-1+equates-1+enum-complement-1`); nil for a stock Ghidra.
+    /// (`stack-params-1+equates-1+enum-values-2`); nil for a stock Ghidra.
     /// Not part of a project's environment: it changes the C printed, not the
     /// program kept.
     public var decompilerPatch: String? { patch("byteripper-decompiler-patch") }

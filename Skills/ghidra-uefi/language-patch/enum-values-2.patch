@@ -1,0 +1,21 @@
+--- a/Ghidra/Features/Decompiler/src/decompile/cpp/type.cc
++++ b/Ghidra/Features/Decompiler/src/decompile/cpp/type.cc
+@@ -1599,6 +1599,18 @@
+ {
+   map<uintb,string>::const_iterator iter;
+   int4 count;
++
++  // ByteRipper enum-values-2: an OR of members, or the complement of one, reads right only for
++  // an enumeration of flags. A list of values (some member has more than one bit set) names a
++  // value only when a member equals it; any other value prints as a number
++  for(iter=namemap.begin();iter!=namemap.end();++iter) {
++    if (popcount((*iter).first) > 1) {
++      iter = namemap.find(val);
++      if (iter != namemap.end())
++	rep.matchname.push_back( (*iter).second );
++      return;
++    }
++  }
+ 
+   for(count=0;count<2;++count) {
+     bool allmatch = true;
