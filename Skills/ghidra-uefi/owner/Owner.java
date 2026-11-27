@@ -903,15 +903,7 @@ public class Owner {
         if (name.isEmpty()) throw new Failure(400, "`functions` names a value; removing is per `address`");
         String valueText = required(body, "value");
         long value;
-        try {
-            boolean negative = valueText.startsWith("-");
-            String digits = negative ? valueText.substring(1) : valueText;
-            value = digits.startsWith("0x") || digits.startsWith("0X")
-                ? Long.parseUnsignedLong(digits.substring(2), 16) : Long.parseLong(digits);
-            if (negative) value = -value;
-        } catch (NumberFormatException error) {
-            throw new Failure(400, valueText + " is not a number");
-        }
+        value = immediateValue(valueText);
         java.util.List<Function> functions = new java.util.ArrayList<>();
         for (com.google.gson.JsonElement item : body.getAsJsonArray("functions")) {
             functions.add(functionAt(item.getAsString()));
@@ -7453,12 +7445,7 @@ public class Owner {
         String valueText = string(body, "value", null);
         Long value = null;
         if (valueText != null) {
-            try {
-                value = valueText.startsWith("0x") || valueText.startsWith("0X")
-                    ? Long.parseUnsignedLong(valueText.substring(2), 16) : Long.parseLong(valueText);
-            } catch (NumberFormatException error) {
-                throw new Failure(400, valueText + " is not a number");
-            }
+            value = immediateValue(valueText);
         }
         int operand = integer(body, "operand", -1);
 
@@ -11561,6 +11548,19 @@ public class Owner {
         String value = string(body, name, null);
         if (value == null || value.isEmpty()) throw new Failure(400, name + " is required");
         return value;
+    }
+
+    /** An equate's `value`: decimal or 0x hex, either with a leading minus (`-0x80`). */
+    static long immediateValue(String text) throws Failure {
+        try {
+            boolean negative = text.startsWith("-");
+            String digits = negative ? text.substring(1) : text;
+            long value = digits.startsWith("0x") || digits.startsWith("0X")
+                ? Long.parseUnsignedLong(digits.substring(2), 16) : Long.parseLong(digits);
+            return negative ? -value : value;
+        } catch (NumberFormatException | IndexOutOfBoundsException error) {
+            throw new Failure(400, text + " is not a number");
+        }
     }
 
     private static String string(JsonObject body, String name, String fallback) {

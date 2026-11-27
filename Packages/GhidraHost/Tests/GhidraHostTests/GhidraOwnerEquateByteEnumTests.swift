@@ -191,5 +191,8 @@ final class GhidraOwnerEquateByteEnumTests: XCTestCase {
         // A negative value is a number in `functions` mode too.
         let negative = try await post(["functions": ["0xAA00"], "value": "-0x80", "name": "AdcTestValid", "dry_run": true])
         XCTAssertNotNil(negative["applied"], "\(negative)")
+        // And for one address, as for each item.
+        let one = try await post(["address": "0xAA74", "value": "-0x80", "name": "AdcTestValid", "enum": "ADC_TEST_BIT"])
+        XCTAssertEqual(one["value"] as? String, "0x80", "\(one)")
     }
 }
