@@ -5626,6 +5626,21 @@ public class Owner {
     }
 
     /** One row, checked and in its canonical form: the columns in their order, then `confidence` and `note`. */
+    /// Whether the row's own values lift `required` from a column: the
+    /// column's `optional_when` names another column and the words that,
+    /// written there, leave this one free to be empty or left out.
+    private static boolean optionalHere(JsonObject column, JsonObject given) {
+        if (!column.has("optional_when") || !column.get("optional_when").isJsonObject()) return false;
+        for (Map.Entry<String, JsonElement> entry : column.getAsJsonObject("optional_when").entrySet()) {
+            JsonElement other = given.get(entry.getKey());
+            if (other == null || !other.isJsonPrimitive() || !other.getAsJsonPrimitive().isString()) continue;
+            for (JsonElement word : entry.getValue().getAsJsonArray()) {
+                if (word.getAsString().equals(other.getAsString())) return true;
+            }
+        }
+        return false;
+    }
+
     private JsonObject recordRow(JsonElement element, JsonArray columns, String at, JsonObject refKeys,
                                  boolean topLevel) throws Failure {
         if (!element.isJsonObject()) throw new Failure(400, at + ": expected a row (an object)");
@@ -5659,6 +5674,10 @@ public class Owner {
             if (kind.equals("computed")) {
                 if (value != null) throw new Failure(400, at + "." + name + ": expected nothing — it is computed; leave it out");
                 continue;
+            }
+            if (optionalHere(column, given)) {
+                column = column.deepCopy();
+                column.addProperty("required", false);
             }
             if (value == null || value.isJsonNull()) {
                 if (column.has("required") && column.get("required").getAsBoolean()) {

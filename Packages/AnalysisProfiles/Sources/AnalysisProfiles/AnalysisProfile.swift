@@ -153,12 +153,16 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         public var compute: String?
         /// Values of this column that need the row's `note` (`runtime`).
         public var noteFor: [String]?
+        /// A required column the row may leave empty or out when another of
+        /// its columns holds one of these words: `["address": ["mailbox"]]`.
+        public var optionalWhen: [String: [String]]?
         public var summary: String
 
         public init(_ id: String, _ title: String, _ kind: ColumnKind, required: Bool = false,
                     values: [String]? = nil, min: Int? = nil, max: Int? = nil, hex: Bool? = nil,
                     pattern: String? = nil, of: ColumnKind? = nil, columns: [Column]? = nil,
-                    ref: String? = nil, compute: String? = nil, noteFor: [String]? = nil, summary: String) {
+                    ref: String? = nil, compute: String? = nil, noteFor: [String]? = nil,
+                    optionalWhen: [String: [String]]? = nil, summary: String) {
             self.id = id
             self.title = title
             self.kind = kind
@@ -173,12 +177,14 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             self.ref = ref
             self.compute = compute
             self.noteFor = noteFor
+            self.optionalWhen = optionalWhen
             self.summary = summary
         }
 
         private enum CodingKeys: String, CodingKey {
             case id, title, kind, required, values, min, max, hex, pattern, of, columns, ref, compute, summary
             case noteFor = "note_for"
+            case optionalWhen = "optional_when"
         }
     }
 
@@ -570,7 +576,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                     Column("size", "Size", .enum, required: true, values: ["byte", "word", "block"],
                            summary: "The transfer's size."),
                     Column("meaning", "Meaning", .text, required: true, summary: "What it reads or sets.")
-                ], summary: "The commands the firmware sends the device."),
+                ], optionalWhen: ["address": ["runtime", "mailbox"]],
+                   summary: "The commands the firmware sends the device; empty when the address is runtime or mailbox and the host sets the command byte."),
                 Column("callers", "Callers", .list, of: .code, summary: "The code that talks to the device.")
                ]),
         Record(id: "gpio", title: "GPIO",

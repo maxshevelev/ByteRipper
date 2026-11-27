@@ -1,3 +1,4 @@
+import AgentKit
 import CodeAnalysis
 import Foundation
 import XCTest
@@ -273,6 +274,57 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         XCTAssertTrue(flashWarnings.first?.contains("68/6C") == true, "\(flashWarnings)")
     }
 
+    /// `commands` is required, but a row whose address is mailbox or runtime
+    /// may leave it empty or out (`optional_when`); a numeric address may not.
+    func testCommandsAreOptionalOnlyForAMailboxOrRuntimeAddress() async throws {
+        try await open()
+        await refused(["record": "smbus_peers", "rows": [["channel": "A", "address": 0x0B, "device": "battery",
+                                                          "confidence": "inference"]]],
+                      saying: "smbus_peers[row 0].commands: expected a value (required)")
+        await refused(["record": "smbus_peers", "rows": [["channel": "A", "address": 0x0B, "device": "battery",
+                                                          "commands": [], "confidence": "inference"]]],
+                      saying: "smbus_peers[row 0].commands: expected at least one row (required)")
+        let answer = try await set(["record": "smbus_peers", "rows": [
+            ["channel": "C", "address": "mailbox", "device": "not identified", "commands": [],
+             "note": "the host sets the command byte through the mailbox", "confidence": "established"],
+            ["channel": "E", "address": "runtime", "device": "not identified",
+             "note": "address and command from the host mailbox", "confidence": "inference"]]])
+        let peers = try XCTUnwrap(try record(answer, "smbus_peers")["rows"] as? [[String: Any]])
+        XCTAssertEqual(peers.map { $0["channel"] as? String }, ["C", "E"])
+    }
+
+    /// `ghidra_type_definition` without `verbose` carries the program's
+    /// definition with its fields: the owner's answer names the type
+    /// `program`, the same key as the identity the compact answer drops.
+    func testTheCompactTypeDefinitionKeepsTheProgramsFields() async throws {
+        try await open()
+        _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["c": """
+            typedef struct _EC_RAM_PROBE {
+                UINT8 State; /* power state */
+                UINT8 Pad;
+                UINT16 Fan;
+            } EC_RAM_PROBE;
+            """]))
+        let owner = try JSONValue.parse(try await host.read(module, "/v1/type?name=EC_RAM_PROBE", holder: "a reader"))
+        let compact = GhidraTools.compact(owner, tool: "ghidra_type_definition", arguments: [:])
+        let object = try XCTUnwrap(compact.objectValue)
+        XCTAssertNil(object["project"])
+        XCTAssertNil(object["module"])
+        XCTAssertEqual(object["found"], .bool(true))
+        let program = try XCTUnwrap(object["program"]?.objectValue, "\(compact)")
+        XCTAssertEqual(program["size"], .int(4))
+        XCTAssertNil(program["c"])
+        let fields = try XCTUnwrap(program["fields"]?.arrayValue).compactMap(\.objectValue)
+        XCTAssertEqual(fields.compactMap { $0["name"]?.stringValue }, ["State", "Pad", "Fan"])
+        XCTAssertEqual(fields.compactMap { $0["offset"]?.stringValue }, ["0x0", "0x1", "0x2"])
+        XCTAssertEqual(fields.last?["type"]?.stringValue, "UINT16")
+        XCTAssertNil(fields.first?["comment"])
+        // The owner's own answer, which verbose passes through, keeps the C and the comment.
+        let full = try XCTUnwrap(owner.objectValue?["program"]?.objectValue)
+        XCTAssertNotNil(full["c"])
+        XCTAssertEqual(full["fields"]?.arrayValue?.first?.objectValue?["comment"]?.stringValue, "power state")
+    }
+
     // MARK: - The harvest
 
     /// The review document a publish would store: a dry run harvests it, and
@@ -301,5 +353,30 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         let after = try await harvest()
         XCTAssertEqual(String(decoding: after, as: UTF8.self), String(decoding: before, as: UTF8.self),
                        "a review whose records were taken back harvests as one that never had any")
+    }
+
+    // MARK: - The publish
+
+    /// A publish copies each record's status into the revision's reading
+    /// and reports the `records_answered` gate — never refusing on it.
+    func testAPublishKeepsTheStatusesAndReportsTheGate() async throws {
+        try await open()
+        let (code, _) = try await entries()
+        try await set(["record": "irq_map", "status": "complete", "rows": [irq(4, code)]])
+        try await set(["record": "gpio", "status": "none", "note": "the firmware drives no GPIO"])
+        try await set(["record": "ec_ram", "status": "partial", "note": "review continues",
+                       "rows": [["offset": 16, "width": 1, "name": "STATE", "writer": "EC", "meaning": "state",
+                                 "confidence": "inference"]]])
+        let publication = try await host.publish(module, by: "GhidraOwnerRecordsTests")
+        let reading = try XCTUnwrap(publication.manifest.reading)
+        XCTAssertEqual(reading.records, ["irq_map": "complete", "gpio": "none", "ec_ram": "partial"])
+        XCTAssertEqual(reading.profile, "ec-ite-nds32@2")
+        XCTAssertNotEqual(publication.manifest.reviewProgress, .complete)
+
+        let answer = try object(try JSONEncoder().encode(PublishAnswer(publication)))
+        let gate = try XCTUnwrap((answer["gates"] as? [String: Any])?["records_answered"] as? [String: Any])
+        XCTAssertEqual(gate["passed"] as? Bool, false)
+        XCTAssertEqual(gate["partial"] as? [String], ["ec_ram"])
+        XCTAssertEqual(gate["unanswered"] as? [String], ["host_commands", "smbus_peers", "eflash_area"])
     }
 }

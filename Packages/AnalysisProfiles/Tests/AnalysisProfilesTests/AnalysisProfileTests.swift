@@ -217,6 +217,8 @@ final class AnalysisProfileTests: XCTestCase {
         XCTAssertEqual(address["note_for"] as? [String], ["runtime", "mailbox"])
         XCTAssertEqual(address["kind"] as? String, "int")
         XCTAssertEqual(address["max"] as? Int, 0x7F)
+        let commands = try XCTUnwrap((smbus["columns"] as? [[String: Any]])?.first { $0["id"] as? String == "commands" })
+        XCTAssertEqual(commands["optional_when"] as? [String: [String]], ["address": ["runtime", "mailbox"]])
         XCTAssertEqual(try JSONDecoder().decode(AnalysisProfile.self, from: data), .ecIteNds32)
         let uefi = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(AnalysisProfile.uefi))
                                  as? [String: Any])

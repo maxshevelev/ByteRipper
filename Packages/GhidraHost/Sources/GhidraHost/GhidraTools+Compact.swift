@@ -54,6 +54,10 @@ extension GhidraTools {
         case "ghidra_function":
             note += "; `comments` lists only those the C does not print: the plate is in `plate`, and a comment "
                 + "printed in the C is read there"
+        case "ghidra_type_definition":
+            note += "; each definition gives its `kind`, `size`, `fields` (`name`, `offset`, `type`, `size`, and "
+                + "`bits` and `bit_offset` for a bit-field), an enum's `values`, a typedef's `base` and a function's "
+                + "`convention`; `verbose` adds the C, the path, packing and alignment, and the comments"
         case "ghidra_disassembly":
             note += "; an instruction with no references has no `references`, and a reference gives `to` and "
                 + "`type`, with `function` only when it is another function"
@@ -73,6 +77,16 @@ extension GhidraTools {
             value = compactFunction(value)
         case "ghidra_disassembly":
             value = compactDisassembly(value)
+        case "ghidra_type_definition":
+            // `program` here is the type as the program holds it, not the
+            // program's name: identity is taken off first, the type kept.
+            guard var object = value.objectValue else { break }
+            let definitions = ["program", "shared", "edk2"].map { ($0, object[$0]) }
+            object = withoutIdentity(.object(object), keepLanguage: false).objectValue ?? object
+            for (key, definition) in definitions {
+                if let definition { object[key] = compactTypeDescription(definition) }
+            }
+            return .object(object)
         default:
             break
         }
@@ -141,6 +155,21 @@ extension GhidraTools {
     static func squeezed(_ text: String) -> String {
         String(text.replacingOccurrences(of: "/*", with: "").replacingOccurrences(of: "*/", with: "")
             .unicodeScalars.filter { !CharacterSet.whitespacesAndNewlines.contains($0) }.map(Character.init))
+    }
+
+    /// A type's definition as the fields a review reads: no C, path,
+    /// packing, alignment or comments (those are `verbose`'s).
+    static func compactTypeDescription(_ value: JSONValue) -> JSONValue {
+        guard var object = value.objectValue else { return value }
+        for key in ["c", "path", "packing", "packing_value", "alignment", "comments", "format"] { object[key] = nil }
+        if let fields = object["fields"]?.arrayValue {
+            object["fields"] = .array(fields.map { field in
+                guard var field = field.objectValue else { return field }
+                field["comment"] = nil
+                return .object(field)
+            })
+        }
+        return .object(object)
     }
 
     /// The instructions without what each reference repeats of its row.
