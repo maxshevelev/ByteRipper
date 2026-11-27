@@ -3996,7 +3996,7 @@ import ToolModuleKit
         functionScroll.drawsBackground = false
         functionScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let functionPane = NSView()
+        let functionPane = CodeNavigatorFrame()
         functionPane.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(moduleBlock)
         functionPane.addSubview(descriptionButton)
@@ -6877,6 +6877,11 @@ class CodeNavigatorCell: NSTableCellView {
 /// The three layouts are three buttons, not the segments of one control: the
 /// bar reads as a row of separate buttons, and a segmented control would draw
 /// them as a single joined frame with dividers — chrome the bar does not have.
+/// The navigator's column: a tool panel's frame, so the large view of a
+/// record's details keeps clear of it and is as wide as the sidebar's divider
+/// leaves, as it is beside a tool panel.
+final class CodeNavigatorFrame: NSView, ToolPanelFrame {}
+
 /// A view that takes no click: what it shows lies over a control.
 final class CodeClickThroughView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
