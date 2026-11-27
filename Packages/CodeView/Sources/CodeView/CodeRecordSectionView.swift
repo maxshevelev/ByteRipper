@@ -606,6 +606,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let body = styled(CodePaneView.navigatorFont())
         let mark = mark(values)
         let key = keyDisplay(values), tag = tag(values), label = label(values), tabStop = keyColumnWidth
+        let net = record?.id == "gpio" ? values["net"]?.string.flatMap { $0.isEmpty ? nil : $0 } : nil
         // The line for a row on the selection's fill (`on`) or off it: on it
         // every colour — the tag's orange, the mark's grey — takes the
         // selection's text colour, as a function's name does.
@@ -635,6 +636,12 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         }
         if !label.isEmpty {
             line.append(NSAttributedString(string: "\t" + label, attributes: [.font: body, .foregroundColor: ink]))
+            // A pin's signal name, the board's, stands out from what it is.
+            if let net, label.hasPrefix(net) {
+                let start = line.length - (label as NSString).length
+                line.addAttribute(.font, value: NSFontManager.shared.convert(body, toHaveTrait: .boldFontMask),
+                                  range: NSRange(location: start, length: (net as NSString).length))
+            }
         }
         // The labels start in one column, past the widest key and its mark.
         let paragraph = NSMutableParagraphStyle()

@@ -146,6 +146,12 @@ final class CodeRecordSectionViewTests: XCTestCase {
              "function": "Driven high at start.", "confidence": "established"]]]], show: "gpio")
         XCTAssertEqual(named.cell(row: 1)?.textField?.stringValue, "GPA4 OUT\tEC_FAN2_PWM: Fan 2 PWM")
         XCTAssertEqual(named.cell(row: 1)?.toolTip, "Driven high at start.")
+        let text = try XCTUnwrap(named.cell(row: 1)?.textField?.attributedStringValue)
+        let at = (text.string as NSString).range(of: "EC_FAN2_PWM").location
+        let font = text.attribute(.font, at: at, effectiveRange: nil) as? NSFont
+        XCTAssertTrue(font?.fontDescriptor.symbolicTraits.contains(.bold) ?? false, "the net in bold")
+        let rest = text.attribute(.font, at: (text.string as NSString).range(of: "Fan 2").location, effectiveRange: nil) as? NSFont
+        XCTAssertFalse(rest?.fontDescriptor.symbolicTraits.contains(.bold) ?? true)
 
         let flashPanel = try panel(["eflash_area": flash], show: "eflash_area")
         XCTAssertEqual(lines(flashPanel), ["0x2A600  Shipping flag"])
@@ -296,7 +302,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
             for width in [CGFloat(180), 340, 500] {
                 for id in ["host_commands", "ec_ram", "gpio"] {
                     let gpio: [String: Any] = ["status": "complete", "rows": [
-                        ["pin": "GPJ5", "direction": "in", "function": "Lid switch.", "group": "input", "confidence": "established"]]]
+                        ["pin": "GPJ5", "net": "EC_LID_OUT#", "label": "Lid switch", "direction": "in", "function": "Lid switch.", "group": "input", "confidence": "established"]]]
                     let panel = try self.panel(["host_commands": longCommands, "ec_ram": ram, "gpio": gpio], show: id, width: width)
                     panel.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
                     if id != "gpio" {
