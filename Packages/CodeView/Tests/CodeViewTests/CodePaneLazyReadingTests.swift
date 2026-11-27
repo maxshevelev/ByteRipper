@@ -156,4 +156,40 @@ final class CodePaneLazyReadingTests: XCTestCase {
         XCTAssertTrue(loader.asked.contains { $0 == nil || $0 == [CodeAddress(0x330)] }, "\(loader.asked)")
         XCTAssertEqual(view.searchResultsForTests.map(\.function), ["Alpha", "Beta"])
     }
+
+    /// A selection made in one function's C is not carried to the next —
+    /// one whose code arrives only after it is shown, or one Back and
+    /// Forward return to.
+    func testASelectionIsNotCarriedToAnotherFunction() async throws {
+        let loader = Loader()
+        let view = try pane(loader)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        await settle()
+        let text = view.cTextViewForTests
+        XCTAssertTrue(text.string.contains("void Alpha"))
+        window.makeFirstResponder(text)
+        text.setSelectedRange(NSRange(location: 5, length: 5))
+        view.follow(.function(1))
+        XCTAssertEqual(text.selectedRange().length, 0, "while reading")
+        await settle()
+        XCTAssertTrue(text.string.contains("void Beta"))
+        XCTAssertEqual(text.selectedRange().length, 0, "after the read: \(text.selectedRange())")
+        // Back and Forward arrive at a function too: a selection made by
+        // hand is not put back.
+        text.setSelectedRange(NSRange(location: 5, length: 4))
+        view.goBack()
+        await settle()
+        XCTAssertTrue(text.string.contains("void Alpha"))
+        XCTAssertEqual(text.selectedRange().length, 0, "back: \(text.selectedRange())")
+        view.goForward()
+        await settle()
+        XCTAssertTrue(text.string.contains("void Beta"))
+        XCTAssertEqual(text.selectedRange().length, 0, "forward: \(text.selectedRange())")
+    }
 }

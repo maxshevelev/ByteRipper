@@ -3,7 +3,8 @@ import CodeAnalysis
 
 /// How one place in the code was on screen when the reader left it: where
 /// the listing and the C were scrolled, and in the C the call they followed
-/// or what they had selected. Back puts it back as it was.
+/// or the name they asked about — never a selection made by hand: a function
+/// arrived at starts with no text selected. Back puts it back as it was.
 struct CodeViewPosition: Equatable {
     var listing: NSPoint?
     var c: NSPoint?

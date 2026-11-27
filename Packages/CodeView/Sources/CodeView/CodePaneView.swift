@@ -3331,16 +3331,16 @@ import ToolModuleKit
     private var leavingCMark: NSRange?
 
     /// How the reader has the code on screen now: both scroll positions, and
-    /// in the C the call they followed, or what they selected.
+    /// in the C the call they followed or the name they asked about. What
+    /// they selected by hand is not kept: a function arrived at — Back and
+    /// Forward too — starts with no text selected.
     private var currentView: CodeViewPosition {
-        let selected = cTextView.selectedRange()
-        let mark = leavingCMark ?? (selected.length > 0 ? selected : nil)
-        return CodeViewPosition(listing: tableScroll.contentView.bounds.origin,
-                                c: cScroll.contentView.bounds.origin,
-                                cMark: mark,
-                                cText: state.function.flatMap { model.functions[$0].c },
-                                description: showsDescription ? descriptionView.scrollOrigin : nil,
-                                descriptionMark: showsDescription ? leavingDescriptionMark : nil)
+        CodeViewPosition(listing: tableScroll.contentView.bounds.origin,
+                         c: cScroll.contentView.bounds.origin,
+                         cMark: leavingCMark,
+                         cText: state.function.flatMap { model.functions[$0].c },
+                         description: showsDescription ? descriptionView.scrollOrigin : nil,
+                         descriptionMark: showsDescription ? leavingDescriptionMark : nil)
     }
 
     /// Keeps the current place as the reader has it now, before they leave it.
@@ -3529,7 +3529,18 @@ import ToolModuleKit
         leaveDescription()
         show(place.view)
         historyChanged()
-        flashArrival(cMark: place.view.cMark)
+        flashArrival(cMark: cMarkHere(place.view))
+    }
+
+    /// A place's mark, if it is a place in the C on screen: a mark is a range
+    /// of the C it was taken from, and in any other text — the function's
+    /// code read since, or changed — it would select whatever came to stand
+    /// there.
+    private func cMarkHere(_ view: CodeViewPosition) -> NSRange? {
+        guard let mark = view.cMark, let index = state.function, model.functions.indices.contains(index),
+              let c = model.functions[index].c, view.cText == c,
+              NSMaxRange(mark) <= (cTextView.string as NSString).length else { return nil }
+        return mark
     }
 
     /// A link in the description: the function it names opens in the code,
@@ -3568,7 +3579,7 @@ import ToolModuleKit
             table.layoutSubtreeIfNeeded()
             scroll(tableScroll, to: origin)
         }
-        if let mark = view.cMark, NSMaxRange(mark) <= (cTextView.string as NSString).length {
+        if let mark = cMarkHere(view) {
             cTextView.setSelectedRange(mark)
         }
         if let origin = view.c {

@@ -3328,6 +3328,48 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.diffHighlightedRanges, [], "the diff's highlight stays behind")
     }
 
+    /// A function without a comparison is shown as plain C, and the diff
+    /// behind it still holds the function before. Opening that function
+    /// again is a new arrival: its diff, the same text as before, must not
+    /// bring back the selection it was left with.
+    func testADiffOpenedAgainStartsWithNoSelection() throws {
+        func artifact(_ value: String) throws -> CodeArtifact {
+            func function(_ entry: String, _ name: String) -> [String: Any] {
+                ["entry": entry, "name": name, "c": "void \(name)(void)\n{\n  Use(\(value));\n  Other(7);\n}\n",
+                 "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            }
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [function("0x220", "First"), function("0x230", "Second")]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("1"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("2"), pinned: true)
+        XCTAssertTrue(view.showsRevisionDiff)
+        let diff = try XCTUnwrap(first(CodeTextView.self, in: view) { $0.string == view.diffText })
+        let shown = view.diffText
+        diff.setSelectedRange((shown as NSString).range(of: "Other(7)"))
+        XCTAssertGreaterThan(view.diffSelectedRange.length, 0)
+
+        view.follow(.function(1))
+        XCTAssertFalse(view.showsRevisionDiff, "Second has no comparison")
+        XCTAssertEqual(view.diffText, shown, "the diff behind the C still holds First")
+        view.follow(.function(0))
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertEqual(view.diffText, shown)
+        XCTAssertEqual(view.diffSelectedRange.length, 0, "the selection First was left with came back")
+
+    }
+
     /// A field of a structure has no token of its own in the C: the diff finds
     /// it by its place, on either side, and marks it as the C does.
     func testAFieldInTheDiffExplainsItself() throws {
