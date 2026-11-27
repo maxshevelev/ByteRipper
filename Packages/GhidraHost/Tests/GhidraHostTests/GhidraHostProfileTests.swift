@@ -44,7 +44,7 @@ final class GhidraHostProfileTests: XCTestCase {
         defer { Task { await host.stop(module) } }
         var answer = try await readProfile(host, module)
         XCTAssertEqual(answer["kind"] as? String, "EC")
-        XCTAssertEqual(answer["stamp"] as? String, "ec-ite-nds32@1")
+        XCTAssertEqual(answer["stamp"] as? String, "ec-ite-nds32@2")
         XCTAssertEqual(answer["type_group"] as? String, "Nds32")
         XCTAssertNil(answer["note"])
         XCTAssertNil(answer["latest_revision_profile"])
@@ -56,9 +56,9 @@ final class GhidraHostProfileTests: XCTestCase {
             .contains { $0["tool"] as? String == "ghidra_set_interfaces" && ($0["hint"] as? String)?.isEmpty == false })
         XCTAssertFalse((profile["gates"] as? [Any] ?? []).isEmpty)
         // The Code panel's part, an addition under `panel`: the EC hides
-        // interfaces and POST codes, and every record has a section.
+        // interfaces, POST codes, strings and status codes, and every record has a section.
         let panel = try XCTUnwrap(profile["panel"] as? [String: Any])
-        XCTAssertEqual((panel["built_in"] as? [[String: Any]])?.compactMap { $0["shown"] as? Bool }, [false, false])
+        XCTAssertEqual((panel["built_in"] as? [[String: Any]])?.compactMap { $0["shown"] as? Bool }, [false, false, false, false])
         XCTAssertTrue(((profile["records"] as? [[String: Any]]) ?? []).allSatisfy { $0["panel"] != nil })
 
         // A revision that recorded its profile is answered as such.
@@ -82,6 +82,7 @@ final class GhidraHostProfileTests: XCTestCase {
         XCTAssertEqual(profile["skill"] as? String, "ghidra-uefi")
         XCTAssertEqual((profile["records"] as? [[String: Any]])?.compactMap { $0["id"] as? String },
                        ["interfaces", "post_codes"])
-        XCTAssertEqual((profile["inapplicable_tools"] as? [Any])?.count, 0)
+        XCTAssertEqual((profile["inapplicable_tools"] as? [[String: Any]])?.compactMap { $0["tool"] as? String },
+                       ["register_registry"])
     }
 }

@@ -245,6 +245,16 @@ public struct RemoteStore: Sendable {
         try await json("GET", "guids")
     }
 
+    /// The chips whose register registry the server holds, with versions and counts.
+    public func registerChips() async throws -> [ECRegisterChipSummary] {
+        try await json("GET", "registers")
+    }
+
+    /// One chip's register registry on the server.
+    public func registerFile(_ chip: String) async throws -> ECRegisterFile {
+        try await json("GET", "registers/\(chip)")
+    }
+
     /// The library registry's index on the server.
     public func libraryIndex() async throws -> LibraryIndex {
         try await json("GET", "library")

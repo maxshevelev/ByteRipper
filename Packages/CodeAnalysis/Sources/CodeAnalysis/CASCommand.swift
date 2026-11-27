@@ -44,6 +44,13 @@ public enum CASCommand {
           guids-seed --edk2 <checkout> --tag <edk2 tag> [--catalogue <guids.csv>] [--apply]
           guid-replace <guid> --name <gName…Guid> --kind <kind> --reason <text> [--note <text>] [--by <who>]
           guid-remove <guid> --reason <text> [--expect-name <gName…Guid>] [--apply]
+          registers-seed --chip <chip> --reference <dir> [--apply]
+          register-replace (--address <hex> | --irq <n>) --chip <chip> --name <name> --reason <text>
+                           [--width <1|2|4>] [--block <b>] [--description <text>]
+                           [--status <status>] [--evidence <text>] [--module <sha256> --code <addr,…>]
+                           [--by <who>]
+          register-remove (--address <hex> | --irq <n>) --chip <chip> --reason <text>
+                          [--expect-name <name>] [--apply]
           library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
           put-object <file>
           has-object <sha256>
@@ -319,6 +326,71 @@ public enum CASCommand {
             let content = try ContentStore(root: local.root, create: local.create)
             output.stdout = try encode(try content.removeGuid(guid, reason: reason, expectName: expectName,
                                                               dryRun: !apply))
+        case "registers-seed":
+            let apply = parser.flag("--apply")
+            guard let chip = parser.option("--chip"), let reference = parser.option("--reference") else {
+                throw Usage(description: "registers-seed: --chip <chip> and --reference <dir> are required")
+            }
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("registers-seed runs on a store directory, not on a server")
+            }
+            let content = try ContentStore(root: local.root, create: local.create)
+            output.stdout = try encode(try ECRegisterSeed.run(
+                store: content, chip: chip, reference: URL(fileURLWithPath: reference, isDirectory: true), apply: apply))
+        case "register-replace":
+            let (kind, key) = try registerKey(&parser)
+            guard let chip = parser.option("--chip"), let name = parser.option("--name"),
+                  let reason = parser.option("--reason") else {
+                throw Usage(description: "register-replace: --chip --name --reason are required")
+            }
+            let width = parser.option("--width").flatMap { Int($0) }
+            let block = parser.option("--block")
+            let description = parser.option("--description")
+            let statusText = parser.option("--status")
+            let evidence = parser.option("--evidence")
+            let moduleText = parser.option("--module")
+            let code = parser.option("--code")
+            let by = parser.option("--by") ?? "administrator"
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("register-replace runs on a store directory, not on a server")
+            }
+            let content = try ContentStore(root: local.root, create: local.create)
+            let held = try content.registerFile(chip).entries(kind)[ECRegisterFile.key(kind, key)]?.current
+            let status = try statusText.map { text -> ECRegisterStatus in
+                guard let status = ECRegisterStatus(rawValue: text) else {
+                    throw Usage(description: "--status is one of \(ECRegisterStatus.allCases.map(\.rawValue).joined(separator: ", "))")
+                }
+                return status
+            } ?? held?.status ?? .unverified
+            var proof = held?.evidence ?? ECRegisterEvidence()
+            if let evidence { proof.text = evidence }
+            if let moduleText {
+                guard let digest = SHA256Digest(hex: moduleText) else { throw CodeAnalysisError.invalidDigest(moduleText) }
+                proof.module = digest
+            }
+            if let code { proof.addresses = code.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } }
+            let offer = ECRegisterOffer(kind: kind, number: key, name: name, aliases: nil,
+                                        width: kind == .register ? (width ?? held?.width) : nil,
+                                        block: block ?? held?.block, description: description ?? held?.description,
+                                        bits: held?.bits, status: status, evidence: proof)
+            output.stdout = try encode(try content.offerRegister(chip: chip, offer, by: by, replace: true, reason: reason))
+        case "register-remove":
+            let apply = parser.flag("--apply")
+            let (kind, key) = try registerKey(&parser)
+            guard let chip = parser.option("--chip"), let reason = parser.option("--reason") else {
+                throw Usage(description: "register-remove: --chip --reason are required")
+            }
+            let expectName = parser.option("--expect-name")
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("register-remove runs on a store directory, not on a server")
+            }
+            let content = try ContentStore(root: local.root, create: local.create)
+            output.stdout = try encode(try content.removeRegister(
+                chip: chip, kind: kind, key: ECRegisterFile.key(kind, key), reason: reason,
+                expectName: expectName, dryRun: !apply))
         case "library-source-rev":
             let apply = parser.flag("--apply")
             guard let text = parser.option("--module"), let module = SHA256Digest(hex: text),
@@ -377,6 +449,25 @@ public enum CASCommand {
             output.stdout = try encode(try store.importBundle(from: URL(fileURLWithPath: file)))
         default:
             throw Usage(description: "unknown command \(command)", showsUsage: true)
+        }
+    }
+
+    /// `--address <hex>` or `--irq <n>`, one of them.
+    static func registerKey(_ parser: inout Arguments) throws -> (ECRegisterKind, UInt64) {
+        let address = parser.option("--address")
+        let irq = parser.option("--irq")
+        switch (address, irq) {
+        case (let text?, nil):
+            guard let key = ECRegisterFile.key(.register, parsing: text),
+                  let value = UInt64(key.dropFirst(2), radix: 16) else {
+                throw Usage(description: "--address takes a hex address, not \(text)")
+            }
+            return (.register, value)
+        case (nil, let text?):
+            guard let value = UInt64(text) else { throw Usage(description: "--irq takes a number, not \(text)") }
+            return (.irq, value)
+        default:
+            throw Usage(description: "name one --address or one --irq")
         }
     }
 

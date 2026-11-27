@@ -28,17 +28,38 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         /// How the Code panel shows the record; nil for one it does not show.
         public var panel: PanelSection?
 
+        /// The columns that make a row's key, unique within the record; rows
+        /// are kept in key order. Empty for a record with no table.
+        public var key: [String]
+        /// The table's columns. Empty for a record the review does not write
+        /// as rows (`interfaces`, `post_codes`): `ghidra_set_record` refuses it.
+        /// Every row also carries `confidence` (`established`|`inference`,
+        /// required) and an optional `note`, and the record a `status`
+        /// (`unanswered`|`partial`|`complete`|`none`) and a `note` — common to
+        /// every record and not declared here.
+        public var columns: [Column]
+        /// Values a `computed` column reads, as hex or decimal strings
+        /// (`ec_ram_base: "0x80400"`).
+        public var parameters: [String: String]
+
         public init(id: String, title: String, summary: String, unansweredGate: Bool,
-                    panel: PanelSection? = nil) {
+                    panel: PanelSection? = nil, key: [String] = [], columns: [Column] = [],
+                    parameters: [String: String] = [:]) {
             self.id = id
             self.title = title
             self.summary = summary
             self.unansweredGate = unansweredGate
             self.panel = panel
+            self.key = key
+            self.columns = columns
+            self.parameters = parameters
         }
 
+        /// The column `id`, when the record has one.
+        public func column(_ id: String) -> Column? { columns.first { $0.id == id } }
+
         private enum CodingKeys: String, CodingKey {
-            case id, title, summary, panel
+            case id, title, summary, panel, key, columns, parameters
             case unansweredGate = "unanswered_gate"
         }
 
@@ -49,6 +70,10 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             summary = try c.decode(String.self, forKey: .summary)
             unansweredGate = try c.decode(Bool.self, forKey: .unansweredGate)
             panel = try c.decodeIfPresent(PanelSection.self, forKey: .panel)
+            // A profile written before records had tables reads as one without.
+            key = try c.decodeIfPresent([String].self, forKey: .key) ?? []
+            columns = try c.decodeIfPresent([Column].self, forKey: .columns) ?? []
+            parameters = try c.decodeIfPresent([String: String].self, forKey: .parameters) ?? [:]
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -58,7 +83,117 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             try c.encode(summary, forKey: .summary)
             try c.encode(unansweredGate, forKey: .unansweredGate)
             if !AnalysisProfile.omitsPanel(encoder), let panel { try c.encode(panel, forKey: .panel) }
+            // Only a record with a table: one without encodes as before.
+            if !key.isEmpty { try c.encode(key, forKey: .key) }
+            if !columns.isEmpty { try c.encode(columns, forKey: .columns) }
+            if !parameters.isEmpty { try c.encode(parameters, forKey: .parameters) }
         }
+    }
+
+    // MARK: - A record's table
+
+    /// What a column holds. Raw values are the JSON's.
+    public enum ColumnKind: String, Codable, CaseIterable, Sendable {
+        /// Free text; with `pattern`, text that must match it.
+        case text
+        /// An integer, within `min`…`max`; `hex` writes it `0x…`. With
+        /// `values`, one of those words is taken instead of a number.
+        case int
+        /// An integer 0…0xFF, written `0x..`.
+        case byte
+        /// One of `values`.
+        case `enum`
+        case bool
+        /// An address inside a function of the module (the app opens the
+        /// function or the instruction).
+        case code
+        /// An address in the module's memory (the app opens the datum and its
+        /// references).
+        case data
+        /// Text that matches `pattern`.
+        case pattern
+        /// A list whose elements are of kind `of` (with the element's
+        /// `values`, `pattern`, `min`, `max` and `ref` taken from the column).
+        case list
+        /// A table inside the row, with `columns`.
+        case rows
+        /// A row of record `ref`: its key value — a single value for a
+        /// one-column key, an object of the key columns otherwise. A ref
+        /// nothing answers is a warning, never a refusal.
+        case ref
+        /// Worked out from the row and the record's `parameters` by `compute`;
+        /// never written by the review.
+        case computed
+    }
+
+    /// One column of a record's table.
+    public struct Column: Codable, Equatable, Hashable, Sendable {
+        public var id: String
+        /// The panel's header (English; the app localises it).
+        public var title: String
+        public var kind: ColumnKind
+        public var required: Bool
+        /// `enum`: the choices; `int`: words taken instead of a number.
+        public var values: [String]?
+        public var min: Int?
+        public var max: Int?
+        /// An `int` written `0x…`.
+        public var hex: Bool?
+        /// `pattern` (or `text`, or a list's elements): a regular expression
+        /// the whole value matches.
+        public var pattern: String?
+        /// `list`: the elements' kind.
+        public var of: ColumnKind?
+        /// `rows`: the nested table's columns.
+        public var columns: [Column]?
+        /// `ref`, or a list of refs: the record whose rows it names.
+        public var ref: String?
+        /// `computed`: what works it out — `ec_ram_address` (the record's
+        /// `ec_ram_base` + `offset`), `smbus_address_8bit` (`address` × 2).
+        public var compute: String?
+        /// Values of this column that need the row's `note` (`runtime`).
+        public var noteFor: [String]?
+        public var summary: String
+
+        public init(_ id: String, _ title: String, _ kind: ColumnKind, required: Bool = false,
+                    values: [String]? = nil, min: Int? = nil, max: Int? = nil, hex: Bool? = nil,
+                    pattern: String? = nil, of: ColumnKind? = nil, columns: [Column]? = nil,
+                    ref: String? = nil, compute: String? = nil, noteFor: [String]? = nil, summary: String) {
+            self.id = id
+            self.title = title
+            self.kind = kind
+            self.required = required
+            self.values = values
+            self.min = min
+            self.max = max
+            self.hex = hex
+            self.pattern = pattern
+            self.of = of
+            self.columns = columns
+            self.ref = ref
+            self.compute = compute
+            self.noteFor = noteFor
+            self.summary = summary
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, kind, required, values, min, max, hex, pattern, of, columns, ref, compute, summary
+            case noteFor = "note_for"
+        }
+    }
+
+    /// A record's status, common to every record with a table. Raw values are
+    /// the JSON's.
+    public enum RecordStatus: String, Codable, CaseIterable, Sendable {
+        case unanswered, partial, complete, none
+
+        /// Whether the `records_answered` gate takes it.
+        public var answers: Bool { self == .complete || self == .none }
+    }
+
+    /// A row's confidence, common to every row.
+    public enum RowConfidence: String, Codable, CaseIterable, Sendable {
+        case established, inference
     }
 
     // MARK: - The Code panel
@@ -312,40 +447,21 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             Gate(id: "description", summary: "The module described."),
             Gate(id: "interfaces_answered", summary: "Installs, locates and notifies each answered.")
         ],
-        inapplicableTools: [],
+        inapplicableTools: [
+            InapplicableTool(tool: "register_registry",
+                             hint: "The register registry names an EC chip's registers and interrupts; "
+                                + "a UEFI module's are not kept there.")
+        ],
         panel: Panel(builtIn: [BuiltInVisibility(.interfaces, shown: true),
                                BuiltInVisibility(.postCodes, shown: true)]))
 
     /// An ITE EC firmware on an Andes NDS32 core.
     public static let ecIteNds32 = AnalysisProfile(
-        id: "ec-ite-nds32", version: 1, title: "ITE EC firmware (NDS32)", skill: "ghidra-ec",
+        id: "ec-ite-nds32", version: 2, title: "ITE EC firmware (NDS32)", skill: "ghidra-ec",
         typeGroups: ["Nds32"], libraryKinds: ["toolchain", "ite"],
         references: ["ghidra-uefi/SKILL.md", "ghidra-ec/reference/it83xx-registers.tsv", "ghidra-ec/reference/it83xx-irqs.tsv",
                      "ghidra-uefi/reference/description.md"],
-        records: [
-            Record(id: "irq_map", title: "Interrupts",
-                   summary: "IRQ, its handler, its source and what it does.", unansweredGate: true,
-                   panel: PanelSection(order: 0, symbol: "bolt")),
-            Record(id: "host_commands", title: "Host commands",
-                   summary: "Port pair and command byte, the handler, its effect, data in and out.",
-                   unansweredGate: true, panel: PanelSection(order: 1, symbol: "arrow.left.arrow.right")),
-            Record(id: "ec_ram", title: "EC RAM",
-                   summary: "Offset, width, name, writer (EC or host) and meaning.", unansweredGate: true,
-                   panel: PanelSection(order: 2, symbol: "memorychip")),
-            Record(id: "smbus_peers", title: "SMBus and I2C",
-                   summary: "Channel and address, the device, the commands and registers used.",
-                   unansweredGate: true, panel: PanelSection(order: 3, symbol: "point.3.connected.trianglepath.dotted")),
-            Record(id: "gpio", title: "GPIO",
-                   summary: "Pin, direction and its function in this firmware.", unansweredGate: true,
-                   panel: PanelSection(order: 4, symbol: "cable.connector")),
-            Record(id: "eflash_area", title: "Flash data area",
-                   summary: "The EC's flash data area past the image extent: every range or address the code "
-                      + "reads, writes or erases there; the function that does it; the record format; and what "
-                      + "it holds (state bytes, logs, settings). Write the meaning only from the code. A dump's "
-                      + "contents are never the meaning, because they differ between reads and a host update "
-                      + "rewrites them up to host_update_size.",
-                   unansweredGate: true, panel: PanelSection(order: 5, symbol: "internaldrive"))
-        ],
+        records: ecRecords,
         gates: [
             Gate(id: "levels", summary: "Every function full, linked to the registry or bodiless."),
             Gate(id: "x1_sweep", summary: "The X1 sweep clean in the module's own functions."),
@@ -362,10 +478,9 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                              hint: "An EC has no port-0x80 POST codes; what it sends the host is in host_commands."),
             InapplicableTool(tool: "ghidra_set_interfaces",
                              hint: "An EC module has no PPIs or protocols: its records are irq_map, host_commands, "
-                                + "ec_ram, smbus_peers, gpio and eflash_area, kept for now as ### subsections of "
-                                + "Interactions in the description."),
+                                + "ec_ram, smbus_peers, gpio and eflash_area, written with ghidra_set_record."),
             InapplicableTool(tool: "ghidra_interfaces",
-                             hint: "An EC module records no interfaces; read its description's Interactions."),
+                             hint: "An EC module records no interfaces; read its records with ghidra_records."),
             InapplicableTool(tool: "ghidra_guid_add",
                              hint: "EC firmware has no GUIDs to name.")
         ],
@@ -375,4 +490,123 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                                BuiltInVisibility(.postCodes, shown: false),
                                BuiltInVisibility(.strings, shown: false),
                                BuiltInVisibility(.statusCodes, shown: false)]))
+    /// The six records of an EC review, each a table (the EC reviewer's
+    /// schema, 2026-11-27). A field marked required in the schema is
+    /// `required` here; `->code` is `code`, `->data` is `data`.
+    static let ecRecords: [Record] = [
+        Record(id: "irq_map", title: "Interrupts",
+               summary: "One row per IRQ whose handler is not empty: the handler, its source and what it does. "
+                  + "Say what the other IRQs are in the record's note (\"all other IRQs: empty stub\").",
+               unansweredGate: true, panel: PanelSection(order: 0, symbol: "bolt"),
+               key: ["irq"],
+               columns: [
+                Column("irq", "IRQ", .int, required: true, min: 0, max: 239, summary: "The interrupt number, 0…239."),
+                Column("handler", "Handler", .code, required: true, summary: "The ISR the table calls (Isr_IrqNNN)."),
+                Column("body", "Body", .code, summary: "The function doing the work (IntcIrqNNN_…), when not the handler."),
+                Column("source", "Source", .text, required: true, summary: "What raises the interrupt."),
+                Column("source_status", "Source known from", .enum, required: true, values: ["firmware", "unverified"],
+                       summary: "firmware: the code shows the source; unverified: from a datasheet or another chip."),
+                Column("enabled_by_firmware", "Enabled", .bool, required: true,
+                       summary: "Whether the firmware enables the interrupt."),
+                Column("task_slot", "Task slot", .int, min: 0, summary: "The task slot the handler sets, if any."),
+                Column("purpose", "Purpose", .text, required: true, summary: "What the handler does.")
+               ]),
+        Record(id: "host_commands", title: "Host commands",
+               summary: "Port pair and command byte, the handler, its effect, data in and out. A command on two "
+                  + "port pairs is two rows.",
+               unansweredGate: true, panel: PanelSection(order: 1, symbol: "arrow.left.arrow.right"),
+               key: ["ports", "cmd", "sub", "mode"],
+               columns: [
+                Column("ports", "Ports", .enum, required: true, values: ["60/64", "62/66", "68/6C"],
+                       summary: "The port pair the command is written to."),
+                Column("mode", "Mode", .enum, required: true, values: ["normal", "flash"],
+                       summary: "normal, or the flash (update) mode the command is taken in."),
+                Column("cmd", "Command", .byte, required: true, summary: "The command byte."),
+                Column("sub", "Subcommand", .byte, summary: "The subcommand byte, when the command takes one."),
+                Column("handler", "Handler", .code, required: true, summary: "The code that carries it out."),
+                Column("effect", "Effect", .text, required: true, summary: "What the command does."),
+                Column("data_in", "Data in", .text, summary: "Bytes the host writes after it: count and meaning."),
+                Column("data_out", "Data out", .text, summary: "Bytes the EC answers: count and meaning."),
+                Column("raises", "Raises", .list, pattern: "SCI|SMI|query (0x[0-9A-Fa-f]{1,2}|[0-9]{1,3})", of: .pattern,
+                       summary: "Events it raises: SCI, SMI, query N."),
+                Column("ec_ram", "EC RAM", .list, of: .ref, ref: "ec_ram",
+                       summary: "The EC RAM offsets it touches (rows of ec_ram).")
+               ]),
+        Record(id: "ec_ram", title: "EC RAM",
+               summary: "Offset, width, name, writer (EC or host) and meaning.",
+               unansweredGate: true, panel: PanelSection(order: 2, symbol: "memorychip"),
+               key: ["offset"],
+               columns: [
+                Column("offset", "Offset", .int, required: true, min: 0, max: 0xFF, hex: true,
+                       summary: "The offset in the host's EC RAM window, 0x00…0xFF."),
+                Column("width", "Width", .int, required: true, min: 1, summary: "The width in bytes."),
+                Column("name", "Name", .text, required: true, summary: "The field's name."),
+                Column("address", "Address", .computed, compute: "ec_ram_address",
+                       summary: "Where the EC holds it: ec_ram_base + offset."),
+                Column("writer", "Writer", .enum, required: true, values: ["EC", "host", "both"],
+                       summary: "Who writes it."),
+                Column("meaning", "Meaning", .text, required: true, summary: "What it holds."),
+                Column("values", "Values", .text, summary: "Its values and what each means."),
+                Column("accessed_by", "Accessed by", .list, of: .code, summary: "The code that reads or writes it.")
+               ],
+               parameters: ["ec_ram_base": "0x80400"]),
+        Record(id: "smbus_peers", title: "SMBus and I2C",
+               summary: "Channel and address, the device, the commands and registers used.",
+               unansweredGate: true, panel: PanelSection(order: 3, symbol: "point.3.connected.trianglepath.dotted"),
+               key: ["channel", "address"],
+               columns: [
+                Column("channel", "Channel", .enum, required: true, values: ["A", "B", "C", "D", "E"],
+                       summary: "The SMBus channel."),
+                Column("address", "Address", .int, required: true, values: ["runtime"], min: 0, max: 0x7F, hex: true,
+                       noteFor: ["runtime"],
+                       summary: "The 7-bit address, or runtime when the code works it out (say how in the row's note)."),
+                Column("address_8bit", "Bus address", .computed, compute: "smbus_address_8bit",
+                       summary: "The 8-bit bus address: the 7-bit address × 2."),
+                Column("device", "Device", .text, required: true, summary: "The device, or \"not identified\"."),
+                Column("pec", "PEC", .bool, summary: "Whether the transfers carry a PEC byte."),
+                Column("commands", "Commands", .rows, required: true, columns: [
+                    Column("cmd", "Command", .byte, required: true, summary: "The command or register byte."),
+                    Column("access", "Access", .enum, required: true, values: ["R", "W"], summary: "Read or write."),
+                    Column("size", "Size", .enum, required: true, values: ["byte", "word", "block"],
+                           summary: "The transfer's size."),
+                    Column("meaning", "Meaning", .text, required: true, summary: "What it reads or sets.")
+                ], summary: "The commands the firmware sends the device."),
+                Column("callers", "Callers", .list, of: .code, summary: "The code that talks to the device.")
+               ]),
+        Record(id: "gpio", title: "GPIO",
+               summary: "Pin, direction and its function in this firmware. The board's net is not written here.",
+               unansweredGate: true, panel: PanelSection(order: 4, symbol: "cable.connector"),
+               key: ["pin"],
+               columns: [
+                Column("pin", "Pin", .pattern, required: true, pattern: "[A-Z][0-7]",
+                       summary: "The pin: port letter and bit, A0…M7."),
+                Column("direction", "Direction", .enum, required: true, values: ["in", "out", "alt", "bidir"],
+                       summary: "How the firmware sets it."),
+                Column("function", "Function", .text, required: true, summary: "What the pin does in this firmware."),
+                Column("active_level", "Active level", .enum, values: ["high", "low"], summary: "The level that asserts it."),
+                Column("init", "Initial state", .text, summary: "How the firmware sets it up."),
+                Column("accessed_by", "Accessed by", .list, of: .code, summary: "The code that reads or drives it.")
+               ]),
+        Record(id: "eflash_area", title: "Flash data area",
+               summary: "The EC's flash data area past the image extent: every range or address the code "
+                  + "reads, writes or erases there; the function that does it; the record format; and what "
+                  + "it holds (state bytes, logs, settings). Write the meaning only from the code. A dump's "
+                  + "contents are never the meaning, because they differ between reads and a host update "
+                  + "rewrites them up to host_update_size. A byte inside the image the code keeps state in "
+                  + "is a row too, with in_image.",
+               unansweredGate: true, panel: PanelSection(order: 5, symbol: "internaldrive"),
+               key: ["address"],
+               columns: [
+                Column("address", "Address", .data, required: true,
+                       summary: "Where the area starts (its label in eflash_data)."),
+                Column("size", "Size", .int, required: true, min: 1, hex: true, summary: "Its size in bytes."),
+                Column("format", "Format", .text, required: true, summary: "A type's name, or the layout in words."),
+                Column("writers", "Writers", .list, required: true, of: .code, summary: "The code that writes or erases it."),
+                Column("readers", "Readers", .list, of: .code, summary: "The code that reads it."),
+                Column("host_commands", "Host commands", .list, of: .ref, ref: "host_commands",
+                       summary: "Host commands that reach it (rows of host_commands)."),
+                Column("meaning", "Meaning", .text, required: true, summary: "What it holds, from the code."),
+                Column("in_image", "In the image", .bool, summary: "A byte inside the image rather than past its extent.")
+               ])
+    ]
 }

@@ -20,10 +20,12 @@ public actor ChangeFeed {
     private var libraryFingerprint: SHA256Digest?
     /// The GUID registry as the feed last saw it.
     private var guidsFingerprint: SHA256Digest?
+    /// Each chip's register registry as the feed last saw it.
+    private var registerFingerprints: [String: SHA256Digest]
     private(set) var seq = 0
     /// The modules of each step, and whether the registry changed with them,
     /// oldest first; at most `memory` steps.
-    private var steps: [(seq: Int, modules: Set<SHA256Digest>, library: Bool, guids: Bool)] = []
+    private var steps: [(seq: Int, modules: Set<SHA256Digest>, library: Bool, guids: Bool, registers: Set<String>)] = []
     private let memory: Int
     private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
@@ -33,6 +35,7 @@ public actor ChangeFeed {
         self.fingerprints = store.fingerprints()
         self.libraryFingerprint = Self.libraryFingerprint(store)
         self.guidsFingerprint = Self.guidsFingerprint(store)
+        self.registerFingerprints = Self.registerFingerprints(store)
         self.memory = memory
     }
 
@@ -52,9 +55,12 @@ public actor ChangeFeed {
         let guids = Self.guidsFingerprint(store)
         let guidsChanged = guids != guidsFingerprint
         guidsFingerprint = guids
-        guard !changed.isEmpty || libraryChanged || guidsChanged else { return [] }
+        let registers = Self.registerFingerprints(store)
+        let chips = Set(registers.keys.filter { registers[$0] != registerFingerprints[$0] })
+        registerFingerprints = registers
+        guard !changed.isEmpty || libraryChanged || guidsChanged || !chips.isEmpty else { return [] }
         seq += 1
-        steps.append((seq, changed, libraryChanged, guidsChanged))
+        steps.append((seq, changed, libraryChanged, guidsChanged, chips))
         if steps.count > memory { steps.removeFirst(steps.count - memory) }
         let woken = waiters
         waiters.removeAll()
@@ -95,13 +101,24 @@ public actor ChangeFeed {
         guard since < seq else { return nil }
         let after = steps.filter { $0.seq > since }
         let modules = after.reduce(into: Set<SHA256Digest>()) { $0.formUnion($1.modules) }
+        let chips = after.reduce(into: Set<String>()) { $0.formUnion($1.registers) }
         return .init(store: storeID, epoch: self.epoch, seq: seq, modules: modules.sorted(), resync: false,
                      library: after.contains(where: \.library) ? true : nil,
-                     guids: after.contains(where: \.guids) ? true : nil)
+                     guids: after.contains(where: \.guids) ? true : nil,
+                     registers: chips.isEmpty ? nil : chips.sorted())
     }
 
     private static func guidsFingerprint(_ store: ContentStore) -> SHA256Digest? {
         (try? Data(contentsOf: store.guidsURL.appendingPathComponent("registry.json"))).map { SHA256Digest(data: $0) }
+    }
+
+    private static func registerFingerprints(_ store: ContentStore) -> [String: SHA256Digest] {
+        var prints: [String: SHA256Digest] = [:]
+        for chip in store.registerChips() {
+            let url = store.registersURL.appendingPathComponent("\(chip).json")
+            if let data = try? Data(contentsOf: url) { prints[chip] = SHA256Digest(data: data) }
+        }
+        return prints
     }
 
     private static func libraryFingerprint(_ store: ContentStore) -> SHA256Digest? {

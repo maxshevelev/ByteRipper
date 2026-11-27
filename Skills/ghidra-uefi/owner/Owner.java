@@ -361,6 +361,7 @@ public class Owner {
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
                 if (path.equals("/v1/interfaces")) { json(exchange, 200, interfaces()); return; }
+                if (path.equals("/v1/records")) { json(exchange, 200, records(query)); return; }
                 if (path.equals("/v1/guid-at")) { json(exchange, 200, guidAt(query)); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
                 if (path.equals("/v1/types")) { json(exchange, 200, types(query)); return; }
@@ -396,6 +397,7 @@ public class Owner {
                     case "/v1/set/data" -> write(exchange, this::setData);
                     case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/set/interfaces" -> write(exchange, this::setInterfaces);
+                    case "/v1/set/record" -> write(exchange, this::setRecord);
                     case "/v1/uefi/retype" -> write(exchange, this::retypeUefi);
                     case "/v1/ec/reapply" -> write(exchange, this::ecReapply);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
@@ -5425,6 +5427,477 @@ public class Owner {
         }
         Harvest.setInterfaces(program, record);
         return interfaces();
+    }
+
+    // MARK: - The module's records
+
+    /** The fields `ghidra_set_record` takes; `schema` is the host's. */
+    private static final java.util.List<String> RECORD_FIELDS =
+        java.util.List.of("record", "schema", "status", "note", "rows", "upsert", "delete");
+    private static final java.util.List<String> RECORD_STATUSES = java.util.List.of("partial", "complete", "none");
+    private static final java.util.List<String> ROW_CONFIDENCES = java.util.List.of("established", "inference");
+
+    /**
+     * The records the review set — each `{status, note?, rows}` — under
+     * `records`, or only `record` when the query names one. A record not set
+     * is not listed: the host knows the profile's and answers it unanswered.
+     */
+    private JsonObject records(Map<String, String> query) {
+        JsonObject answer = identity();
+        JsonObject all = Harvest.records(program);
+        JsonObject listed = new JsonObject();
+        String only = query.get("record");
+        if (all != null) {
+            for (String id : all.keySet()) if (only == null || only.equals(id)) listed.add(id, all.get(id));
+        }
+        answer.add("records", listed);
+        return answer;
+    }
+
+    /**
+     * Writes one record: `rows` replaces its table, `upsert` puts rows by key,
+     * `delete` takes rows by key; `status` and `note` set the record's. A
+     * null `status` takes the record back to unanswered and empty. The host
+     * gives `schema` — the record's `key`, `columns`, `parameters` and
+     * `ref_keys` (each referenced record's key columns) from the module's
+     * analysis profile — so this owner keeps no copy of a profile. Every row
+     * is checked before anything is written: one wrong value refuses the
+     * whole call, as `record[row i].column: expected …`.
+     */
+    private JsonObject setRecord(JsonObject body) throws Exception {
+        String id = required(body, "record");
+        for (String field : body.keySet()) {
+            if (!RECORD_FIELDS.contains(field)) {
+                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, rows, upsert, delete");
+            }
+        }
+        if (!body.has("schema") || !body.get("schema").isJsonObject()) {
+            throw new Failure(400, id + ": the call came without the record's schema (the host gives it)");
+        }
+        JsonObject schema = body.getAsJsonObject("schema");
+        JsonArray columns = schema.has("columns") ? schema.getAsJsonArray("columns") : new JsonArray();
+        if (columns.size() == 0) throw new Failure(400, id + ": the record has no columns to write");
+        java.util.List<String> key = new java.util.ArrayList<>();
+        if (schema.has("key")) for (JsonElement column : schema.getAsJsonArray("key")) key.add(column.getAsString());
+        JsonObject parameters = schema.has("parameters") ? schema.getAsJsonObject("parameters") : new JsonObject();
+        JsonObject refKeys = schema.has("ref_keys") ? schema.getAsJsonObject("ref_keys") : new JsonObject();
+
+        boolean replaces = body.has("rows");
+        boolean edits = body.has("upsert") || body.has("delete");
+        if (replaces && edits) throw new Failure(400, id + ": give rows (the whole table) or upsert/delete (rows by key), not both");
+        JsonObject all = Harvest.records(program);
+        all = all == null ? new JsonObject() : all.deepCopy();
+
+        if (body.has("status") && body.get("status").isJsonNull()) {
+            if (replaces || edits || (body.has("note") && !body.get("note").isJsonNull())) {
+                throw new Failure(400, id + ".status: null takes the record back to unanswered and empty; give no rows or note with it");
+            }
+            all.remove(id);
+            Harvest.setRecords(program, all);
+            return records(Map.of());
+        }
+        if (!body.has("status") && !body.has("note") && !replaces && !edits) {
+            throw new Failure(400, id + ": give status, note, rows, or upsert/delete");
+        }
+
+        JsonObject stored = all.has(id) && all.get(id).isJsonObject() ? all.getAsJsonObject(id) : null;
+        String status = stored != null && stored.has("status") ? stored.get("status").getAsString() : "unanswered";
+        String note = stored != null && stored.has("note") && !stored.get("note").isJsonNull()
+            ? stored.get("note").getAsString() : null;
+        java.util.Map<String, JsonObject> rows = new java.util.LinkedHashMap<>();
+        if (stored != null && stored.has("rows")) {
+            for (JsonElement row : stored.getAsJsonArray("rows")) {
+                rows.put(rowKey(row.getAsJsonObject(), key), row.getAsJsonObject());
+            }
+        }
+
+        if (replaces) {
+            if (!body.get("rows").isJsonArray()) throw new Failure(400, id + ".rows: expected a list of rows");
+            rows.clear();
+            putRows(id, "rows", body.getAsJsonArray("rows"), columns, key, parameters, refKeys, rows);
+        }
+        if (body.has("delete")) {
+            if (!body.get("delete").isJsonArray()) throw new Failure(400, id + ".delete: expected a list of keys");
+            int index = 0;
+            for (JsonElement given : body.getAsJsonArray("delete")) {
+                String at = id + "[delete " + index++ + "]";
+                if (!given.isJsonObject()) throw new Failure(400, at + ": expected an object of the key " + key);
+                JsonObject keyRow = new JsonObject();
+                for (String field : given.getAsJsonObject().keySet()) {
+                    if (!key.contains(field)) throw new Failure(400, at + "." + field + ": expected only the key " + key);
+                }
+                for (String field : key) {
+                    JsonObject column = columnNamed(columns, field);
+                    JsonElement value = given.getAsJsonObject().get(field);
+                    if (value == null || value.isJsonNull()) {
+                        if (column.has("required") && column.get("required").getAsBoolean()) {
+                            throw new Failure(400, at + "." + field + ": expected a value (part of the key)");
+                        }
+                        keyRow.add(field, com.google.gson.JsonNull.INSTANCE);
+                    } else {
+                        keyRow.add(field, recordValue(column, value, at + "." + field, refKeys));
+                    }
+                }
+                String rowKey = rowKey(keyRow, key);
+                if (rows.remove(rowKey) == null) throw new Failure(400, at + ": no row has the key " + rowKey);
+            }
+        }
+        if (body.has("upsert")) {
+            if (!body.get("upsert").isJsonArray()) throw new Failure(400, id + ".upsert: expected a list of rows");
+            java.util.Map<String, JsonObject> given = new java.util.LinkedHashMap<>();
+            putRows(id, "upsert", body.getAsJsonArray("upsert"), columns, key, parameters, refKeys, given);
+            rows.putAll(given);
+        }
+
+        if (body.has("status")) {
+            String asked = body.get("status").getAsString();
+            if (asked.equals("unanswered")) {
+                throw new Failure(400, id + ".status: give null to take the record back to unanswered");
+            }
+            if (!RECORD_STATUSES.contains(asked)) {
+                throw new Failure(400, id + ".status: expected partial, complete or none (or null), got " + asked);
+            }
+            status = asked;
+        }
+        if (body.has("note")) {
+            JsonElement given = body.get("note");
+            if (given.isJsonNull()) note = null;
+            else if (!given.isJsonPrimitive() || !given.getAsJsonPrimitive().isString()) {
+                throw new Failure(400, id + ".note: expected text");
+            } else note = given.getAsString().trim().isEmpty() ? null : given.getAsString();
+        }
+        // Rows written to a record nobody answered yet: the review goes on.
+        if (status.equals("unanswered") && (replaces || edits) && !rows.isEmpty()) {
+            status = "partial";
+            if (note == null) note = "review continues";
+        }
+        if ((status.equals("partial") || status.equals("none")) && note == null) {
+            throw new Failure(400, id + ".note: expected a note with status " + status
+                + (status.equals("none") ? " (why the module has none)" : " (what is left)"));
+        }
+        if (status.equals("none") && !rows.isEmpty()) {
+            throw new Failure(400, id + ".status: none takes no rows; " + rows.size() + " are recorded — delete them, or say partial or complete");
+        }
+        if (status.equals("complete") && rows.isEmpty()) {
+            throw new Failure(400, id + ".status: complete with no rows — use none with the reason");
+        }
+
+        java.util.List<JsonObject> sorted = new java.util.ArrayList<>(rows.values());
+        sorted.sort((a, b) -> compareKeys(a, b, key));
+        if (status.equals("unanswered") && sorted.isEmpty() && note == null) {
+            all.remove(id);
+        } else {
+            JsonObject record = new JsonObject();
+            record.addProperty("status", status);
+            if (note != null) record.addProperty("note", note);
+            JsonArray table = new JsonArray();
+            for (JsonObject row : sorted) table.add(row);
+            record.add("rows", table);
+            all.add(id, record);
+        }
+        Harvest.setRecords(program, all);
+        return records(Map.of());
+    }
+
+    /** Checks `given` rows into `into` by key; a key twice is refused. */
+    private void putRows(String id, String field, JsonArray given, JsonArray columns, java.util.List<String> key,
+                         JsonObject parameters, JsonObject refKeys, java.util.Map<String, JsonObject> into) throws Failure {
+        java.util.Map<String, Integer> seen = new java.util.HashMap<>();
+        int index = 0;
+        for (JsonElement element : given) {
+            String at = id + "[" + (field.equals("rows") ? "row " : field + " ") + index + "]";
+            JsonObject row = recordRow(element, columns, at, refKeys, true);
+            computeColumns(row, columns, parameters);
+            String rowKey = rowKey(row, key);
+            Integer earlier = seen.put(rowKey, index);
+            if (earlier != null) {
+                throw new Failure(400, at + ": expected a key of its own; row " + earlier + " has the key " + rowKey + " too");
+            }
+            into.put(rowKey, row);
+            index++;
+        }
+    }
+
+    private static JsonObject columnNamed(JsonArray columns, String id) throws Failure {
+        for (JsonElement column : columns) {
+            if (column.getAsJsonObject().get("id").getAsString().equals(id)) return column.getAsJsonObject();
+        }
+        throw new Failure(500, "the schema names `" + id + "` in its key but has no such column");
+    }
+
+    /** One row, checked and in its canonical form: the columns in their order, then `confidence` and `note`. */
+    private JsonObject recordRow(JsonElement element, JsonArray columns, String at, JsonObject refKeys,
+                                 boolean topLevel) throws Failure {
+        if (!element.isJsonObject()) throw new Failure(400, at + ": expected a row (an object)");
+        JsonObject given = element.getAsJsonObject();
+        java.util.Set<String> known = new java.util.HashSet<>();
+        for (JsonElement column : columns) known.add(column.getAsJsonObject().get("id").getAsString());
+        for (String field : given.keySet()) {
+            if (known.contains(field)) continue;
+            if (topLevel && (field.equals("confidence") || field.equals("note"))) continue;
+            StringBuilder names = new StringBuilder();
+            for (JsonElement column : columns) {
+                if (column.getAsJsonObject().get("kind").getAsString().equals("computed")) continue;
+                if (names.length() > 0) names.append(", ");
+                names.append(column.getAsJsonObject().get("id").getAsString());
+            }
+            throw new Failure(400, at + "." + field + ": expected one of the record's columns: " + names
+                              + (topLevel ? ", confidence, note" : ""));
+        }
+        JsonObject row = new JsonObject();
+        String note = null;
+        if (topLevel && given.has("note") && !given.get("note").isJsonNull()) {
+            JsonElement value = given.get("note");
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) throw new Failure(400, at + ".note: expected text");
+            if (!value.getAsString().trim().isEmpty()) note = value.getAsString();
+        }
+        for (JsonElement element2 : columns) {
+            JsonObject column = element2.getAsJsonObject();
+            String name = column.get("id").getAsString();
+            String kind = column.get("kind").getAsString();
+            JsonElement value = given.get(name);
+            if (kind.equals("computed")) {
+                if (value != null) throw new Failure(400, at + "." + name + ": expected nothing — it is computed; leave it out");
+                continue;
+            }
+            if (value == null || value.isJsonNull()) {
+                if (column.has("required") && column.get("required").getAsBoolean()) {
+                    throw new Failure(400, at + "." + name + ": expected a value (required)");
+                }
+                continue;
+            }
+            JsonElement checked = recordValue(column, value, at + "." + name, refKeys);
+            if (column.has("note_for") && checked.isJsonPrimitive() && checked.getAsJsonPrimitive().isString()) {
+                for (JsonElement word : column.getAsJsonArray("note_for")) {
+                    if (word.getAsString().equals(checked.getAsString()) && note == null) {
+                        throw new Failure(400, at + ".note: expected a note saying how, with " + name + " " + checked.getAsString());
+                    }
+                }
+            }
+            row.add(name, checked);
+        }
+        if (topLevel) {
+            JsonElement confidence = given.get("confidence");
+            if (confidence == null || confidence.isJsonNull()) {
+                throw new Failure(400, at + ".confidence: expected established or inference (required)");
+            }
+            String text = confidence.isJsonPrimitive() ? confidence.getAsString() : "";
+            if (!ROW_CONFIDENCES.contains(text)) {
+                throw new Failure(400, at + ".confidence: expected established or inference, got " + confidence);
+            }
+            row.addProperty("confidence", text);
+            if (note != null) row.addProperty("note", note);
+        }
+        return row;
+    }
+
+    /** The computed columns of a checked row, from it and the record's parameters. */
+    private static void computeColumns(JsonObject row, JsonArray columns, JsonObject parameters) {
+        for (JsonElement element : columns) {
+            JsonObject column = element.getAsJsonObject();
+            if (!column.get("kind").getAsString().equals("computed") || !column.has("compute")) continue;
+            String name = column.get("id").getAsString();
+            switch (column.get("compute").getAsString()) {
+                case "ec_ram_address" -> {
+                    Long base = parameters.has("ec_ram_base") ? integerOf(parameters.get("ec_ram_base")) : null;
+                    Long offset = row.has("offset") ? integerOf(row.get("offset")) : null;
+                    if (base != null && offset != null) row.addProperty(name, "0x" + Long.toHexString(base + offset).toUpperCase());
+                }
+                case "smbus_address_8bit" -> {
+                    Long address = row.has("address") ? integerOf(row.get("address")) : null;
+                    if (address != null) row.addProperty(name, String.format("0x%02X", address * 2));
+                }
+                default -> { }
+            }
+        }
+    }
+
+    /** An integer given as a JSON number, decimal text or `0x…`; null for anything else. */
+    private static Long integerOf(JsonElement value) {
+        if (value == null || !value.isJsonPrimitive()) return null;
+        com.google.gson.JsonPrimitive primitive = value.getAsJsonPrimitive();
+        try {
+            if (primitive.isNumber()) {
+                java.math.BigDecimal number = primitive.getAsBigDecimal();
+                return number.stripTrailingZeros().scale() <= 0 ? number.longValueExact() : null;
+            }
+            if (primitive.isString()) {
+                String text = primitive.getAsString().trim();
+                if (text.startsWith("0x") || text.startsWith("0X")) return Long.parseLong(text.substring(2), 16);
+                if (text.matches("-?[0-9]+")) return Long.parseLong(text);
+            }
+        } catch (RuntimeException notAnInteger) {
+            return null;
+        }
+        return null;
+    }
+
+    /** One value of `column`, checked and canonical. */
+    private JsonElement recordValue(JsonObject column, JsonElement value, String at, JsonObject refKeys) throws Failure {
+        String kind = column.get("kind").getAsString();
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (column.has("values")) for (JsonElement word : column.getAsJsonArray("values")) values.add(word.getAsString());
+        String pattern = column.has("pattern") ? column.get("pattern").getAsString() : null;
+        Long min = column.has("min") ? column.get("min").getAsLong() : null;
+        Long max = column.has("max") ? column.get("max").getAsLong() : null;
+        boolean isString = value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
+        switch (kind) {
+            case "text", "pattern" -> {
+                if (!isString) throw new Failure(400, at + ": expected text, got " + value);
+                String text = value.getAsString();
+                if (text.trim().isEmpty()) throw new Failure(400, at + ": expected text, got an empty string");
+                if (pattern != null && !text.matches(pattern)) {
+                    throw new Failure(400, at + ": expected text matching " + pattern + ", got " + value);
+                }
+                return new com.google.gson.JsonPrimitive(text);
+            }
+            case "int", "byte" -> {
+                if (isString && values.contains(value.getAsString())) return new com.google.gson.JsonPrimitive(value.getAsString());
+                Long number = integerOf(value);
+                boolean isByte = kind.equals("byte");
+                long low = isByte ? 0 : (min == null ? Long.MIN_VALUE : min);
+                long high = isByte ? 0xFF : (max == null ? Long.MAX_VALUE : max);
+                String expected = isByte ? "a byte 0x00…0xFF"
+                    : "an integer" + (min != null || max != null ? " " + (min == null ? "" : min) + "…" + (max == null ? "" : max) : "")
+                      + (values.isEmpty() ? "" : " or " + String.join("/", values));
+                if (number == null || number < low || number > high) throw new Failure(400, at + ": expected " + expected + ", got " + value);
+                if (isByte) return new com.google.gson.JsonPrimitive(String.format("0x%02X", number));
+                if (column.has("hex") && column.get("hex").getAsBoolean()) {
+                    return new com.google.gson.JsonPrimitive("0x" + Long.toHexString(number).toUpperCase());
+                }
+                return new com.google.gson.JsonPrimitive(number);
+            }
+            case "enum" -> {
+                if (!isString || !values.contains(value.getAsString())) {
+                    throw new Failure(400, at + ": expected one of " + String.join(", ", values) + ", got " + value);
+                }
+                return new com.google.gson.JsonPrimitive(value.getAsString());
+            }
+            case "bool" -> {
+                if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) {
+                    throw new Failure(400, at + ": expected true or false, got " + value);
+                }
+                return value;
+            }
+            case "code" -> {
+                if (!isString) throw new Failure(400, at + ": expected a code address (\"0x…\"), got " + value);
+                Address address;
+                try {
+                    address = address(value.getAsString());
+                } catch (Failure notAnAddress) {
+                    throw new Failure(400, at + ": expected a code address (\"0x…\"), got " + value);
+                }
+                if (program.getFunctionManager().getFunctionContaining(address) == null) {
+                    throw new Failure(400, at + ": expected a code address inside a function, got " + value
+                                      + " — no function holds it");
+                }
+                return new com.google.gson.JsonPrimitive(hex(address));
+            }
+            case "data" -> {
+                if (!isString) throw new Failure(400, at + ": expected a data address (\"0x…\"), got " + value);
+                Address address;
+                try {
+                    address = address(value.getAsString());
+                } catch (Failure notAnAddress) {
+                    throw new Failure(400, at + ": expected a data address (\"0x…\"), got " + value);
+                }
+                if (!program.getMemory().contains(address)) {
+                    throw new Failure(400, at + ": expected a data address in the module's memory, got " + value);
+                }
+                return new com.google.gson.JsonPrimitive(hex(address));
+            }
+            case "list" -> {
+                if (!value.isJsonArray()) throw new Failure(400, at + ": expected a list, got " + value);
+                JsonObject element = column.deepCopy();
+                element.addProperty("kind", column.has("of") ? column.get("of").getAsString() : "text");
+                element.remove("of");
+                JsonArray checked = new JsonArray();
+                int index = 0;
+                for (JsonElement item : value.getAsJsonArray()) {
+                    if (item.isJsonNull()) throw new Failure(400, at + "[" + index + "]: expected a value, got null");
+                    checked.add(recordValue(element, item, at + "[" + index++ + "]", refKeys));
+                }
+                if (checked.size() == 0 && column.has("required") && column.get("required").getAsBoolean()) {
+                    throw new Failure(400, at + ": expected at least one entry (required)");
+                }
+                return checked;
+            }
+            case "rows" -> {
+                if (!value.isJsonArray()) throw new Failure(400, at + ": expected a list of rows, got " + value);
+                JsonArray nested = column.has("columns") ? column.getAsJsonArray("columns") : new JsonArray();
+                JsonArray checked = new JsonArray();
+                int index = 0;
+                for (JsonElement item : value.getAsJsonArray()) {
+                    checked.add(recordRow(item, nested, at + "[" + index++ + "]", refKeys, false));
+                }
+                if (checked.size() == 0 && column.has("required") && column.get("required").getAsBoolean()) {
+                    throw new Failure(400, at + ": expected at least one row (required)");
+                }
+                return checked;
+            }
+            case "ref" -> {
+                String target = column.has("ref") ? column.get("ref").getAsString() : null;
+                if (target == null || !refKeys.has(target)) throw new Failure(500, at + ": the schema gives no key for " + target);
+                JsonArray keyColumns = refKeys.getAsJsonArray(target);
+                if (keyColumns.size() == 1) {
+                    JsonObject keyColumn = keyColumns.get(0).getAsJsonObject();
+                    JsonElement single = value;
+                    // One field named as the key's column reads as the value.
+                    if (value.isJsonObject() && value.getAsJsonObject().size() == 1
+                        && value.getAsJsonObject().has(keyColumn.get("id").getAsString())) {
+                        single = value.getAsJsonObject().get(keyColumn.get("id").getAsString());
+                    }
+                    return recordValue(keyColumn, single, at + " (" + target + "." + keyColumn.get("id").getAsString() + ")", refKeys);
+                }
+                if (!value.isJsonObject()) {
+                    StringBuilder names = new StringBuilder();
+                    for (JsonElement keyColumn : keyColumns) {
+                        if (names.length() > 0) names.append(", ");
+                        names.append(keyColumn.getAsJsonObject().get("id").getAsString());
+                    }
+                    throw new Failure(400, at + ": expected a row of " + target + " by its key {" + names + "}, got " + value);
+                }
+                JsonObject checked = recordRow(value, keyColumns, at + " (" + target + ")", refKeys, false);
+                for (JsonElement keyColumn : keyColumns) {
+                    String name = keyColumn.getAsJsonObject().get("id").getAsString();
+                    if (!checked.has(name)) checked.add(name, com.google.gson.JsonNull.INSTANCE);
+                }
+                return checked;
+            }
+            case "computed" -> throw new Failure(400, at + ": expected nothing — it is computed; leave it out");
+            default -> throw new Failure(500, at + ": the schema has a column of unknown kind " + kind);
+        }
+    }
+
+    /** A row's key as text: its key columns' canonical values, in key order, as a JSON list. */
+    private static String rowKey(JsonObject row, java.util.List<String> key) {
+        JsonArray values = new JsonArray();
+        for (String column : key) values.add(row.has(column) ? row.get(column) : com.google.gson.JsonNull.INSTANCE);
+        return values.toString();
+    }
+
+    /** Key order: column by column, nothing first, then numbers (hex text read as one), then text. */
+    private static int compareKeys(JsonObject a, JsonObject b, java.util.List<String> key) {
+        for (String column : key) {
+            JsonElement left = a.get(column);
+            JsonElement right = b.get(column);
+            boolean leftNone = left == null || left.isJsonNull();
+            boolean rightNone = right == null || right.isJsonNull();
+            if (leftNone || rightNone) {
+                if (leftNone && rightNone) continue;
+                return leftNone ? -1 : 1;
+            }
+            Long leftNumber = integerOf(left);
+            Long rightNumber = integerOf(right);
+            int order;
+            if (leftNumber != null && rightNumber != null) order = Long.compare(leftNumber, rightNumber);
+            else if (leftNumber != null) order = -1;
+            else if (rightNumber != null) order = 1;
+            else order = (left.isJsonPrimitive() ? left.getAsString() : left.toString())
+                .compareTo(right.isJsonPrimitive() ? right.getAsString() : right.toString());
+            if (order != 0) return order;
+        }
+        return 0;
     }
 
     /** One entry, checked and written in its canonical form. */

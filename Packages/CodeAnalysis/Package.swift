@@ -7,6 +7,8 @@
 // It also holds the client of a served store (`RemoteStore`) and the mirror the
 // app reads in its place (`StoreMirror`), on URLSession; the server side is
 // `CASService`.
+// The EC register registry is seeded from ECImage's register tables, a pure
+// package with no dependency of its own.
 //
 // Beside the library, one executable: `byteripper-cas`, the store as a command
 // line. The skill's Python writes and reads the store through it, so the
@@ -22,11 +24,15 @@ let package = Package(
     ],
     dependencies: [
         // The analysis profiles a revision is stamped with.
-        .package(path: "../AnalysisProfiles")
+        .package(path: "../AnalysisProfiles"),
+        // An EC chip's register and interrupt tables, which seed the
+        // register registry.
+        .package(path: "../ECImage")
     ],
     targets: [
         .target(name: "CodeAnalysis", dependencies: [
-            .product(name: "AnalysisProfiles", package: "AnalysisProfiles")
+            .product(name: "AnalysisProfiles", package: "AnalysisProfiles"),
+            .product(name: "ECImage", package: "ECImage")
         ]),
         .executableTarget(name: "byteripper-cas", dependencies: ["CodeAnalysis"]),
         .testTarget(

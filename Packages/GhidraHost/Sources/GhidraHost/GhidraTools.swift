@@ -138,10 +138,13 @@ public enum GhidraTools {
         holder at a time writes and publishes a module, and reading needs nothing; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_bytes`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
-        `ghidra_type_uses` (where every module names a type), `ghidra_description`, `ghidra_interfaces`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
+        `ghidra_type_uses` (where every module names a type), `ghidra_description`, `ghidra_interfaces`, `ghidra_records`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, `ghidra_flow_override`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_set_interfaces` (what the module installs, \
-        locates and is notified of: a review is not complete while a list is unanswered), `ghidra_code_mode`, `ghidra_equate`. \
+        locates and is notified of: a review is not complete while a list is unanswered), `ghidra_set_record` (one of the \
+        tables the module's profile asks for — an EC module's interrupts, host commands, EC RAM, SMBus peers, GPIO and \
+        flash data area — row by row with each row's confidence; a gated record not complete or none keeps the \
+        review short of complete), `ghidra_code_mode`, `ghidra_equate`. \
         A library function lives in the shared registry and nowhere else: a module holds a link to its entry. \
         `ghidra_library_candidate` proposes a reviewed function for it — `edk2`, `amd` (AGESA) or `intel` (FSP/RC), by the \
         criteria in the skill's "Library functions" — and `ghidra_publish` decides: the registry takes every candidate, or the publish is refused until that is resolved. A body the registry \
@@ -879,6 +882,31 @@ public enum GhidraTools {
                 return try await answer { try await backend.readCall(module, "interfaces", query: [:]) }
             },
             AgentTool(
+                name: "ghidra_records",
+                title: "Read the module's records",
+                description: """
+                    The records the module's analysis profile asks a review to fill (`ghidra_profile`'s \
+                    `records`; an EC module's are irq_map, host_commands, ec_ram, smbus_peers, gpio and \
+                    eflash_area), as written with `ghidra_set_record`: `records`, each with `status` \
+                    (`unanswered` until written, `partial`, `complete`, or `none`), `note`, `rows` in key \
+                    order (each with its `confidence` and an optional `note`) and `gate`; `unanswered`, the \
+                    gated records neither complete nor none — the review is not complete while any is; \
+                    `warnings`, refs that name no row of their record. With `record`, only that one, with \
+                    its `key`, `columns` (each `id`, `kind`, `required`, and its `values`, `min`, `max`, \
+                    `pattern`, `of`, `columns`, `ref`, `compute`) and `parameters`.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "record": AgentSchema.string("One record's id: only it, with its columns.")
+                ], required: ["module"])
+            ) { call in
+                let module = try module(call.arguments)
+                var query: [String: String] = [:]
+                if let record = try call.arguments.optionalString("record") { query["record"] = record }
+                let asked = query
+                return try await answer { try await backend.readCall(module, "records", query: asked) }
+            },
+            AgentTool(
                 name: "ghidra_unpublished",
                 title: "List the writes since the last publish",
                 description: """
@@ -1601,6 +1629,60 @@ public enum GhidraTools {
                 }
                 let payload = JSONValue.object(fields).encoded()
                 return try await answer { try await backend.writeCall(module, "set/interfaces", body: payload) }
+            },
+            AgentTool(
+                name: "ghidra_set_record",
+                title: "Write one of the module's records",
+                description: """
+                    Writes one record of the module's analysis profile (`ghidra_records` with `record` gives \
+                    its columns), read from the code. `rows` replaces the whole table; `upsert` puts rows by \
+                    key (a row whose key is recorded replaces it); `delete` takes rows by key, each an object \
+                    of the key's columns. Every row carries `confidence` — `established` (the code shows it) \
+                    or `inference` — and may carry a `note`. A code column takes an address inside a \
+                    function, a data column an address in the module's memory; a ref names a row of another \
+                    record by its key (a value, or an object of the key's columns), and one that names no row \
+                    is a warning in the answer, not a refusal. A computed column is never written. `status`: \
+                    `partial` (with a `note` saying what is left), `complete` (at least one row), `none` (no \
+                    rows, with a `note` saying why); null takes the record back to unanswered and empty. \
+                    Rows written to an unanswered record without a status make it partial, noted "review \
+                    continues". Every value is checked first and one wrong value refuses the whole call, \
+                    naming it as `record[row i].column: expected …`. The answer is the record as \
+                    `ghidra_records` reads it.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "record": AgentSchema.string("The record's id: \"irq_map\", \"ec_ram\"."),
+                    "status": [
+                        "type": ["string", "null"],
+                        "enum": ["partial", "complete", "none", nil],
+                        "description": "partial, complete or none; null takes the record back to unanswered."
+                    ],
+                    "note": AgentSchema.string("The record's note: what is left (partial), why there are none (none), what the rows leave out."),
+                    "rows": [
+                        "type": "array", "items": ["type": "object"],
+                        "description": "The whole table: each row its columns, `confidence` and an optional `note`."
+                    ],
+                    "upsert": [
+                        "type": "array", "items": ["type": "object"],
+                        "description": "Rows to put by key, replacing a row of the same key."
+                    ],
+                    "delete": [
+                        "type": "array", "items": ["type": "object"],
+                        "description": "Keys of rows to take out, each an object of the key's columns."
+                    ]
+                ], required: ["module", "record"]),
+                annotations: .edit
+            ) { call in
+                let module = try module(call.arguments)
+                var fields: [String: JSONValue] = ["record": .string(try call.arguments.string("record"))]
+                for field in ["status", "note", "rows", "upsert", "delete"] {
+                    if let given = call.arguments.values[field] { fields[field] = given }
+                }
+                guard fields.count > 1 else {
+                    throw AgentToolError("Give status, note, rows, or upsert/delete.")
+                }
+                let payload = JSONValue.object(fields).encoded()
+                return try await answer { try await backend.writeCall(module, "set/record", body: payload) }
             },
             write("ghidra_type", "type", "Define a type",
                   "Adds a structure, union, enum or typedef from C to the module, shared with modules opened "

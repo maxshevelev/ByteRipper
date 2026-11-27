@@ -169,9 +169,12 @@ public enum ServedStoreProtocol {
         /// The GUID registry changed: a mirror reads it again. Nil from a
         /// server that predates it.
         public var guids: Bool?
+        /// The chips whose register registry changed: a mirror reads each
+        /// again. Nil when none did, and from a server that predates it.
+        public var registers: [String]?
 
         public init(store: String, epoch: String, seq: Int, modules: [SHA256Digest], resync: Bool,
-                    library: Bool? = nil, guids: Bool? = nil) {
+                    library: Bool? = nil, guids: Bool? = nil, registers: [String]? = nil) {
             self.store = store
             self.epoch = epoch
             self.seq = seq
@@ -179,6 +182,7 @@ public enum ServedStoreProtocol {
             self.resync = resync
             self.library = library
             self.guids = guids
+            self.registers = registers
         }
     }
 

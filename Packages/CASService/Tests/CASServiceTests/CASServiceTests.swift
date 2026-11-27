@@ -479,6 +479,43 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(try store.guidRegistry().entries[guid]?.name, "gAmdFactoryResetPpiGuid")
     }
 
+    /// The register registry: every chip with its version and counts, one
+    /// chip's file whole, a change found by a rescan as the chip's name in
+    /// the feed, and a mirror that copies it on connect and on a step.
+    func testTheRegisterRegistryIsServedAndAMirrorFollowsIt() async throws {
+        let none = try await remote.registerChips()
+        XCTAssertEqual(none, [], "a store never seeded serves no chip")
+        let empty = try await remote.registerFile("it8227e")
+        XCTAssertEqual(empty.version, 0)
+        do {
+            _ = try await remote.registerFile("it9999")
+            XCTFail("an unknown chip is not served")
+        } catch {}
+
+        let offer = ECRegisterOffer(kind: .register, number: 0xF01C00, name: "SMB_HOSTA_A", width: 1, block: "SMB",
+                                    status: .firmware,
+                                    evidence: ECRegisterEvidence(module: module("ec").sha256, addresses: ["0x3C5A"]))
+        _ = try served.offerRegister(chip: "it8227e", offer, by: "agent")
+        let mirror = StoreMirror(remote: remote, mirrorsRoot: directory.appendingPathComponent("mirrors"))
+        let store = try await mirror.connect()
+        XCTAssertEqual(try store.registerFile("it8227e").version, 1, "a mirror copies every chip when it connects")
+
+        let hello = try await remote.hello()
+        _ = try served.offerRegister(chip: "it8227e", ECRegisterOffer(
+            kind: .irq, number: 160, name: "SMB_E", status: .guess, evidence: ECRegisterEvidence(text: "IER20")), by: "agent")
+        let found = await service.feed.rescan()
+        XCTAssertEqual(found, [], "the registry changed, no module did")
+        let changes = try await remote.changes(since: hello.seq, epoch: hello.epoch, wait: 0)
+        XCTAssertEqual(changes.registers, ["it8227e"])
+        XCTAssertNil(changes.guids)
+        let chips = try await remote.registerChips()
+        XCTAssertEqual(chips, [ECRegisterChipSummary(chip: "it8227e", version: 2, registers: 1, irqs: 1)])
+
+        _ = try await mirror.follow(wait: 0)
+        XCTAssertEqual(try store.registerFile("it8227e").irqs["160"]?.current.name, "SMB_E")
+        XCTAssertEqual(try store.registerFile("it8227e"), try served.registerFile("it8227e"))
+    }
+
     // MARK: - The mirror
 
     func testAMirrorCopiesManifestsAndFetchesObjectsOnRead() async throws {

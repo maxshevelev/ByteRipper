@@ -366,6 +366,13 @@ public actor GhidraHost {
             return data
         }
         let record = try await owner(of: module)
+        // A review's records: the owner's rows, with what the profile says of them.
+        if path == Self.recordsPath || path.hasPrefix(Self.recordsPath + "?") {
+            let only = URLComponents(string: path)?.queryItems?.first { $0.name == "record" }?.value
+            let rows = try await Self.call(record.port, "GET", Self.recordsPath).data
+            noteActivity(module, holder: holder, call: "records", kind: .read)
+            return try recordsAnswer(module, owner: rows, only: only.flatMap { $0.isEmpty ? nil : $0 })
+        }
         let data = try await Self.call(record.port, "GET", path).data
         noteActivity(module, holder: holder, call: Self.callName(path), kind: .read)
         return data
@@ -427,6 +434,13 @@ public actor GhidraHost {
         // The EC step works out its body itself, from the module's image.
         if path == Self.ecReapplyPath, !byHost { return try await ecReapply(module, holder: holder) }
         if !byHost { try requireLease(module, holder: holder) }
+        // A record write carries its schema from the profile, put in here.
+        var body = body
+        var recordWritten: String?
+        if path == Self.setRecordPath {
+            body = try recordWriteBody(module, body: body)
+            recordWritten = (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["record"] as? String
+        }
         if path == "/v1/type", writer.keepsTypeArchives, Self.withdrawsShared(body) {
             return try await withdrawSharedType(module, body: body)
         }
@@ -480,6 +494,7 @@ public actor GhidraHost {
             try project.write(state)
         }
         if !byHost { noteActivity(module, holder: holder, call: Self.callName(path), kind: .write) }
+        if let recordWritten { return try recordsAnswer(module, owner: answer, only: recordWritten) }
         return answer
     }
 

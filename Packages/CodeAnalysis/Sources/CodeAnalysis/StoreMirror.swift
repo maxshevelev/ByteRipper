@@ -77,6 +77,9 @@ public actor StoreMirror {
         if changes.guids == true {
             try store.mirrorGuids(try await remote.guidRegistry())
         }
+        for chip in changes.registers ?? [] {
+            try store.mirrorRegisters(try await remote.registerFile(chip))
+        }
         seq = changes.seq
         return changes.modules
     }
@@ -139,6 +142,14 @@ public actor StoreMirror {
         // Nor one before the GUID registry.
         if let registry = try? await remote.guidRegistry() {
             try store.mirrorGuids(registry)
+        }
+        // Nor one before the register registry.
+        if let chips = try? await remote.registerChips() {
+            for chip in chips {
+                if let file = try? await remote.registerFile(chip.chip) {
+                    try store.mirrorRegisters(file)
+                }
+            }
         }
     }
 }

@@ -216,6 +216,64 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(one["citations"]?.arrayValue?.count, 1)
     }
 
+    /// The register registry is read from the store: a list narrowed by
+    /// kind, status, block, name and version, and one entry by address or
+    /// interrupt number with its history.
+    func testTheRegisterRegistryIsReadFromTheStore() async throws {
+        let store = try ContentStore(root: directory)
+        let module = SHA256Digest(data: Data("ItEcNmD562".utf8))
+        func offer(_ offer: ECRegisterOffer) throws { _ = try store.offerRegister(chip: "it8227e", offer, by: "test") }
+        try offer(ECRegisterOffer(kind: .register, number: 0xF01C00, name: "SMB_4P7USL", width: 1, block: "SMB",
+                                  status: .unverified))
+        try offer(ECRegisterOffer(kind: .register, number: 0xF01C00, name: "SMB_HOSTA_A", width: 1, block: "SMB",
+                                  status: .firmware, evidence: ECRegisterEvidence(module: module, addresses: ["0x3C5A"])))
+        try offer(ECRegisterOffer(kind: .register, number: 0xF01020, name: "SMFI_SMECCS", width: 1, block: "SMFI",
+                                  status: .unverified))
+        try offer(ECRegisterOffer(kind: .irq, number: 160, name: "SMB_E", status: .guess,
+                                  evidence: ECRegisterEvidence(text: "IER20 bit 0")))
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "register_registry" })
+        func run(_ arguments: [String: JSONValue]) async throws -> [String: JSONValue] {
+            guard case .json(.object(let answer)) = try await tool.run(
+                AgentCall(tool: "register_registry", arguments: AgentArguments(arguments))) else {
+                XCTFail("no object"); return [:]
+            }
+            return answer
+        }
+        let all = try await run([:])
+        XCTAssertEqual(all["stamp"], "it8227e@4")
+        XCTAssertEqual(all["total"], .int(3))
+        XCTAssertEqual(all["entries"]?.arrayValue?.compactMap { $0.objectValue?["name"] },
+                       ["SMFI_SMECCS", "SMB_HOSTA_A", "SMB_E"])
+        let irqs = try await run(["kind": "irq"])["total"]
+        XCTAssertEqual(irqs, .int(1))
+        let unverified = try await run(["status": "unverified"])["total"]
+        XCTAssertEqual(unverified, .int(1))
+        let smb = try await run(["block": "smb"])["total"]
+        XCTAssertEqual(smb, .int(1))
+        let hosta = try await run(["search": "hosta"])["total"]
+        XCTAssertEqual(hosta, .int(1))
+        let recent = try await run(["since_version": 3])["total"]
+        XCTAssertEqual(recent, .int(2))
+
+        let one = try await run(["address": "0xf01c00"])
+        XCTAssertEqual(one["key"], "0x00F01C00")
+        XCTAssertEqual(one["current"]?.objectValue?["name"], "SMB_HOSTA_A")
+        XCTAssertEqual(one["current"]?.objectValue?["changed_in"], .int(2))
+        XCTAssertEqual(one["history"]?.arrayValue?.first?.objectValue?["name"], "SMB_4P7USL")
+        XCTAssertEqual(one["history"]?.arrayValue?.first?.objectValue?["replaced_in"], .int(2))
+        let irqStatus = try await run(["irq": 160])["current"]?.objectValue?["status"]
+        XCTAssertEqual(irqStatus, "guess")
+
+        do {
+            _ = try await run(["address": "0xF01C01"])
+            XCTFail("an address the registry does not hold is refused")
+        } catch {}
+        do {
+            _ = try await run(["chip": "it9999"])
+            XCTFail("an unknown chip is refused")
+        } catch {}
+    }
+
     private func query(_ readings: CodeReadings) throws -> AgentTool {
         try XCTUnwrap(readings.tools().first { $0.name == "code_query" })
     }

@@ -62,6 +62,12 @@ final class Harvest {
      */
     static final String INTERFACES = "interfaces";
     static final java.util.List<String> INTERFACE_LISTS = java.util.List.of("installs", "locates", "notifies");
+    /**
+     * The review's records (an analysis profile's tables), as JSON
+     * `{<record>: {status, note?, rows}}`: a record missing is unanswered.
+     * Rows are kept in key order, as the owner's `setRecord` checked them.
+     */
+    static final String RECORDS = "records";
     /** The longest description the owner keeps, in UTF-8 bytes. */
     static final int DESCRIPTION_LIMIT = 256 * 1024;
 
@@ -119,8 +125,9 @@ final class Harvest {
         String description = description(program);
         JsonObject origin = origin(program);
         JsonObject interfaces = interfaces(program);
+        JsonObject records = records(program);
         boolean reviewed = functions.size() > 0 || comments.size() > 0 || data.size() > 0 || types.size() > 0
-            || equates.size() > 0 || description != null || origin != null || interfaces != null;
+            || equates.size() > 0 || description != null || origin != null || interfaces != null || records != null;
         JsonObject document = new JsonObject();
         document.add("comments", comments);
         document.add("data", data);
@@ -143,6 +150,9 @@ final class Harvest {
         // The same: a review that answered none of the lists harvests as before.
         if (interfaces != null) document.add("interfaces", interfaces);
         document.addProperty("project", projectId);
+        // Only when some record is set: a review without records harvests
+        // to the bytes it did before records were kept.
+        if (records != null) document.add("records", records);
         document.addProperty("schema", 1);
         document.add("types", types);
         Gson gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().serializeNulls().create();
@@ -188,6 +198,27 @@ final class Harvest {
         Options options = program.getOptions(OPTIONS);
         if (record == null || record.size() == 0) options.removeOption(INTERFACES);
         else options.setString(INTERFACES, record.toString());
+    }
+
+    // MARK: - The module's records
+
+    /** The records the review set; null while it set none. */
+    static JsonObject records(Program program) {
+        String text = program.getOptions(OPTIONS).getString(RECORDS, null);
+        if (text == null || text.isEmpty()) return null;
+        try {
+            JsonObject records = JsonParser.parseString(text).getAsJsonObject();
+            return records.size() == 0 ? null : records;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /** Sets the records; null or an empty object removes them. Inside a transaction. */
+    static void setRecords(Program program, JsonObject records) {
+        Options options = program.getOptions(OPTIONS);
+        if (records == null || records.size() == 0) options.removeOption(RECORDS);
+        else options.setString(RECORDS, records.toString());
     }
 
     // MARK: - The module description

@@ -83,8 +83,8 @@ public final class CodeReadings {
         self.screen = screen
     }
 
-    /// `code_query`, `code_modules`, `library_registry`, then `guid_registry`.
-    public nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, libraryTool, guidTool] }
+    /// `code_query`, `code_modules`, `library_registry`, `guid_registry`, then `register_registry`.
+    public nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, libraryTool, guidTool, registerTool] }
 
     nonisolated static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references",
                                 "post_codes"]

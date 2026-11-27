@@ -12,7 +12,7 @@ final class AnalysisProfileTests: XCTestCase {
 
     func testAnITEECModuleIsEcIteNds32() {
         XCTAssertEqual(AnalysisProfile.derive(kind: "EC", ecFamily: "ite-nds32"), .ecIteNds32)
-        XCTAssertEqual(AnalysisProfile.derive(kind: "EC", ecFamily: "ite-nds32")?.stamp, "ec-ite-nds32@1")
+        XCTAssertEqual(AnalysisProfile.derive(kind: "EC", ecFamily: "ite-nds32")?.stamp, "ec-ite-nds32@2")
     }
 
     /// An unknown kind is refused, never given UEFI's rules.
@@ -27,7 +27,7 @@ final class AnalysisProfileTests: XCTestCase {
 
     func testTheCatalogue() {
         let catalogue = AnalysisProfile.catalogue
-        XCTAssertEqual(catalogue.map(\.stamp), ["uefi@1", "ec-ite-nds32@1"])
+        XCTAssertEqual(catalogue.map(\.stamp), ["uefi@1", "ec-ite-nds32@2"])
         XCTAssertEqual(Set(catalogue.map(\.id)).count, catalogue.count)
         for profile in catalogue {
             XCTAssertEqual(Set(profile.records.map(\.id)).count, profile.records.count, profile.id)
@@ -41,7 +41,8 @@ final class AnalysisProfileTests: XCTestCase {
         XCTAssertEqual(uefi.skill, "ghidra-uefi")
         XCTAssertEqual(uefi.records.map(\.id), ["interfaces", "post_codes"])
         XCTAssertEqual(uefi.libraryKinds, ["edk2", "amd", "intel"])
-        XCTAssertTrue(uefi.inapplicableTools.isEmpty, "uefi keeps every tool it has today")
+        XCTAssertEqual(uefi.inapplicableTools.map(\.tool), ["register_registry"],
+                       "uefi keeps every tool it had; only the EC register registry does not apply")
         XCTAssertEqual(uefi.typeGroup(bits: 32), "Ia32")
         XCTAssertEqual(uefi.typeGroup(bits: 64), "X64")
         XCTAssertNil(uefi.typeGroup(bits: nil))
@@ -158,6 +159,82 @@ final class AnalysisProfileTests: XCTestCase {
             XCTAssertEqual(Set(orders).count, orders.count, profile.id)
             XCTAssertTrue(profile.records.allSatisfy { !($0.panel?.symbol.isEmpty ?? true) }, profile.id)
         }
+    }
+
+    // MARK: - Record tables
+
+    /// Every EC record has a table: its key columns exist, a ref names a
+    /// record of the profile, a computed column says how, and nothing is
+    /// declared twice.
+    func testTheECRecordsHaveTables() throws {
+        let ec = AnalysisProfile.ecIteNds32
+        XCTAssertEqual(ec.version, 2)
+        let ids = Set(ec.records.map(\.id))
+        for record in ec.records {
+            XCTAssertFalse(record.columns.isEmpty, record.id)
+            XCTAssertFalse(record.key.isEmpty, record.id)
+            XCTAssertEqual(Set(record.columns.map(\.id)).count, record.columns.count, record.id)
+            for key in record.key {
+                let column = try XCTUnwrap(record.column(key), "\(record.id).\(key)")
+                XCTAssertNotEqual(column.kind, .computed, "\(record.id).\(key)")
+            }
+            for column in record.columns {
+                XCTAssertFalse(["status", "note", "confidence"].contains(column.id), "common fields are not declared")
+                if column.kind == .ref || column.of == .ref {
+                    XCTAssertTrue(ids.contains(column.ref ?? ""), "\(record.id).\(column.id) -> \(column.ref ?? "nil")")
+                }
+                if column.kind == .list { XCTAssertNotNil(column.of, "\(record.id).\(column.id)") }
+                if column.kind == .enum { XCTAssertFalse(column.values?.isEmpty ?? true, "\(record.id).\(column.id)") }
+                if column.kind == .computed {
+                    XCTAssertNotNil(column.compute)
+                    XCTAssertFalse(column.required)
+                }
+                if column.kind == .rows { XCTAssertFalse(column.columns?.isEmpty ?? true) }
+                if let pattern = column.pattern { XCTAssertNoThrow(try NSRegularExpression(pattern: pattern)) }
+            }
+        }
+        let ram = try XCTUnwrap(ec.records.first { $0.id == "ec_ram" })
+        XCTAssertEqual(ram.parameters["ec_ram_base"], "0x80400")
+        XCTAssertEqual(ram.column("address")?.compute, "ec_ram_address")
+        XCTAssertEqual(ec.records.first { $0.id == "host_commands" }?.key, ["ports", "cmd", "sub", "mode"])
+        XCTAssertEqual(ec.records.first { $0.id == "host_commands" }?.column("ec_ram")?.ref, "ec_ram")
+        XCTAssertEqual(ec.records.first { $0.id == "eflash_area" }?.column("host_commands")?.ref, "host_commands")
+        XCTAssertEqual(ec.records.first { $0.id == "smbus_peers" }?.column("address_8bit")?.compute, "smbus_address_8bit")
+        XCTAssertFalse(ec.inapplicableTools.contains { $0.hint.contains("###") }, "records are no longer subsections")
+        // UEFI's records have no table.
+        XCTAssertTrue(AnalysisProfile.uefi.records.allSatisfy { $0.columns.isEmpty && $0.key.isEmpty })
+    }
+
+    /// The columns encode in snake case and round-trip; a record without a
+    /// table encodes no table keys.
+    func testColumnsEncodeAndDecode() throws {
+        let data = try JSONEncoder().encode(AnalysisProfile.ecIteNds32)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let records = try XCTUnwrap(object["records"] as? [[String: Any]])
+        let smbus = try XCTUnwrap(records.first { $0["id"] as? String == "smbus_peers" })
+        XCTAssertEqual(smbus["key"] as? [String], ["channel", "address"])
+        let address = try XCTUnwrap((smbus["columns"] as? [[String: Any]])?.first { $0["id"] as? String == "address" })
+        XCTAssertEqual(address["note_for"] as? [String], ["runtime"])
+        XCTAssertEqual(address["kind"] as? String, "int")
+        XCTAssertEqual(address["max"] as? Int, 0x7F)
+        XCTAssertEqual(try JSONDecoder().decode(AnalysisProfile.self, from: data), .ecIteNds32)
+        let uefi = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(AnalysisProfile.uefi))
+                                 as? [String: Any])
+        for record in try XCTUnwrap(uefi["records"] as? [[String: Any]]) {
+            XCTAssertNil(record["columns"])
+            XCTAssertNil(record["key"])
+            XCTAssertNil(record["parameters"])
+        }
+    }
+
+    /// A record written before tables — no key, columns or parameters — reads.
+    func testARecordWithoutColumnsDecodes() throws {
+        let old = #"{"id":"gpio","title":"GPIO","summary":"Pins.","unanswered_gate":true}"#
+        let record = try JSONDecoder().decode(AnalysisProfile.Record.self, from: Data(old.utf8))
+        XCTAssertEqual(record.id, "gpio")
+        XCTAssertTrue(record.columns.isEmpty)
+        XCTAssertTrue(record.key.isEmpty)
+        XCTAssertTrue(record.parameters.isEmpty)
     }
 
     private let BuiltInSectionsAll = AnalysisProfile.BuiltInSection.allCases

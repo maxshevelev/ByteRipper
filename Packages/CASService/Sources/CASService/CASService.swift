@@ -145,6 +145,20 @@ public struct CASService: Sendable {
             .json(try Self.answer { try store.guidRegistry() })
         }
 
+        // The register registry (`ECRegisterFile`): the chips with their
+        // versions and counts, and one chip's file whole. Written only in
+        // the server's own process and by `byteripper-cas`.
+        router.add("GET", "\(prefix)/registers", access: .rights([.casRead])) { _ in
+            .json(try Self.answer { try store.registerSummaries() })
+        }
+        router.add("GET", "\(prefix)/registers/:chip", access: .rights([.casRead])) { request in
+            let chip = request.parameters["chip"] ?? ""
+            guard ECRegisterChip.named(chip) != nil else {
+                throw HTTPError(.notFound, "no register registry for chip \(chip)")
+            }
+            return .json(try Self.answer { try store.registerFile(chip) })
+        }
+
         // The library registry (`Design/LIBRARY_REGISTRY_PLAN.md`): its index,
         // one entry's history, and a publish's offer.
         router.add("GET", "\(prefix)/library", access: .rights([.casRead])) { _ in
