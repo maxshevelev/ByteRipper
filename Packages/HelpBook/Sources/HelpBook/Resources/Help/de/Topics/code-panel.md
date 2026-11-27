@@ -1,4 +1,4 @@
-@source-sha 6820de611adf0d085bf7cc371a4559a294a802b6830f3b62ef223816ca0594c0
+@source-sha 565ad9f78f965d3a636122ba119501b2a61a810b14fa7b176a42397e7fb59ab6
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -53,7 +53,24 @@ Das Symbol mit Pfeilen nach oben und unten im Umschalter über der Liste, vor de
 
 ## Tabs je nach Modultyp
 
-Welche Tabs der Umschalter zeigt, hängt vom Typ des Moduls ab. Ein UEFI-Modul hat alle oben beschriebenen Tabs. Eine EC-Firmware hat weder Interfaces noch POST-Codes noch Statuscode-Meldungen und kaum Zeichenketten, daher keinen dieser vier Tabs; an ihrer Stelle stehen vor der Lupe eigene Tabs, jeder als Symbol: **Interrupts**, **Host-Befehle**, **EC-RAM**, **SMBus und I2C**, **GPIO** und **Flash-Datenbereich**. Steht der Zeiger auf einem Symbol, erscheint der Name des Abschnitts. Diese Abschnitte werden bei der Analyse des EC-Images gefüllt; solange die Analyse keine Einträge dazu enthält, weist der Abschnitt darauf hin.
+Welche Tabs der Umschalter zeigt, hängt vom Typ des Moduls ab. Ein UEFI-Modul hat alle oben beschriebenen Tabs. Eine EC-Firmware hat weder Interfaces noch POST-Codes noch Statuscode-Meldungen und kaum Zeichenketten, daher keinen dieser vier Tabs; an ihrer Stelle stehen vor der Lupe eigene Tabs, jeder als Symbol: **Interrupts**, **Host-Befehle**, **EC-RAM**, **SMBus und I2C**, **GPIO** und **Flash-Datenbereich**. Steht der Zeiger auf einem Symbol, erscheint der Name des Abschnitts. Diese Abschnitte werden bei der Analyse des EC-Images gefüllt.
+
+## Einträge eines EC-Images
+
+Jeder EC-Abschnitt ist eine Tabelle mit einer Zeile für jedes Element, das die Analyse gefunden hat: ein Interrupt, ein Host-Befehl, ein Feld des EC-RAM, ein Gerät am SMBus, ein Pin, ein Bereich im Flash. Die Spalten sind die des jeweiligen Eintrags; der Tooltip eines Spaltenkopfs gibt an, was die Spalte enthält. Die Zeilen gehören zu der Revision, die der Bereich anzeigt.
+
+Die Zeile über der Tabelle gibt den Stand des Eintrags an:
+
+- **Noch nicht bearbeitet.** Die Analyse hat diesen Eintrag noch nicht behandelt; die Tabelle ist leer.
+- **Analyse läuft.** Die bisherigen Zeilen, darunter der Hinweis der Analyse, was noch fehlt.
+- **Vollständig.** Alle Zeilen, die sich aus dem Code ergeben; ein Hinweis unter der Zeile gibt gegebenenfalls an, was außerhalb der Tabelle liegt, etwa „all other IRQs: empty stub“.
+- **Keine** mit Begründung: Die Firmware enthält nichts dieser Art.
+
+Eine Zeile, die die Analyse erschlossen und nicht unmittelbar aus dem Code gelesen hat, steht kursiv und trägt ein **?**; der Zeiger auf dem **?** zeigt die Begründung. Der Zeiger auf einer beliebigen Zelle zeigt den Hinweis der Zeile.
+
+Eine blaue Adresse ist ein Link: Ein Klick auf einen Handler oder auf eine Funktion in **Zugriff durch**, **Aufrufer**, **Leser** oder **Schreiber** öffnet diese Stelle im Code; ein Klick auf eine Datenadresse öffnet die Instruktion, die sie verwendet. Eine Zelle, die eine Zeile eines anderen Eintrags nennt – die EC-RAM-Felder eines Host-Befehls, die Host-Befehle eines Flash-Bereichs –, wechselt zum Tab dieses Eintrags und wählt die Zeile aus. Enthält eine Zelle mehrere Adressen oder Zeilen, bietet der Klick sie in einem Menü an. Die Befehle eines SMBus-Geräts sind in ihrer Zelle gezählt; der Zeiger darauf listet sie auf.
+
+Das Feld über der Tabelle filtert die Zeilen nach beliebigem Text darin; ein Klick auf einen Spaltenkopf sortiert danach. **Zeile als TSV kopieren** im Kontextmenü kopiert die ausgewählten Zeilen tabulatorgetrennt, etwa für eine Tabellenkalkulation oder einen Bericht.
 
 ## Einen Namen kopieren
 

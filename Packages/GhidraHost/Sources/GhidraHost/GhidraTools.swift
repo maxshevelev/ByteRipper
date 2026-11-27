@@ -1793,7 +1793,9 @@ public enum GhidraTools {
                 the function's definition at edk2-stable202608: `no_evidence`, `unparseable`, \
                 `file_not_at_tag`, `not_in_checkout`, or `not_definition` with `defined_at` where the file \
                 defines it; a warning, the revision is stored. `evidence_checked` counts the functions \
-                checked: with no `evidence`, every citation held. The review's types \
+                checked: with no `evidence`, every citation held. For a profile with records, `gates` \
+                reports `records_answered`: `passed`, `unanswered` and `partial` (the gated records not yet \
+                complete or none); a report, the revision is stored. The review's types \
                 are shared by the registry's rule, and the store keeps the shared archive in versions: a \
                 type new to it is added; the same type is nothing; an addition — an enum member, a real \
                 name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member \

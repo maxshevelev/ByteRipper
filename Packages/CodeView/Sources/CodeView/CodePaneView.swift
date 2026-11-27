@@ -525,6 +525,8 @@ import ToolModuleKit
             if showsInterfacesTab, segment(of: .interfaces) == nil { showInterfacesTab(false) }
             configureListSegments()
         }
+        // Another revision's rows are read again (`setModuleRecords`).
+        setModuleRecords(nil)
         state = state.carried(to: model)
         artifact = model.artifact
 
@@ -2807,6 +2809,22 @@ import ToolModuleKit
         listControl.selectedSegment = shownSegment
     }
 
+    /// Whether the module's profile gives the navigator record sections:
+    /// only then has the review document rows worth reading.
+    public var hasRecordSections: Bool {
+        navigatorTabs.contains { if case .record = $0 { true } else { false } }
+    }
+
+    /// The records of the revision on screen, read from its review document:
+    /// the rows of each record section. The app reads them after the pane
+    /// is made, as it does the description; until then the sections show the
+    /// manifest's statuses.
+    public func setModuleRecords(_ records: ModuleRecords?) {
+        guard hasRecordSections || records == nil else { return }
+        recordPanel.setRecords(records, statuses: manifest.reading?.records,
+                               profile: AnalysisProfile.derive(for: manifest.module))
+    }
+
     /// Puts a record section's tab in front of the lists — nil puts the lists
     /// back.
     public func showRecordSection(_ id: String?) {
@@ -4066,6 +4084,10 @@ import ToolModuleKit
         // A record section's tab stands there too.
         recordPanel.translatesAutoresizingMaskIntoConstraints = false
         recordPanel.isHidden = true
+        recordPanel.onOpenAddress = { [weak self] address in self?.openInterfaceAddress(address) }
+        recordPanel.onShowRecord = { [weak self] id in self?.showRecordSection(id) }
+        recordPanel.setRecords(nil, statuses: manifest.reading?.records,
+                               profile: AnalysisProfile.derive(for: manifest.module))
         functionPane.addSubview(recordPanel)
         NSLayoutConstraint.activate([
             recordPanel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),

@@ -572,7 +572,8 @@ public final class CodeReadings {
             "sha256": .string(source.manifest.module.sha256.hex),
             "recipe": .string(source.manifest.recipe.id),
             "origin": originItem(source.manifest.reading?.origin),
-            "interfaces": interfacesItem(source.manifest.reading?.interfaces, guids: guids)
+            "interfaces": interfacesItem(source.manifest.reading?.interfaces, guids: guids),
+            "records": recordsItem(source.manifest.reading)
         ]
         if let document = source.document { body["document"] = .string(document) }
         if let node = source.node { body["node"] = .string(node) }
@@ -975,7 +976,8 @@ public final class CodeReadings {
                 "recipes": .array(recipes.map { .string($0.recipe.id) }),
                 "functions": .int(Int64(manifest.stats.functions)),
                 "origin": originItem(manifest.reading?.origin),
-                "interfaces": interfacesItem(manifest.reading?.interfaces, guids: guids)
+                "interfaces": interfacesItem(manifest.reading?.interfaces, guids: guids),
+                "records": recordsItem(manifest.reading)
             ]
             // The dependency expression is the FFS file's, beside the image:
             // read from the dump for every module, reviewed or not.
@@ -1031,6 +1033,19 @@ private func interfacesItem(_ interfaces: ModuleInterfaces?, guids: GuidRegistry
         "notifies": entries(interfaces.notifies),
         "unanswered": .array(interfaces.unanswered.map(JSONValue.string))
     ])
+}
+
+/// Each table record of the reading's profile and its status, `unanswered`
+/// for one the review has not set: null for a module whose profile keeps no
+/// table records (a UEFI module: its interfaces are `interfaces`), or with no
+/// review.
+private func recordsItem(_ reading: AnalysisReading?) -> JSONValue {
+    guard let reading, let profile = reading.analysisProfile else { return .null }
+    let tables = profile.records.filter { !$0.columns.isEmpty }
+    guard !tables.isEmpty else { return .null }
+    var item: [String: JSONValue] = [:]
+    for record in tables { item[record.id] = .string(reading.records?[record.id] ?? "unanswered") }
+    return .object(item)
 }
 
 /// A function's place in the library registry, as `code_query` answers it.

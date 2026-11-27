@@ -377,9 +377,15 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     /// (`AnalysisProfile.stamp`); nil in everything published before it was
     /// recorded, and for a module no profile covers.
     public var profile: String?
+    /// Each record the review set and its status (`unanswered`, `partial`,
+    /// `complete`, `none`), by record id (`ModuleRecords`); nil while it has
+    /// set none, and in everything published before records were kept. The
+    /// rows stay in the review document.
+    public var records: [String: String]?
 
     public init(project: String? = nil, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil,
-                origin: ModuleOrigin? = nil, interfaces: ModuleInterfaces? = nil, profile: String? = nil) {
+                origin: ModuleOrigin? = nil, interfaces: ModuleInterfaces? = nil, profile: String? = nil,
+                records: [String: String]? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
@@ -387,6 +393,7 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
         self.origin = origin
         self.interfaces = interfaces
         self.profile = profile
+        self.records = records
     }
 
     /// The objects this reading names besides the artifact.
@@ -690,8 +697,10 @@ public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
     /// manifest written before they were).
     case partial
     /// Every function full, linked to the registry or bodiless, the module
-    /// described, and its installs, lookups and notifications answered
-    /// (`ModuleInterfaces`).
+    /// described, and every record its profile gates answered: a UEFI
+    /// module's installs, lookups and notifications (`ModuleInterfaces`), an
+    /// EC module's tables complete or none (`RecordsGate`) — partial does not
+    /// count.
     case complete
 
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
@@ -700,15 +709,26 @@ public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
     static let done: Set<String> = [ReviewLevel.full.rawValue, ReviewLevel.library.rawValue, ReviewLevel.noBody.rawValue]
 }
 
+extension AnalysisReading {
+    /// Whether every record the reading's profile gates is answered.
+    var recordsAnswered: Bool {
+        let profile = analysisProfile ?? .uefi
+        let gatesInterfaces = profile.records.contains { $0.id == "interfaces" && $0.unansweredGate }
+        if gatesInterfaces, interfaces?.isComplete != true { return false }
+        return RecordsGate.of(profile: profile, statuses: records ?? [:])?.passed ?? true
+    }
+}
+
 public extension AnalysisManifest {
     var reviewProgress: ReviewProgress {
         guard let reading else { return .mechanical }
         let described = reading.description != nil || reading.origin != nil || reading.interfaces != nil
+            || reading.records != nil
         if let levels = stats.reviewLevels, !described, (levels[ReviewLevel.full.rawValue] ?? 0) == 0 {
             return .mechanical
         }
-        guard let levels = stats.reviewLevels, reading.description != nil,
-              reading.interfaces?.isComplete == true else { return .partial }
+        guard let levels = stats.reviewLevels, reading.description != nil, reading.recordsAnswered
+        else { return .partial }
         let short = levels.contains { level, count in count > 0 && !ReviewProgress.done.contains(level) }
         return short ? .partial : .complete
     }

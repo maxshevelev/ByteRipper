@@ -77,6 +77,8 @@ struct PublishJournal: Codable, Sendable {
     var origin: ModuleOrigin?
     /// The review's record of the module's interfaces, from its document.
     var interfaces: ModuleInterfaces?
+    /// Each record's status, from the document (`ModuleRecords`).
+    var records: [String: String]?
     var rev: Int?
     var manifest: AnalysisManifest?
     var project: ProjectRecord?
@@ -96,7 +98,7 @@ struct PublishJournal: Codable, Sendable {
     var reading: AnalysisReading? {
         guard reviewed, let rev, let review else { return nil }
         return AnalysisReading(rev: rev, review: review, description: described, origin: origin,
-                               interfaces: interfaces, profile: profileStamp)
+                               interfaces: interfaces, profile: profileStamp, records: records)
     }
 }
 
@@ -203,6 +205,7 @@ extension GhidraHost {
                 journal.review = review
                 journal.origin = ModuleOrigin.of(reviewDocument: document)
                 journal.interfaces = ModuleInterfaces.of(reviewDocument: document)
+                journal.records = ModuleRecords.of(reviewDocument: document).statuses
                 journal.keep(review)
                 let description = try await writer.readObject(journal.description)
                 journal.described = description.isEmpty ? nil : try await writer.writeObject(description)
@@ -213,7 +216,8 @@ extension GhidraHost {
                     module: module, reading: AnalysisReading(rev: journal.planned, review: review,
                                                              description: journal.described, origin: journal.origin,
                                                              interfaces: journal.interfaces,
-                                                             profile: journal.profileStamp),
+                                                             profile: journal.profileStamp,
+                                                             records: journal.records),
                     artifact: code, by: journal.by)
             }
             try await mark(.revision, in: &journal)

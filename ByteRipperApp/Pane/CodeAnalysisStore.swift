@@ -192,6 +192,15 @@ enum CodeAnalysisStore {
         }.value
     }
 
+    /// The records of the review document the manifest names, read off the
+    /// main actor; nil when it names none or the store cannot give it.
+    static func moduleRecords(for manifest: AnalysisManifest, root: URL? = nil) async -> ModuleRecords? {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) { () -> ModuleRecords? in
+            (try? ContentStore(root: root, create: false).moduleRecords(for: manifest)) ?? nil
+        }.value
+    }
+
     /// The analyses a project carries, beside its `Project.json`.
     static func bundleURL(in project: URL) -> URL {
         project.appendingPathComponent("Analyses.bundle")
@@ -258,6 +267,14 @@ extension CodePaneView {
             let text = await CodeAnalysisStore.moduleDescription(for: manifest)
             guard let self, self.readingGeneration == generation else { return }
             self.setModuleDescription(text)
+        }
+        // The rows of the record sections, from the same revision's review
+        // document; only a profile with record tables has any to show.
+        guard hasRecordSections else { return }
+        Task { @MainActor [weak self] in
+            let records = await CodeAnalysisStore.moduleRecords(for: manifest)
+            guard let self, self.readingGeneration == generation else { return }
+            self.setModuleRecords(records)
         }
     }
 }

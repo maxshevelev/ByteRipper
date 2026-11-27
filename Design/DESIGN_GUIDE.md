@@ -133,6 +133,13 @@ a cut's offset and description.
   nil target, the action travels the responder chain from whatever has the
   focus, and that may be another pane.
 - **Toolbar items** use plain `NSToolbarItem` images. A view item draws small.
+- **A row the review inferred** rather than read from the code (a record row
+  with confidence `inference`) is drawn in italics, with `questionmark.circle`
+  in the secondary colour in its first cell — the marker slot of
+  `ToolPanelTable.makeCell(marker:)` set with `setMarker`; the pointer on it
+  reads "Inference: <the row's note>" (`CodeRecordSectionView`). A nested
+  list in a cell (an SMBus device's commands) is a count in the cell and the
+  full list in its tooltip, not a popover: it leads nowhere.
 
 ## 4a. The reader's line in read-only text
 

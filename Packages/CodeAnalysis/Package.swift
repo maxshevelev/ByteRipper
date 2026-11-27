@@ -37,7 +37,7 @@ let package = Package(
         .executableTarget(name: "byteripper-cas", dependencies: ["CodeAnalysis"]),
         .testTarget(
             name: "CodeAnalysisTests",
-            dependencies: ["CodeAnalysis"],
+            dependencies: ["CodeAnalysis", .product(name: "AnalysisProfiles", package: "AnalysisProfiles")],
             resources: [.copy("Fixtures")]
         )
     ]

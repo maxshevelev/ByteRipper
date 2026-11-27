@@ -78,7 +78,24 @@ The up and down arrows in the switch above the list, before the magnifier, show 
 
 ## Sections by module kind
 
-The tabs of the switch depend on the kind of module the panel reads. A UEFI module has every tab described above. An EC firmware image has no interfaces, no POST codes, no status-code reports and few strings, so it has none of those four tabs; in their place come tabs of its own, each drawn as a symbol before the magnifier: **Interrupts**, **Host commands**, **EC RAM**, **SMBus and I2C**, **GPIO** and **Flash data area**. The pointer over a symbol shows the section's name. These sections are filled in by the review of the EC image; while the review has recorded none, a section says so.
+The tabs of the switch depend on the kind of module the panel reads. A UEFI module has every tab described above. An EC firmware image has no interfaces, no POST codes, no status-code reports and few strings, so it has none of those four tabs; in their place come tabs of its own, each drawn as a symbol before the magnifier: **Interrupts**, **Host commands**, **EC RAM**, **SMBus and I2C**, **GPIO** and **Flash data area**. The pointer over a symbol shows the section's name. These sections are filled in by the review of the EC image.
+
+## Records of an EC image
+
+Each EC section is a table, one row per thing the review found: an interrupt, a host command, a field of EC RAM, a device on the SMBus, a pin, an area of flash. The columns are the record's own; a header's tooltip says what its column holds. The rows are those of the revision the panel shows.
+
+The line over the table says how far the review has got with the record:
+
+- **Not answered yet.** The review has not dealt with this record; the table is empty.
+- **Review continues.** The rows so far, and below them the review's note on what is still missing.
+- **Complete.** Every row the code gives; a note under the line, when there is one, says what is outside the table, such as "all other IRQs: empty stub".
+- **None** with the reason: the firmware has nothing of this kind.
+
+A row the review concluded rather than read directly from the code is in italics, with a **?** before it; the pointer over the **?** shows the reason. The pointer over any cell of a row shows the row's note.
+
+An address in blue is a link: a click on a handler or on a function in **Accessed by**, **Callers**, **Readers** or **Writers** opens that place in the code; a click on an address of data opens the instruction that uses it. A cell that names a row of another record — the EC RAM fields of a host command, the host commands that reach a flash area — switches to that record's tab and selects the row. Where a cell holds several addresses or rows, the click offers them in a menu. The commands an SMBus device is sent are counted in their cell, and the pointer over it lists them.
+
+The field above the table filters the rows by any text in them; a click on a column's header sorts by it. **Copy Row as TSV** in the right-click menu copies the selected rows, tab-separated, for a spreadsheet or a report.
 
 ## Copying a name
 

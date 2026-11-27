@@ -142,6 +142,18 @@ public struct PublishAnswer: Codable, Sendable {
     public var evidence: [GhidraHost.EvidenceWarning]?
     public var evidenceUnchecked: String?
     public var evidenceChecked: Int?
+    /// The profile's gates as the stored revision meets them — reported,
+    /// never a refusal: `records_answered` with the gated records not yet
+    /// complete or none. Nil for a profile without record gates.
+    public var gates: Gates?
+
+    public struct Gates: Codable, Sendable {
+        public var recordsAnswered: RecordsGate?
+
+        private enum CodingKeys: String, CodingKey {
+            case recordsAnswered = "records_answered"
+        }
+    }
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -161,6 +173,7 @@ public struct PublishAnswer: Codable, Sendable {
         evidence = publication.map(\.evidence).flatMap { $0.isEmpty ? nil : $0 }
         evidenceUnchecked = publication?.evidenceUnchecked
         evidenceChecked = publication.flatMap { $0.evidenceChecked > 0 ? $0.evidenceChecked : nil }
+        gates = publication?.manifest.reading.flatMap(RecordsGate.of(reading:)).map { Gates(recordsAnswered: $0) }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -181,6 +194,7 @@ public struct PublishAnswer: Codable, Sendable {
         case evidence
         case evidenceUnchecked = "evidence_unchecked"
         case evidenceChecked = "evidence_checked"
+        case gates
     }
 }
 

@@ -562,7 +562,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: the document's bytes as they are stored, with unsaved edits — the find bar's own search — in address order, `offset`/`end` limiting the range. With `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`, or \"root\" for the whole image): what the UEFI tree holds at and under that node — every container opened, every compressed section searched in what it decompresses to (nested ones too), a BIOS Guard update in its assembled region, a Lenovo LENV block stored XOR-encoded decoded — and only so: a compressed stream or an encoded block as stored is not searched, nor is an ME region. Opening everything takes a few seconds on a large image the first time; the same search of unchanged bytes again — a next page — is answered from the last one. A text the file holds only compressed is found this way and not the other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything (\"24 ?? 4D 49\"). Each match: the `encoding` that matched; without `node`, `start`, `end` (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, from its first byte (its part \"all\"), and `body_offset`, from its body's, when the match lies in the body (its part \"body\", what `uefi_node_data` and `pattern_part` read by default), its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed section, `in_compressed: true`, the `section` (open it with `open_part` part \"decompressed\") and `buffer_start`/`buffer_end` in what it decompresses to, which `uefi_node_data` reads — and `decoded` (\"XOR 77\") in a LENV block decoded. With `context`, a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the compressed sections that would not decompress. Matches overlap, as in the find bar: \"AA\" in \"AAAA\" is three, or two with `overlapping` false. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after` until it is null. `show` \"compact\" answers each match as where it is and no more — `node` by its id with `node_offset` and `body_offset`, or `start` — and \"count\" answers `total` alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be anything, such as an operand that holds an address. With `survey`, which dumps of a folder hold a string.",
+    "description" : "Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: the document's bytes as they are stored, with unsaved edits — the find bar's own search — in address order, `offset`/`end` limiting the range. With `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`, or \"root\" for the whole image): what the UEFI tree holds at and under that node — every container opened, every compressed section searched in what it decompresses to (nested ones too), a BIOS Guard update in its assembled region, a Lenovo LENV block stored XOR-encoded decoded — and only so: a compressed stream or an encoded block as stored is not searched, nor is an ME region. Opening everything takes a few seconds on a large image the first time; the same search of unchanged bytes again — a next page — is answered from the last one. A text the file holds only compressed is found this way and not the other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything (\"24 ?? 4D 49\"); `guid` is a GUID as code writes it, \"CDEA2BD3-FC25-4C1C-B97C-B31186064990\", looked for as the 16 bytes it is in an image — the first three groups byte-reversed: D3 2B EA CD 25 FC 1C 4C B9 7C B3 11 86 06 49 90. Each match: the `encoding` that matched; without `node`, `start`, `end` (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, from its first byte (its part \"all\"), and `body_offset`, from its body's, when the match lies in the body (its part \"body\", what `uefi_node_data` and `pattern_part` read by default), its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed section, `in_compressed: true`, the `section` (open it with `open_part` part \"decompressed\") and `buffer_start`/`buffer_end` in what it decompresses to, which `uefi_node_data` reads — and `decoded` (\"XOR 77\") in a LENV block decoded. With `context`, a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the compressed sections that would not decompress. Matches overlap, as in the find bar: \"AA\" in \"AAAA\" is three, or two with `overlapping` false. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after` until it is null. `show` \"compact\" answers each match as where it is and no more — `node` by its id with `node_offset` and `body_offset`, or `start` — and \"count\" answers `total` alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be anything, such as an operand that holds an address. With `survey`, which dumps of a folder hold a string.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -600,6 +600,10 @@
             "integer",
             "string"
           ]
+        },
+        "guid" : {
+          "description" : "A GUID to find, \"CDEA2BD3-FC25-4C1C-B97C-B31186064990\", braces optional: its bytes in memory.",
+          "type" : "string"
         },
         "hex" : {
           "description" : "Bytes to find, as hex pairs; `??` for any byte: \"24 ?? 4D 49\".",
@@ -658,7 +662,7 @@
           "type" : "string"
         },
         "text" : {
-          "description" : "A text to find. Give `text` or `hex`.",
+          "description" : "A text to find. Give one of `text`, `hex` and `guid`.",
           "type" : "string"
         }
       },
@@ -793,7 +797,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "Read a module's stored code analysis. The module is the Code panel or tab given as `document`; or a PE32/TE image `node` of a dump (`code_modules` lists the ones with an analysis), its bytes hashed to find the analysis; or a `module` SHA-256, read from the store alone. No panel needs to be open. `what` picks the list (default \"functions\"): \"functions\"; one function's \"instructions\" (paged: `limit`, then `next` as `after`, until it is null) or decompiled \"c\"; a function's callers and callees (\"references\"); the instructions that \"uses\" an address — who calls a function, jumps to a label, or reads a global or a string; \"strings\"; \"symbols\", the named data — GUIDs, service tables, interfaces; or \"post_codes\", the values written to port 0x80 (what a POST card shows), each at the call that supplies it, with the functions it passes through (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does not say (`unresolved`). A function's `name_source` says where its name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the module (`name_reason` says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, decompiled, library or no_body; null in an analysis made before it was recorded — and `review_gaps` what keeps it from full: name, plate, comments, params, locals, c (a body that did not decompile), as the last publish recorded them, so a write shows in them only at the next publish; `text: \"registry\"` on a row or a C says it reads as its registry entry (`text_unavailable` when its entry could not be read), and `publisher_addresses` lists names there that still carry the address of the module the entry came from; `full` is a mechanical bar on those fields, not a judgement of the function: it does not look at a comment on data, at a placeholder on a register or `HASH` (that is `temporaries`), or at whether a type is right; `temporaries` the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library function can hold them, so a clean row does not mean the locals are named; a library function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and `library_entry`, the registry entry a link reads from: `id` and `version`; null for a function of the module. `text: \"registry\"` says the name, signature and C are the entry's. The answer to `what: \"functions\"` also carries `library`: how many `links` the module holds, of each kind (`edk2`, `amd`, `intel`), how many entries hold this module's body as their source (`installed`), and how many still print a placeholder name (`with_temporaries`). `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex view shows (none when read by `module` alone). To show the person a function, `open_code`; to leave a note on it, `annotate` with `function`. These are stored observations, not a live disassembly; the C is Ghidra's reading of the instructions, not the source. `origin` is whose code the module is, as its review set it (`ghidra_describe`'s `origin`).",
+    "description" : "Read a module's stored code analysis. The module is the Code panel or tab given as `document`; or a PE32/TE image `node` of a dump (`code_modules` lists the ones with an analysis), its bytes hashed to find the analysis; or a `module` SHA-256, read from the store alone. No panel needs to be open. `what` picks the list (default \"functions\"): \"functions\"; one function's \"instructions\" (paged: `limit`, then `next` as `after`, until it is null) or decompiled \"c\"; a function's callers and callees (\"references\"); the instructions that \"uses\" an address — who calls a function, jumps to a label, or reads a global or a string; \"strings\"; \"symbols\", the named data — GUIDs, service tables, interfaces; or \"post_codes\", the values written to port 0x80 (what a POST card shows), each at the call that supplies it, with the functions it passes through (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does not say (`unresolved`). A function's `name_source` says where its name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the module (`name_reason` says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, decompiled, library or no_body; null in an analysis made before it was recorded — and `review_gaps` what keeps it from full: name, plate, comments, params, locals, c (a body that did not decompile), as the last publish recorded them, so a write shows in them only at the next publish; `text: \"registry\"` on a row or a C says it reads as its registry entry (`text_unavailable` when its entry could not be read), and `publisher_addresses` lists names there that still carry the address of the module the entry came from; `full` is a mechanical bar on those fields, not a judgement of the function: it does not look at a comment on data, at a placeholder on a register or `HASH` (that is `temporaries`), or at whether a type is right; `temporaries` the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library function can hold them, so a clean row does not mean the locals are named; a library function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and `library_entry`, the registry entry a link reads from: `id` and `version`; null for a function of the module. `text: \"registry\"` says the name, signature and C are the entry's. The answer to `what: \"functions\"` also carries `library`: how many `links` the module holds, of each kind (`edk2`, `amd`, `intel`), how many entries hold this module's body as their source (`installed`), and how many still print a placeholder name (`with_temporaries`). `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex view shows (none when read by `module` alone). To show the person a function, `open_code`; to leave a note on it, `annotate` with `function`. These are stored observations, not a live disassembly; the C is Ghidra's reading of the instructions, not the source. `interfaces` is what it installs, locates and is notified of, as `code_modules` gives it. `origin` is whose code the module is, as its review set it (`ghidra_describe`'s `origin`).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -881,7 +885,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The PE32/TE modules of a dump that have a stored code analysis: their image `node`, name, the analyses (`recipes`, newest first), how many functions the newest found, and `origin`, whose code the module is as its review set it (`category`, `confidence`, `vendor`; null while unset). The modules are found by their bytes — the same module in another dump has the same analysis — including those inside compressed sections, which are opened for it: seconds on a large image the first time. Read one with `code_query`, show it with `open_code`. The list comes in pages, in tree order, `total` modules in all: at most `limit` on a page, fewer when the answer would pass its size bound; pass `next` back as `after` until it is null.",
+    "description" : "The PE32/TE modules of a dump that have a stored code analysis: their image `node`, name, the analyses (`recipes`, newest first), how many functions the newest found, and `origin`, whose code the module is as its review set it (`category`, `confidence`, `vendor`; null while unset); `interfaces`, what the module installs, locates and is notified of as its review recorded it (`ghidra_set_interfaces`: `installs`, `locates`, `notifies`, each null while unanswered, and `unanswered`; null while it has recorded none); and `depex`, the dependency expression of the FFS file that holds the image, read from the dump (`expression`, `guids`; null where the file has none). The modules are found by their bytes — the same module in another dump has the same analysis — including those inside compressed sections, which are opened for it: seconds on a large image the first time. Read one with `code_query`, show it with `open_code`. The list comes in pages, in tree order, `total` modules in all: at most `limit` on a page, fewer when the answer would pass its size bound; pass `next` back as `after` until it is null.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -980,6 +984,131 @@
     },
     "name" : "library_registry",
     "title" : "Read the library function registry"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The shared registry of GUID names: one name for each GUID a review names in a module's code — a PPI, a protocol, a HOB, a variable's vendor GUID, an event group, a configuration table — in EDK2's variable form, `gEfiPeiMemoryDiscoveredPpiGuid`. Each entry says where its name comes from (`source`): `edk2`, a `.dec` file of the pinned tag with its line, or `review`, the module and the address where the code shows what the GUID is. A name `gUnknown…` is a placeholder: the GUID's role is known, its name is not. Without `guid`: the entries — `guid`, `name`, `kind`, `source`, `version` — narrowed by `search` (a part of the name, or the start of the GUID), `kind` and `source`, sorted by name, paged by `limit` and `after`. With `guid`: that entry, with its `note`, the `citations` (every module and address a review named it with this name) and its `history`, each earlier version with who replaced it and why. Name a GUID in a review as the registry does; a GUID it does not hold is added with `ghidra_guid_add` where the server offers it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before.",
+          "type" : "string"
+        },
+        "guid" : {
+          "description" : "A GUID, 8-4-4-4-12, for its entry.",
+          "type" : "string"
+        },
+        "kind" : {
+          "description" : "Only entries of this kind.",
+          "enum" : [
+            "ppi",
+            "protocol",
+            "hob",
+            "variable",
+            "event",
+            "table",
+            "guid"
+          ],
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "search" : {
+          "description" : "Only entries whose name holds this text, any case, or whose GUID starts with it.",
+          "type" : "string"
+        },
+        "source" : {
+          "description" : "Only entries whose name comes from here.",
+          "enum" : [
+            "edk2",
+            "review"
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "guid_registry",
+    "title" : "Read the GUID name registry"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The shared registry of an EC chip model's register and interrupt names: one name for each register address and each interrupt number, kept once for every review of that chip's firmware. The file has a `version` that rises with every change; cite it as `stamp` (`it8227e@12`). Each entry's `status` says how far its name is known: `published` (the chip's published headers, confirmed for this model), `firmware` (shown by this model's firmware: module and code addresses in `evidence`), `guess` (a review's reading, with its evidence) or `unverified` (a related chip's published name, not checked for this model). Without `address` or `irq`: the entries — `kind`, `key`, `name`, `aliases`, `width`, `block`, `status`, `changed_in` — narrowed by `kind`, `search` (a part of a name, any case), `status`, `block` and `since_version` (changed in that version or later), sorted by key, paged by `limit` and `after`. With `address` or `irq`: that entry whole — its `current` state with description, bits and evidence, and its `history`, each earlier state stamped with the version it took effect in and the one it was replaced in.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "A register's address in hex, \"0xF01C00\", for its entry.",
+          "type" : "string"
+        },
+        "after" : {
+          "description" : "The `next` of the page before.",
+          "type" : "string"
+        },
+        "block" : {
+          "description" : "Only registers of this block, \"SMB\".",
+          "type" : "string"
+        },
+        "chip" : {
+          "description" : "The chip model. Default \"it8227e\".",
+          "type" : "string"
+        },
+        "irq" : {
+          "description" : "An interrupt's number, for its entry.",
+          "type" : "integer"
+        },
+        "kind" : {
+          "description" : "Only registers, or only interrupts.",
+          "enum" : [
+            "register",
+            "irq"
+          ],
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "search" : {
+          "description" : "Only entries with a name or alias that holds this text, any case.",
+          "type" : "string"
+        },
+        "since_version" : {
+          "description" : "Only entries changed in this version or later.",
+          "type" : "integer"
+        },
+        "status" : {
+          "description" : "Only entries of this status.",
+          "enum" : [
+            "published",
+            "firmware",
+            "guess",
+            "unverified"
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "register_registry",
+    "title" : "Read the EC register registry"
   },
   {
     "annotations" : {
@@ -1117,7 +1246,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature and `tags`. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \"unfinished\"` keeps what a review has not passed — a parameter or a local Ghidra still names itself, or one still typed `undefined`, or no plate comment — each with `leftovers`, and `summary` says how many of how many; that filter decompiles every function, so it is slow on a large module. `leftovers.fragments` counts the register and `unique:` pieces the decompiler splits off while a review types a function — its own artefacts, which do not make a function unfinished, though a name like `uVar1` among them still prints in the C — and `fragment_names` names them; `filter: \"fragments\"` lists every function that has them. Paged by `offset` and `limit`; `next` says where the next page starts. `library_entry` is the entry a function links to (`state`: linked, or edited when it is dirty: written on since it was bound). While the registry reads through, a row at its entry has the entry's name and signature and `text: \"registry\"`, or `text_unavailable` saying why not; `leftovers`, and so `filter: \"unfinished\"`, stay the project's, and can list a function that reads as its entry. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature and `tags`. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \"unfinished\"` keeps what a review has not passed — a parameter or a local Ghidra still names itself, or one still typed `undefined`, or no plate comment — each with `leftovers`, and `summary` says how many of how many; that filter decompiles every function, so it is slow on a large module. `leftovers.local_list` names each local `leftovers.locals` counts — `name`, `type`, `storage`, `first_use` to rename or retype it by, and `why`: `unnamed`, or `untyped` for a named one still typed `undefined`. `leftovers.fragments` counts the register and `unique:` pieces the decompiler splits off while a review types a function — its own artefacts, which do not make a function unfinished, though a name like `uVar1` among them still prints in the C — and `fragment_names` names them; `filter: \"fragments\"` lists every function that has them. Paged by `offset` and `limit`; `next` says where the next page starts. `library_entry` is the entry a function links to (`state`: linked, or edited when it is dirty: written on since it was bound). While the registry reads through, a row at its entry has the entry's name and signature and `text: \"registry\"`, or `text_unavailable` saying why not; `leftovers`, and so `filter: \"unfinished\"`, stay the project's, and can list a function that reads as its entry. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1223,13 +1352,21 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "One function as Ghidra holds it now: its signature, its `tags`; its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its plate comment, its `comments` — every comment in the body with its `address`, `kind` (plate, pre, eol, post, repeatable) and `text`, to check against a re-read of the C — what is left to name or type — a name Ghidra made up, or an `undefined` type — (`leftovers`, whose `fragments` are the decompiler's register pieces rather than missing names), and its decompiled C — fresh after every write, ahead of what the app shows until a publish. While the registry reads through, a function at its entry answers the entry's name, signature, plate, comments and C with `text: \"registry\"`, as the store reads it, and `publisher_addresses` lists any name that still carries the address of the module the entry came from; `locals` are the entry's and `parameters` the project's; `project_c_differs: true` says the project's own decompile reads otherwise than that text — a temporary named or typed there before the function was bound again — and a write that changes something makes it `edited`, so the project's C answers and a publish can offer it. Any write in it makes it `edited` (`library_entry.state`): it then answers as Ghidra holds it. A publish that changes its review makes that the entry's next version, for every module that holds it, from any holder. A name or type on a decompiler temporary shows only in the C: from the module the entry's C came from it is the entry's next version when no other module holds the entry, and otherwise stays in this module's project (`library_kept_in_module` in the publish). From any other module it changes nothing. A publish binds the function to the entry again as it then reads, so an edit published before it took effect needs a fresh write to be offered. `text_unavailable` says why a marked function has no `text`: the entry could not be read, or this store has no reading of the function. `summary: true` leaves the C and the equates out, for walking a module without its text. A function the decompiler refuses answers `decompile_error` and `suspects`: the parameters, locals and referenced data whose applied type is a pointer to something that is not a structure — where `PTRSUB off of non structured pointer type` comes from — so the offending symbol is named rather than bisected for. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base); `comments` lists only those the C does not print: the plate is in `plate`, and a comment printed in the C is read there.",
+    "description" : "One function as Ghidra holds it now: its signature, its `tags`; its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its plate comment, its `comments` — every comment in the body with its `address`, `kind` (plate, pre, eol, post, repeatable) and `text`, to check against a re-read of the C — what is left to name or type — a name Ghidra made up, or an `undefined` type — (`leftovers`, whose `fragments` are the decompiler's register pieces rather than missing names), and its decompiled C — fresh after every write, ahead of what the app shows until a publish. While the registry reads through, a function at its entry answers the entry's name, signature, plate, comments and C with `text: \"registry\"`, as the store reads it, and `publisher_addresses` lists any name that still carries the address of the module the entry came from; `locals` are the entry's and `parameters` the project's; `project_c_differs: true` says the project's own decompile reads otherwise than that text — a temporary named or typed there before the function was bound again — and a write that changes something makes it `edited`, so the project's C answers and a publish can offer it. Any write in it makes it `edited` (`library_entry.state`): it then answers as Ghidra holds it. A publish that changes its review makes that the entry's next version, for every module that holds it, from any holder. A name or type on a decompiler temporary shows only in the C: from the module the entry's C came from it is the entry's next version when no other module holds the entry, and otherwise stays in this module's project (`library_kept_in_module` in the publish). From any other module it changes nothing. A publish binds the function to the entry again as it then reads, so an edit published before it took effect needs a fresh write to be offered. `text_unavailable` says why a marked function has no `text`: the entry could not be read, or this store has no reading of the function. `summary: true` leaves the C and the equates out, for walking a module without its text. A function the decompiler refuses answers `decompile_error` and `suspects`: the parameters, locals and referenced data whose applied type is a pointer to something that is not a structure — where `PTRSUB off of non structured pointer type` comes from — so the offending symbol is named rather than bisected for. A large function reads within the answer bound in parts: `c_from` and `c_limit` give lines of the C (`c_lines` says which, of how many, and the `next` line to ask for), and `omit` leaves out lists not needed this time. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base); `comments` lists only those the C does not print: the plate is in `plate`, and a comment printed in the C is read there.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "address" : {
           "description" : "The function's entry address, e.g. \"0x68A\".",
           "type" : "string"
+        },
+        "c_from" : {
+          "description" : "The first line of the C to answer, from 1. Default: 1.",
+          "type" : "integer"
+        },
+        "c_limit" : {
+          "description" : "How many lines of the C to answer. Default: all.",
+          "type" : "integer"
         },
         "explain" : {
           "description" : "When the C does not come out, bisect the data the body references: each datum is let go in turn inside a transaction that is rolled back, and the ones after which the C decompiles are named under `explained`. Nothing is kept; a rollback that did not take says so and stops.",
@@ -1238,6 +1375,13 @@
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
+        },
+        "omit" : {
+          "description" : "Lists to leave out of the answer — locals, leftovers, comments, equates, parameters, data_comments — e.g. [\"locals\", \"leftovers\"] for a body with hundreds of temporaries.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
         },
         "summary" : {
           "description" : "Leave out the decompiled C and the equates: signature, parameters, locals, plate, leftovers.",
@@ -1305,6 +1449,46 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
+    "description" : "The references `to` an address (who calls a function, reads a global) or `from` one. `to` also answers `held_by`: instructions that hold the address as a constant and have no reference to it, such as `MOV EAX,addr` before `CALL EAX`; in an image based at zero it is empty, a small constant being no address. `function` answers `calls`: every call it makes and every jump that leaves it, in order, each with `at`, `text` and `kind`, \"direct\" or \"indirect\", and `target` and `name` where known; an indirect one traced to its `MOV` gives `held_at`, one with no `target` is not known from here. An empty list means no calls. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "from" : {
+          "description" : "Or references from this address.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "Or the calls this function makes.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "to" : {
+          "description" : "References to this address.",
+          "type" : "string"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_xrefs",
+    "title" : "Find references"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
     "description" : "The program's bytes from `address`, at most 4096, as `hex`; with `unit` 2, 4 or 8 also `values` in the program's byte order, and `symbols`: the name at each value that is an address in the program. Initialized memory only; a read past its block's end stops there with `truncated`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -1339,46 +1523,6 @@
     },
     "name" : "ghidra_bytes",
     "title" : "Read a module's bytes"
-  },
-  {
-    "annotations" : {
-      "destructiveHint" : false,
-      "idempotentHint" : true,
-      "openWorldHint" : false,
-      "readOnlyHint" : true
-    },
-    "description" : "The references `to` an address (who calls a function, reads a global) or `from` one. `to` also answers `held_by`: instructions that hold the address as a constant and have no reference to it, such as `MOV EAX,addr` before `CALL EAX`; in an image based at zero it is empty, a small constant being no address. `function` answers `calls`: every call it makes and every jump that leaves it, in order, each with `at`, `text` and `kind`, \"direct\" or \"indirect\", and `target` and `name` where known; an indirect one traced to its `MOV` gives `held_at`, one with no `target` is not known from here. An empty list means no calls. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
-    "inputSchema" : {
-      "additionalProperties" : false,
-      "properties" : {
-        "from" : {
-          "description" : "Or references from this address.",
-          "type" : "string"
-        },
-        "function" : {
-          "description" : "Or the calls this function makes.",
-          "type" : "string"
-        },
-        "module" : {
-          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
-          "type" : "string"
-        },
-        "to" : {
-          "description" : "References to this address.",
-          "type" : "string"
-        },
-        "verbose" : {
-          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
-          "type" : "boolean"
-        }
-      },
-      "required" : [
-        "module"
-      ],
-      "type" : "object"
-    },
-    "name" : "ghidra_xrefs",
-    "title" : "Find references"
   },
   {
     "annotations" : {
@@ -1499,6 +1643,66 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
+    "description" : "What the module installs, locates and is notified of, as the review recorded it with `ghidra_set_interfaces`: `installs`, `locates` and `notifies`, each a list — left out while the review has not answered it — and `unanswered`, the lists not answered yet. A module's review is not complete while any is unanswered. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_interfaces",
+    "title" : "Read the module's interfaces"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The records the module's analysis profile asks a review to fill (`ghidra_profile`'s `records`; an EC module's are irq_map, host_commands, ec_ram, smbus_peers, gpio and eflash_area), as written with `ghidra_set_record`: `records`, each with `status` (`unanswered` until written, `partial`, `complete`, or `none`), `note`, `rows` in key order (each with its `confidence` and an optional `note`) and `gate`; `unanswered`, the gated records neither complete nor none — the review is not complete while any is; `warnings`, refs that name no row of their record. With `record`, only that one, with its `key`, `columns` (each `id`, `kind`, `required`, and its `values`, `min`, `max`, `pattern`, `of`, `columns`, `ref`, `compute`) and `parameters`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "record" : {
+          "description" : "One record's id: only it, with its columns.",
+          "type" : "string"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_records",
+    "title" : "Read the module's records"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
     "description" : "The writes the module's program took since its last publish, by where they went: `groups`, each a function (`entry` and its current `name`), an `address` outside any function, or `module: true` for writes of no address (a type, the description, registry calls); each with `writes`, the kinds of write and how many (`rename_function`, `rename_label`, `rename_variable`, `set_signature`, `set_comment`, `set_data`, `set_equate`, `create_function`, `set_code_mode`, `set_description`, `type`, …). A write counts under the places its call named. `total` adds them up. Survives an owner restart; a publish empties it. Check before a publish that every write is where it was meant to go. `function` or `addresses` keeps only those places' groups (`module` names the module group). Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -1563,7 +1767,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The type `name` three ways: as the module's program holds it (`program`), as the shared review archive holds it now (`shared`, what another review published), and as the EDK2 archive holds it (`edk2`); each is null where that place has no such type. Each has its C, `size`, and for a structure or union every field's `offset`, `size`, `name`, `type` and `comment`, with `packing` and `packing_value`; for a function type, or a pointer typedef of one, its calling `convention` (`__cdecl` is EFIAPI on IA32; `unknown` reads as the program's default). `same` says whether the program's and the shared one agree. A name and its tag find each other — `NAME` finds `_NAME` and the other way round; `resolved` gives the name that answered. `found` says whether any of the three has the type, and `near` lists close names when none does. Read the types `ghidra_publish` reports in `type_conflicts` with it, and bring yours in line with `ghidra_type`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "The type `name` three ways: as the module's program holds it (`program`), as the shared review archive holds it now (`shared`, what another review published), and as the EDK2 archive holds it (`edk2`); each is null where that place has no such type. Each has its C, `size`, and for a structure or union every field's `offset`, `size`, `name`, `type` and `comment`, with `packing` and `packing_value`; for a function type, or a pointer typedef of one, its calling `convention` (`__cdecl` is EFIAPI on IA32; `unknown` reads as the program's default). `same` says whether the program's and the shared one agree. A name and its tag find each other — `NAME` finds `_NAME` and the other way round; `resolved` gives the name that answered. `found` says whether any of the three has the type, and `near` lists close names when none does. Read the types `ghidra_publish` reports in `type_conflicts` with it, and bring yours in line with `ghidra_type`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base); each definition gives its `kind`, `size`, `fields` (`name`, `offset`, `type`, `size`, and `bits` and `bit_offset` for a bit-field), an enum's `values`, a typedef's `base` and a function's `convention`; `verbose` adds the C, the path, packing and alignment, and the comments.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2392,7 +2596,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes the label there, a leftover under a type that now names the place. A type laid over decoded instructions is refused, naming them, unless `clear_code: true`: they go, the function holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as an MMIO register, takes a name without `type` (there are no bytes to type, and a type is refused) and `outside_memory` says so: the C prints it where the code uses that address, and `ghidra_data` and the artifact's symbols do not list it. Data the new datum overlaps, or sits inside, is cleared and listed in `data_cleared`; a datum it replaces at the same address is `replaced_type`. A name at a function's entry is refused: that is `ghidra_rename`'s. `prints_as_constant`: Ghidra's decompiler takes an address with under three bit transitions (0x1000, 0x3000, 0x3800) for a mask and prints `(EFI_GUID *)0x3000` whatever the datum is called — name it in an end-of-line comment where the code uses it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "Names and/or types the datum at `address`, e.g. a GUID or a table. A name on an `EFI_GUID` datum is the GUID registry's name for its bytes (`guid_registry`): any other is refused with the registry's, and a GUID it does not hold is added first with `ghidra_guid_add`. An empty `name` removes the label there, a leftover under a type that now names the place. An empty `type` removes the datum at `address`, or the one it sits inside, and lists it in `data_cleared`: its bytes are left undefined, free for `ghidra_redecode` or `ghidra_function_create` (`undefined1` is a datum of its own). A type laid over decoded instructions is refused, naming them, unless `clear_code: true`: they go, the function holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as an MMIO register, takes a name without `type` (there are no bytes to type, and a type is refused) and `outside_memory` says so: the C prints it where the code uses that address, and `ghidra_data` and the artifact's symbols do not list it. Data the new datum overlaps, or sits inside, is cleared and listed in `data_cleared`; a datum it replaces at the same address is `replaced_type`. A name at a function's entry is refused: that is `ghidra_rename`'s. `prints_as_constant`: Ghidra's decompiler takes an address with under three bit transitions (0x1000, 0x3000, 0x3800) for a mask and prints `(EFI_GUID *)0x3000` whatever the datum is called — name it in an end-of-line comment where the code uses it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2413,7 +2617,7 @@
           "type" : "string"
         },
         "type" : {
-          "description" : "Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".",
+          "description" : "Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\"; empty removes the datum.",
           "type" : "string"
         },
         "verbose" : {
@@ -2530,7 +2734,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "EC only: adds to a module created before these were part of creation the flash references past the image extent, their FlashRef_ labels and plates, and refs_past_extent in the facts; touches nothing else; safe to repeat. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "EC only: adds to a module created before these were part of creation the flash references past the image extent, their FlashRef_ labels and plates, the eflash_data block over the flash data area, and refs_past_extent in the facts; removes a FlashRef_ label, its reference and plate an earlier rule made from a value the code never uses as an address, unless a review renamed it; on a Ghidra with nds32-standby-1 also disassembles the code after each standby and gives the functions it cut their whole body (standby_* in the answer); brings the register labels and the plates of single-interrupt ISRs the EC pass placed to the register and IRQ maps as they are now (IT8227E names from the firmware, IT8320 names marked unverified): a label is the pass's while it is IMPORTED and carries a name the map gives or gave that address (its # replaced: lines), a plate while its first line is the pass's; a label or plate a review changed is kept and listed in `kept` (registers_renamed, registers_added, register_notes_refreshed, isr_plates_refreshed count the rest); touches nothing else; safe to repeat. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2549,7 +2753,260 @@
       "type" : "object"
     },
     "name" : "ghidra_ec_reapply",
-    "title" : "Add the flash references to an older EC module"
+    "title" : "Bring an older EC module up to the EC pass"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Records what the module installs, locates and is notified of, read from its code — the record the app shows in the module's popover and a dependency graph is built from, without reading the description. Each list given replaces that list; null takes the answer back; a list not given stays. An empty list is an answer: the module does none of that. A list left unanswered keeps the review short of complete. `installs`: InstallPpi, ReInstallPpi, a list handed over at entry; InstallProtocolInterface, InstallMultipleProtocolInterfaces, ReinstallProtocolInterface. `locates`: LocatePpi, LocateProtocol, HandleProtocol on a known GUID, outside the dependency expression. `notifies`: NotifyPpi, RegisterProtocolNotify, a protocol notify event. One call that installs a descriptor list gives one entry per GUID, all with the call's address. The dependency expression is not written here: the UEFI parser reads it from the FFS file. Each entry carries its `purpose`: why the module needs it and what it gives. Every entry is checked — the GUID's form, its name the GUID registry's (a GUID the registry does not hold is added first with `ghidra_guid_add`), the address a call in a function or a typed datum, a callback a function's entry — and one wrong entry refuses the whole call. Read back, each entry carries the registry's name, and `recorded_name` where an older record wrote another. The answer is the record, as `ghidra_interfaces` reads it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "installs" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "address" : {
+                "description" : "Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it.",
+                "type" : "string"
+              },
+              "condition" : {
+                "description" : "`always`, or when it happens: \"only on S3 resume\", \"only in recovery\".",
+                "type" : "string"
+              },
+              "guid" : {
+                "description" : "The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\".",
+                "type" : "string"
+              },
+              "kind" : {
+                "description" : "A PPI or a protocol.",
+                "enum" : [
+                  "ppi",
+                  "protocol"
+                ],
+                "type" : "string"
+              },
+              "method" : {
+                "description" : "install (InstallPpi, InstallProtocolInterface, InstallMultipleProtocolInterfaces; the default), reinstall (ReInstallPpi, ReinstallProtocolInterface), handoff (a list handed over without a service call: SecCore's to PeiCore, PeiCore's own).",
+                "enum" : [
+                  "install",
+                  "reinstall",
+                  "handoff"
+                ],
+                "type" : "string"
+              },
+              "name" : {
+                "description" : "The GUID registry's name for it (`guid_registry`): \"gEfiPeiMemoryDiscoveredPpiGuid\".",
+                "type" : "string"
+              },
+              "purpose" : {
+                "description" : "One or two sentences: why the module needs this and what it gives — what the interface is used for here, and anything particular about its use (a field it reads, a second install, what a failed lookup leads to).",
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "guid",
+              "name",
+              "kind",
+              "address",
+              "condition",
+              "purpose"
+            ],
+            "type" : "object"
+          },
+          "type" : "array"
+        },
+        "locates" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "address" : {
+                "description" : "Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it.",
+                "type" : "string"
+              },
+              "condition" : {
+                "description" : "`always`, or when it happens: \"only on S3 resume\", \"only in recovery\".",
+                "type" : "string"
+              },
+              "guid" : {
+                "description" : "The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\".",
+                "type" : "string"
+              },
+              "kind" : {
+                "description" : "A PPI or a protocol.",
+                "enum" : [
+                  "ppi",
+                  "protocol"
+                ],
+                "type" : "string"
+              },
+              "name" : {
+                "description" : "The GUID registry's name for it (`guid_registry`): \"gEfiPeiMemoryDiscoveredPpiGuid\".",
+                "type" : "string"
+              },
+              "purpose" : {
+                "description" : "One or two sentences: why the module needs this and what it gives — what the interface is used for here, and anything particular about its use (a field it reads, a second install, what a failed lookup leads to).",
+                "type" : "string"
+              },
+              "required" : {
+                "description" : "true when the module stops or fails without it, false when it goes on.",
+                "type" : "boolean"
+              }
+            },
+            "required" : [
+              "guid",
+              "name",
+              "kind",
+              "address",
+              "condition",
+              "purpose",
+              "required"
+            ],
+            "type" : "object"
+          },
+          "type" : "array"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "notifies" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "address" : {
+                "description" : "Where the module supplies the GUID: the call, in the function that passes the GUID or its descriptor (to the service, or to a wrapper it calls), or the typed descriptor or list itself where no call of the module's holds it.",
+                "type" : "string"
+              },
+              "callback" : {
+                "description" : "The entry of the function called.",
+                "type" : "string"
+              },
+              "condition" : {
+                "description" : "`always`, or when it happens: \"only on S3 resume\", \"only in recovery\".",
+                "type" : "string"
+              },
+              "guid" : {
+                "description" : "The GUID, 8-4-4-4-12: \"0AE8CE5D-E448-4437-A8D7-EBF5F194F731\".",
+                "type" : "string"
+              },
+              "kind" : {
+                "description" : "A PPI or a protocol.",
+                "enum" : [
+                  "ppi",
+                  "protocol"
+                ],
+                "type" : "string"
+              },
+              "name" : {
+                "description" : "The GUID registry's name for it (`guid_registry`): \"gEfiPeiMemoryDiscoveredPpiGuid\".",
+                "type" : "string"
+              },
+              "purpose" : {
+                "description" : "One or two sentences: why the module needs this and what it gives — what the interface is used for here, and anything particular about its use (a field it reads, a second install, what a failed lookup leads to).",
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "guid",
+              "name",
+              "kind",
+              "address",
+              "condition",
+              "purpose",
+              "callback"
+            ],
+            "type" : "object"
+          },
+          "type" : "array"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_set_interfaces",
+    "title" : "Record the module's interfaces"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Writes one record of the module's analysis profile (`ghidra_records` with `record` gives its columns), read from the code. `rows` replaces the whole table; `upsert` puts rows by key (a row whose key is recorded replaces it); `delete` takes rows by key, each an object of the key's columns. Every row carries `confidence` — `established` (the code shows it) or `inference` — and may carry a `note`. A code column takes an address inside a function, a data column an address in the module's memory; a ref names a row of another record by its key (a value, or an object of the key's columns), and one that names no row is a warning in the answer, not a refusal. A computed column is never written. `status`: `partial` (with a `note` saying what is left), `complete` (at least one row), `none` (no rows, with a `note` saying why); null takes the record back to unanswered and empty. Rows written to an unanswered record without a status make it partial, noted \"review continues\". Every value is checked first and one wrong value refuses the whole call, naming it as `record[row i].column: expected …`. The answer is the record as `ghidra_records` reads it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "delete" : {
+          "description" : "Keys of rows to take out, each an object of the key's columns.",
+          "items" : {
+            "type" : "object"
+          },
+          "type" : "array"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "note" : {
+          "description" : "The record's note: what is left (partial), why there are none (none), what the rows leave out.",
+          "type" : "string"
+        },
+        "record" : {
+          "description" : "The record's id: \"irq_map\", \"ec_ram\".",
+          "type" : "string"
+        },
+        "rows" : {
+          "description" : "The whole table: each row its columns, `confidence` and an optional `note`.",
+          "items" : {
+            "type" : "object"
+          },
+          "type" : "array"
+        },
+        "status" : {
+          "description" : "partial, complete or none; null takes the record back to unanswered.",
+          "enum" : [
+            "partial",
+            "complete",
+            "none",
+            null
+          ],
+          "type" : [
+            "string",
+            "null"
+          ]
+        },
+        "upsert" : {
+          "description" : "Rows to put by key, replacing a row of the same key.",
+          "items" : {
+            "type" : "object"
+          },
+          "type" : "array"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module",
+        "record"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_set_record",
+    "title" : "Write one of the module's records"
   },
   {
     "annotations" : {
@@ -2628,7 +3085,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that link by themselves — `ghidra_create` links them, and `ghidra_library_apply` without `address` does: the function takes the entry's number, name and signature, and what the project wrote on it stays. A body that differs from an entry only in the codes an assert routine is called with links as a variant of it. `edited`: linked and dirty, written on since: the next publish offers it to the entry. `short_candidate`: a body under four instructions with the same bytes as an entry: nothing links by itself, and a review binds it with `ghidra_library_apply` from how it is called, or names it and proposes it as a new entry. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference; `state: callee_differs`, a body that calls another function where the entry's calls its callee — the body's hash leaves call targets out, so a ZeroMem wrapper has SetMem's — or whose other constant is in a call (another EFI_PEI_SERVICES slot, another service) is another function: no apply links it, and `why` names the call. `state: global`: the entry reads a global of a shared type where this function's global is untyped or of another type: `why` names both; type the global and the function links. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review, its history and `gaps`, what its review lacks, read from the review itself; `library_registry` reads the `function_parts` left out of the review. A match's `gaps` are the function's own missing parts as the last published analysis recorded them, and `entry_gaps` the entry's, so a decision to link or take can be made without opening either — and the two are read in the same words. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that link by themselves — `ghidra_create` links them, and `ghidra_library_apply` without `address` does: the function takes the entry's number, name and signature, and what the project wrote on it stays. A body that differs from an entry only in the codes an assert routine is called with links as a variant of it. `edited`: linked and dirty, written on since: the next publish offers it to the entry. `short_candidate`: a body under four instructions with the same bytes as an entry, the bytes that encode a reference aside: nothing links by itself, and a review binds it with `ghidra_library_apply` from how it is called, or names it and proposes it as a new entry. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference; `state: callee_differs`, a body that calls another function where the entry's calls its callee — the body's hash leaves call targets out, so a ZeroMem wrapper has SetMem's — or whose other constant is in a call (another EFI_PEI_SERVICES slot, another service) is another function: no apply links it, and `why` names the call. `state: global`: the entry reads a global of a shared type where this function's global is untyped or of another type: `why` names both; type the global and the function links. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review, its history and `gaps`, what its review lacks, read from the review itself; `library_registry` reads the `function_parts` left out of the review. A match's `gaps` are the function's own missing parts as the last published analysis recorded them, and `entry_gaps` the entry's, so a decision to link or take can be made without opening either — and the two are read in the same words. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2718,7 +3175,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Links functions to the registry's entries, each in a transaction of its own, and answers each in `results`: `renamed` (from, to), `filled`, `leftovers`, and `marked`. A linked function holds the entry's number, and its name and signature for its callers to print; what the project wrote on it stays in the project, and a reader is shown the entry. Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate only with `reason` (why its other constants make no difference: it becomes a variant of the entry), a dirty function stops being dirty and offers nothing. With `take_text: true` the entry's text replaces what the project holds on the function: do this before adding to a function of the registry, so that an addition stands on the entry's text. `dry_run: true` answers the same and writes nothing. `decline: true` refuses the entry for the function (`id`, or the one matched), and it is not offered again; a function linked to that entry is unlinked (`unmarked`) and publishes as the module's own, its names and text as the review wrote them. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "Links functions to the registry's entries, each in a transaction of its own, and answers each in `results`: `renamed` (from, to), `filled`, `leftovers`, and `marked`. A linked function holds the entry's number, and its name and signature for its callers to print; what the project wrote on it stays in the project, and a reader is shown the entry. Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate only with `reason` (why its other constants make no difference: it becomes a variant of the entry), a dirty function stops being dirty and offers nothing. With `take_text: true` the entry's text replaces what the project holds on the function: do this before adding to a function of the registry, so that an addition stands on the entry's text. `dry_run: true` answers the same, with `dry_run: true` at its top, and writes nothing: its `renamed` and `marked` are what an apply would do. `decline: true` refuses the entry for the function (`id`, or the one matched), and it is not offered again; a function linked to that entry is unlinked (`unmarked`) and publishes as the module's own, its names and text as the review wrote them. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2836,7 +3293,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `stale_links` lists links in comments and the description whose text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say where, `name` is what the text should read; they are reported, not rewritten. `evidence` lists the `edk2` library functions offered whose plate's `Evidence: <Function>, <path>:<line>` is not the function's definition at edk2-stable202608: `no_evidence`, `unparseable`, `file_not_at_tag`, `not_in_checkout`, or `not_definition` with `defined_at` where the file defines it; a warning, the revision is stored. `evidence_checked` counts the functions checked: with no `evidence`, every citation held. The review's types are shared by the registry's rule, and the store keeps the shared archive in versions: a type new to it is added; the same type is nothing; an addition — an enum member, a real name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member type Ghidra made up as `_func_N`), a placeholder over untyped bytes (`UINT8 Unknown04[24]`) cut into fields inside it while every named field keeps its place and size — makes the next version, `types_version`. Comments and descriptions are the last publish's: this module's text for a type, a field or an enum member replaces the shared one, and that is a version too. A type the archive holds differently in any other way refuses the whole publish before anything is stored, naming each type and the module that wrote the shared copy: `ghidra_type_definition` shows both; bring the module's type in line with the shared one. Avoid changing what another review wrote unless the code proves it wrong; when it does, propose the replacement with `ghidra_type_propose`: two other agents agreeing apply it at the next publish, and the person can decide it in the console. A type this module wrote into the archive itself, which no other module of its size holds — no published review, no running program, no project with unpublished writes — is corrected without a vote: the publish takes it and says so in `types_taken_as_origin`; with another holder the refusal names it. A name withdrawn from the archive does not refuse: it is listed in `type_conflicts`, its `type_conflict_origins` saying `withdrawn`, and stays in this module only. A function of the registry that became dirty — written on since it was bound — offers itself to the registry, and needs no candidate mark. The publish decides for all at once. New: `library.added`. The same review: `unchanged`. A review that only adds to the entry — a comment or a plate where it had none, a name or a type in place of a Ghidra placeholder, an equate or a label it did not name — is the entry's next version, `updated`, whichever version it was made on. A review that changes the function's name, its signature or any text the entry holds replaces it: the whole publish is refused, nothing is stored, the function stays dirty, and `conflicts` names the entry, its version, what would change and the module that wrote it. Take the entry's text with `ghidra_library_apply` and `take_text`, make the addition over it, and publish again — or, if the code proves the entry wrong, propose this module's review with `ghidra_type_propose`, as for a shared type. An entry whose current version this module wrote, which no other module of its size holds — no published review linking it, no module one of its bodies came from, no project with unpublished writes — is corrected without a vote, as a shared type is: the publish takes it and says so in `library_taken_as_origin`; with another holder the refusal names it. A name or type on a decompiler temporary, which only the C shows, is taken so only from a sole holder; with other holders it stays in the module and never refuses the publish, named in `library_kept_in_module` (the dry run too). A dirty function short of the bar of a finished function is refused the same way. Each version names its `module` and `reason` in the entry's history; `entry_reasons`, an object of entry id to why, says it in the review's words, and an addition without one says what was added. A success takes the candidate and dirty marks off what the registry took; nothing else in the project changes, and what the project wrote on a function stays there. What the revision stores of such a function is a link from the module to its registry entry. By default the answer carries only what the publish changed; `full: true` adds the list of entries it left as they were. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size, the type conflicts with `types_refused` when they would refuse the publish (or `types_agreed`, the agreed proposals the publish would apply instead), `types_version` when the publish would make a new version of the shared types, and `library`, what the registry would do — with an agreed proposal's entries taken, named in `library_agreed`, or the author's own corrections in `library_taken_as_origin` — with the refusal in `library_refused`. The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the owner also writes the program out when it idles out, is stopped or gets a signal — not after every change — so only an owner killed outright or crashed loses what came after the last publish. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `stale_links` lists links in comments and the description whose text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say where, `name` is what the text should read; they are reported, not rewritten. `evidence` lists the `edk2` library functions offered whose plate's `Evidence: <Function>, <path>:<line>` is not the function's definition at edk2-stable202608: `no_evidence`, `unparseable`, `file_not_at_tag`, `not_in_checkout`, or `not_definition` with `defined_at` where the file defines it; a warning, the revision is stored. `evidence_checked` counts the functions checked: with no `evidence`, every citation held. For a profile with records, `gates` reports `records_answered`: `passed`, `unanswered` and `partial` (the gated records not yet complete or none); a report, the revision is stored. The review's types are shared by the registry's rule, and the store keeps the shared archive in versions: a type new to it is added; the same type is nothing; an addition — an enum member, a real name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member type Ghidra made up as `_func_N`), a placeholder over untyped bytes (`UINT8 Unknown04[24]`) cut into fields inside it while every named field keeps its place and size — makes the next version, `types_version`. Comments and descriptions are the last publish's: this module's text for a type, a field or an enum member replaces the shared one, and that is a version too. A type the archive holds differently in any other way refuses the whole publish before anything is stored, naming each type and the module that wrote the shared copy: `ghidra_type_definition` shows both; bring the module's type in line with the shared one. Avoid changing what another review wrote unless the code proves it wrong; when it does, propose the replacement with `ghidra_type_propose`: two other agents agreeing apply it at the next publish, and the person can decide it in the console. A type this module wrote into the archive itself, which no other module of its size holds — no published review, no running program, no project with unpublished writes — is corrected without a vote: the publish takes it and says so in `types_taken_as_origin`; with another holder the refusal names it. A name withdrawn from the archive does not refuse: it is listed in `type_conflicts`, its `type_conflict_origins` saying `withdrawn`, and stays in this module only. A function of the registry that became dirty — written on since it was bound — offers itself to the registry, and needs no candidate mark. The publish decides for all at once. New: `library.added`. The same review: `unchanged`. A review that only adds to the entry — a comment or a plate where it had none, a name or a type in place of a Ghidra placeholder, an equate or a label it did not name — is the entry's next version, `updated`, whichever version it was made on. A review that changes the function's name, its signature or any text the entry holds replaces it: the whole publish is refused, nothing is stored, the function stays dirty, and `conflicts` names the entry, its version, what would change and the module that wrote it. Take the entry's text with `ghidra_library_apply` and `take_text`, make the addition over it, and publish again — or, if the code proves the entry wrong, propose this module's review with `ghidra_type_propose`, as for a shared type. An entry whose current version this module wrote, which no other module of its size holds — no published review linking it, no module one of its bodies came from, no project with unpublished writes — is corrected without a vote, as a shared type is: the publish takes it and says so in `library_taken_as_origin`; with another holder the refusal names it. A name or type on a decompiler temporary, which only the C shows, is taken so only from a sole holder; with other holders it stays in the module and never refuses the publish, named in `library_kept_in_module` (the dry run too). A dirty function short of the bar of a finished function is refused the same way. Each version names its `module` and `reason` in the entry's history; `entry_reasons`, an object of entry id to why, says it in the review's words, and an addition without one says what was added. A success takes the candidate and dirty marks off what the registry took; nothing else in the project changes, and what the project wrote on a function stays there. What the revision stores of such a function is a link from the module to its registry entry. By default the answer carries only what the publish changed; `full: true` adds the list of entries it left as they were. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size, the type conflicts with `types_refused` when they would refuse the publish (or `types_agreed`, the agreed proposals the publish would apply instead), `types_version` when the publish would make a new version of the shared types, and `library`, what the registry would do — with an agreed proposal's entries taken, named in `library_agreed`, or the author's own corrections in `library_taken_as_origin` — with the refusal in `library_refused`. The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the owner also writes the program out when it idles out, is stopped or gets a signal — not after every change — so only an owner killed outright or crashed loses what came after the last publish. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -3426,6 +3883,71 @@
     },
     "name" : "ghidra_type_vote",
     "title" : "Vote on a shared-definition proposal"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Gives a GUID the registry does not hold its name, read from a module's code: a vendor PPI or protocol, a HOB, a variable's vendor GUID, an event group, a configuration table. `guid_registry` reads what the registry holds; a GUID it names is named so in every review — in `ghidra_set_interfaces`, in a label on its bytes, in a comment. The name is in EDK2's variable form, `g`, the name, `Guid` (`gAmdFabricTopologyPpiGuid`); a PPI's says `Ppi` and a protocol's `Protocol`. `module` and `address` are where the code shows what the GUID is — the install with its descriptor, the call that uses the interface, the HOB's creation — not merely where its bytes lie; a name with no such place is a placeholder, `gUnknownPpi9C98130AGuid`. The answer's `outcome`: `added`; `same` (the registry already names it so: the place is cited); `addition` (a placeholder named properly, or a plain GUID given its kind); `conflict` — the registry names it otherwise and that name stands, `entry` and `why` say which and from where. A conflict you believe is the registry's mistake goes to the person, with the place that shows it: only an administrator renames. `dry_run` answers and writes nothing. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "Where in the module the code shows what the GUID is.",
+          "type" : "string"
+        },
+        "dry_run" : {
+          "description" : "Answer what it would do and write nothing.",
+          "type" : "boolean"
+        },
+        "guid" : {
+          "description" : "The GUID, 8-4-4-4-12: \"9C98130A-8921-45EB-86F3-16041C6BB7AD\".",
+          "type" : "string"
+        },
+        "kind" : {
+          "description" : "What it identifies; `guid` when none of the rest.",
+          "enum" : [
+            "ppi",
+            "protocol",
+            "hob",
+            "variable",
+            "event",
+            "table",
+            "guid"
+          ],
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "Its name: \"gAmdFactoryResetPpiGuid\".",
+          "type" : "string"
+        },
+        "note" : {
+          "description" : "A sentence on what it is, for the next reader, when the name alone does not say.",
+          "type" : "string"
+        },
+        "verbose" : {
+          "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "guid",
+        "name",
+        "kind",
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_guid_add",
+    "title" : "Name a GUID in the GUID registry"
   },
   {
     "annotations" : {

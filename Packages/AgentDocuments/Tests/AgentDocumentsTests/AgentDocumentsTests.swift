@@ -785,6 +785,35 @@ final class CodeReadingsTests: XCTestCase {
         }
     }
 
+    /// An EC module's reading names each record of its profile with its
+    /// status — `unanswered` for one the review has not set — beside the
+    /// interfaces (the same item `code_modules` lists).
+    func testAnECModuleListsItsRecordStatuses() async throws {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x4000)
+        bytes.replaceSubrange(0..<4, with: [0x48, 0x00, 0x00, 0x00])
+        bytes.replaceSubrange(0x80..<0x90, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x94, 0x85, 0x12,
+                                                  0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55])
+        bytes.replaceSubrange(0x90..<0xA0, with: Array("ITE8380-EC-V9.99".utf8))
+        for at in 0xA0..<0x200 { bytes[at] = 0x11 }
+        let digest = GhidraHost.moduleDigest(of: Data(bytes))
+        try ContentStore(root: directory).putAnalysis(
+            module: ModuleIdentity(sha256: digest, size: 0x200, name: "ITE8380-EC-V9.99", kind: "EC",
+                                   language: "NDS32:LE:32:default"),
+            recipe: recipe, artifact: Data(Self.artifact.utf8),
+            reading: AnalysisReading(rev: 2, profile: "ec-ite-nds32@2",
+                                     records: ["irq_map": "complete", "ec_ram": "partial", "gpio": "none"]))
+        let tree = UEFIParser.parse(bytes)
+        let node = try XCTUnwrap(tree.allNodes.first { $0.children.first?.kind == .ecImagePart })
+        let tool = try query(readings([Document("d1", "ec.bin", bytes: bytes)]))
+        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "document": "d1", "node": .string(node.id.description), "what": "functions"])))
+        guard case .json(.object(let members)) = answer else { return XCTFail("not an object: \(answer)") }
+        XCTAssertEqual(members["records"], .object([
+            "irq_map": "complete", "host_commands": "unanswered", "ec_ram": "partial",
+            "smbus_peers": "unanswered", "gpio": "none", "eflash_area": "unanswered"]))
+        XCTAssertEqual(members["interfaces"], .null)
+    }
+
     /// A document that is not a module's code and has no `node` given is
     /// refused in the host's words — the app's name its Code panel, the
     /// server's name nothing.
