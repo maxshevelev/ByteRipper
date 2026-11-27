@@ -578,8 +578,8 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                unansweredGate: true, panel: PanelSection(order: 4, symbol: "cable.connector"),
                key: ["pin"],
                columns: [
-                Column("pin", "Pin", .pattern, required: true, pattern: "[A-Z][0-7]",
-                       summary: "The pin: port letter and bit, A0…M7."),
+                Column("pin", "Pin", .pattern, required: true, pattern: "GP[A-M][0-7]",
+                       summary: "The GPIO pin as the chip names it: GP, port letter and bit, GPA0…GPM7 (not a package ball)."),
                 Column("direction", "Direction", .enum, required: true, values: ["in", "out", "alt", "bidir"],
                        summary: "How the firmware sets it."),
                 Column("function", "Function", .text, required: true, summary: "What the pin does in this firmware."),

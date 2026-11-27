@@ -121,7 +121,7 @@ final class GhidraOwnerRecordsTests: XCTestCase {
                       saying: "irq_map[row 0].source_status: expected one of firmware, unverified")
         await refused(["record": "irq_map", "rows": [irq(4, code).merging(["enabled_by_firmware": "yes"]) { $1 }]],
                       saying: "enabled_by_firmware: expected true or false")
-        await refused(["record": "gpio", "rows": [["pin": "A9", "direction": "out", "function": "LED",
+        await refused(["record": "gpio", "rows": [["pin": "GPA9", "direction": "out", "function": "LED",
                                                    "confidence": "inference"]]],
                       saying: "gpio[row 0].pin: expected text matching")
         await refused(["record": "irq_map", "rows": [irq(4, "0x8D")]],
