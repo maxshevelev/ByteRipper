@@ -140,6 +140,13 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertEqual(gpio.cell(row: 3)?.textField?.stringValue, "GPA3 OUT\tPower LED")
         XCTAssertNil((gpio.cell(row: 1) as? RecordRowCell)?.shownMark, "no arrow")
 
+        // With the board's net: the net, then the label; the function is the pointer's.
+        let named = try panel(["gpio": ["status": "complete", "rows": [
+            ["pin": "GPA4", "net": "EC_FAN2_PWM", "label": "Fan 2 PWM", "direction": "out",
+             "function": "Driven high at start.", "confidence": "established"]]]], show: "gpio")
+        XCTAssertEqual(named.cell(row: 1)?.textField?.stringValue, "GPA4 OUT\tEC_FAN2_PWM: Fan 2 PWM")
+        XCTAssertEqual(named.cell(row: 1)?.toolTip, "Driven high at start.")
+
         let flashPanel = try panel(["eflash_area": flash], show: "eflash_area")
         XCTAssertEqual(lines(flashPanel), ["0x2A600  Shipping flag"])
         XCTAssertTrue(flashPanel.shownGroups.isEmpty)

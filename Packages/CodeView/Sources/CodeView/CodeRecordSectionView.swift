@@ -375,6 +375,11 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The row's short label: the review's `label`, or the first sentence of
     /// its main text, whole — the line cuts it at the list's width, not here.
     func label(_ row: [String: RecordValue]) -> String {
+        // A pin reads as the board names its signal, then what it is.
+        if record?.id == "gpio", let net = row["net"]?.string, !net.isEmpty {
+            let short = row["label"]?.string ?? ""
+            return short.isEmpty ? net : net + ": " + short
+        }
         if let label = row["label"]?.string, !label.isEmpty { return label }
         guard let main = mainColumn else { return "" }
         return Self.firstSentence(text(of: row, main))
@@ -646,7 +651,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         cell.show(line: draw, mark: isGrouped ? Self.groupMark(record) : Self.rowMark(record?.id), said: mark?.tip)
         // No pointer words that repeat the line: the note only, which the
         // line does not show, and on a marked row what the mark says.
-        cell.toolTip = mark?.tip ?? values["note"]?.string
+        // A pin's line is net and label: its function is the pointer's.
+        cell.toolTip = record?.id == "gpio"
+            ? (values["function"]?.string ?? mark?.tip) : (mark?.tip ?? values["note"]?.string)
         return cell
     }
 

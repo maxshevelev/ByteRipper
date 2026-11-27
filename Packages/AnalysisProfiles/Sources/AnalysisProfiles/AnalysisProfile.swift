@@ -678,7 +678,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                ],
                groupBy: "channel"),
         Record(id: "gpio", title: "GPIO",
-               summary: "Pin, direction and its function in this firmware. The board's net is not written here.",
+               summary: "Pin, net, direction and its function in this firmware. The firmware is built for one board, so the board's net names the pin's signal.",
                unansweredGate: true, panel: PanelSection(order: 4, symbol: "cable.connector"),
                key: ["pin"],
                columns: [
@@ -686,6 +686,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                        summary: "A short name for the panel's list, at most 40 characters, with no details: what the row is, not how."),
                 Column("pin", "Pin", .pattern, required: true, pattern: "GP[A-M][0-7]|KSO([0-9]|1[0-7])|KSI[0-7]",
                        summary: "The GPIO pin as the chip names it: GPA0…GPM7, or a keyboard-scan pin used as GPIO, KSO0…KSO17 or KSI0…KSI7 (not a package ball)."),
+                Column("net", "Net", .text, summary: "The board's net on the pin, as the board's schematic and boardview name it (EC_FAN1_PWM)."),
                 Column("direction", "Direction", .enum, required: true, values: ["in", "out", "alt", "bidir"],
                        summary: "How the firmware sets it."),
                 Column("function", "Function", .text, required: true, summary: "What the pin does in this firmware."),
