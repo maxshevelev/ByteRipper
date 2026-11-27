@@ -2147,7 +2147,6 @@
 "Inference" = "Вывод разбора";
 "Inference: %1$@" = "Вывод разбора: %1$@";
 "Filter the record's rows" = "Отобрать строки записи";
-"Host commands are commands the host — the BIOS, SMM or the operating system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over LPC or, on eSPI, over the peripheral channel. Each port pair is a data port and a command port; the command byte is written to the command port, the data bytes go through the data port." = "Команды хоста — это команды, которые хост (BIOS, SMM или ACPI-драйвер операционной системы) записывает в порты ввода-вывода EC. На шине это обычные циклы ввода-вывода по LPC, а на eSPI — по каналу периферии (peripheral channel). Каждая пара портов состоит из порта данных и порта команд: байт команды записывается в порт команд, байты данных передаются через порт данных.";
 "Ports 0x60 (data) and 0x64 (command): the keyboard controller interface (KBC, i8042) — keyboard, touchpad and the legacy commands. In the EC the KBC block takes them." = "Порты 0x60 (данные) и 0x64 (команды): интерфейс контроллера клавиатуры (KBC, i8042) — клавиатура, тачпад и унаследованные команды. В EC их принимает блок KBC.";
 "Ports 0x62 (data) and 0x66 (command): the standard ACPI embedded controller interface — EC RAM read and write (0x80/0x81), query 0x84 and the SCI. In the EC the first PMC channel (PMC1) takes them." = "Порты 0x62 (данные) и 0x66 (команды): стандартный интерфейс встроенного контроллера ACPI — чтение и запись EC RAM (0x80/0x81), запрос 0x84 и SCI. В EC их принимает первый канал PMC (PMC1).";
 "Ports 0x68 (data) and 0x6C (command): the second PMC channel (PMC2), usually the manufacturer's (OEM) commands — modes, flash mode, service functions." = "Порты 0x68 (данные) и 0x6C (команды): второй канал PMC (PMC2), обычно команды производителя (OEM) — режимы, режим прошивки, сервисные функции.";
@@ -2208,4 +2207,4 @@
 "Not checked:" = "Не проверено:";
 "Partial:" = "Не полностью:";
 
-"What this record is and how far the review has got" = "Что содержит эта запись и как далеко продвинулся разбор";
+"What the record's rows cover and what the review has not checked" = "Что охватывают строки записи и что разбор ещё не проверил";

@@ -41,17 +41,13 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         /// Values a `computed` column reads, as hex or decimal strings
         /// (`ec_ram_base: "0x80400"`).
         public var parameters: [String: String]
-        /// What the record's subject is, for the reader of the panel: the
-        /// words above the table (English; the app localises it). Constant
-        /// chip knowledge, not the review's.
-        public var header: String?
         /// The column whose values group the rows in the panel: a tree, a
         /// branch per value. Nil for a flat table.
         public var groupBy: String?
 
         public init(id: String, title: String, summary: String, unansweredGate: Bool,
                     panel: PanelSection? = nil, key: [String] = [], columns: [Column] = [],
-                    parameters: [String: String] = [:], header: String? = nil, groupBy: String? = nil) {
+                    parameters: [String: String] = [:], groupBy: String? = nil) {
             self.id = id
             self.title = title
             self.summary = summary
@@ -60,7 +56,6 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             self.key = key
             self.columns = columns
             self.parameters = parameters
-            self.header = header
             self.groupBy = groupBy
         }
 
@@ -68,7 +63,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
         public func column(_ id: String) -> Column? { columns.first { $0.id == id } }
 
         private enum CodingKeys: String, CodingKey {
-            case id, title, summary, panel, key, columns, parameters, header
+            case id, title, summary, panel, key, columns, parameters
             case unansweredGate = "unanswered_gate"
             case groupBy = "group_by"
         }
@@ -84,7 +79,6 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             key = try c.decodeIfPresent([String].self, forKey: .key) ?? []
             columns = try c.decodeIfPresent([Column].self, forKey: .columns) ?? []
             parameters = try c.decodeIfPresent([String: String].self, forKey: .parameters) ?? [:]
-            header = try c.decodeIfPresent(String.self, forKey: .header)
             groupBy = try c.decodeIfPresent(String.self, forKey: .groupBy)
         }
 
@@ -99,7 +93,6 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
             if !key.isEmpty { try c.encode(key, forKey: .key) }
             if !columns.isEmpty { try c.encode(columns, forKey: .columns) }
             if !parameters.isEmpty { try c.encode(parameters, forKey: .parameters) }
-            if let header, !header.isEmpty { try c.encode(header, forKey: .header) }
             if let groupBy, !groupBy.isEmpty { try c.encode(groupBy, forKey: .groupBy) }
         }
     }
@@ -576,11 +569,6 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
     /// schema, 2026-11-27). A field marked required in the schema is
     /// `required` here; `->code` is `code`, `->data` is `data`.
     /// What host commands are, above the Host commands table.
-    public static let hostCommandsHeader = "Host commands are commands the host — the BIOS, SMM or the operating "
-        + "system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over "
-        + "LPC or, on eSPI, over the peripheral channel. Each port pair is a data port and a command port; the "
-        + "command byte is written to the command port, the data bytes go through the data port."
-
     /// What each port pair of host commands is, behind its branch's (i).
     public static let kbcPortsSummary = "Ports 0x60 (data) and 0x64 (command): the keyboard controller interface "
         + "(KBC, i8042) — keyboard, touchpad and the legacy commands. In the EC the KBC block takes them."
@@ -641,7 +629,7 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                 Column("ec_ram", "EC RAM", .list, of: .ref, ref: "ec_ram",
                        summary: "The EC RAM offsets it touches (rows of ec_ram).")
                ],
-               header: AnalysisProfile.hostCommandsHeader, groupBy: "ports"),
+               groupBy: "ports"),
         Record(id: "ec_ram", title: "EC RAM",
                summary: "Offset, width, name, writer (EC or host) and meaning.",
                unansweredGate: true, panel: PanelSection(order: 2, symbol: "memorychip"),

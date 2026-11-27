@@ -28,11 +28,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The record id the section shows, nil before the first `show`.
     private(set) var recordID: String?
     /// The line over the list: the record's name and its status, and an
-    /// (i) after them whose popover says what the record is (the profile's
-    /// `header`), what its rows cover and what the review has not checked.
-    /// Nothing over the list opens or takes room of its own.
+    /// (i) after them whose popover says what the record's rows cover and
+    /// what the review has not checked — both the review's, for every record.
     let legendTitle = NSButton()
-    private var storedHeader: String?
     let statusInfo = ToolPanelInfoButton()
     private var titleText = ""
     /// At the foot, as the Functions list's filter (`CodePaneView.dressFilter`).
@@ -96,7 +94,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     override init(frame: NSRect) {
         super.init(frame: frame)
         // help: panel.code.record-sections
-        ControlHelp.describe(statusInfo, L("What this record is and how far the review has got"))
+        ControlHelp.describe(statusInfo, L("What the record's rows cover and what the review has not checked"))
         statusInfo.target = self
         statusInfo.action = #selector(statusInfoClicked)
         legendTitle.isBordered = false
@@ -238,9 +236,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             .font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor
         ]))
         legendTitle.attributedTitle = line
-        let header = record?.header.map(Self.header) ?? ""
-        storedHeader = header.isEmpty ? nil : header
-        statusInfo.isHidden = storedHeader == nil && parts.scope == nil && parts.open == nil
+        statusInfo.isHidden = parts.scope == nil && parts.open == nil
         allRows = (stored?.rows ?? []).sorted(by: keyOrder)
         measureKeys()
         applyFilter()
@@ -290,8 +286,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The legend's one line: the record's name and its status.
     var shownLegendLine: String { legendTitle.attributedTitle.string }
     var shownNote: String { storedNote ?? "" }
-    /// What the record is, as the status's popover says it; empty when it has no words.
-    var shownHeader: String { storedHeader ?? "" }
     /// The branches shown, in order: the value, the branch's words, its long
     /// words and how many rows it holds.
     var shownGroups: [(value: String, title: String, summary: String?, rows: Int)] {
@@ -734,10 +728,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// what the rows cover, then — under a warning — what is not checked yet.
     /// The status is on the line the (i) stands in, and is not said again.
     func showStatusInfo() {
-        guard storedHeader != nil || storedScope != nil || storedNotChecked != nil else { return }
-        shownPopoverText = [storedHeader, storedScope, storedNotChecked].compactMap { $0 }.joined(separator: "\n\n")
+        guard storedScope != nil || storedNotChecked != nil else { return }
+        shownPopoverText = [storedScope, storedNotChecked].compactMap { $0 }.joined(separator: "\n\n")
         let stack = ToolPanelPopover.stack()
-        if let header = storedHeader { stack.addArrangedSubview(ToolPanelPopover.prose(header)) }
         if let scope = storedScope { stack.addArrangedSubview(ToolPanelPopover.prose(scope)) }
         if let open = storedNotChecked {
             let mark = NSImageView()
@@ -1198,15 +1191,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 }
 
 extension CodeRecordSectionView {
-    /// A record's header in the reader's language: the profiles carry
-    /// English, and words not listed here stay the profile's.
-    static func header(_ english: String) -> String {
-        switch english {
-        case AnalysisProfile.hostCommandsHeader:
-            L("Host commands are commands the host — the BIOS, SMM or the operating system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over LPC or, on eSPI, over the peripheral channel. Each port pair is a data port and a command port; the command byte is written to the command port, the data bytes go through the data port.")
-        default: english
-        }
-    }
 
     /// What a branch's value stands for, in the reader's language.
     static func valueSummary(_ english: String) -> String {

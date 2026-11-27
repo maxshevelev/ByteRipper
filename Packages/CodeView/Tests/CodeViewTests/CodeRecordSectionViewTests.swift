@@ -70,6 +70,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
 
     private let commands: [String: Any] = [
         "status": "partial",
+        "note": "Commands on the three port pairs.",
         "rows": [
             ["ports": "68/6C", "mode": "flash", "cmd": "0x10", "handler": "0x1700", "effect": "enter flash",
              "confidence": "established"],
@@ -491,20 +492,17 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertTrue(partial == (nil, "Partial:", "each pair's note says what is left."))
     }
 
-    /// Over the list one line, the record and its status; what the record
-    /// is, what its rows cover and what is not checked are in the (i)'s
-    /// popover, in that order. Nothing over the list opens.
-    func testTheStatusLineCarriesEverythingInItsPopover() throws {
-        let header = CodeRecordSectionView.header(AnalysisProfile.hostCommandsHeader)
+    /// Over the list one line, the record and its status; its (i) or a
+    /// click on the line opens the review's words on the record — what the
+    /// rows cover, then what is not checked — and nothing else.
+    func testTheStatusLineCarriesTheReviewsWordsInItsPopover() throws {
         let panel = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")
         XCTAssertEqual(panel.shownLegendLine, CodeRecordSectionView.title(of: "host_commands", fallback: "")
             + " · " + String(CodeRecordSectionView.statusText(.partial, note: nil).dropLast()))
-        XCTAssertEqual(panel.shownHeader, header)
         panel.legendTitle.performClick(nil)
-        XCTAssertTrue(panel.shownPopoverText?.hasPrefix(header) ?? false, "the record's words first")
+        XCTAssertEqual(panel.shownPopoverText, commands["note"] as? String, "the note alone, no words of the profile")
 
         panel.show(id: "ec_ram", fallbackTitle: "ec_ram", font: .systemFont(ofSize: 11))
-        XCTAssertEqual(panel.shownHeader, "")
         XCTAssertFalse(panel.statusInfo.isHidden)
         panel.statusInfo.performClick(nil)
         XCTAssertEqual(panel.shownPopoverText, "the battery block is not read yet")

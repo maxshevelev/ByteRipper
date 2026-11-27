@@ -178,9 +178,9 @@ a cut's offset and description.
   branch or legend line shows. The label is never cut in the text, only
   by the line at the column's width. Each record keeps its selected row
   and scroll across tab switches and new revisions. Over the list stands one line,
-  the record's name and status, and an (i) after it whose popover holds,
-  in this order, what the record is (the profile's header), what its rows
-  cover (the review's `note`) and, under a warning sign and a bold
+  the record's name and status, and an (i) after it whose popover holds
+  the review's words on the record and nothing else: what its rows cover
+  (`note`) and, under a warning sign and a bold
   **Not checked:**, what the review has not checked (`not_checked`).
   Nothing over the list opens or takes the list's room; every record tab
   is drawn so. The filter is at the

@@ -2147,7 +2147,6 @@
 "Inference" = "Erschlossen";
 "Inference: %1$@" = "Erschlossen: %1$@";
 "Filter the record's rows" = "Die Zeilen des Eintrags filtern";
-"Host commands are commands the host — the BIOS, SMM or the operating system's ACPI driver — writes to the EC's I/O ports. On the bus they are ordinary I/O cycles over LPC or, on eSPI, over the peripheral channel. Each port pair is a data port and a command port; the command byte is written to the command port, the data bytes go through the data port." = "Host-Befehle sind Befehle, die der Host – das BIOS, der SMM oder der ACPI-Treiber des Betriebssystems – in die I/O-Ports des EC schreibt. Auf dem Bus sind das gewöhnliche I/O-Zyklen über LPC oder, bei eSPI, über den Peripheral Channel. Jedes Portpaar besteht aus einem Datenport und einem Befehlsport: Das Befehlsbyte wird in den Befehlsport geschrieben, die Datenbytes laufen über den Datenport.";
 "Ports 0x60 (data) and 0x64 (command): the keyboard controller interface (KBC, i8042) — keyboard, touchpad and the legacy commands. In the EC the KBC block takes them." = "Ports 0x60 (Daten) und 0x64 (Befehl): die Schnittstelle des Tastaturcontrollers (KBC, i8042) – Tastatur, Touchpad und die Legacy-Befehle. Im EC nimmt der KBC-Block sie an.";
 "Ports 0x62 (data) and 0x66 (command): the standard ACPI embedded controller interface — EC RAM read and write (0x80/0x81), query 0x84 and the SCI. In the EC the first PMC channel (PMC1) takes them." = "Ports 0x62 (Daten) und 0x66 (Befehl): die standardisierte Schnittstelle des ACPI-Embedded-Controllers – EC-RAM lesen und schreiben (0x80/0x81), Query 0x84 und der SCI. Im EC nimmt der erste PMC-Kanal (PMC1) sie an.";
 "Ports 0x68 (data) and 0x6C (command): the second PMC channel (PMC2), usually the manufacturer's (OEM) commands — modes, flash mode, service functions." = "Ports 0x68 (Daten) und 0x6C (Befehl): der zweite PMC-Kanal (PMC2), meist herstellereigene (OEM-)Befehle – Betriebsarten, Flash-Modus, Servicefunktionen.";
@@ -2208,4 +2207,4 @@
 "Not checked:" = "Nicht geprüft:";
 "Partial:" = "Unvollständig:";
 
-"What this record is and how far the review has got" = "Was dieser Eintrag enthält und wie weit die Analyse ist";
+"What the record's rows cover and what the review has not checked" = "Was die Zeilen des Eintrags umfassen und was die Analyse noch nicht geprüft hat";
