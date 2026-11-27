@@ -693,7 +693,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         })
         case "smbus_peers": (.letter("S"), .systemIndigo)
         case "gpio": (.letter("P"), .systemBrown)
-        case "eflash_area": (.letter("F"), .systemPink)
+        case "eflash_area": (.letter("V"), .systemGreen)
         default: nil
         }
     }
