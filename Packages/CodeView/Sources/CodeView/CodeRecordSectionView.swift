@@ -708,6 +708,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// Interfaces tab's headings carry theirs.
     static func groupMark(_ record: AnalysisProfile.Record?) -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? {
         guard let symbol = record?.panel?.symbol, let color = rowMark(record?.id)?.color else { return nil }
+        // A pin's branch reads I/O, as the trade writes it, not a plug.
+        if record?.id == "gpio" { return (.letter("I/O"), color) }
         return (.symbol(symbol), color)
     }
 

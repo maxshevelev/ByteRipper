@@ -183,12 +183,24 @@ enum CodeNavigatorIcon {
     /// has an ascender and no descender, and would sit high in a line box.
     private static func drawLetter(_ letter: String, color: NSColor, in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        let base = NSFont.systemFont(ofSize: rect.height * 0.74, weight: .bold)
-        let font = base.fontDescriptor.withDesign(.rounded)
-            .flatMap { NSFont(descriptor: $0, size: base.pointSize) } ?? base
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: letter, attributes: [
-            .font: font, .foregroundColor: color
-        ]))
+        func line(_ size: CGFloat) -> CTLine {
+            let base = NSFont.systemFont(ofSize: size, weight: .bold)
+            let font = base.fontDescriptor.withDesign(.rounded)
+                .flatMap { NSFont(descriptor: $0, size: size) } ?? base
+            return CTLineCreateWithAttributedString(NSAttributedString(string: letter, attributes: [
+                .font: font, .foregroundColor: color
+            ]))
+        }
+        // A short word — `I/O` — is drawn smaller until it fits the square.
+        var size = rect.height * 0.74
+        var drawn = line(size)
+        let room = rect.width * 0.84
+        let wide = CTLineGetBoundsWithOptions(drawn, .useGlyphPathBounds).width
+        if wide > room {
+            size *= room / wide
+            drawn = line(size)
+        }
+        let line = drawn
         let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         context.saveGState()
         context.textMatrix = .identity

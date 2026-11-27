@@ -292,11 +292,15 @@ final class CodeRecordSectionViewTests: XCTestCase {
         guard let folder = ProcessInfo.processInfo.environment["RECORDS_PNG_DIR"] else { return }
         for dark in [false, true] {
             for width in [CGFloat(180), 340, 500] {
-                for id in ["host_commands", "ec_ram"] {
-                    let panel = try self.panel(["host_commands": longCommands, "ec_ram": ram], show: id, width: width)
+                for id in ["host_commands", "ec_ram", "gpio"] {
+                    let gpio: [String: Any] = ["status": "complete", "rows": [
+                        ["pin": "GPJ5", "direction": "in", "function": "Lid switch.", "group": "input", "confidence": "established"]]]
+                    let panel = try self.panel(["host_commands": longCommands, "ec_ram": ram, "gpio": gpio], show: id, width: width)
                     panel.window?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-                    try select(panel, id == "ec_ram" ? "0x10  Power state"
-                               : "0x81  Write to the auxiliary keyboard output buffer and raise its interrupt")
+                    if id != "gpio" {
+                        try select(panel, id == "ec_ram" ? "0x10  Power state"
+                                   : "0x81  Write to the auxiliary keyboard output buffer and raise its interrupt")
+                    }
                     panel.layoutSubtreeIfNeeded()
                     panel.displayIfNeeded()
                     let rep = try XCTUnwrap(panel.bitmapImageRepForCachingDisplay(in: panel.bounds))
