@@ -454,6 +454,9 @@ final class WorkspaceRestoreTests: XCTestCase {
         let id = try XCTUnwrap(source.fragments.expanded)
         source.tearOffFragment(id)
         XCTAssertEqual(tab.currentCodeScreen()?.manifest.reading?.rev, 24)
+        // The reader's tab: a new revision is data, not a new screen.
+        let shown = try XCTUnwrap(tab.focusedCodePane())
+        shown.showInterfacesTab(true)
 
         try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("SecStartup"),
                               reading: AnalysisReading(project: "p", rev: 25))
@@ -463,6 +466,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         }
         XCTAssertEqual(tab.currentCodeScreen()?.manifest.reading?.rev, 25, "the tab drew the new reading")
         XCTAssertEqual(tab.focusedCodePane()?.selectedFunction?.name, "SecStartup")
+        XCTAssertTrue(tab.focusedCodePane() === shown, "the code pane is not rebuilt")
+        XCTAssertTrue(shown.showsInterfacesTab, "the tab the reader chose stays in front")
     }
 
     /// A code panel comes back as a code panel: the analysis from the store,

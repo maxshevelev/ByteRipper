@@ -640,6 +640,8 @@ import ToolModuleKit
     /// What a navigator row reads, for tests.
     func navigatorRowText(_ row: Int) -> String { navigatorText(at: row) }
     var navigatorListIndex: Int { listControl.selectedSegment }
+    /// The navigator switch itself, for tests that it is kept, not rebuilt.
+    var navigatorSwitch: NSSegmentedControl { listControl }
     var descriptionSectionTitles: [String] { descriptionView.sections.map(\.title) }
     /// The section selected in the column, nil when none is shown; for tests.
     var shownSectionTitle: String? { showsSectionColumn ? descriptionView.selectedSectionTitle : nil }

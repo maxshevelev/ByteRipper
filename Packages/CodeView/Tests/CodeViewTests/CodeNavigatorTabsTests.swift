@@ -98,4 +98,35 @@ final class CodeNavigatorTabsTests: XCTestCase {
         pane.selectList(.functions)
         XCTAssertEqual(pane.navigatorListIndex, 0)
     }
+
+    /// A new revision published while a record tab is in front changes the
+    /// data only: the tab stays, and the switch and the section are the same
+    /// views, with the new revision's rows in them. The app's path is
+    /// followed — the reading adopted, the place restored, the records read.
+    func testANewRevisionKeepsTheRecordTabInFront() throws {
+        let pane = try self.pane(kind: "EC", ecFamily: "ite-nds32")
+        pane.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400)
+        pane.layoutSubtreeIfNeeded()
+        pane.showRecordSection("irq_map")
+        let segment = pane.navigatorListIndex
+        let navigatorSwitch = pane.navigatorSwitch
+        let section = pane.recordPanel
+
+        var manifest = pane.manifest
+        manifest.reading = AnalysisReading(project: "p", rev: 2, records: ["irq_map": "complete"])
+        pane.adoptReading(manifest: manifest,
+                          model: CodeModel(artifact: pane.artifact, moduleBytes: moduleBytes), recipes: [])
+        pane.restore(function: 0, instruction: 0, showsC: false)
+        pane.focusSelectedFunction()
+        pane.setModuleRecords(ModuleRecords(["irq_map": .init(status: .complete,
+                                                               rows: [["irq": .string("4")]])]))
+        pane.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(pane.shownRecordSection, "irq_map", "the tab the reader chose stays")
+        XCTAssertEqual(pane.navigatorListIndex, segment)
+        XCTAssertFalse(pane.recordPanel.isHidden)
+        XCTAssertTrue(pane.navigatorSwitch === navigatorSwitch, "the switch is not rebuilt")
+        XCTAssertTrue(pane.recordPanel === section, "the section is not rebuilt")
+        XCTAssertEqual(pane.manifest.reading?.rev, 2)
+    }
 }

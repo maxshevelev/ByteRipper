@@ -122,6 +122,28 @@ extension MainViewController {
             next.openCalls = self.codeScreenView?.openCallEntries ?? screen.openCalls
             next.search = self.codeScreenView.map(\.searchTabState) ?? screen.search
             self.codeScreen = (pane, pane.document, next)
+            // The screen already drawn takes the new reading: only the data
+            // changes, never the views — the navigator's tab, its filter and
+            // the dump stay as the reader left them (as a dock panel does,
+            // `FragmentPanels.replaceCodeScreen`).
+            if let view = self.codeScreenView {
+                let previous = self.pendingCodeRevision.flatMap { revision in
+                    self.pendingCodeRevisionChange.map { (revision, $0) }
+                }
+                view.adoptReading(manifest: next.manifest,
+                                  model: CodeModel(artifact: next.artifact, moduleBytes: next.bytes),
+                                  recipes: next.recipes)
+                view.loadModuleDescription()
+                self.applyCodeNotes()
+                if let previous { view.markRevisionChange(from: previous.1, revision: previous.0) }
+                self.pendingCodeRevisionChange = nil
+                self.pendingCodeRevision = nil
+                wireCodeRevisions(view, previous: previous)
+                presentCodeScreen(next, on: view)
+                view.focusSelectedFunction()
+                if let history { view.adoptHistory(history) }
+                return
+            }
             self.apply(mode: .singleFile)
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
             if let history { self.codeScreenView?.adoptHistory(history) }
