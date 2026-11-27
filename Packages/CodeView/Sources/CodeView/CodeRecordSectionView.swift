@@ -763,7 +763,14 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         // of this branch: what it covered and left out there.
         guard let group = table.item(atRow: row) as? RecordGroupItem, group.hasInfo else { return }
         let text = [group.summary, group.note].compactMap { $0 }.joined(separator: "\n\n")
-        showInfo(title: group.label, text: text, relativeTo: table.rect(ofRow: row), of: table, edge: .maxX)
+        // From the (i) itself, where it stands after the branch's words; the
+        // row's frame only when the button is not drawn.
+        if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? RecordGroupCell,
+           !cell.info.isHidden, cell.info.window != nil {
+            showInfo(title: group.label, text: text, relativeTo: cell.info.bounds, of: cell.info, edge: .maxX)
+        } else {
+            showInfo(title: group.label, text: text, relativeTo: table.rect(ofRow: row), of: table, edge: .maxX)
+        }
     }
 
     private func showInfo(title: String, text: String, relativeTo rect: NSRect, of view: NSView, edge: NSRectEdge) {
