@@ -163,7 +163,7 @@ a cut's offset and description.
   column, else the first sentence of the main text), labels aligned past the
   widest key by a tab stop, no sideways scroll, drawn as every navigator
   list above. A line carries at most one mark after its key: the inference
-  circle or a pin's direction arrow; an interrupt left off reads in grey. A
+  circle; a tag after the key says the rest (flash, PEC, a pin's IN, OUT or I/O); an interrupt left off reads in grey. A
   branch shows its row count and an (i) whose popover holds what the
   profile says of it and the review's own note for it (`branch_notes`).
   The branch row is never an AppKit group row, which draws its

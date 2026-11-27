@@ -574,27 +574,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The row's one mark, in the cell's marker slot: the `?` of an inferred
     /// row; otherwise a pin's direction — up for out, down for in.
     private func mark(_ row: [String: RecordValue]) -> (symbol: String, tip: String)? {
-        if Self.isInference(row) { return ("circle.dashed", Self.inferenceToolTip(note: row["note"]?.string)) }
-        guard record?.id == "gpio" else { return nil }
-        let direction = row["direction"]?.string ?? ""
-        let symbol: String? = switch direction {
-        case "out": "arrow.up"
-        case "in": "arrow.down"
-        case "bidir": "arrow.up.arrow.down"
-        default: nil
-        }
-        guard let symbol, let tip = Self.directionTip(direction) else { return nil }
-        return (symbol, tip)
-    }
-
-    /// What a pin's arrow says.
-    static func directionTip(_ direction: String) -> String? {
-        switch direction {
-        case "out": L("Output")
-        case "in": L("Input")
-        case "bidir": L("Input and output")
-        default: nil
-        }
+        guard Self.isInference(row) else { return nil }
+        return ("circle.dashed", Self.inferenceToolTip(note: row["note"]?.string))
     }
 
     /// Whether the rows stand under branches.
@@ -620,6 +601,13 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         switch record?.id {
         case "host_commands" where row["mode"]?.string == "flash": Self.valueTitle("flash")
         case "smbus_peers" where row["pec"] == .bool(true): "PEC"
+        // A pin's direction in words, not an arrow: IN, OUT, I/O.
+        case "gpio": switch row["direction"]?.string {
+            case "in": "IN"
+            case "out": "OUT"
+            case "bidir": "I/O"
+            default: nil
+            }
         default: nil
         }
     }

@@ -2165,8 +2165,6 @@
 "Used by host commands" = "Используется командами хоста";
 "Indicators" = "Индикаторы";
 "Input" = "Вход";
-"Output" = "Выход";
-"Input and output" = "Вход и выход";
 "Label" = "Метка";
 "Not enabled" = "Не включено";
 "Power" = "Питание";

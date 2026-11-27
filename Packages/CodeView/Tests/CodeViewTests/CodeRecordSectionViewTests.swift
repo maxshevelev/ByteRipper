@@ -141,8 +141,9 @@ final class CodeRecordSectionViewTests: XCTestCase {
             ["pin": "GPA3", "direction": "out", "function": "Power LED.", "confidence": "established"]]]], show: "gpio")
         XCTAssertEqual(gpio.shownGroups.map(\.value), ["input", "other"], "a pin with no group stands under Other")
         XCTAssertEqual(lines(gpio), ["", "GPJ5  Lid switch", "", "GPA3  Power LED"])
-        XCTAssertEqual((gpio.cell(row: 1) as? RecordRowCell)?.shownMark, CodeRecordSectionView.directionTip("in"))
-        XCTAssertEqual((gpio.cell(row: 3) as? RecordRowCell)?.shownMark, CodeRecordSectionView.directionTip("out"))
+        XCTAssertEqual(gpio.cell(row: 1)?.textField?.stringValue, "GPJ5 IN\tLid switch", "the direction as a word")
+        XCTAssertEqual(gpio.cell(row: 3)?.textField?.stringValue, "GPA3 OUT\tPower LED")
+        XCTAssertNil((gpio.cell(row: 1) as? RecordRowCell)?.shownMark, "no arrow")
 
         let flashPanel = try panel(["eflash_area": flash], show: "eflash_area")
         XCTAssertEqual(lines(flashPanel), ["0x2A600  Shipping flag"])
