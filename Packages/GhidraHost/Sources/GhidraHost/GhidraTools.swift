@@ -1650,7 +1650,9 @@ public enum GhidraTools {
                     Rows written to an unanswered record without a status make it partial, noted "review \
                     continues". In a record whose list groups its rows into branches (host commands by port \
                     pair), `branch_notes` gives a branch its own note — what the review covered and left out \
-                    there — shown with that branch; `note` keeps what holds for the whole record. Every value is checked first and one wrong value refuses the whole call, \
+                    there — shown with that branch. `note` says what the record's rows cover, in a \
+                    sentence; `not_checked` what the review has not checked yet, so the reader does not \
+                    take the rows as whole there (a partial record needs one of the two). Every value is checked first and one wrong value refuses the whole call, \
                     naming it as `record[row i].column: expected …`. The answer is the record as \
                     `ghidra_records` reads it.
                     """,
@@ -1663,6 +1665,7 @@ public enum GhidraTools {
                         "description": "partial, complete or none; null takes the record back to unanswered."
                     ],
                     "note": AgentSchema.string("The record's note: what is left (partial), why there are none (none), what the rows leave out."),
+                    "not_checked": AgentSchema.string("What the review has not checked yet in this record; null or empty clears it."),
                     "branch_notes": [
                         "type": "object", "additionalProperties": ["type": ["string", "null"]],
                         "description": "A note per branch, by its value (\"62/66\"); merged into the stored ones, null removes one."
@@ -1688,7 +1691,7 @@ public enum GhidraTools {
             ) { call in
                 let module = try module(call.arguments)
                 var fields: [String: JSONValue] = ["record": .string(try call.arguments.string("record"))]
-                for field in ["status", "note", "branch_notes", "rows", "upsert", "patch", "delete"] {
+                for field in ["status", "note", "not_checked", "branch_notes", "rows", "upsert", "patch", "delete"] {
                     if let given = call.arguments.values[field] { fields[field] = given }
                 }
                 // A client holding the tool's schema from before a field was
@@ -1704,7 +1707,7 @@ public enum GhidraTools {
                     }
                 }
                 guard fields.count > 1 else {
-                    throw AgentToolError("Give status, note, branch_notes, rows, or upsert/patch/delete.")
+                    throw AgentToolError("Give status, note, not_checked, branch_notes, rows, or upsert/patch/delete.")
                 }
                 let payload = JSONValue.object(fields).encoded()
                 return try await answer { try await backend.writeCall(module, "set/record", body: payload) }

@@ -18,14 +18,17 @@ public struct ModuleRecords: Equatable, Sendable {
     public struct Record: Equatable, Sendable {
         public var status: AnalysisProfile.RecordStatus
         public var note: String?
+        /// What the review has not checked yet in the record.
+        public var notChecked: String?
         /// A note per branch of the list, by the group column's value.
         public var branchNotes: [String: String]
         public var rows: [[String: RecordValue]]
 
-        public init(status: AnalysisProfile.RecordStatus, note: String? = nil, branchNotes: [String: String] = [:],
-                    rows: [[String: RecordValue]] = []) {
+        public init(status: AnalysisProfile.RecordStatus, note: String? = nil, notChecked: String? = nil,
+                    branchNotes: [String: String] = [:], rows: [[String: RecordValue]] = []) {
             self.status = status
             self.note = note
+            self.notChecked = notChecked
             self.branchNotes = branchNotes
             self.rows = rows
         }
@@ -42,6 +45,7 @@ public struct ModuleRecords: Equatable, Sendable {
                   let status = (record["status"] as? String).flatMap(AnalysisProfile.RecordStatus.init) else { continue }
             let rows = (record["rows"] as? [[String: Any]] ?? []).map { $0.mapValues(RecordValue.init) }
             records[id] = Record(status: status, note: record["note"] as? String,
+                                 notChecked: record["not_checked"] as? String,
                                  branchNotes: record["branch_notes"] as? [String: String] ?? [:], rows: rows)
         }
         return ModuleRecords(records)

@@ -54,7 +54,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The list over the details, as the firmware panels have them.
     let splitter = ALSplitView()
     private let emptyLabel = NSTextField(wrappingLabelWithString: "")
-    private let popover = NSPopover()
+    let popover = NSPopover()
     /// The words the last (i) showed, for the tests.
     private(set) var shownPopoverText: String?
 
@@ -71,6 +71,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     private var record: AnalysisProfile.Record?
     private var fallbackTitle = ""
     private var storedNote: String?
+    private var storedScope: String?
+    private var storedNotChecked: String?
+    private var storedOpenHead: String?
     /// Every row of the record, in the document's (key) order.
     private var allRows: [[String: RecordValue]] = []
     /// The rows shown: filtered, branch after branch for a grouped record.
@@ -245,6 +248,10 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let statusText = Self.statusText(status, note: stored?.note)
         let note = status == .none ? nil : stored?.note
         storedNote = note
+        let parts = Self.notedParts(note: note, notChecked: status == .none ? nil : stored?.notChecked)
+        storedScope = parts.scope
+        storedNotChecked = parts.open
+        storedOpenHead = parts.head
         shownStatus = statusText
         let short = statusText.hasSuffix(".") ? String(statusText.dropLast()) : statusText
         let line = NSMutableAttributedString(string: titleText, attributes: [
@@ -257,7 +264,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let header = record?.header.map(Self.header) ?? ""
         headerLabel.stringValue = header
         headerLabel.isHidden = header.isEmpty
-        statusInfo.isHidden = (note ?? "").isEmpty
+        statusInfo.isHidden = parts.scope == nil && parts.open == nil
         legendDisclosure.isHidden = header.isEmpty
         applyLegend()
         allRows = (stored?.rows ?? []).sorted(by: keyOrder)
@@ -756,12 +763,64 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     @objc private func statusInfoClicked() { showStatusInfo() }
 
-    /// Shows the review's note on the record from the (i) after its status.
-    func showStatusInfo() {
-        guard let note = storedNote, !note.isEmpty else { return }
-        let status = shownStatus.hasSuffix(".") ? String(shownStatus.dropLast()) : shownStatus
-        showInfo(title: status, text: note, relativeTo: statusInfo.bounds, of: statusInfo, edge: .maxY)
+    /// The review's note on a record in its two parts: what the rows cover,
+    /// and what is not checked yet. A review that wrote both into `note`, as
+    /// `… Not checked: …`, is read apart at those words.
+    static func noteParts(note: String?, notChecked: String?) -> (scope: String?, notChecked: String?) {
+        let parts = notedParts(note: note, notChecked: notChecked)
+        return (parts.scope, parts.open)
     }
+
+    /// The words a review opens what is still open with, in its note: the
+    /// part after them is drawn under a warning with these words as its head.
+    static let openMarkers = ["Not checked:", "Partial:"]
+
+    static func notedParts(note: String?, notChecked: String?) -> (scope: String?, head: String?, open: String?) {
+        func clean(_ text: String?) -> String? {
+            let text = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return text.isEmpty ? nil : text
+        }
+        if let notChecked = clean(notChecked) { return (clean(note), "Not checked:", notChecked) }
+        guard let note = clean(note) else { return (nil, nil, nil) }
+        let found = openMarkers.compactMap { marker in note.range(of: marker).map { (marker, $0) } }
+            .min { $0.1.lowerBound < $1.1.lowerBound }
+        guard let (marker, range) = found else { return (note, nil, nil) }
+        return (clean(String(note[..<range.lowerBound])), marker, clean(String(note[range.upperBound...])))
+    }
+
+    /// Shows the review's note on the record from the (i) after its status:
+    /// what the rows cover, then — under a warning — what is not checked yet.
+    /// The status is on the line the (i) stands in, and is not said again.
+    func showStatusInfo() {
+        guard storedScope != nil || storedNotChecked != nil else { return }
+        shownPopoverText = [storedScope, storedNotChecked].compactMap { $0 }.joined(separator: "\n\n")
+        let stack = ToolPanelPopover.stack()
+        if let scope = storedScope { stack.addArrangedSubview(ToolPanelPopover.prose(scope)) }
+        if let open = storedNotChecked {
+            let mark = NSImageView()
+            let config = NSImage.SymbolConfiguration(pointSize: ToolPanelPopover.size, weight: .semibold)
+                .applying(.init(paletteColors: [.white, .systemOrange]))
+            if let image = NSImage(systemSymbolName: "exclamationmark.triangle.fill",
+                                   accessibilityDescription: nil)?.withSymbolConfiguration(config) {
+                mark.image = image
+                mark.widthAnchor.constraint(equalToConstant: image.size.width).isActive = true
+            }
+            let words = NSTextField(labelWithString: storedOpenHead == "Partial:" ? Self.partialTitle : Self.notCheckedTitle)
+            words.font = .systemFont(ofSize: ToolPanelPopover.size, weight: .bold)
+            let heading = NSStackView(views: [mark, words])
+            heading.orientation = .horizontal
+            heading.spacing = 4
+            stack.addArrangedSubview(heading)
+            stack.addArrangedSubview(ToolPanelPopover.prose(open))
+        }
+        let controller = NSViewController()
+        controller.view = ToolPanelPopover.content(stack)
+        guard statusInfo.window != nil else { return }
+        ToolPanelPopover.show(popover, with: controller, relativeTo: statusInfo.bounds, of: statusInfo, edge: .maxY)
+    }
+
+    static var notCheckedTitle: String { L("Not checked:") }
+    static var partialTitle: String { L("Partial:") }
 
     @objc private func groupInfoClicked(_ sender: NSButton) {
         let row = table.row(for: sender)

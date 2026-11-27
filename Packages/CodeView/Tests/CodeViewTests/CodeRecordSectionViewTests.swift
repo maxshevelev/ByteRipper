@@ -311,6 +311,17 @@ final class CodeRecordSectionViewTests: XCTestCase {
                 }
             }
         }
+        // The status's popover, for a note with its open part.
+        let noted: [String: Any] = ["status": "partial", "rows": (ram["rows"] as? [Any]) ?? [],
+            "note": "All rows of the description's Interrupts table. Not checked: handler plates of IRQ 107, 125, 126; the wake-pin handlers' bodies are not reviewed."]
+        let panel = try self.panel(["ec_ram": noted], show: "ec_ram", width: 340)
+        panel.showStatusInfo()
+        if let view = panel.popover.contentViewController?.view {
+            view.layoutSubtreeIfNeeded()
+            let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder + "/status-popover.png"))
+        }
         // The FIT panel's details at the same width, filled as
         // `FITToolViewController.renderDetail` fills them, to set beside.
         for dark in [false, true] {
@@ -473,6 +484,18 @@ final class CodeRecordSectionViewTests: XCTestCase {
     }
 
     // MARK: - The legend, the filter, the width
+
+    /// The status's (i) says what the rows cover and, apart, what is not
+    /// checked yet — from the field, or from a note that holds both.
+    func testTheStatusNoteIsReadInItsTwoParts() {
+        XCTAssertTrue(CodeRecordSectionView.noteParts(note: "All rows. Not checked: IRQ 107.", notChecked: nil)
+            == ("All rows.", "IRQ 107."))
+        XCTAssertTrue(CodeRecordSectionView.noteParts(note: "All rows.", notChecked: "IRQ 107.") == ("All rows.", "IRQ 107."))
+        XCTAssertTrue(CodeRecordSectionView.noteParts(note: "Only this.", notChecked: nil) == ("Only this.", nil))
+        XCTAssertTrue(CodeRecordSectionView.noteParts(note: nil, notChecked: " ") == (nil, nil))
+        let partial = CodeRecordSectionView.notedParts(note: "Partial: each pair's note says what is left.", notChecked: nil)
+        XCTAssertTrue(partial == (nil, "Partial:", "each pair's note says what is left."))
+    }
 
     func testTheLegendIsShutByDefaultAndRememberedPerRecord() throws {
         let panel = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")

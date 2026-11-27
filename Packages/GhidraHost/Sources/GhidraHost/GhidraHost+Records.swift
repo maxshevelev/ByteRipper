@@ -105,6 +105,7 @@ extension GhidraHost {
             if only != nil { entry["rows"] = rows } else { entry["row_count"] = rows.count }
             if let note = set?["note"] { entry["note"] = note }
             if let notes = set?["branch_notes"] { entry["branch_notes"] = notes }
+            if let open = set?["not_checked"] { entry["not_checked"] = open }
             if only != nil {
                 entry["key"] = record.key
                 entry["columns"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(record.columns))

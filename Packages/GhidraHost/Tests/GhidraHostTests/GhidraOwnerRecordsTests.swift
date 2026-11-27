@@ -137,6 +137,24 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         await refused(["record": "ec_ram", "branch_notes": ["a": "x"]], saying: "has no branches")
     }
 
+    /// `not_checked` stands beside `note`, and a partial record takes it in
+    /// place of a note; null clears it.
+    func testWhatIsNotCheckedIsAFieldOfItsOwn() async throws {
+        try await open()
+        let (code, _) = try await entries()
+        var answer = try await set(["record": "irq_map", "status": "partial", "not_checked": "IRQ 107",
+                                    "upsert": [irq(4, code)]])
+        var irqs = try record(answer, "irq_map")
+        XCTAssertEqual(irqs["not_checked"] as? String, "IRQ 107")
+        XCTAssertNil(irqs["note"])
+        answer = try await set(["record": "irq_map", "note": "All rows of the table."])
+        irqs = try record(answer, "irq_map")
+        XCTAssertEqual(irqs["note"] as? String, "All rows of the table.")
+        XCTAssertEqual(irqs["not_checked"] as? String, "IRQ 107", "kept")
+        answer = try await set(["record": "irq_map", "not_checked": NSNull()])
+        XCTAssertNil(try record(answer, "irq_map")["not_checked"])
+    }
+
     /// `patch` changes only the columns it gives; the rest of the row stays.
     func testAPatchChangesOnlyTheColumnsGiven() async throws {
         try await open()

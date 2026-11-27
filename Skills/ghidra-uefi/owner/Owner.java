@@ -5448,7 +5448,7 @@ public class Owner {
 
     /** The fields `ghidra_set_record` takes; `schema` is the host's. */
     private static final java.util.List<String> RECORD_FIELDS =
-        java.util.List.of("record", "schema", "status", "note", "branch_notes", "rows", "upsert", "patch", "delete");
+        java.util.List.of("record", "schema", "status", "note", "not_checked", "branch_notes", "rows", "upsert", "patch", "delete");
     private static final java.util.List<String> RECORD_STATUSES = java.util.List.of("partial", "complete", "none");
     private static final java.util.List<String> ROW_CONFIDENCES = java.util.List.of("established", "inference");
 
@@ -5483,7 +5483,7 @@ public class Owner {
         String id = required(body, "record");
         for (String field : body.keySet()) {
             if (!RECORD_FIELDS.contains(field)) {
-                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, branch_notes, rows, upsert, patch, delete");
+                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, not_checked, branch_notes, rows, upsert, patch, delete");
             }
         }
         if (!body.has("schema") || !body.get("schema").isJsonObject()) {
@@ -5511,7 +5511,7 @@ public class Owner {
             Harvest.setRecords(program, all);
             return records(Map.of());
         }
-        if (!body.has("status") && !body.has("note") && !body.has("branch_notes") && !replaces && !edits) {
+        if (!body.has("status") && !body.has("note") && !body.has("not_checked") && !body.has("branch_notes") && !replaces && !edits) {
             throw new Failure(400, id + ": give status, note, branch_notes, rows, or upsert/patch/delete");
         }
 
@@ -5519,6 +5519,8 @@ public class Owner {
         String status = stored != null && stored.has("status") ? stored.get("status").getAsString() : "unanswered";
         String note = stored != null && stored.has("note") && !stored.get("note").isJsonNull()
             ? stored.get("note").getAsString() : null;
+        String notChecked = stored != null && stored.has("not_checked") && !stored.get("not_checked").isJsonNull()
+            ? stored.get("not_checked").getAsString() : null;
         JsonObject branchNotes = stored != null && stored.has("branch_notes") && stored.get("branch_notes").isJsonObject()
             ? stored.getAsJsonObject("branch_notes").deepCopy() : new JsonObject();
         java.util.Map<String, JsonObject> rows = new java.util.LinkedHashMap<>();
@@ -5628,6 +5630,15 @@ public class Owner {
                 throw new Failure(400, id + ".note: expected text");
             } else note = given.getAsString().trim().isEmpty() ? null : given.getAsString();
         }
+        // What the review has not checked yet — the reader is told not to
+        // take the rows as whole there; `note` says what the rows cover.
+        if (body.has("not_checked")) {
+            JsonElement given = body.get("not_checked");
+            if (given.isJsonNull()) notChecked = null;
+            else if (!given.isJsonPrimitive() || !given.getAsJsonPrimitive().isString()) {
+                throw new Failure(400, id + ".not_checked: expected text");
+            } else notChecked = given.getAsString().trim().isEmpty() ? null : given.getAsString();
+        }
         // A note per branch of the list — a value of the record's group
         // column: what the review covered and left out there. Given by
         // branch, merged into the stored ones; null or empty text takes one out.
@@ -5659,6 +5670,7 @@ public class Owner {
             status = "partial";
             if (note == null) note = "review continues";
         }
+        if (status.equals("partial") && note == null && notChecked != null) note = "";
         if ((status.equals("partial") || status.equals("none")) && note == null) {
             throw new Failure(400, id + ".note: expected a note with status " + status
                 + (status.equals("none") ? " (why the module has none)" : " (what is left)"));
@@ -5672,12 +5684,13 @@ public class Owner {
 
         java.util.List<JsonObject> sorted = new java.util.ArrayList<>(rows.values());
         sorted.sort((a, b) -> compareKeys(a, b, key));
-        if (status.equals("unanswered") && sorted.isEmpty() && note == null && branchNotes.size() == 0) {
+        if (status.equals("unanswered") && sorted.isEmpty() && note == null && notChecked == null && branchNotes.size() == 0) {
             all.remove(id);
         } else {
             JsonObject record = new JsonObject();
             record.addProperty("status", status);
-            if (note != null) record.addProperty("note", note);
+            if (note != null && !note.isEmpty()) record.addProperty("note", note);
+            if (notChecked != null) record.addProperty("not_checked", notChecked);
             if (branchNotes.size() > 0) record.add("branch_notes", branchNotes);
             JsonArray table = new JsonArray();
             for (JsonObject row : sorted) table.add(row);
