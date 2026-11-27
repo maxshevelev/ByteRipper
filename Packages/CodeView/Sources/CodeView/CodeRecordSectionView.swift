@@ -685,7 +685,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         switch record {
         case "irq_map": (.letter("I"), .systemOrange)
         case "host_commands": (.letter("C"), .systemTeal)
-        case "ec_ram": (.symbol("memorychip"), .systemGreen)
+        case "ec_ram": (.symbol("cpu.fill"), .systemGreen)
         case "smbus_peers": (.letter("S"), .systemIndigo)
         case "gpio": (.letter("P"), .systemBrown)
         case "eflash_area": (.letter("F"), .systemPink)

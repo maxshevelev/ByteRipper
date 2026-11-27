@@ -142,9 +142,7 @@ enum CodeNavigatorIcon {
                 drawLetter(letter, color: color, in: rect)
             case let .symbol(name):
                 square(rect, radius: radius, color: color, onPlate: inverted)
-                // A flat symbol — the memory chip — is narrow in height at
-                // the common scale, so it takes more of the square.
-                drawSymbol(name, color: .white, scale: name == "memorychip" ? 0.86 : 0.7, in: rect)
+                drawSymbol(name, color: .white, scale: name == "cpu.fill" ? 0.84 : 0.7, in: rect)
             case let .badge(name):
                 // A badge keeps its own colours on a selected row, on a white plate.
                 if inverted {
@@ -232,26 +230,39 @@ enum CodeNavigatorIcon {
             .withSymbolConfiguration(configuration) else { return }
         let fit = min(rect.width * scale / max(symbol.size.width, 1), rect.height * scale / max(symbol.size.height, 1))
         let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
-        // Centred by its ink, not its box: a symbol's box carries room for
-        // the baseline, and the glyph sits off-centre in it.
-        var box = NSRect(origin: .zero, size: symbol.size)
-        let picture = symbol.cgImage(forProposedRect: &box, context: nil, hints: nil)
-        let ink = picture.flatMap { image in
-            Self.inkBounds(image).map { pixels in
-                let x = box.width / CGFloat(image.width), y = box.height / CGFloat(image.height)
-                return CGRect(x: pixels.minX * x, y: pixels.minY * y, width: pixels.width * x, height: pixels.height * y)
-            }
+        // The symbol is drawn into pixels of its own at the screen's scale,
+        // and that picture is set by its ink — not its box, which carries
+        // room for a baseline — with the ink's centre on the square's and the
+        // picture on whole device pixels, so both sides of a straight edge
+        // draw alike and what is measured is what shows.
+        let context = NSGraphicsContext.current
+        let pixel = context.map { abs($0.cgContext.convertToDeviceSpace(CGSize(width: 1, height: 1)).width) } ?? 2
+        let scale = max(pixel, 1)
+        let pad = 2
+        let width = Int((size.width * scale).rounded(.up)) + 2 * pad
+        let height = Int((size.height * scale).rounded(.up)) + 2 * pad
+        guard let bitmap = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpaceCreateDeviceRGB(),
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: bitmap, flipped: false)
+        symbol.draw(in: NSRect(x: CGFloat(pad), y: CGFloat(pad), width: size.width * scale, height: size.height * scale))
+        NSGraphicsContext.restoreGraphicsState()
+        guard let picture = bitmap.makeImage() else { return }
+        let ink = Self.inkBounds(picture) ?? CGRect(x: 0, y: 0, width: width, height: height)
+        let flipped = context?.isFlipped ?? false
+        // The ink's centre in the picture's points, from its top when the
+        // view is flipped, as the picture is then laid out from its top.
+        let inkX = ink.midX / scale
+        let inkY = (flipped ? CGFloat(height) - ink.midY : ink.midY) / scale
+        var origin = CGPoint(x: rect.midX - inkX, y: rect.midY - inkY)
+        if let cg = context?.cgContext {
+            let device = cg.convertToDeviceSpace(origin)
+            origin = cg.convertToUserSpace(CGPoint(x: device.x.rounded(), y: device.y.rounded()))
         }
-        let offset = ink.map { CGPoint(x: (box.width / 2 - $0.midX) * fit, y: (box.height / 2 - $0.midY) * fit) } ?? .zero
-        var origin = CGPoint(x: rect.midX - size.width / 2 + offset.x, y: rect.midY - size.height / 2 + offset.y)
-        // On whole device pixels: a symbol's straight edges set between two
-        // pixels draw as a blurred double line on one side and a crisp one on
-        // the other, and the mark reads as off-centre though it is not.
-        if let context = NSGraphicsContext.current?.cgContext {
-            let device = context.convertToDeviceSpace(origin)
-            origin = context.convertToUserSpace(CGPoint(x: device.x.rounded(), y: device.y.rounded()))
-        }
-        symbol.draw(in: NSRect(origin: origin, size: size))
+        NSImage(cgImage: picture, size: NSSize(width: CGFloat(width) / scale, height: CGFloat(height) / scale))
+            .draw(in: NSRect(origin: origin, size: NSSize(width: CGFloat(width) / scale, height: CGFloat(height) / scale)),
+                  from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
 
     /// The bounds of a picture's painted pixels, in pixels, origin at the
