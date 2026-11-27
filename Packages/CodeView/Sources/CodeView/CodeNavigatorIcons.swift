@@ -147,7 +147,7 @@ enum CodeNavigatorIcon {
                 drawSymbol(name, color: .white, scale: 0.7, in: rect)
             case let .bareSymbol(name):
                 if inverted { plate(rect, radius: radius) }
-                drawSymbol(name, color: color, scale: inverted ? 0.96 : 1.2, in: rect)
+                drawSymbol(name, color: color, scale: inverted ? 1.08 : 1.36, in: rect)
             case let .badge(name):
                 // A badge keeps its own colours on a selected row, on a white plate.
                 if inverted {
@@ -228,7 +228,9 @@ enum CodeNavigatorIcon {
 
     /// The symbol centred in `rect`, no larger than `scale` of it.
     private static func drawSymbol(_ name: String, color: NSColor, scale: CGFloat, in rect: NSRect) {
-        let configuration = NSImage.SymbolConfiguration(pointSize: rect.height * 0.56 / scale * 0.7,
+        // A symbol the size of the square is asked for at that size: one
+        // asked for small and drawn large comes out in other proportions.
+        let configuration = NSImage.SymbolConfiguration(pointSize: scale >= 1 ? rect.height : rect.height * 0.56 / scale * 0.7,
                                                         weight: scale < 1 ? .bold : .regular)
             .applying(.init(paletteColors: [color]))
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
