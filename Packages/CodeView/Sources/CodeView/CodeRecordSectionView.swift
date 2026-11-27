@@ -668,7 +668,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         cell.showsDisclosure(isGrouped)
         cell.showsCalls(expandable: false, expanded: false)
         cell.indent = isGrouped ? CodeNavigatorCell.disclosureRoom - 2 : 0
-        cell.show(line: draw, mark: Self.rowMark(record?.id), said: mark?.tip)
+        // A row under a branch carries its branch's mark; a list with no
+        // branches, the record's letter.
+        cell.show(line: draw, mark: isGrouped ? Self.groupMark(record) : Self.rowMark(record?.id), said: mark?.tip)
         // No pointer words that repeat the line: the note only, which the
         // line does not show, and on a marked row what the mark says.
         cell.toolTip = mark?.tip ?? values["note"]?.string

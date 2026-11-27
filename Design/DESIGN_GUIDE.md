@@ -148,7 +148,8 @@ a cut's offset and description.
     height, no indentation or cell gaps of AppKit's own;
   - every row is a `CodeNavigatorCell` (or a subclass): the chevron's room,
     then a mark on a coloured square (`CodeNavigatorIcon`; a letter for an
-    entry — `f`, `G`, a record's letter — a symbol for a heading), then the
+    entry — `f`, `G`, a record's letter — a symbol for a heading; a record's
+    row under a branch carries its branch's mark), then the
     words in `navigatorFont`; a level further in moves by `indent`;
   - a heading's words are `CodeNavigatorCell.headingAttributes()`: one
     weight up, grey, the count in brackets after them;
