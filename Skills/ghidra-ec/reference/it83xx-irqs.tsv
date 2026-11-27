@@ -9,6 +9,10 @@
 # IT8227E firmware's code (it8227e-irq-overrides.tsv); unverified = an IT8320 name not checked
 # for IT8227E (its description may still be a fact from the firmware: its source says so).
 # `# replaced:` lines are published entries an overlay entry removed.
+# replaced: 4	SMB_D	-	registers.h:21	unverified	(by SMB_D)
+# replaced: 9	SMB_A	-	registers.h:27	unverified	(by SMB_A)
+# replaced: 10	SMB_B	-	registers.h:28	unverified	(by SMB_B)
+# replaced: 16	SMB_C	-	registers.h:35	unverified	(by SMB_C)
 # replaced: 25	PMC_IN	-	registers.h:45	unverified	(by PMC_IN)
 # replaced: 27	PMC2_IN	-	registers.h:47	unverified	(by PMC2_IN)
 # replaced: 160	PECI	-	registers.h:195	unverified	(by SMB_E)
@@ -16,19 +20,19 @@ irq	name	description	source	status
 1	WKO20	-	registers.h:18	unverified
 2	KBC_OUT	-	registers.h:19	unverified
 3	PMC_OUT	-	registers.h:20	unverified
-4	SMB_D	-	registers.h:21	unverified
+4	SMB_D	SMBus channel D (IER0/ISR0 bit 4); the handler is a plain stub, the channel code enables IER0 bit 4	IT8227E fw SmbChanRegsTable 0x239F8+3*0x2C: IER0 0xF01104, ISR0 0xF01100, mask 0x10	firmware
 5	WKINTAD	-	registers.h:22	unverified
 6	WKO23	-	registers.h:23	unverified
 7	PWM	-	registers.h:24	unverified
 8	ADC	-	registers.h:26	unverified
-9	SMB_A	-	registers.h:27	unverified
-10	SMB_B	-	registers.h:28	unverified
+9	SMB_A	SMBus channel A (IER1/ISR1 bit 1)	IT8227E fw SmbChanRegsTable 0x239F8+0*0x2C: IER1 0xF01105, ISR1 0xF01101, mask 2; IntcIrq009_MaskAck 0x5DBC	firmware
+10	SMB_B	SMBus channel B (IER1/ISR1 bit 2)	IT8227E fw SmbChanRegsTable 0x239F8+1*0x2C: IER1 0xF01105, ISR1 0xF01101, mask 4; IntcIrq010_MaskAck 0x5DDC	firmware
 11	KB_MATRIX	-	registers.h:29	unverified
 12	WKO26	-	registers.h:30	unverified
 13	WKINTC	-	registers.h:31	unverified
 14	WKO25	-	registers.h:32	unverified
 15	CIR	-	registers.h:33	unverified
-16	SMB_C	-	registers.h:35	unverified
+16	SMB_C	SMBus channel C (IER2/ISR2 bit 0)	IT8227E fw SmbChanRegsTable 0x239F8+2*0x2C: IER2 0xF01106, ISR2 0xF01102, mask 1; IntcIrq016_MaskAck 0x5E2C	firmware
 17	WKO24	-	registers.h:36	unverified
 18	PS2_2	-	registers.h:37	unverified
 19	PS2_1	-	registers.h:38	unverified

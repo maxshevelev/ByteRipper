@@ -162,9 +162,9 @@ final class ECFirmwareTests: XCTestCase {
         XCTAssertEqual(irqs.entry(of: 27)?.name, "PMC2_IN")
         XCTAssertEqual(irqs.entry(of: 27)?.status, "unverified")
         XCTAssertNotNil(irqs.entry(of: 27)?.description)
-        XCTAssertEqual(irqs.replaced.map(\.name), ["PMC_IN", "PMC2_IN", "PECI"])
+        XCTAssertEqual(irqs.replaced.map(\.name), ["SMB_D", "SMB_A", "SMB_B", "SMB_C", "PMC_IN", "PMC2_IN", "PECI"])
         XCTAssertEqual(Set(irqs.entries.compactMap(\.status)), ["firmware", "unverified"])
-        XCTAssertEqual(irqs.entries.filter { $0.status == "firmware" }.map(\.irq), [25, 160])
+        XCTAssertEqual(irqs.entries.filter { $0.status == "firmware" }.map(\.irq), [4, 9, 10, 16, 25, 160])
     }
 
     /// A list from before the status column (`irq name source`) still reads.

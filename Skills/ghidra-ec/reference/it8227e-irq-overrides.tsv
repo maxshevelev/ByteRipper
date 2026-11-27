@@ -9,3 +9,7 @@ irq	name	description	source	status	replaces
 25	PMC_IN	PMC input buffer full; the handler serves PM1 and PM2 together (it also checks PM2STS 0xF01510 bit 1)	IT8227E fw IsrIrqTable 0x5000+0x64 -> Isr_Irq025 0x5A38, PM2STS read at 0x5A3E	firmware	PMC_IN
 27	PMC2_IN	in this firmware an empty stub: the handler only calls an empty function (0x5E74), nothing is masked, acknowledged or served; PM2 is served by IRQ 25	IT8227E fw IsrIrqTable 0x5000+0x6C -> Isr_Irq027 0x5A28 -> 0x5E74 (push25/pop25 only)	unverified	PMC2_IN
 160	SMB_E	SMBus channel E (IER20/ISR20 bit 0); IT8320's IRQ 160 is PECI and its SMB_E is IRQ 152	IT8227E fw SmbChanRegsTable 0x239F8+4*0x2C: IER20 0xF01155 (+0x1C), ISR20 0xF01154 (+0x20), mask 1 (+0x24); IsrIrqTable 0x5000+0x280 -> Isr_Irq160 0x53E8 -> IntcIrq160_MaskAck 0x608E	firmware	PECI
+4	SMB_D	SMBus channel D (IER0/ISR0 bit 4); the handler is a plain stub, the channel code enables IER0 bit 4	IT8227E fw SmbChanRegsTable 0x239F8+3*0x2C: IER0 0xF01104, ISR0 0xF01100, mask 0x10	firmware	SMB_D
+9	SMB_A	SMBus channel A (IER1/ISR1 bit 1)	IT8227E fw SmbChanRegsTable 0x239F8+0*0x2C: IER1 0xF01105, ISR1 0xF01101, mask 2; IntcIrq009_MaskAck 0x5DBC	firmware	SMB_A
+10	SMB_B	SMBus channel B (IER1/ISR1 bit 2)	IT8227E fw SmbChanRegsTable 0x239F8+1*0x2C: IER1 0xF01105, ISR1 0xF01101, mask 4; IntcIrq010_MaskAck 0x5DDC	firmware	SMB_B
+16	SMB_C	SMBus channel C (IER2/ISR2 bit 0)	IT8227E fw SmbChanRegsTable 0x239F8+2*0x2C: IER2 0xF01106, ISR2 0xF01102, mask 1; IntcIrq016_MaskAck 0x5E2C	firmware	SMB_C
