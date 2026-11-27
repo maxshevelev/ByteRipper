@@ -98,7 +98,11 @@ extension GhidraHost {
             }
             guard only == nil || only == record.id else { continue }
             var entry: [String: Any] = ["id": record.id, "title": record.title, "status": status,
-                                        "gate": record.unansweredGate, "rows": set?["rows"] ?? []]
+                                        "gate": record.unansweredGate]
+            // All records with their rows outgrow one answer (103 KB on the
+            // EC module): without `record` only how many rows each has.
+            let rows = set?["rows"] as? [Any] ?? []
+            if only != nil { entry["rows"] = rows } else { entry["row_count"] = rows.count }
             if let note = set?["note"] { entry["note"] = note }
             if let notes = set?["branch_notes"] { entry["branch_notes"] = notes }
             if only != nil {

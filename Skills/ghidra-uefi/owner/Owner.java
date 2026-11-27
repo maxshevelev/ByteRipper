@@ -5448,7 +5448,7 @@ public class Owner {
 
     /** The fields `ghidra_set_record` takes; `schema` is the host's. */
     private static final java.util.List<String> RECORD_FIELDS =
-        java.util.List.of("record", "schema", "status", "note", "branch_notes", "rows", "upsert", "delete");
+        java.util.List.of("record", "schema", "status", "note", "branch_notes", "rows", "upsert", "patch", "delete");
     private static final java.util.List<String> RECORD_STATUSES = java.util.List.of("partial", "complete", "none");
     private static final java.util.List<String> ROW_CONFIDENCES = java.util.List.of("established", "inference");
 
@@ -5483,7 +5483,7 @@ public class Owner {
         String id = required(body, "record");
         for (String field : body.keySet()) {
             if (!RECORD_FIELDS.contains(field)) {
-                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, branch_notes, rows, upsert, delete");
+                throw new Failure(400, "`" + field + "` is not a field of a record write: status, note, branch_notes, rows, upsert, patch, delete");
             }
         }
         if (!body.has("schema") || !body.get("schema").isJsonObject()) {
@@ -5498,8 +5498,8 @@ public class Owner {
         JsonObject refKeys = schema.has("ref_keys") ? schema.getAsJsonObject("ref_keys") : new JsonObject();
 
         boolean replaces = body.has("rows");
-        boolean edits = body.has("upsert") || body.has("delete");
-        if (replaces && edits) throw new Failure(400, id + ": give rows (the whole table) or upsert/delete (rows by key), not both");
+        boolean edits = body.has("upsert") || body.has("patch") || body.has("delete");
+        if (replaces && edits) throw new Failure(400, id + ": give rows (the whole table) or upsert/patch/delete (rows by key), not both");
         JsonObject all = Harvest.records(program);
         all = all == null ? new JsonObject() : all.deepCopy();
 
@@ -5512,7 +5512,7 @@ public class Owner {
             return records(Map.of());
         }
         if (!body.has("status") && !body.has("note") && !body.has("branch_notes") && !replaces && !edits) {
-            throw new Failure(400, id + ": give status, note, branch_notes, rows, or upsert/delete");
+            throw new Failure(400, id + ": give status, note, branch_notes, rows, or upsert/patch/delete");
         }
 
         JsonObject stored = all.has(id) && all.get(id).isJsonObject() ? all.getAsJsonObject(id) : null;
@@ -5564,6 +5564,51 @@ public class Owner {
             java.util.Map<String, JsonObject> given = new java.util.LinkedHashMap<>();
             putRows(id, "upsert", body.getAsJsonArray("upsert"), columns, key, parameters, refKeys, given);
             rows.putAll(given);
+        }
+
+        // `patch`: a recorded row by its key, only the columns given changed —
+        // a value replaces, null takes it out; the rest stays as recorded.
+        // The row as it comes out is checked as a whole row is.
+        if (body.has("patch")) {
+            if (!body.get("patch").isJsonArray()) throw new Failure(400, id + ".patch: expected a list of rows");
+            JsonArray merged = new JsonArray();
+            int index = 0;
+            for (JsonElement given : body.getAsJsonArray("patch")) {
+                String at = id + "[patch " + index++ + "]";
+                if (!given.isJsonObject()) throw new Failure(400, at + ": expected an object: the key's columns and those to change");
+                JsonObject change = given.getAsJsonObject();
+                JsonObject keyRow = new JsonObject();
+                for (String field : key) {
+                    JsonObject column = columnNamed(columns, field);
+                    JsonElement value = change.get(field);
+                    if (value == null || value.isJsonNull()) {
+                        if (column.has("required") && column.get("required").getAsBoolean()) {
+                            throw new Failure(400, at + "." + field + ": expected a value (part of the key)");
+                        }
+                        keyRow.add(field, com.google.gson.JsonNull.INSTANCE);
+                    } else {
+                        keyRow.add(field, recordValue(column, value, at + "." + field, refKeys));
+                    }
+                }
+                String rowKey = rowKey(keyRow, key);
+                JsonObject recorded = rows.get(rowKey);
+                if (recorded == null) throw new Failure(400, at + ": no row has the key " + rowKey + " (upsert adds one)");
+                JsonObject row = recorded.deepCopy();
+                for (JsonElement column : columns) {
+                    JsonObject described = column.getAsJsonObject();
+                    if (described.has("kind") && described.get("kind").getAsString().equals("computed")) {
+                        row.remove(described.get("id").getAsString());
+                    }
+                }
+                for (Map.Entry<String, JsonElement> entry : change.entrySet()) {
+                    if (entry.getValue().isJsonNull()) row.remove(entry.getKey());
+                    else row.add(entry.getKey(), entry.getValue());
+                }
+                merged.add(row);
+            }
+            java.util.Map<String, JsonObject> patched = new java.util.LinkedHashMap<>();
+            putRows(id, "patch", merged, columns, key, parameters, refKeys, patched);
+            rows.putAll(patched);
         }
 
         if (body.has("status")) {

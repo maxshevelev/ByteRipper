@@ -137,6 +137,22 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         await refused(["record": "ec_ram", "branch_notes": ["a": "x"]], saying: "has no branches")
     }
 
+    /// `patch` changes only the columns it gives; the rest of the row stays.
+    func testAPatchChangesOnlyTheColumnsGiven() async throws {
+        try await open()
+        let (code, second) = try await entries()
+        try await set(["record": "irq_map", "status": "partial", "note": "others not read",
+                       "rows": [irq(4, code), irq(9, second)]])
+        let answer = try await set(["record": "irq_map", "patch": [["irq": 4, "label": "1 ms tick"]]])
+        let rows = try XCTUnwrap(try record(answer, "irq_map")["rows"] as? [[String: Any]])
+        let four = try XCTUnwrap(rows.first { $0["irq"] as? Int == 4 })
+        XCTAssertEqual(four["label"] as? String, "1 ms tick")
+        XCTAssertEqual(four["purpose"] as? String, irq(4, code)["purpose"] as? String, "the rest kept")
+        XCTAssertEqual(rows.count, 2)
+        await refused(["record": "irq_map", "patch": [["irq": 5, "label": "x"]]], saying: "no row has the key")
+        await refused(["record": "irq_map", "patch": [["irq": 4, "source": NSNull()]]], saying: "source")
+    }
+
     // MARK: - Refusals
 
     func testEveryKindOfWrongValueIsRefused() async throws {
@@ -251,6 +267,8 @@ final class GhidraOwnerRecordsTests: XCTestCase {
         XCTAssertEqual(answer["unanswered"] as? [String], ["host_commands", "ec_ram", "smbus_peers", "eflash_area"])
         XCTAssertEqual(try record(answer, "gpio")["status"] as? String, "none")
         XCTAssertEqual(try record(answer, "irq_map")["note"] as? String, "all other IRQs: empty stub")
+        XCTAssertNil(try record(answer, "irq_map")["rows"], "all records: no rows, only their count")
+        XCTAssertEqual(try record(answer, "irq_map")["row_count"] as? Int, 1)
         // A status written alone keeps the rows; going back to partial needs a note.
         await refused(["record": "irq_map", "status": "partial", "note": NSNull()], saying: "expected a note")
         // Deleting the last row of a complete record is refused.

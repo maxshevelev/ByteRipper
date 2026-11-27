@@ -60,6 +60,19 @@ final class ToolArgumentChecksTests: XCTestCase {
         XCTAssertTrue(made.isEmpty, "nothing reached the backend")
     }
 
+    /// A client holding the schema from before `branch_notes` sends the
+    /// object as its JSON text: it reaches the owner as the object (9b5f357e).
+    func testAnObjectSentAsItsJSONTextIsTakenAsTheObject() async throws {
+        let calls = Calls()
+        let refused = await call("ghidra_set_record", ["module": module, "record": "host_commands",
+                                                       "branch_notes": "{\"62/66\": \"ACPI EC commands\"}"], calls: calls)
+        XCTAssertNil(refused)
+        let made = await calls.made
+        let body = try XCTUnwrap(made.first?.1)
+        let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(sent["branch_notes"] as? [String: String], ["62/66": "ACPI EC commands"])
+    }
+
     func testClearCodeIsTakenAsTheBooleanTheSchemaSays() async throws {
         let calls = Calls()
         let refused = await call("ghidra_set_data", ["module": module, "address": "0x10", "type": "UINT32",

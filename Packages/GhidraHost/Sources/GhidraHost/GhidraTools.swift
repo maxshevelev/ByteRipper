@@ -891,7 +891,9 @@ public enum GhidraTools {
                     (`unanswered` until written, `partial`, `complete`, or `none`), `note`, `rows` in key \
                     order (each with its `confidence` and an optional `note`) and `gate`; `unanswered`, the \
                     gated records neither complete nor none — the review is not complete while any is; \
-                    `warnings`, refs that name no row of their record. With `record`, only that one, with \
+                    `warnings`, refs that name no row of their record. Without `record` a record's rows are \
+                    not listed, only `row_count` (all six would not fit in one answer). With `record`, only \
+                    that one, its rows in full, with \
                     its `key`, `columns` (each `id`, `kind`, `required`, and its `values`, `min`, `max`, \
                     `pattern`, `of`, `columns`, `ref`, `compute`) and `parameters`.
                     """,
@@ -1636,7 +1638,8 @@ public enum GhidraTools {
                 description: """
                     Writes one record of the module's analysis profile (`ghidra_records` with `record` gives \
                     its columns), read from the code. `rows` replaces the whole table; `upsert` puts rows by \
-                    key (a row whose key is recorded replaces it); `delete` takes rows by key, each an object \
+                    key (a row whose key is recorded replaces it); `patch` changes recorded rows by key, only the \
+                    columns given (null takes one out), the rest kept; `delete` takes rows by key, each an object \
                     of the key's columns. Every row carries `confidence` — `established` (the code shows it) \
                     or `inference` — and may carry a `note`. A code column takes an address inside a \
                     function, a data column an address in the module's memory; a ref names a row of another \
@@ -1672,6 +1675,10 @@ public enum GhidraTools {
                         "type": "array", "items": ["type": "object"],
                         "description": "Rows to put by key, replacing a row of the same key."
                     ],
+                    "patch": [
+                        "type": "array", "items": ["type": "object"],
+                        "description": "Recorded rows by key, each the key's columns and only those to change; null takes a column out."
+                    ],
                     "delete": [
                         "type": "array", "items": ["type": "object"],
                         "description": "Keys of rows to take out, each an object of the key's columns."
@@ -1681,11 +1688,23 @@ public enum GhidraTools {
             ) { call in
                 let module = try module(call.arguments)
                 var fields: [String: JSONValue] = ["record": .string(try call.arguments.string("record"))]
-                for field in ["status", "note", "branch_notes", "rows", "upsert", "delete"] {
+                for field in ["status", "note", "branch_notes", "rows", "upsert", "patch", "delete"] {
                     if let given = call.arguments.values[field] { fields[field] = given }
                 }
+                // A client holding the tool's schema from before a field was
+                // added sends an object it does not know as its JSON text:
+                // taken as the object it spells (issue 9b5f357e).
+                for field in ["branch_notes", "rows", "upsert", "patch", "delete"] {
+                    if case let .string(text)? = fields[field],
+                       let parsed = try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8)) {
+                        switch parsed {
+                        case .object, .array: fields[field] = parsed
+                        default: break
+                        }
+                    }
+                }
                 guard fields.count > 1 else {
-                    throw AgentToolError("Give status, note, branch_notes, rows, or upsert/delete.")
+                    throw AgentToolError("Give status, note, branch_notes, rows, or upsert/patch/delete.")
                 }
                 let payload = JSONValue.object(fields).encoded()
                 return try await answer { try await backend.writeCall(module, "set/record", body: payload) }

@@ -1671,7 +1671,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The records the module's analysis profile asks a review to fill (`ghidra_profile`'s `records`; an EC module's are irq_map, host_commands, ec_ram, smbus_peers, gpio and eflash_area), as written with `ghidra_set_record`: `records`, each with `status` (`unanswered` until written, `partial`, `complete`, or `none`), `note`, `rows` in key order (each with its `confidence` and an optional `note`) and `gate`; `unanswered`, the gated records neither complete nor none — the review is not complete while any is; `warnings`, refs that name no row of their record. With `record`, only that one, with its `key`, `columns` (each `id`, `kind`, `required`, and its `values`, `min`, `max`, `pattern`, `of`, `columns`, `ref`, `compute`) and `parameters`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "The records the module's analysis profile asks a review to fill (`ghidra_profile`'s `records`; an EC module's are irq_map, host_commands, ec_ram, smbus_peers, gpio and eflash_area), as written with `ghidra_set_record`: `records`, each with `status` (`unanswered` until written, `partial`, `complete`, or `none`), `note`, `rows` in key order (each with its `confidence` and an optional `note`) and `gate`; `unanswered`, the gated records neither complete nor none — the review is not complete while any is; `warnings`, refs that name no row of their record. Without `record` a record's rows are not listed, only `row_count` (all six would not fit in one answer). With `record`, only that one, its rows in full, with its `key`, `columns` (each `id`, `kind`, `required`, and its `values`, `min`, `max`, `pattern`, `of`, `columns`, `ref`, `compute`) and `parameters`. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2944,7 +2944,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Writes one record of the module's analysis profile (`ghidra_records` with `record` gives its columns), read from the code. `rows` replaces the whole table; `upsert` puts rows by key (a row whose key is recorded replaces it); `delete` takes rows by key, each an object of the key's columns. Every row carries `confidence` — `established` (the code shows it) or `inference` — and may carry a `note`. A code column takes an address inside a function, a data column an address in the module's memory; a ref names a row of another record by its key (a value, or an object of the key's columns), and one that names no row is a warning in the answer, not a refusal. A computed column is never written. `status`: `partial` (with a `note` saying what is left), `complete` (at least one row), `none` (no rows, with a `note` saying why); null takes the record back to unanswered and empty. Rows written to an unanswered record without a status make it partial, noted \"review continues\". In a record whose list groups its rows into branches (host commands by port pair), `branch_notes` gives a branch its own note — what the review covered and left out there — shown with that branch; `note` keeps what holds for the whole record. Every value is checked first and one wrong value refuses the whole call, naming it as `record[row i].column: expected …`. The answer is the record as `ghidra_records` reads it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "Writes one record of the module's analysis profile (`ghidra_records` with `record` gives its columns), read from the code. `rows` replaces the whole table; `upsert` puts rows by key (a row whose key is recorded replaces it); `patch` changes recorded rows by key, only the columns given (null takes one out), the rest kept; `delete` takes rows by key, each an object of the key's columns. Every row carries `confidence` — `established` (the code shows it) or `inference` — and may carry a `note`. A code column takes an address inside a function, a data column an address in the module's memory; a ref names a row of another record by its key (a value, or an object of the key's columns), and one that names no row is a warning in the answer, not a refusal. A computed column is never written. `status`: `partial` (with a `note` saying what is left), `complete` (at least one row), `none` (no rows, with a `note` saying why); null takes the record back to unanswered and empty. Rows written to an unanswered record without a status make it partial, noted \"review continues\". In a record whose list groups its rows into branches (host commands by port pair), `branch_notes` gives a branch its own note — what the review covered and left out there — shown with that branch; `note` keeps what holds for the whole record. Every value is checked first and one wrong value refuses the whole call, naming it as `record[row i].column: expected …`. The answer is the record as `ghidra_records` reads it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2972,6 +2972,13 @@
         "note" : {
           "description" : "The record's note: what is left (partial), why there are none (none), what the rows leave out.",
           "type" : "string"
+        },
+        "patch" : {
+          "description" : "Recorded rows by key, each the key's columns and only those to change; null takes a column out.",
+          "items" : {
+            "type" : "object"
+          },
+          "type" : "array"
         },
         "record" : {
           "description" : "The record's id: \"irq_map\", \"ec_ram\".",
