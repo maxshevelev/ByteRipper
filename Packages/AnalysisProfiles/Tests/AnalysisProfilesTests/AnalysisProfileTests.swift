@@ -214,7 +214,7 @@ final class AnalysisProfileTests: XCTestCase {
         let smbus = try XCTUnwrap(records.first { $0["id"] as? String == "smbus_peers" })
         XCTAssertEqual(smbus["key"] as? [String], ["channel", "address"])
         let address = try XCTUnwrap((smbus["columns"] as? [[String: Any]])?.first { $0["id"] as? String == "address" })
-        XCTAssertEqual(address["note_for"] as? [String], ["runtime"])
+        XCTAssertEqual(address["note_for"] as? [String], ["runtime", "mailbox"])
         XCTAssertEqual(address["kind"] as? String, "int")
         XCTAssertEqual(address["max"] as? Int, 0x7F)
         XCTAssertEqual(try JSONDecoder().decode(AnalysisProfile.self, from: data), .ecIteNds32)

@@ -557,9 +557,9 @@ public struct AnalysisProfile: Codable, Equatable, Hashable, Sendable {
                columns: [
                 Column("channel", "Channel", .enum, required: true, values: ["A", "B", "C", "D", "E"],
                        summary: "The SMBus channel."),
-                Column("address", "Address", .int, required: true, values: ["runtime"], min: 0, max: 0x7F, hex: true,
-                       noteFor: ["runtime"],
-                       summary: "The 7-bit address, or runtime when the code works it out (say how in the row's note)."),
+                Column("address", "Address", .int, required: true, values: ["runtime", "mailbox"], min: 0, max: 0x7F, hex: true,
+                       noteFor: ["runtime", "mailbox"],
+                       summary: "The 7-bit address; runtime when the code works it out, mailbox when the channel has no address of its own and works only through the host mailbox (say how in the row's note)."),
                 Column("address_8bit", "Bus address", .computed, compute: "smbus_address_8bit",
                        summary: "The 8-bit bus address: the 7-bit address × 2."),
                 Column("device", "Device", .text, required: true, summary: "The device, or \"not identified\"."),
