@@ -147,7 +147,7 @@ enum CodeNavigatorIcon {
                 drawSymbol(name, color: .white, scale: 0.7, in: rect)
             case let .bareSymbol(name):
                 if inverted { plate(rect, radius: radius) }
-                drawSymbol(name, color: color, scale: inverted ? 0.84 : 1, in: rect)
+                drawSymbol(name, color: color, scale: inverted ? 0.96 : 1.2, in: rect)
             case let .badge(name):
                 // A badge keeps its own colours on a selected row, on a white plate.
                 if inverted {
