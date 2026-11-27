@@ -759,6 +759,52 @@ public class Owner {
     }
 
     /** An operand that is a constant by itself, not part of a memory reference. */
+    /**
+     * Whether an instruction's immediate only moves the stack pointer — the
+     * frame size of `push25 s0,0x10`, `pop25`, `sub esp,0x20` — and so names
+     * no value: the instruction writes the stack pointer, and its p-code
+     * carries the constant nowhere else. `push 0` stores the constant and
+     * stays a value (issue 36dabe9a).
+     */
+    private boolean onlyAdjustsStack(Instruction instruction, ghidra.program.model.scalar.Scalar scalar) {
+        ghidra.program.model.lang.Register stack = program.getCompilerSpec().getStackPointer();
+        if (stack == null) return false;
+        ghidra.program.model.pcode.PcodeOp[] pcode = instruction.getPcode();
+        boolean writesStack = false;
+        for (ghidra.program.model.pcode.PcodeOp op : pcode) {
+            ghidra.program.model.pcode.Varnode out = op.getOutput();
+            if (out != null && out.isRegister() && program.getRegister(out) != null && stack.contains(program.getRegister(out))) writesStack = true;
+        }
+        if (!writesStack) return false;
+        java.util.Set<ghidra.program.model.pcode.Varnode> carried = new java.util.HashSet<>();
+        for (ghidra.program.model.pcode.PcodeOp op : pcode) {
+            boolean uses = false;
+            for (ghidra.program.model.pcode.Varnode input : op.getInputs()) {
+                if (input == null) continue;
+                if (carried.contains(input)) { uses = true; break; }
+                if (input.isConstant()) {
+                    int size = input.getSize();
+                    long mask = size >= 8 ? -1L : (1L << (size * 8)) - 1;
+                    if ((input.getOffset() & mask) == (scalar.getUnsignedValue() & mask)
+                        || (input.getOffset() & mask) == (scalar.getSignedValue() & mask)) {
+                        if (op.getOpcode() != ghidra.program.model.pcode.PcodeOp.LOAD
+                            && op.getOpcode() != ghidra.program.model.pcode.PcodeOp.STORE || input != op.getInput(0)) {
+                            uses = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!uses) continue;
+            ghidra.program.model.pcode.Varnode out = op.getOutput();
+            if (out == null) return false;
+            if (out.isUnique()) { carried.add(out); continue; }
+            if (out.isRegister() && program.getRegister(out) != null && stack.contains(program.getRegister(out))) continue;
+            return false;
+        }
+        return true;
+    }
+
     private static boolean isImmediate(Instruction instruction, int index) {
         int type = instruction.getOperandType(index);
         return ghidra.program.model.lang.OperandType.isScalar(type)
@@ -871,6 +917,7 @@ public class Owner {
         JsonArray applied = new JsonArray();
         JsonArray skipped = new JsonArray();
         JsonArray notImmediate = new JsonArray();
+        JsonArray stackAdjust = new JsonArray();
         int droppedReferences = 0;
         ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
         for (Function function : functions) {
@@ -887,6 +934,14 @@ public class Owner {
                         item.addProperty("operand", index);
                         item.addProperty("text", instruction.toString());
                         notImmediate.add(item);
+                        continue;
+                    }
+                    if (onlyAdjustsStack(instruction, scalar)) {
+                        JsonObject item = new JsonObject();
+                        item.addProperty("address", hex(at));
+                        item.addProperty("operand", index);
+                        item.addProperty("text", instruction.toString());
+                        stackAdjust.add(item);
                         continue;
                     }
                     String held = null;
@@ -926,6 +981,8 @@ public class Owner {
         answer.add("applied", applied);
         answer.add("skipped", skipped);
         if (notImmediate.size() > 0) answer.add("not_immediate", notImmediate);
+        // An immediate that only sizes the stack frame names no value.
+        if (stackAdjust.size() > 0) answer.add("stack_adjust", stackAdjust);
         if (droppedReferences > 0) answer.addProperty("address_references_dropped", droppedReferences);
         return answer;
     }

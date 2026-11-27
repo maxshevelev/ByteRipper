@@ -120,4 +120,34 @@ final class GhidraOwnerEquateByteEnumTests: XCTestCase {
         let code = String(decoding: try await host.read(module, "/v1/function/0x1355C"), as: UTF8.self)
         XCTAssertTrue(code.contains("= GpcrTestInput"), code)
     }
+
+    /// `functions` names the reply byte of `movi a1,0x0`, not the frame size
+    /// of the `push25 s0,0x0` and `pop25 s0,0x0` around it (issue 36dabe9a).
+    func testFunctionsModeSkipsTheStackFrameImmediate() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_EC_MODULE"], !path.isEmpty else {
+            throw XCTSkip("GHIDRA_EC_MODULE names no EC image")
+        }
+        guard (try? GhidraInstall.find()) != nil else { throw XCTSkip("no Ghidra on this machine") }
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerEquateByteEnumTests-\(UUID().uuidString)", isDirectory: true)
+        self.directory = directory
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraOwnerEquateByteEnumTests"),
+                              writer: store)
+        let module = GhidraHost.moduleDigest(of: image)
+        _ = try await host.create(module: image, name: "ItEcNmD562", source: .init(document: "dump", node: "0.0.3"))
+        defer { Task { await host.stop(module) } }
+        try await host.take(module)
+        let data = try await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: [
+            "functions": ["0x74AA", "0x75FA", "0x7606"], "value": "0x0", "name": "ReplyTestZero", "dry_run": true]))
+        let answer = (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        let applied = (answer["applied"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }
+        let frames = (answer["stack_adjust"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }
+        XCTAssertFalse(applied.contains { $0.hasPrefix("push25") || $0.hasPrefix("pop25") }, "\(answer)")
+        XCTAssertTrue(frames.contains { $0.hasPrefix("push25") }, "\(answer)")
+        XCTAssertTrue(frames.contains { $0.hasPrefix("pop25") }, "\(answer)")
+        XCTAssertFalse(applied.isEmpty, "\(answer)")
+    }
 }
