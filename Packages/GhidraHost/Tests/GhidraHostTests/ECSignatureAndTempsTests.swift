@@ -127,4 +127,26 @@ final class ECSignatureAndTempsTests: XCTestCase {
         XCTAssertTrue(c.contains("UINT8 Ram44D;"), c)
         XCTAssertFalse(c.contains("Unable to use type"), c)
     }
+
+    /// The follow-up: a web named first, then typed by an item with no
+    /// name, by the value's address on either storage, takes the type.
+    func testANamedJoinedVariableTakesATypeAlone() async throws {
+        let (host, module) = try await made()
+        defer { Task { await host.stop(module) } }
+        func write(_ items: [[String: Any]]) async throws -> [[String: Any]] {
+            try json(try await host.write(module, "/v1/rename/variables", body: try JSONSerialization.data(
+                withJSONObject: ["items": items])))["items"] as? [[String: Any]] ?? []
+        }
+        let named = try await write([["function": "0x7200", "storage": "HASH:00000000:1", "first_use": "0x723C",
+                                      "name": "OldRamByte"]])
+        XCTAssertEqual(named.first?["ok"] as? Bool, true, "\(named)")
+        let typed = try await write([["function": "0x7200", "storage": "HASH:00000000:1", "first_use": "0x723C",
+                                      "type": "UINT8"]])
+        XCTAssertEqual(typed.first?["ok"] as? Bool, true, "\(typed)")
+        let c = try json(try await host.read(module, "/v1/function/0x7200"))["c"] as? String ?? ""
+        XCTAssertTrue(c.contains("UINT8 OldRamByte;"), c)
+        let storage = try XCTUnwrap(named.first?["storage"] as? String)
+        let again = try await write([["function": "0x7200", "storage": storage, "first_use": "0x725A", "type": "UINT8"]])
+        XCTAssertEqual(again.first?["ok"] as? Bool, true, "by the named storage too: \(again)")
+    }
 }

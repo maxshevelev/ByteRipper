@@ -7975,8 +7975,12 @@ public class Owner {
                 answer.addProperty("storage", holder.getStorage().toString());
                 answer.addProperty("first_use", firstUse);
                 answer.addProperty("joined", true);
-                answer.addProperty("unchanged", type == null);
+                answer.addProperty("unchanged", true);
                 if (type == null) return answer;
+                // A type for it goes the way a named one's does: on the
+                // variable, by Ghidra's own commit, not on a table entry the
+                // decompiler reads as one copy's (follow-up to 1df1ef78).
+                match = holder;
             }
         }
         if (match == null) {
