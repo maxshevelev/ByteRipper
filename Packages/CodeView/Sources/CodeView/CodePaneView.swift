@@ -2769,7 +2769,8 @@ import ToolModuleKit
             case .list(.strings): L("Strings")
             case .list(.postCodes): L("POST")
             case .list(.statusCodes): L("Status")
-            case .interfaces, .search, .record: ""
+            case let .record(id, _, _): CodeRecordSectionView.tabWord(of: id) ?? ""
+            case .interfaces, .search: ""
             }
         }
     }
@@ -2802,8 +2803,12 @@ import ToolModuleKit
                                      tooltip: L("Interfaces: what the module installs, looks up and is notified of"))
             case let .record(id, title, symbol):
                 // help: panel.code.record-sections
-                listControl.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: nil),
-                                     forSegment: segment)
+                // A record's tab is a short word, as the lists are; the
+                // profile's glyph only for a record the app has no word for.
+                if labels[segment].isEmpty {
+                    listControl.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: nil),
+                                         forSegment: segment)
+                }
                 ControlHelp.describe(listControl, segment: segment,
                                      CodeRecordSectionView.title(of: id, fallback: title))
             }

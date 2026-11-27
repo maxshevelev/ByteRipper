@@ -2200,3 +2200,9 @@
 "Width" = "Breite";
 "Writer" = "Schreibt";
 "Writers" = "Schreiber";
+
+/* Record tabs of the code navigator: the trade's short terms, the same in every language. */
+"Int" = "Int";
+"Host" = "Host";
+"RAM" = "RAM";
+"SMBus" = "SMBus";

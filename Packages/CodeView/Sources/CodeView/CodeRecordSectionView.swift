@@ -1095,6 +1095,20 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     /// A column's header in the reader's language: the profiles carry
     /// English, and a title not listed here stays the profile's.
+    /// A record's word on the navigator's switch: short, the trade's term —
+    /// nil for a record the app has none for, which keeps its glyph.
+    static func tabWord(of id: String) -> String? {
+        switch id {
+        case "irq_map": L("Int")
+        case "host_commands": L("Host")
+        case "ec_ram": L("RAM")
+        case "smbus_peers": L("SMBus")
+        case "gpio": L("GPIO")
+        case "eflash_area": L("Data")
+        default: nil
+        }
+    }
+
     static func columnTitle(_ english: String) -> String {
         switch english {
         case "Access": L("Access")

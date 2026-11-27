@@ -1,4 +1,4 @@
-@source-sha 14883ff7482a52b4080a6832beb47d7ccc508e9b308a46d516e9432eb308a3f8
+@source-sha 1f7bb9e49621b6b0fe75f7a5f8d4e8a4a54fe7995f9824e4be36ac675b4d8b40
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -53,7 +53,7 @@ Das Symbol mit Pfeilen nach oben und unten im Umschalter über der Liste, vor de
 
 ## Tabs je nach Modultyp
 
-Welche Tabs der Umschalter zeigt, hängt vom Typ des Moduls ab. Ein UEFI-Modul hat alle oben beschriebenen Tabs. Eine EC-Firmware hat weder Interfaces noch POST-Codes noch Statuscode-Meldungen und kaum Zeichenketten, daher keinen dieser vier Tabs; an ihrer Stelle stehen vor der Lupe eigene Tabs, jeder als Symbol: **Interrupts**, **Host-Befehle**, **EC-RAM**, **SMBus und I2C**, **GPIO** und **Flash-Datenbereich**. Steht der Zeiger auf einem Symbol, erscheint der Name des Abschnitts. Diese Abschnitte werden bei der Analyse des EC-Images gefüllt.
+Welche Tabs der Umschalter zeigt, hängt vom Typ des Moduls ab. Ein UEFI-Modul hat alle oben beschriebenen Tabs. Eine EC-Firmware hat weder Interfaces noch POST-Codes noch Statuscode-Meldungen und kaum Zeichenketten, daher keinen dieser vier Tabs; an ihrer Stelle stehen vor der Lupe eigene Tabs, jeder mit einem kurzen Wort bezeichnet: **Int** für die Interrupts, **Host** für die Host-Befehle, **RAM** für den EC-RAM, **SMBus** für SMBus und I2C, **GPIO** und **Daten** für den Flash-Datenbereich. Steht der Zeiger auf einem Tab, erscheint der vollständige Name des Abschnitts. Diese Abschnitte werden bei der Analyse des EC-Images gefüllt.
 
 ## Einträge eines EC-Images
 

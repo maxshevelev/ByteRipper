@@ -78,7 +78,7 @@ The up and down arrows in the switch above the list, before the magnifier, show 
 
 ## Sections by module kind
 
-The tabs of the switch depend on the kind of module the panel reads. A UEFI module has every tab described above. An EC firmware image has no interfaces, no POST codes, no status-code reports and few strings, so it has none of those four tabs; in their place come tabs of its own, each drawn as a symbol before the magnifier: **Interrupts**, **Host commands**, **EC RAM**, **SMBus and I2C**, **GPIO** and **Flash data area**. The pointer over a symbol shows the section's name. These sections are filled in by the review of the EC image.
+The tabs of the switch depend on the kind of module the panel reads. A UEFI module has every tab described above. An EC firmware image has no interfaces, no POST codes, no status-code reports and few strings, so it has none of those four tabs; in their place come tabs of its own, each named by a short word before the magnifier: **Int** for interrupts, **Host** for host commands, **RAM** for the EC RAM, **SMBus** for SMBus and I2C, **GPIO**, and **Data** for the flash data area. The pointer over a word shows the section's full name. These sections are filled in by the review of the EC image.
 
 ## Records of an EC image
 

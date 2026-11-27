@@ -99,6 +99,27 @@ final class CodeNavigatorTabsTests: XCTestCase {
         XCTAssertEqual(pane.navigatorListIndex, 0)
     }
 
+    /// A record's tab is a short word, not a glyph, and the EC switch fits
+    /// the navigator at its default width with every word whole.
+    func testAnECSwitchNamesItsRecordTabsInWords() throws {
+        let pane = try self.pane(kind: "EC", ecFamily: "ite-nds32")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 400),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = pane
+        pane.layoutSubtreeIfNeeded()
+        let control = pane.navigatorSwitch
+        let words = (0..<control.segmentCount).map { control.label(forSegment: $0) ?? "" }
+        XCTAssertEqual(Array(words.dropFirst().dropLast()), ["Int", "Host", "RAM", "SMBus", "GPIO", "Data"])
+        for segment in 1..<(control.segmentCount - 1) { XCTAssertNil(control.image(forSegment: segment)) }
+        XCTAssertLessThanOrEqual(control.intrinsicContentSize.width, CodePaneView.defaultNavigatorWidth - 16,
+                                 "the switch fits the navigator")
+        if let folder = ProcessInfo.processInfo.environment["RECORDS_PNG_DIR"],
+           let rep = control.bitmapImageRepForCachingDisplay(in: control.bounds) {
+            control.cacheDisplay(in: control.bounds, to: rep)
+            try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder + "/ec-switch.png"))
+        }
+    }
+
     /// A new revision published while a record tab is in front changes the
     /// data only: the tab stays, and the switch and the section are the same
     /// views, with the new revision's rows in them. The app's path is
