@@ -2159,7 +2159,6 @@
 "Select a row to see its details." = "Выберите строку, чтобы увидеть подробности.";
 "Confidence" = "Достоверность";
 "Established" = "Установлено";
-"About this record" = "Об этой записи";
 "Flash data areas" = "Области данных во флеш-памяти";
 "Used by host commands" = "Используется командами хоста";
 "Indicators" = "Индикаторы";
@@ -2206,7 +2205,7 @@
 "RAM" = "RAM";
 "SMBus" = "SMBus";
 
-"Show or hide what this record is" = "Показать или скрыть, что содержит эта запись";
-"The review's note on this record" = "Примечание разбора к этой записи";
 "Not checked:" = "Не проверено:";
 "Partial:" = "Не полностью:";
+
+"What this record is and how far the review has got" = "Что содержит эта запись и как далеко продвинулся разбор";

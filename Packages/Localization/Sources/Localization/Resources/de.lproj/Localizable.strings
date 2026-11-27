@@ -2159,7 +2159,6 @@
 "Select a row to see its details." = "Wählen Sie eine Zeile, um ihre Details zu sehen.";
 "Confidence" = "Sicherheit";
 "Established" = "Belegt";
-"About this record" = "Über diesen Eintrag";
 "Flash data areas" = "Flash-Datenbereiche";
 "Used by host commands" = "Verwendet von Host-Befehlen";
 "Indicators" = "Anzeigen";
@@ -2206,7 +2205,7 @@
 "RAM" = "RAM";
 "SMBus" = "SMBus";
 
-"Show or hide what this record is" = "Ein- oder ausblenden, was dieser Eintrag enthält";
-"The review's note on this record" = "Hinweis der Analyse zu diesem Eintrag";
 "Not checked:" = "Nicht geprüft:";
 "Partial:" = "Unvollständig:";
+
+"What this record is and how far the review has got" = "Was dieser Eintrag enthält und wie weit die Analyse ist";

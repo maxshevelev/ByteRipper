@@ -14,12 +14,6 @@ final class CodeRecordSectionViewTests: XCTestCase {
         ModuleRecords.of(reviewDocument: try JSONSerialization.data(withJSONObject: ["records": object]))
     }
 
-    override func tearDown() {
-        for record in AnalysisProfile.ecIteNds32.records {
-            CodeRecordSectionView.forgetLegend(record.id)
-        }
-        super.tearDown()
-    }
 
     /// The section in a window at the navigator's narrowest, laid out.
     private func panel(_ object: [String: Any], show id: String, width: CGFloat = 180) throws -> CodeRecordSectionView {
@@ -497,30 +491,26 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertTrue(partial == (nil, "Partial:", "each pair's note says what is left."))
     }
 
-    func testTheLegendIsShutByDefaultAndRememberedPerRecord() throws {
+    /// Over the list one line, the record and its status; what the record
+    /// is, what its rows cover and what is not checked are in the (i)'s
+    /// popover, in that order. Nothing over the list opens.
+    func testTheStatusLineCarriesEverythingInItsPopover() throws {
+        let header = CodeRecordSectionView.header(AnalysisProfile.hostCommandsHeader)
         let panel = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")
-        XCTAssertFalse(panel.legendIsOpen)
         XCTAssertEqual(panel.shownLegendLine, CodeRecordSectionView.title(of: "host_commands", fallback: "")
             + " · " + String(CodeRecordSectionView.statusText(.partial, note: nil).dropLast()))
-        XCTAssertEqual(panel.shownHeader, CodeRecordSectionView.header(AnalysisProfile.hostCommandsHeader))
+        XCTAssertEqual(panel.shownHeader, header)
         panel.legendTitle.performClick(nil)
-        XCTAssertTrue(panel.legendIsOpen)
+        XCTAssertTrue(panel.shownPopoverText?.hasPrefix(header) ?? false, "the record's words first")
 
-        let again = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")
-        XCTAssertTrue(again.legendIsOpen, "remembered")
-        again.show(id: "ec_ram", fallbackTitle: "ec_ram", font: .systemFont(ofSize: 11))
-        XCTAssertFalse(again.legendIsOpen, "per record")
-        XCTAssertEqual(again.shownNote, "the battery block is not read yet")
-        XCTAssertEqual(again.shownHeader, "")
-        // The review's note is behind the (i) after the status, not in the legend.
-        XCTAssertTrue(again.legendDisclosure.isHidden, "no header: nothing to open")
-        XCTAssertFalse(again.statusInfo.isHidden)
-        again.statusInfo.performClick(nil)
-        XCTAssertEqual(again.shownPopoverText, "the battery block is not read yet")
+        panel.show(id: "ec_ram", fallbackTitle: "ec_ram", font: .systemFont(ofSize: 11))
+        XCTAssertEqual(panel.shownHeader, "")
+        XCTAssertFalse(panel.statusInfo.isHidden)
+        panel.statusInfo.performClick(nil)
+        XCTAssertEqual(panel.shownPopoverText, "the battery block is not read yet")
 
         let bare = try self.panel(["gpio": ["status": "complete", "rows": []]], show: "gpio")
-        XCTAssertTrue(bare.legendDisclosure.isHidden, "nothing to open")
-        XCTAssertTrue(bare.statusInfo.isHidden, "a complete record with no note has no (i)")
+        XCTAssertTrue(bare.statusInfo.isHidden, "nothing to say: no (i)")
     }
 
     func testTheFilterAtTheFootMatchesKeyAndLabel() throws {

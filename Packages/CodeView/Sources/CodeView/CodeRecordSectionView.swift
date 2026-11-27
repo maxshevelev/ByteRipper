@@ -27,16 +27,12 @@ import ToolModuleKit
 final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
     /// The record id the section shows, nil before the first `show`.
     private(set) var recordID: String?
-    /// The legend over the list, as a panel's marks legend: shut, one line —
-    /// the record's name and its status; open, what the record is (the
-    /// profile's `header`) and the review's note on it. Open or shut is
-    /// remembered per record (`legendKey`), shut until the reader opens it.
-    let legendDisclosure = NSButton()
+    /// The line over the list: the record's name and its status, and an
+    /// (i) after them whose popover says what the record is (the profile's
+    /// `header`), what its rows cover and what the review has not checked.
+    /// Nothing over the list opens or takes room of its own.
     let legendTitle = NSButton()
-    private let legendBody = NSStackView()
-    private let headerLabel = NSTextField(wrappingLabelWithString: "")
-    /// The (i) after the status: the review's note on the record — why it
-    /// is partial — in a popover, not in the legend.
+    private var storedHeader: String?
     let statusInfo = ToolPanelInfoButton()
     private var titleText = ""
     /// At the foot, as the Functions list's filter (`CodePaneView.dressFilter`).
@@ -99,16 +95,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        legendDisclosure.bezelStyle = .disclosure
-        legendDisclosure.setButtonType(.pushOnPushOff)
-        legendDisclosure.title = ""
-        legendDisclosure.target = self
-        legendDisclosure.action = #selector(legendToggled)
         // help: panel.code.record-sections
-        ControlHelp.describe(legendDisclosure, name: L("About this record"),
-                             tooltip: L("Show or hide what this record is"))
-        // help: panel.code.record-sections
-        ControlHelp.describe(statusInfo, L("The review's note on this record"))
+        ControlHelp.describe(statusInfo, L("What this record is and how far the review has got"))
         statusInfo.target = self
         statusInfo.action = #selector(statusInfoClicked)
         legendTitle.isBordered = false
@@ -117,8 +105,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         (legendTitle.cell as? NSButtonCell)?.wraps = false
         legendTitle.cell?.lineBreakMode = .byTruncatingTail
         legendTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        headerLabel.isSelectable = true
-        headerLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         // The same quiet, centred words as the navigator's empty lists.
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center
@@ -158,18 +144,11 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(0.4), at: 1)
 
-        let heading = NSStackView(views: [legendDisclosure, legendTitle, statusInfo])
+        let heading = NSStackView(views: [legendTitle, statusInfo])
         heading.orientation = .horizontal
         heading.alignment = .centerY
         heading.spacing = 2
-        legendBody.orientation = .vertical
-        legendBody.alignment = .leading
-        legendBody.spacing = 4
-        legendBody.detachesHiddenViews = true
-        // Under the title, not under the chevron, as the marks legend.
-        legendBody.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)
-        legendBody.addArrangedSubview(headerLabel)
-        let words = NSStackView(views: [heading, legendBody])
+        let words = NSStackView(views: [heading])
         words.orientation = .vertical
         words.alignment = .leading
         words.spacing = 4
@@ -185,7 +164,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             words.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             words.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             heading.trailingAnchor.constraint(lessThanOrEqualTo: words.trailingAnchor),
-            legendBody.widthAnchor.constraint(equalTo: words.widthAnchor),
             splitter.topAnchor.constraint(equalTo: words.bottomAnchor, constant: 6),
             splitter.leadingAnchor.constraint(equalTo: leadingAnchor),
             splitter.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -235,7 +213,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         record = profile?.records.first { $0.id == id }
         titleText = Self.title(of: id, fallback: fallbackTitle)
         emptyLabel.font = font
-        headerLabel.font = CodePaneView.navigatorFont()
         table.rowHeight = CodePaneView.navigatorRowHeight
         if changed {
             searchField.stringValue = ""
@@ -262,11 +239,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         ]))
         legendTitle.attributedTitle = line
         let header = record?.header.map(Self.header) ?? ""
-        headerLabel.stringValue = header
-        headerLabel.isHidden = header.isEmpty
-        statusInfo.isHidden = parts.scope == nil && parts.open == nil
-        legendDisclosure.isHidden = header.isEmpty
-        applyLegend()
+        storedHeader = header.isEmpty ? nil : header
+        statusInfo.isHidden = storedHeader == nil && parts.scope == nil && parts.open == nil
         allRows = (stored?.rows ?? []).sorted(by: keyOrder)
         measureKeys()
         applyFilter()
@@ -316,10 +290,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The legend's one line: the record's name and its status.
     var shownLegendLine: String { legendTitle.attributedTitle.string }
     var shownNote: String { storedNote ?? "" }
-    /// What the legend says the record is; empty when it has no words.
-    var shownHeader: String { headerLabel.isHidden ? "" : headerLabel.stringValue }
-    /// Whether the legend's words are on screen.
-    var legendIsOpen: Bool { !legendBody.isHidden }
+    /// What the record is, as the status's popover says it; empty when it has no words.
+    var shownHeader: String { storedHeader ?? "" }
     /// The branches shown, in order: the value, the branch's words, its long
     /// words and how many rows it holds.
     var shownGroups: [(value: String, title: String, summary: String?, rows: Int)] {
@@ -729,37 +701,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     // MARK: - The (i) popovers
 
-    /// Where the legend's state is remembered: per record, in the store
-    /// every panel setting lives in.
-    static func legendKey(_ record: String) -> String { "RecordLegendExpanded.\(record)" }
-
-    /// Forgets the legend's state for `record`, for the tests.
-    static func forgetLegend(_ record: String) {
-        ToolPanelFont.defaults.removeObject(forKey: legendKey(record))
-    }
-
-    @objc private func legendToggled() {
-        setLegendOpen(legendDisclosure.state == .on)
-    }
-
-    @objc private func legendTitleClicked() {
-        guard !legendDisclosure.isHidden else { return }
-        setLegendOpen(legendBody.isHidden)
-    }
-
-    /// Opens or shuts the legend, and remembers it for this record.
-    func setLegendOpen(_ open: Bool) {
-        guard let recordID else { return }
-        ToolPanelFont.defaults.set(open, forKey: Self.legendKey(recordID))
-        applyLegend()
-    }
-
-    private func applyLegend() {
-        let open = recordID.map { ToolPanelFont.defaults.object(forKey: Self.legendKey($0)) as? Bool ?? false } ?? false
-        let shows = open && !legendDisclosure.isHidden
-        legendDisclosure.state = shows ? .on : .off
-        legendBody.isHidden = !shows
-    }
+    @objc private func legendTitleClicked() { showStatusInfo() }
 
     @objc private func statusInfoClicked() { showStatusInfo() }
 
@@ -792,9 +734,10 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// what the rows cover, then — under a warning — what is not checked yet.
     /// The status is on the line the (i) stands in, and is not said again.
     func showStatusInfo() {
-        guard storedScope != nil || storedNotChecked != nil else { return }
-        shownPopoverText = [storedScope, storedNotChecked].compactMap { $0 }.joined(separator: "\n\n")
+        guard storedHeader != nil || storedScope != nil || storedNotChecked != nil else { return }
+        shownPopoverText = [storedHeader, storedScope, storedNotChecked].compactMap { $0 }.joined(separator: "\n\n")
         let stack = ToolPanelPopover.stack()
+        if let header = storedHeader { stack.addArrangedSubview(ToolPanelPopover.prose(header)) }
         if let scope = storedScope { stack.addArrangedSubview(ToolPanelPopover.prose(scope)) }
         if let open = storedNotChecked {
             let mark = NSImageView()

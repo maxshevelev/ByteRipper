@@ -177,10 +177,13 @@ a cut's offset and description.
   the corner button opens it large. No tooltip repeats what its row,
   branch or legend line shows. The label is never cut in the text, only
   by the line at the column's width. Each record keeps its selected row
-  and scroll across tab switches and new revisions. Over the list stands a legend
-  built as `ToolRowMarksLegend`'s: a disclosure, one line of name and status,
-  the record's description and note under it, shut by default and
-  remembered per record in `ToolPanelFont.defaults`. The filter is at the
+  and scroll across tab switches and new revisions. Over the list stands one line,
+  the record's name and status, and an (i) after it whose popover holds,
+  in this order, what the record is (the profile's header), what its rows
+  cover (the review's `note`) and, under a warning sign and a bold
+  **Not checked:**, what the review has not checked (`not_checked`).
+  Nothing over the list opens or takes the list's room; every record tab
+  is drawn so. The filter is at the
   foot, as the Functions list has it (`CodePaneView.dressFilter`).
 
 ## 4a. The reader's line in read-only text
