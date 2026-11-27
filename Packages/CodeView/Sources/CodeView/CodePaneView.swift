@@ -6649,10 +6649,39 @@ class CodeNavigatorCell: NSTableCellView {
     var indent: CGFloat = 0 {
         didSet { leading.constant = 4 + indent }
     }
-    /// Room kept after the name at the row's trailing edge, for a control a
-    /// row lays there — the (i) of a record's branch.
-    var trailingRoom: CGFloat = 0 {
-        didSet { fieldToEdge.constant = -4 - trailingRoom }
+    /// A control standing right after the row's words — a branch's (i), a
+    /// heading's (?) — not at the trailing edge: the words keep their own
+    /// width, cut only when the row is too narrow for both.
+    private(set) var accessory: NSView?
+    private var fieldWidth: NSLayoutConstraint!
+    private var accessoryConstraints: [NSLayoutConstraint] = []
+
+    func showsAccessory(_ view: NSView?) {
+        if accessory !== view {
+            NSLayoutConstraint.deactivate(accessoryConstraints)
+            accessoryConstraints = []
+            if let old = accessory, old.superview === self { old.removeFromSuperview() }
+            accessory = view
+            if let view {
+                view.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(view)
+                accessoryConstraints = [
+                    view.leadingAnchor.constraint(equalTo: textField!.trailingAnchor, constant: 3),
+                    view.centerYAnchor.constraint(equalTo: centerYAnchor)
+                ]
+                NSLayoutConstraint.activate(accessoryConstraints)
+            }
+        }
+        // The chain the row is leaving is let go before the other takes hold
+        // (see `showsBadge`).
+        if view != nil {
+            fieldToEdge.isActive = false
+            fieldWidth.isActive = true
+        } else {
+            fieldWidth.isActive = false
+            fieldToEdge.isActive = badge.isHidden
+        }
+        needsLayout = true
     }
 
     init(identifier: NSUserInterfaceItemIdentifier) {
@@ -6692,6 +6721,7 @@ class CodeNavigatorCell: NSTableCellView {
         iconGap = field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 4)
         fieldToEdge = field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)
         fieldToBadge = field.trailingAnchor.constraint(equalTo: badge.leadingAnchor, constant: -4)
+        fieldWidth = field.widthAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
             leading,
             disclosureWidth,
@@ -6761,6 +6791,12 @@ class CodeNavigatorCell: NSTableCellView {
 
     /// The row draws the mark under the cell, from the frames set here.
     override func layout() {
+        if let accessory, let field = textField {
+            // The words as wide as they are, in whole points (a field at half
+            // points draws blurred), no further than leaves the control room.
+            let room = bounds.width - field.frame.minX - 3 - accessory.intrinsicContentSize.width - 6
+            fieldWidth.constant = max(0, min(field.intrinsicContentSize.width.rounded(.up), room.rounded(.down)))
+        }
         super.layout()
         superview?.needsDisplay = true
     }
@@ -6856,6 +6892,43 @@ class CodeNavigatorCell: NSTableCellView {
             fieldToEdge.isActive = true
         }
         if shows { drawBadge() }
+    }
+
+    /// Opens or closes `item` as every tab of the navigator does: the rows
+    /// slide in and out over 0.2 s, never jump.
+    static func toggle(_ item: Any, in outline: NSOutlineView) {
+        let opening = !outline.isItemExpanded(item)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            if opening {
+                outline.animator().expandItem(item)
+            } else {
+                outline.animator().collapseItem(item)
+            }
+        }
+    }
+
+    /// The settings every list of the navigator's tabs shares: one column, no
+    /// header, the inset style with the system's rounded selection, the
+    /// navigator's row height, no indentation of AppKit's own (a cell indents
+    /// by `indent`) and no gaps between cells.
+    static func dress(_ outline: NSOutlineView) {
+        outline.headerView = nil
+        outline.rowSizeStyle = .custom
+        outline.style = .inset
+        outline.backgroundColor = .clear
+        outline.rowHeight = CodePaneView.navigatorRowHeight
+        outline.indentationPerLevel = 0
+        outline.intercellSpacing = NSSize(width: 0, height: 0)
+        outline.floatsGroupRows = false
+        outline.usesAlternatingRowBackgroundColors = false
+        outline.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+    }
+
+    /// A heading's words: one weight up, in grey.
+    static func headingAttributes() -> [NSAttributedString.Key: Any] {
+        [.font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
+         .foregroundColor: NSColor.secondaryLabelColor]
     }
 
     /// The click has already flipped the button's state: the chevron turns

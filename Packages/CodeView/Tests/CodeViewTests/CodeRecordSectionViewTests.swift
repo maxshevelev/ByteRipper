@@ -346,6 +346,18 @@ final class CodeRecordSectionViewTests: XCTestCase {
 
     // MARK: - Branches
 
+    /// The (i) of a port pair says what the ports are, then what the review
+    /// noted for that pair; a pair with only the review's note has an (i) too.
+    func testABranchNoteFollowsThePortsWords() throws {
+        var noted = commands
+        noted["branch_notes"] = ["62/66": "0x45/0x47 not reviewed"]
+        let panel = try self.panel(["host_commands": noted], show: "host_commands")
+        let group = try XCTUnwrap(panel.table.view(atColumn: 0, row: 1, makeIfNecessary: true) as? RecordGroupCell)
+        group.info.performClick(nil)
+        XCTAssertEqual(panel.shownPopoverText,
+                       CodeRecordSectionView.valueSummary(AnalysisProfile.acpiPortsSummary) + "\n\n0x45/0x47 not reviewed")
+    }
+
     func testHostCommandsStandUnderTheirPortPairs() throws {
         let panel = try self.panel(["host_commands": commands], show: "host_commands")
         XCTAssertEqual(panel.shownGroups.map(\.value), ["60/64", "62/66", "68/6C"])

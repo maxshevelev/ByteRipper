@@ -133,21 +133,41 @@ a cut's offset and description.
   nil target, the action travels the responder chain from whatever has the
   focus, and that may be another pane.
 - **Toolbar items** use plain `NSToolbarItem` images. A view item draws small.
+- **(?) is the help's, and only the help's.** A question mark on screen
+  opens a page of the book (`HelpButton`); no other mark uses one.
 - **A row the review inferred** rather than read from the code (a record row
-  with confidence `inference`) is drawn in italics, with `questionmark.circle`
-  in the secondary colour in its first cell — the marker slot of
-  `ToolPanelTable.makeCell(marker:)` set with `setMarker`; the pointer on it
-  reads "Inference: <the row's note>" (`CodeRecordSectionView`).
+  with confidence `inference`) is drawn in italics, with `circle.dashed` in
+  the secondary colour after its key; the pointer on the row reads
+  "Inference: <the row's note>" (`CodeRecordSectionView`).
+- **Every list of the code navigator's tabs** — Interfaces, Search, the
+  records, and the Functions list's rows — is drawn one way, from one place in
+  `CodeNavigatorCell` (`Packages/CodeView`):
+  - an outline is set up by `CodeNavigatorCell.dress` (the Functions table,
+    which also takes columns, sets the same by hand): one column, no
+    header, `.inset` with the system's rounded selection, the navigator's row
+    height, no indentation or cell gaps of AppKit's own;
+  - every row is a `CodeNavigatorCell` (or a subclass): the chevron's room,
+    then a mark on a coloured square (`CodeNavigatorIcon`; a letter for an
+    entry — `f`, `G`, a record's letter — a symbol for a heading), then the
+    words in `navigatorFont`; a level further in moves by `indent`;
+  - a heading's words are `CodeNavigatorCell.headingAttributes()`: one
+    weight up, grey, the count in brackets after them;
+  - a control in a row — a heading's (?) or a branch's (i) — stands right
+    after the words (`showsAccessory`), never at the trailing edge;
+  - a branch opens and closes animated, through
+    `CodeNavigatorCell.toggle(_:in:)`, from the chevron and from the row;
+  - the filter is at the bottom, `CodePaneView.dressFilter`.
+  A new tab adds no table settings, fonts or toggles of its own.
 - **A record tab in the navigator** is a list and details, as Functions:
   one column, a line of key in monospace and a short label (the `label`
   column, else the first sentence of the main text), labels aligned past the
-  widest key by a tab stop, no sideways scroll. A line carries at most one
-  mark, at its trailing edge: the inference **?**, a pin's direction arrow,
-  or grey text for an interrupt left off — the record list's one deviation
-  from the marker slot before the name. A branch shows its row count and,
-  for a port pair, an (i) with a popover; its words are not in its cell's
-  `textField`, since AppKit draws a group row's `textField` in its own font
-  until the row is made again. The selected row's details are the
+  widest key by a tab stop, no sideways scroll, drawn as every navigator
+  list above. A line carries at most one mark after its key: the inference
+  circle or a pin's direction arrow; an interrupt left off reads in grey. A
+  branch shows its row count and an (i) whose popover holds what the
+  profile says of it and the review's own note for it (`branch_notes`).
+  The branch row is never an AppKit group row, which draws its
+  `textField` in its own font until the row is made again. The selected row's details are the
   firmware panels' own: a `ToolDetailPane` under the list in an
   `ALSplitView`, filled by `ToolDetailScroll.showRows` — title (key, and
   the review's `label` if any), each field once with the main text whole

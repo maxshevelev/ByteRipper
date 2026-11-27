@@ -136,17 +136,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         column.resizingMask = .autoresizingMask
         outline.addTableColumn(column)
         outline.outlineTableColumn = column
-        outline.headerView = nil
-        outline.rowSizeStyle = .custom
-        // The inset list, as the UEFI tree has it: the rows clear of the
-        // panel's edges, and the selection's rounded block the system's own.
-        outline.style = .inset
-        outline.backgroundColor = .clear
-        // The rows draw their own chevron and inset, as the Functions list's
-        // groups do; the outline's own triangle and indent are not used.
-        outline.indentationPerLevel = 0
-        outline.intercellSpacing = NSSize(width: 0, height: 0)
-        outline.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        CodeNavigatorCell.dress(outline)
         outline.dataSource = self
         outline.delegate = self
         outline.target = self
@@ -394,15 +384,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     /// at their first frame — no indent, no text. The Functions list had the
     /// same fault (8b99226f).
     func toggle(_ group: GroupItem) {
-        let opening = !outline.isItemExpanded(group)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            if opening {
-                outline.animator().expandItem(group)
-            } else {
-                outline.animator().collapseItem(group)
-            }
-        }
+        CodeNavigatorCell.toggle(group, in: outline)
     }
 
     /// The zoom changed: the rows are made again in the new size and

@@ -120,13 +120,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         column.resizingMask = .autoresizingMask
         outline.addTableColumn(column)
         outline.outlineTableColumn = column
-        outline.headerView = nil
-        outline.rowSizeStyle = .custom
-        outline.style = .inset
-        outline.backgroundColor = .clear
-        outline.indentationPerLevel = 0
-        outline.intercellSpacing = NSSize(width: 0, height: 0)
-        outline.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        CodeNavigatorCell.dress(outline)
         outline.dataSource = self
         outline.delegate = self
         outline.target = self
@@ -536,10 +530,8 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             case let list?: " (\(list.count))"
             }
         }
-        cell.textField?.attributedStringValue = NSAttributedString(string: group.title + detail, attributes: [
-            .font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
-            .foregroundColor: NSColor.secondaryLabelColor
-        ])
+        cell.textField?.attributedStringValue = NSAttributedString(
+            string: group.title + detail, attributes: CodeNavigatorCell.headingAttributes())
         Self.putHelp(group.help, named: group.title, in: cell)
         return cell
     }
@@ -588,15 +580,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
     /// Opens or closes a row, as the Search tab's groups do.
     func toggle(_ item: Any) {
-        let opening = !outline.isItemExpanded(item)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            if opening {
-                outline.animator().expandItem(item)
-            } else {
-                outline.animator().collapseItem(item)
-            }
-        }
+        CodeNavigatorCell.toggle(item, in: outline)
     }
 
     /// The zoom changed: the rows are made again in the new size, what the
@@ -663,17 +647,10 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         }
     }
 
-    /// The kind's (?) at the row's trailing edge: what the kind is, in the
-    /// help. A reused cell has its old one taken off first.
-    private static func putHelp(_ link: HelpLink, named name: String, in cell: NSView) {
-        cell.subviews.filter { $0 is HelpButton }.forEach { $0.removeFromSuperview() }
-        let button = HelpButton.inline(for: link, tooltip: name,
-                                       pointSize: (CodePaneView.navigatorSize - 1).rounded())
-        cell.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-            button.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
-        ])
+    /// The kind's (?) right after its words: what the kind is, in the help.
+    private static func putHelp(_ link: HelpLink, named name: String, in cell: CodeNavigatorCell) {
+        cell.showsAccessory(HelpButton.inline(for: link, tooltip: name,
+                                              pointSize: (CodePaneView.navigatorSize - 1).rounded()))
     }
 
     // MARK: - For tests

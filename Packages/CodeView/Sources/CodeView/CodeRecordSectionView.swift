@@ -129,21 +129,10 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         column.resizingMask = .autoresizingMask
         table.addTableColumn(column)
         table.outlineTableColumn = column
-        table.headerView = nil
         table.dataSource = self
         table.delegate = self
-        // The inset list of the Functions and Interfaces tabs: the selection is
-        // the system's rounded block, clear of the panel's edges.
-        table.style = .inset
-        table.backgroundColor = .clear
-        table.rowHeight = CodePaneView.navigatorRowHeight
-        table.intercellSpacing = NSSize(width: 0, height: 0)
-        table.rowSizeStyle = .custom
-        table.floatsGroupRows = false
-        table.indentationPerLevel = 0
-        table.usesAlternatingRowBackgroundColors = false
+        CodeNavigatorCell.dress(table)
         table.allowsMultipleSelection = true
-        table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         let menu = NSMenu()
         // help: panel.code.record-sections
         menu.addItem(withTitle: L("Copy Row as TSV"), action: #selector(copyRows), keyEquivalent: "").target = self
@@ -729,11 +718,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     /// Opens or closes a branch, as the Interfaces tab's kinds do.
     private func toggle(_ group: RecordGroupItem) {
-        if table.isItemExpanded(group) {
-            table.collapseItem(group)
-        } else {
-            table.expandItem(group)
-        }
+        CodeNavigatorCell.toggle(group, in: table)
     }
 
     // MARK: - The (i) popovers
@@ -779,8 +764,11 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// Shows the (i) of the branch at `row`: from the row, `.maxX`, so the
     /// rows under it stay in sight.
     func showGroupInfo(row: Int) {
-        guard let group = table.item(atRow: row) as? RecordGroupItem, let summary = group.summary else { return }
-        showInfo(title: group.label, text: summary, relativeTo: table.rect(ofRow: row), of: table, edge: .maxX)
+        // What the ports are, from the profile, then what the review says
+        // of this branch: what it covered and left out there.
+        guard let group = table.item(atRow: row) as? RecordGroupItem, group.hasInfo else { return }
+        let text = [group.summary, group.note].compactMap { $0 }.joined(separator: "\n\n")
+        showInfo(title: group.label, text: text, relativeTo: table.rect(ofRow: row), of: table, edge: .maxX)
     }
 
     private func showInfo(title: String, text: String, relativeTo rect: NSRect, of view: NSView, edge: NSRectEdge) {
@@ -960,7 +948,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             }
         }
         if let groupBy = record?.groupBy, let groupColumn = record?.column(groupBy) {
-            let groups = Self.groups(of: rows, by: groupColumn, keepEmpty: query.isEmpty)
+            let groups = Self.groups(of: rows, by: groupColumn, keepEmpty: query.isEmpty,
+                                     notes: records[recordID ?? ""]?.branchNotes ?? [:])
             items = groups
             shownRows = groups.flatMap { $0.children.map(\.values) }
         } else {
@@ -994,7 +983,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// value the rows hold. A value with words of its own is a branch with no
     /// rows too, unless a filter is on.
     private static func groups(of rows: [[String: RecordValue]], by column: AnalysisProfile.Column,
-                               keepEmpty: Bool) -> [RecordGroupItem] {
+                               keepEmpty: Bool, notes: [String: String]) -> [RecordGroupItem] {
         let declared = column.values ?? (column.kind == .bool ? ["true", "false"] : [])
         let found = Set(rows.map { groupValue($0, column) })
         let others = found.subtracting(declared).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
@@ -1008,7 +997,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             let label = title.isEmpty ? "\(columnTitle(column.title)) \(name)"
                 : english != nil ? "\(name)  \(title)" : title
             return RecordGroupItem(value: name, title: title, label: label,
-                                   summary: english.map(valueSummary), children: children)
+                                   summary: english.map(valueSummary), note: notes[name], children: children)
         }
     }
 
@@ -1229,9 +1218,14 @@ final class RecordGroupItem {
     /// What the branch's row reads: "62/66  ACPI EC", "Enabled", "Channel A".
     let label: String
     let summary: String?
+    /// The review's note for the branch, in the review's words.
+    let note: String?
+    var hasInfo: Bool { summary != nil || note != nil }
     let children: [RecordRowItem]
 
-    init(value: String, title: String, label: String, summary: String?, children: [RecordRowItem]) {
+    init(value: String, title: String, label: String, summary: String?, note: String? = nil,
+         children: [RecordRowItem]) {
+        self.note = note
         self.value = value
         self.title = title
         self.label = label
@@ -1257,14 +1251,8 @@ final class RecordGroupCell: CodeNavigatorCell {
 
     override init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(identifier: identifier)
-        info.translatesAutoresizingMaskIntoConstraints = false
         // help: panel.code.record-sections
         ControlHelp.describe(info, L("What these ports are"))
-        addSubview(info)
-        NSLayoutConstraint.activate([
-            info.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            info.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
     }
 
     @available(*, unavailable)
@@ -1274,10 +1262,9 @@ final class RecordGroupCell: CodeNavigatorCell {
         showsMark(mark, named: "record.group")
         textField?.attributedStringValue = NSAttributedString(
             string: group.label + " (\(group.children.count))",
-            attributes: [.font: NSFont.systemFont(ofSize: CodePaneView.navigatorSize, weight: .semibold),
-                         .foregroundColor: NSColor.secondaryLabelColor])
-        info.isHidden = group.summary == nil
-        trailingRoom = info.isHidden ? 0 : info.intrinsicContentSize.width + 6
+            attributes: CodeNavigatorCell.headingAttributes())
+        showsAccessory(group.hasInfo ? info : nil)
+        info.isHidden = !group.hasInfo
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {
