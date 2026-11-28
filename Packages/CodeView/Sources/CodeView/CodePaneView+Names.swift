@@ -23,30 +23,12 @@ extension CodePaneView {
     /// asks for many tokens: a copy of the whole text per token made a click
     /// in a long function's C cost seconds.
     private func symbol(of token: CodeToken, in units: [UTF16.CodeUnit]) -> CodeSymbol? {
-        func name() -> String {
-            guard token.start >= 0, token.start + token.length <= units.count else { return "" }
-            return String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
-        }
-        switch token.kind {
-        case .label:
-            // By name: a `goto` links to its label and the definition links
-            // nowhere, and a click on either highlights both.
-            return .named(.label, name())
-        case .function, .global, .pcode:
-            if let link = token.link { return .target(link) }
-            return .named(token.kind, name())
-        case .parameter, .local:
-            return .variable(name())
-        default:
-            return nil
-        }
+        CodeSymbolMatch.symbol(of: token, in: units)
     }
 
     func highlightedRanges(in tokens: [CodeToken], of text: String) -> [NSRange] {
         guard let highlightedSymbol else { return [] }
-        let units = Array(text.utf16)
-        return tokens.filter { symbol(of: $0, in: units) == highlightedSymbol }
-            .map { NSRange(location: $0.start, length: $0.length) }
+        return CodeSymbolMatch.ranges(of: highlightedSymbol, in: tokens, of: text)
     }
 
     /// The occurrences of the highlighted symbol in the C on screen. What
@@ -126,21 +108,12 @@ extension CodePaneView {
     public func goToOccurrence(forward: Bool) {
         let all = occurrences()
         guard !all.isEmpty else { NSSound.beep(); return }
-        var target: Int
-        var wrapped = false
-        if let current = currentOccurrence, all.indices.contains(current) {
-            target = current + (forward ? 1 : -1)
-        } else if showsDecompiledC {
-            let caret = cTextView.selectedRange().location
-            target = forward ? (all.firstIndex { $0.range.location > caret } ?? all.count)
-                             : ((all.lastIndex { $0.range.location < caret }) ?? -1)
-        } else {
-            let selected = state.selectedRow ?? -1
-            target = forward ? (all.firstIndex { ($0.row ?? 0) > selected } ?? all.count)
-                             : ((all.lastIndex { ($0.row ?? 0) < selected }) ?? -1)
-        }
-        if target >= all.count { target = 0; wrapped = true }
-        if target < 0 { target = all.count - 1; wrapped = true }
+        // Where the reader is when no occurrence is current: the caret in
+        // the C, or the selected row.
+        let positions = showsDecompiledC ? all.map(\.range.location) : all.map { $0.row ?? 0 }
+        let anchor = showsDecompiledC ? cTextView.selectedRange().location : (state.selectedRow ?? -1)
+        guard let (target, wrapped) = CodeSymbolMatch.step(forward: forward, current: currentOccurrence,
+                                                           positions: positions, anchor: anchor) else { return }
         currentOccurrence = target
         show(all[target])
         drawOccurrenceBar()

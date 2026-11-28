@@ -82,8 +82,8 @@ import ToolModuleKit
     /// Back and Forward walk it as in an IDE. A jump — a click on a call, a
     /// caller, a function in the list — adds a place; moving inside one
     /// function only moves the current one.
-    var history: [Place] = []
-    var historyIndex = -1
+    /// Back and Forward over the places the reader moved through.
+    var navigation = CodeNavigationHistory<Place>()
     /// The annotations on this module's code, by the function and by the
     /// instruction they are on.
     public internal(set) var notes: [CodeNote] = []
@@ -536,8 +536,7 @@ import ToolModuleKit
         lastFunctionAsked = nil
         waitingForFunctions = []
         // What was drawn, by the old numbering.
-        history = []
-        historyIndex = -1
+        navigation = CodeNavigationHistory()
         cLinks = []
         shownCTokens = []
         shownCSymbols = nil
@@ -749,8 +748,8 @@ import ToolModuleKit
     public var decompiledAttributedText: NSAttributedString {
         cTextView.textStorage.map { NSAttributedString(attributedString: $0) } ?? NSAttributedString()
     }
-    public var canGoBack: Bool { historyIndex > 0 }
-    public var canGoForward: Bool { historyIndex + 1 < history.count }
+    public var canGoBack: Bool { navigation.canGoBack }
+    public var canGoForward: Bool { navigation.canGoForward }
     public var selectedFunctionIndex: Int? { state.function }
     public var selectedInstructionIndex: Int? { state.line }
     /// The place by address: what survives an artifact whose functions are

@@ -108,9 +108,9 @@ extension CodePaneView {
 
     /// Keeps the current place as the reader has it now, before they leave it.
     private func recordCurrentPlace() {
-        guard historyIndex >= 0, var place = currentPlace else { return }
+        guard var place = currentPlace else { return }
         place.view = currentView
-        history[historyIndex] = place
+        navigation.update(place)
     }
 
     /// Moves somewhere new: the place left is kept, what was ahead of it is
@@ -126,16 +126,14 @@ extension CodePaneView {
         guard let place = currentPlace else { return }
         // Leaving the description for the function on screen is still a
         // move: Back returns to the description.
-        if !even, historyIndex >= 0, history[historyIndex].function == place.function,
-           history[historyIndex].line == place.line, history[historyIndex].view.description == nil { return }
-        history = Array(history.prefix(historyIndex + 1)) + [place]
-        historyIndex = history.count - 1
-        historyChanged()
+        let moved = navigation.move(to: place) { here, there in
+            !even && here.function == there.function && here.line == there.line && here.view.description == nil
+        }
+        if moved { historyChanged() }
     }
 
     func resetHistory() {
-        history = currentPlace.map { [$0] } ?? []
-        historyIndex = history.count - 1
+        navigation = CodeNavigationHistory(places: currentPlace.map { [$0] } ?? [])
         historyChanged()
     }
 
@@ -145,13 +143,13 @@ extension CodePaneView {
     /// `adoptHistory`.
     public var carriedHistory: CodeHistory {
         recordCurrentPlace()
-        let places = history.map { place in
+        let places = navigation.places.map { place in
             CodeLocation(function: artifact.functions.indices.contains(place.function)
                             ? artifact.functions[place.function].entry : nil,
                          address: place.line.flatMap { model.lines.indices.contains($0)
                             ? model.lines[$0].instruction.address : nil })
         }
-        return CodeHistory(places: places, index: historyIndex, views: history.map(\.view))
+        return CodeHistory(places: places, index: navigation.index, views: navigation.places.map(\.view))
     }
 
     /// Takes over another pane's history, place by place, through this
@@ -189,8 +187,7 @@ extension CodePaneView {
             }
         }
         adopted[current] = here
-        history = adopted
-        historyIndex = current
+        navigation = CodeNavigationHistory(places: adopted, index: current)
         historyChanged()
     }
 
@@ -260,8 +257,7 @@ extension CodePaneView {
         recordCurrentPlace()
         leavingCMark = nil
         leavingDescriptionMark = nil
-        historyIndex -= 1
-        go(to: history[historyIndex])
+        if let place = navigation.back() { go(to: place) }
     }
 
     public func goForward() {
@@ -269,8 +265,7 @@ extension CodePaneView {
         recordCurrentPlace()
         leavingCMark = nil
         leavingDescriptionMark = nil
-        historyIndex += 1
-        go(to: history[historyIndex])
+        if let place = navigation.forward() { go(to: place) }
     }
 
     /// Returns to a place as the reader left it: the same function and
