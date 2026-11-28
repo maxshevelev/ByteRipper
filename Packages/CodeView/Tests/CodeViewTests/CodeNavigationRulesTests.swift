@@ -1,4 +1,5 @@
 @testable import CodeView
+import CodeAnalysis
 import XCTest
 
 /// Back and Forward, and the step through a name's occurrences, without a
@@ -30,5 +31,18 @@ final class CodeNavigationRulesTests: XCTestCase {
         XCTAssertEqual(back?.index, 2, "before the first: round to the last")
         XCTAssertEqual(back?.wrapped, true)
         XCTAssertNil(CodeSymbolMatch.step(forward: true, current: nil, positions: [], anchor: 0))
+    }
+}
+
+/// The Stubs group starts closed.
+final class CodeStubGroupTests: XCTestCase {
+    func testTheStubsGroupStartsClosed() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":11,"functions":[{"entry":"0x10","name":"Isr_Stub","review_level":"stub",
+          "instructions":[{"address":"0x10","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+        XCTAssertFalse(state.isGroupExpanded(.stub))
+        XCTAssertTrue(state.isGroupExpanded(.full))
     }
 }

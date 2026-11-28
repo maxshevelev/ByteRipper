@@ -149,7 +149,8 @@ public struct CodeReaderState: Sendable {
     private var knownWays: (focus: Int, ways: [[Int]], cut: Bool)?
     /// The review groups whose functions are hidden, and how many functions
     /// each group holds whether it is open or closed.
-    private var collapsedGroups: Set<FunctionGroup> = []
+    /// Stubs start closed: a body that does nothing is not what a reader came for.
+    private var collapsedGroups: Set<FunctionGroup> = [.stub]
     private var groupCounts: [FunctionGroup: Int] = [:]
     /// The same for the library kinds inside the Library functions group.
     private var collapsedSections: Set<LibrarySection> = []
