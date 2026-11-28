@@ -38,6 +38,11 @@ final class CodeInterfacesPanel: CodeNavigatorTreePanel {
         /// Rows under it.
         var children: [Any] { conditions ?? entries ?? [] }
         var treeChildren: [AnyObject] { conditions ?? entries ?? [] }
+
+        @MainActor convenience init(_ group: CodeInterfacesOutline.Group) {
+            self.init(title: group.title, symbol: group.symbol, help: group.help,
+                      entries: group.entries?.map(EntryItem.init), conditions: group.conditions?.map(ConditionItem.init))
+        }
     }
 
     /// A row of the dependency expression: one condition — an interface by
@@ -62,6 +67,11 @@ final class CodeInterfacesPanel: CodeNavigatorTreePanel {
         var isGroup: Bool { !children.isEmpty }
         /// A group's conditions, or what an interface's row opens to.
         var treeChildren: [AnyObject] { isGroup ? children : details }
+
+        @MainActor convenience init(_ condition: CodeInterfacesOutline.Condition) {
+            self.init(text: CodeNavigatorText.attributed(condition.text), children: condition.children.map(ConditionItem.init),
+                      guid: condition.guid, details: condition.details.map(DetailItem.init))
+        }
     }
 
     /// One interface: a row of the second level.
@@ -76,6 +86,10 @@ final class CodeInterfacesPanel: CodeNavigatorTreePanel {
             self.details = details
         }
         var treeChildren: [AnyObject] { details }
+
+        @MainActor convenience init(_ entry: CodeInterfacesOutline.Entry) {
+            self.init(interface: entry.interface, marks: entry.marks, details: entry.details.map(DetailItem.init))
+        }
     }
 
     /// What the review says of an interface: a row of the third level. A
@@ -86,6 +100,10 @@ final class CodeInterfacesPanel: CodeNavigatorTreePanel {
         init(text: NSAttributedString, address: CodeAddress? = nil) {
             self.text = text
             self.address = address
+        }
+
+        @MainActor convenience init(_ detail: CodeInterfacesOutline.Detail) {
+            self.init(text: CodeNavigatorText.attributed(detail.text), address: detail.address)
         }
     }
 
@@ -152,212 +170,20 @@ final class CodeInterfacesPanel: CodeNavigatorTreePanel {
     }
 
     static func summary(of interfaces: ModuleInterfaces?) -> String {
-        guard let interfaces, interfaces.isComplete else {
-            return L("The review has not recorded them all yet")
-        }
-        let count = [interfaces.installs, interfaces.locates, interfaces.notifies]
-            .reduce(0) { $0 + ($1?.count ?? 0) }
-        if count == 0 { return L("The module uses no PPI or protocol") }
-        return count == 1 ? L("1 interface") : L("%1$@ interfaces", String(count))
+        CodeInterfacesOutline.summary(of: interfaces)
     }
 
+    /// The tab's rows, from the outline the model makes.
     static func groups(of interfaces: ModuleInterfaces?, dependencies: DependencyOutline? = nil,
                        registry: GuidRegistry = GuidRegistry(),
                        place: (CodeAddress) -> String?) -> [GroupItem] {
-        func entries(_ list: [ModuleInterfaces.Interface]?,
-                     marks: (ModuleInterfaces.Interface) -> [String]) -> [EntryItem]? {
-            list?.map { EntryItem(interface: $0, marks: marks($0), details: details(of: $0, place: place)) }
-        }
-        // The condition the dispatcher starts the module on, from its
-        // firmware file: the PPIs or protocols it waits for, by name.
-        var depex: [GroupItem] = []
-        if let dependencies {
-            depex.append(GroupItem(title: L("Dependency expression"), symbol: "flowchart",
-                                   help: .term(HelpTermID("depex")), entries: nil,
-                                   conditions: conditionItems(of: dependencies) { guid in
-                                       dependencyDetails(of: guid, registry: registry,
-                                                         interfaces: interfaces, place: place)
-                                   }))
-        }
-        return depex + [
-            GroupItem(title: L("Installs"), symbol: "square.and.arrow.up",
-                      help: .term(HelpTermID("module-installs")),
-                      entries: entries(interfaces?.installs) { entry in
-                          switch entry.method {
-                          case .reinstall: [L("reinstalls")]
-                          case .handoff: [L("handed over")]
-                          default: []
-                          }
-                      }),
-            GroupItem(title: L("Locates"), symbol: "magnifyingglass",
-                      help: .term(HelpTermID("module-locates")),
-                      entries: entries(interfaces?.locates) { entry in
-                          [entry.required == true ? L("required") : L("optional")]
-                      }),
-            GroupItem(title: L("Notified of"), symbol: "bell",
-                      help: .term(HelpTermID("module-notified-of")),
-                      entries: entries(interfaces?.notifies) { _ in [] })
-        ]
+        CodeInterfacesOutline.groups(of: interfaces, dependencies: dependencies, registry: registry, place: place)
+            .map(GroupItem.init)
     }
 
-    /// The rows of a dependency expression: what must all hold, one row
-    /// each — the interface's name and its GUID — and a choice as a row of
-    /// its own with its alternatives under it.
-    static func conditionItems(of outline: DependencyOutline,
-                               details: (String) -> [DetailItem] = { _ in [] }) -> [ConditionItem] {
-        let plain: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
-        ]
-        let quiet: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
-        ]
-        func line(_ words: String, _ attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
-            NSAttributedString(string: words, attributes: attributes)
-        }
-        func interface(_ guid: String, _ name: String?, negated: Bool) -> NSAttributedString {
-            let text = NSMutableAttributedString()
-            // NOT and the opcodes are the format's words, as ASM and C are.
-            if negated { text.append(line("NOT ", quiet)) }
-            text.append(line(name ?? guid, plain))
-            return text
-        }
-        func item(_ condition: DependencyOutline.Condition) -> ConditionItem {
-            switch condition {
-            case .interface(let guid, let name):
-                return ConditionItem(text: interface(guid, name, negated: false), guid: guid, details: details(guid))
-            case .not(.interface(let guid, let name)):
-                return ConditionItem(text: interface(guid, name, negated: true), guid: guid, details: details(guid))
-            case .not(let operand):
-                return ConditionItem(text: line("NOT", quiet), children: [item(operand)])
-            case .anyOf(let list):
-                return ConditionItem(text: line(L("One of"), quiet), children: list.map(item))
-            case .allOf(let list):
-                return ConditionItem(text: line(L("All of"), quiet), children: list.map(item))
-            case .always:
-                return ConditionItem(text: line(L("TRUE: the module waits for nothing"), plain))
-            case .never:
-                return ConditionItem(text: line(L("FALSE: the module is never started"), plain))
-            }
-        }
-        var rows: [ConditionItem] = []
-        if let prefix = outline.prefix { rows.append(ConditionItem(text: line(prefix, plain))) }
-        if outline.unreadable {
-            rows.append(ConditionItem(text: line(L("The expression in the file cannot be read."), quiet)))
-        }
-        return rows + outline.conditions.map(item)
-    }
-
-    /// The rows under a condition of the dependency expression: what the
-    /// GUID is, as the GUID registry holds it, and each place this module's
-    /// review recorded it — installed, located or waited for — with its
-    /// purpose and the code. One the module never touches is said so: only
-    /// the dispatcher reads it.
-    static func dependencyDetails(of guid: String, registry: GuidRegistry, interfaces: ModuleInterfaces?,
-                                  place: (CodeAddress) -> String?) -> [DetailItem] {
-        let plain: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
-        ]
-        let quiet: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
-        ]
-        let link: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.linkColor
-        ]
-        let mono: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: CodePaneView.navigatorSize - 1, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor
-        ]
-        func labelled(_ label: String, _ value: String, _ attributes: [NSAttributedString.Key: Any])
-            -> NSAttributedString {
-            let text = NSMutableAttributedString(string: label + " ", attributes: quiet)
-            text.append(NSAttributedString(string: value, attributes: attributes))
-            return text
-        }
-        let entry = registry.entry(of: guid)
-        let kind: String = switch entry?.kind {
-        case .ppi: "PPI"
-        case .protocol: L("Protocol")
-        default: "GUID"
-        }
-        var rows = [DetailItem(text: labelled(kind, guid, mono))]
-        if let note = entry?.note, !note.isEmpty {
-            rows.append(DetailItem(text: NSAttributedString(string: note, attributes: plain)))
-        }
-        if let source = entry?.source {
-            switch source.kind {
-            case .edk2:
-                // `MdePkg/MdePkg.dec:512`: the file says where; the line is the registry's.
-                let file = source.file.map { $0.replacingOccurrences(of: #":\d+$"#, with: "", options: .regularExpression) }
-                if let file { rows.append(DetailItem(text: labelled(L("Declared in:"), file, plain))) }
-            case .review:
-                rows.append(DetailItem(text: NSAttributedString(string: L("Named by a module review"),
-                                                                attributes: quiet)))
-            }
-        }
-        let lists: [(String, [ModuleInterfaces.Interface]?)] = [
-            (L("Installs:"), interfaces?.installs), (L("Locates:"), interfaces?.locates),
-            (L("Notified of:"), interfaces?.notifies)
-        ]
-        let canonical = GuidName.canonicalGUID(guid) ?? guid.uppercased()
-        var used = false
-        for (label, list) in lists {
-            for recorded in list ?? [] where (GuidName.canonicalGUID(recorded.guid) ?? recorded.guid.uppercased()) == canonical {
-                used = true
-                rows.append(DetailItem(text: labelled(label, recorded.purpose, plain)))
-                let address = CodeAddress(hex: recorded.address)
-                let at = address.flatMap(place)
-                rows.append(DetailItem(text: labelled(L("At:"), at ?? recorded.address, at == nil ? plain : link),
-                                       address: at == nil ? nil : address))
-            }
-        }
-        if !used {
-            let complete = interfaces?.isComplete ?? false
-            rows.append(DetailItem(text: NSAttributedString(
-                string: complete ? L("The module's code does not use it: only the dispatcher checks it.")
-                                 : L("The review has not recorded whether the module's code uses it."),
-                attributes: quiet)))
-        }
-        return rows
-    }
-
-    /// The rows under an interface: why, when, what it is, and where.
-    static func details(of entry: ModuleInterfaces.Interface,
-                        place: (CodeAddress) -> String?) -> [DetailItem] {
-        let plain: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor
-        ]
-        func labelled(_ label: String, _ value: String, value attributes: [NSAttributedString.Key: Any])
-            -> NSAttributedString {
-            let text = NSMutableAttributedString(string: label + " ", attributes: [
-                .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor
-            ])
-            text.append(NSAttributedString(string: value, attributes: attributes))
-            return text
-        }
-        let link: [NSAttributedString.Key: Any] = [
-            .font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.linkColor
-        ]
-        let mono: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: CodePaneView.navigatorSize - 1, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor
-        ]
-        var rows = [DetailItem(text: NSAttributedString(string: entry.purpose, attributes: plain))]
-        let when = entry.condition == "always" ? L("always") : entry.condition
-        rows.append(DetailItem(text: labelled(L("When:"), when, value: plain)))
-        let kind = entry.kind == .ppi ? "PPI" : L("Protocol")
-        rows.append(DetailItem(text: labelled(kind, entry.guid, value: mono)))
-        let address = CodeAddress(hex: entry.address)
-        let at = address.flatMap(place) ?? entry.address
-        rows.append(DetailItem(text: labelled(L("At:"), at, value: address.flatMap(place) == nil ? plain : link),
-                               address: address.flatMap { place($0) == nil ? nil : $0 }))
-        if let callback = entry.callback {
-            let target = CodeAddress(hex: callback)
-            let name = target.flatMap(place) ?? callback
-            rows.append(DetailItem(text: labelled(L("Callback:"), name,
-                                                  value: target.flatMap(place) == nil ? plain : link),
-                                   address: target.flatMap { place($0) == nil ? nil : $0 }))
-        }
-        return rows
+    /// The rows of a dependency expression.
+    static func conditionItems(of outline: DependencyOutline) -> [ConditionItem] {
+        CodeInterfacesOutline.conditions(of: outline).map(ConditionItem.init)
     }
 
     // MARK: - The tree

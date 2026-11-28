@@ -191,3 +191,26 @@ class CodeNavigatorTreePanel: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
     }
 }
+
+/// A navigator row's styled text in the navigator's type: each tone its
+/// font and colour.
+@MainActor
+enum CodeNavigatorText {
+    static func attributed(_ text: CodeStyledText) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        for part in text.parts {
+            result.append(NSAttributedString(string: part.text, attributes: attributes(part.tone)))
+        }
+        return result
+    }
+
+    static func attributes(_ tone: CodeStyledText.Tone) -> [NSAttributedString.Key: Any] {
+        switch tone {
+        case .plain: [.font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.labelColor]
+        case .quiet: [.font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.secondaryLabelColor]
+        case .link: [.font: CodePaneView.navigatorFont(), .foregroundColor: NSColor.linkColor]
+        case .mono: [.font: NSFont.monospacedSystemFont(ofSize: CodePaneView.navigatorSize - 1, weight: .regular),
+                     .foregroundColor: NSColor.secondaryLabelColor]
+        }
+    }
+}
