@@ -32,7 +32,7 @@ final class CodeBareSymbolMarkTests: XCTestCase {
                     try? rep.representation(using: .png, properties: [:])?
                         .write(to: URL(fileURLWithPath: "\(dir)/mark-\(inverted)-\(Int(scale)).png"))
                 }
-                if !inverted {
+                do {
                     XCTAssertGreaterThan(box.minX, 0, "left edge whole")
                     XCTAssertGreaterThan(box.minY, 0, "bottom edge whole")
                     XCTAssertLessThan(box.maxX, CGFloat(width), "right edge whole")
