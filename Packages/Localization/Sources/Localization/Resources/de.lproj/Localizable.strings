@@ -1413,7 +1413,6 @@
 "Region type" = "Bereichstyp";
 "Second level" = "Zweite Ebene";
 "Size in the directories" = "Größe laut Verzeichnissen";
-"Slot" = "Slot";
 "Subprogram" = "Unterprogramm";
 "compressed, inflates to %1$@" = "komprimiert, entpackt %1$@";
 "copied to memory" = "wird in den Speicher kopiert";
@@ -2213,3 +2212,11 @@
 "stub" = "Stub";
 "stub, unused" = "Stub, nicht verwendet";
 "ITE signature" = "ITE-Signatur";
+"Run-time data" = "Laufzeitdaten";
+"The module's published review is not available: the values are not decoded." = "Keine veröffentlichte Analyse des Moduls: Die Werte sind nicht entschlüsselt.";
+"The module's review lists no flash data areas." = "Die Analyse des Moduls führt keine Flash-Datenbereiche auf.";
+"not in the review" = "nicht in der Analyse";
+"Free slots: %1$@." = "Freie Slots: %1$@.";
+"Every byte is erased (FF)." = "Alle Bytes sind gelöscht (FF).";
+"The area lies past the end of the read." = "Der Bereich liegt hinter dem Ende der Auslesung.";
+"The review defines no type %1$@." = "Die Analyse definiert keinen Typ %1$@.";

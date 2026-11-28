@@ -776,6 +776,7 @@ private struct ChecksumPass: Sendable {
         codeAnalysisRequest?.cancel()
         codeAnalysisRequest = nil
         codeAnalysisIndex = .empty
+        ecRuntimeStates = [:]
         codeAnalysisChecked = []
         codeAnalysisNodes = []
         codeAnalysisManifests = [:]
@@ -1097,6 +1098,8 @@ private struct ChecksumPass: Sendable {
             let alreadyChecked: Set<NodeID> = changed ? [] : checked
             self.codeAnalysisIndex = index
             self.codeAnalysisChecked = alreadyChecked
+            // A review read before the scan found it, or an older one.
+            self.ecRuntimeStates = [:]
 
             let candidates = image.allNodes.filter {
                 UEFICodeCandidates.isCandidate($0) && !alreadyChecked.contains($0.id)
@@ -1223,7 +1226,7 @@ private struct ChecksumPass: Sendable {
         // is the node's own curated fields; a UEFI node's is its header read
         // back through the node's own space.
         let meNode = meFocus.flatMap { MEATree.node(at: $0, in: meRoots) }
-        let detail: UEFINodeDetail
+        var detail: UEFINodeDetail
         if let meNode {
             // An ME row's detail is its own curated fields. They render through
             // the UEFI detail's label/value rows; a field whose tone is a failed
@@ -1251,6 +1254,13 @@ private struct ChecksumPass: Sendable {
                     lenovoDMIReaders: tree.lenovoDMIReaders, in: Localization.appLanguage
                 )
             } ?? .empty
+        }
+        if meNode == nil, let node, node.kind == .ecImagePart, node.subtype == ECPart.Kind.runtimeData.rawValue {
+            if let state = ecRuntimeStates[node.id] {
+                detail.tables += UEFIECRuntimeDetail.tables(state, in: Localization.appLanguage)
+            } else {
+                decodeECRuntime(node)
+            }
         }
         // An ME row carries its own term (the curator named it); a UEFI
         // node's comes from its kind. Whichever of the two is in focus.
@@ -2411,6 +2421,38 @@ private struct ChecksumPass: Sendable {
                                              openCode: hasCode ? { [weak self] in self?.openCode(for: nodeID) } : nil)
             self.ecImagePopover = popover
             popover.show(beside: view)
+        }
+    }
+
+    /// The run-time data nodes decoded so far, through their image's review.
+    /// Dropped with the tree and when the store changes.
+    var ecRuntimeStates: [NodeID: UEFIECRuntimeDetail.State] = [:]
+    private var ecRuntimeDecoding: Set<NodeID> = []
+
+    /// Reads the review of the image the node is part of, off the main
+    /// actor, decodes the run-time data with it, and shows the node again.
+    private func decodeECRuntime(_ node: UEFINode) {
+        guard let tree, !ecRuntimeDecoding.contains(node.id) else { return }
+        let imageID = NodeID(Array(node.id.path.dropLast()))
+        guard let image = tree.image().node(imageID),
+              let reader = tree.spaceReaders.reader(for: node.space) else { return }
+        let manifest = codeAnalysisManifests[imageID]
+        let root = UEFIToolModule.codeAnalysisRoot
+        // The image starts the chip read: an area's address is from its start.
+        let range = image.body.lowerBound..<node.body.upperBound
+        ecRuntimeDecoding.insert(node.id)
+        Task { [weak self] in
+            let state = await Task.detached(priority: .userInitiated) { () -> UEFIECRuntimeDetail.State in
+                guard let manifest, let root, let store = try? ContentStore(root: root, create: false),
+                      let records = try? store.moduleRecords(for: manifest),
+                      let types = try? store.reviewTypes(for: manifest) else { return .noReview }
+                return .decoded(ECFlashDataDecoder.decode(records: records, types: types,
+                                                          bytes: Data(reader.bytes(range) ?? [])))
+            }.value
+            guard let self else { return }
+            self.ecRuntimeDecoding.remove(node.id)
+            self.ecRuntimeStates[node.id] = state
+            if self.focus == node.id { self.show(selectionOnly: true) }
         }
     }
 

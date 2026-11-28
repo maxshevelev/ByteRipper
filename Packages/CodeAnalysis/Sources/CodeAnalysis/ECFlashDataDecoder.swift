@@ -26,9 +26,16 @@ public enum ECFlashDataDecoder {
         /// One element per array slot; one for a scalar or a structure.
         public var elements: [Element]
         /// Why the area could not be read as its type, when it could not.
-        public var problem: String?
+        public var problem: Problem?
         /// Every byte of the area is erased (0xFF).
         public var erased: Bool
+    }
+
+    public enum Problem: Equatable, Sendable {
+        /// The area lies past the end of the bytes read.
+        case pastTheEnd
+        /// The review defines no type of this name.
+        case unknownType(String)
     }
 
     /// One slot of an array, or the area itself.
@@ -158,7 +165,7 @@ public enum ECFlashDataDecoder {
                             readers: row["readers"]?.array?.map(\.text) ?? [],
                             elements: [], problem: nil, erased: false)
             guard address >= 0, address + size <= data.count else {
-                area.problem = "past the end of the read"
+                area.problem = .pastTheEnd
                 return area
             }
             let slice = Array(data[address..<(address + size)])
@@ -190,13 +197,13 @@ public enum ECFlashDataDecoder {
         }
         let slots = count ?? 1
         guard types[name] != nil || width(of: name, types: types) != nil else {
-            area.problem = "the published analysis has no type \(name)"
+            area.problem = .unknownType(name)
             return
         }
         // An enum fills its place: the area's size over its slots.
         let width = width(of: name, types: types) ?? (area.size / slots)
         guard width > 0 else {
-            area.problem = "the published analysis has no type \(name)"
+            area.problem = .unknownType(name)
             return
         }
         for index in 0..<slots {

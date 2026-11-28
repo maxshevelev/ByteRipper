@@ -1413,7 +1413,6 @@
 "Region type" = "Тип области";
 "Second level" = "Второй уровень";
 "Size in the directories" = "Размер по каталогам";
-"Slot" = "Слот";
 "Subprogram" = "Подпрограмма";
 "compressed, inflates to %1$@" = "сжат, после распаковки %1$@";
 "copied to memory" = "копируется в память";
@@ -2213,3 +2212,11 @@
 "stub" = "заглушка";
 "stub, unused" = "заглушка, не используется";
 "ITE signature" = "Подпись ITE";
+"Run-time data" = "Рабочие данные";
+"The module's published review is not available: the values are not decoded." = "Опубликованного разбора модуля нет: значения не расшифрованы.";
+"The module's review lists no flash data areas." = "В разборе модуля не перечислено ни одной области данных флеш-памяти.";
+"not in the review" = "нет в разборе";
+"Free slots: %1$@." = "Свободных слотов: %1$@.";
+"Every byte is erased (FF)." = "Все байты стёрты (FF).";
+"The area lies past the end of the read." = "Область лежит за концом считанных данных.";
+"The review defines no type %1$@." = "В разборе нет типа %1$@.";

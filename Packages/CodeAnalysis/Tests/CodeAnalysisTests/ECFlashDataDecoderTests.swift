@@ -64,7 +64,7 @@ final class ECFlashDataDecoderTests: XCTestCase {
         let areas = ECFlashDataDecoder.decode(records: records, types: try store.reviewTypes(for: manifest) ?? [:],
                                               bytes: try Data(contentsOf: URL(fileURLWithPath: chip)))
         for area in areas {
-            print("AREA", String(area.address, radix: 16), area.format, area.problem ?? "", area.erased)
+            print("AREA", String(area.address, radix: 16), area.format, area.problem.map { "\($0)" } ?? "", area.erased)
             for element in area.elements.prefix(40) where !element.free {
                 print("  ", element.index ?? -1, element.raw.map { String(format: "%02X", $0) }.joined(separator: " "),
                       element.fields.map { "\($0.name)=\(String($0.value, radix: 16)) \($0.member ?? ($0.isEnum ? "NOT-IN-REVIEW" : "-"))" }.joined(separator: " | "))

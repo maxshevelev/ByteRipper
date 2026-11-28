@@ -11,6 +11,7 @@
 @covers panel.uefi.module-origin
 @covers panel.uefi.module-summary
 @covers panel.uefi.ec-image
+@covers panel.uefi.ec-runtime-data
 
 An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes; the panel is described on [[topic:code-panel|Code Panel]]. The badge stands after the name of the module's file, collapsed or expanded, and the section that holds the module's image carries it too. A row that holds the files of further modules, such as a volume or a compressed section, carries no badge, collapsed or expanded: the circle stands only on a module's own rows. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
 
@@ -25,6 +26,8 @@ A module whose review wrote a description carries a third mark after the word: *
 The firmware of an ITE embedded controller with an NDS32 core, such as `ITE8380-EC-V0.00`, is a module as well. Its row in the UEFI tree carries the code badge as a PE32 or TE image does, and **Open with Code** opens its code. The module is the image itself, up to where its code ends, not the whole block: the erased bytes after it and the controller's run-time data are not part of it. One byte of the image, which the controller rewrites in its own flash memory, does not count towards the module's identity. A copy of the firmware in a BIOS update and a dump read from the controller's chip therefore open the same analysis.
 
 The row of an EC image carries **(i)** whether or not an analysis exists. Clicking it shows what the image's bytes state: the controller family, the ITE signature (a mark of the toolchain that every ITE image carries, not the firmware's version), where the image ends and how that was determined, the module's SHA-256 and the SHA-256 of the dump's bytes, how many bytes a BIOS update writes to the controller, and the byte the controller rewrites with its value in the dump. When an analysis exists, **Open with Code** is under the list.
+
+In a dump read from the controller's chip, the **EC run-time data** row shows what the controller has written there, decoded with the published analysis of its module: one table per area the analysis lists, a row per written record of a log, and under each table what the analysis says of the values found — what each event code means, which code writes it, and how certain that is. A value the analysis does not describe is marked as not in the review. Without a published analysis of the module, the values are not decoded.
 
 ## Where the analyses are kept
 
