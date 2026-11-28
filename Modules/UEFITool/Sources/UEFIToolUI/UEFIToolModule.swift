@@ -462,6 +462,9 @@ private struct ChecksumPass: Sendable {
         controller.onGoToTopSwapCounterpart = { [weak self] nodeID in
             self?.goToTopSwapCounterpart(of: nodeID)
         }
+        controller.onOpenCodeAt = { [weak self] image, address in
+            self?.openCode(for: image, at: CodeLocation(address: CodeAddress(address)))
+        }
         controller.onOutlineRange = { [weak self] range, name in
             self?.outline(range, named: name)
         }
@@ -1257,7 +1260,8 @@ private struct ChecksumPass: Sendable {
         }
         if meNode == nil, let node, node.kind == .ecImagePart, node.subtype == ECPart.Kind.runtimeData.rawValue {
             if let state = ecRuntimeStates[node.id] {
-                detail.tables += UEFIECRuntimeDetail.tables(state, in: Localization.appLanguage)
+                detail.tables += UEFIECRuntimeDetail.tables(state, image: NodeID(Array(node.id.path.dropLast())),
+                                                            in: Localization.appLanguage)
             } else {
                 decodeECRuntime(node)
             }

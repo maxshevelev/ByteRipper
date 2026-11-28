@@ -65,6 +65,8 @@ import UEFITool
     /// A detail table's row named bytes that are not one node: outline them
     /// in the dump, under the name, and leave the focus where it is.
     var onOutlineRange: ((Range<UInt64>, String) -> Void)?
+    /// A link to a code address of an analysed image was clicked.
+    var onOpenCodeAt: ((NodeID, UInt64) -> Void)?
     /// A compressed section's Save Decompressed Body item was chosen.
     var onSaveDecompressed: ((NodeID) -> Void)?
     /// The same section's Open Decompressed Body item was chosen.
@@ -2981,6 +2983,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         switch target {
         case .node(let node): onFollowNode?(node)
         case .range(let range, let name): onOutlineRange?(range, name)
+        case .code(let image, let address): onOpenCodeAt?(image, address)
         }
     }
 

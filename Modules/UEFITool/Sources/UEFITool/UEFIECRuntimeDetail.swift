@@ -1,6 +1,7 @@
 import CodeAnalysis
 import Foundation
 import Localization
+import UEFIImage
 
 // help: panel.uefi.ec-runtime-data
 /// An EC chip read's run-time data as tables, one per area the module's
@@ -17,7 +18,7 @@ public enum UEFIECRuntimeDetail {
         case noReview
     }
 
-    public static func tables(_ state: State, in language: AppLanguage) -> [UEFIDetailTable] {
+    public static func tables(_ state: State, image: NodeID? = nil, in language: AppLanguage) -> [UEFIDetailTable] {
         guard case .decoded(let areas) = state else {
             return [UEFIDetailTable(title: L("Run-time data", in: language), symbol: "list.bullet.rectangle",
                                     columns: [], rows: [],
@@ -29,7 +30,7 @@ public enum UEFIECRuntimeDetail {
                                     columns: [], rows: [],
                                     note: L("The module's review lists no flash data areas.", in: language))]
         }
-        return areas.map { table($0, in: language) }
+        return areas.flatMap { [table($0, in: language)] + code($0, image: image, in: language) }
     }
 
     static func hex(_ value: UInt64, width: Int) -> String {
@@ -89,10 +90,24 @@ public enum UEFIECRuntimeDetail {
         }
         notes += explained
         if let confidence = area.confidence { notes.append(L("Confidence", in: language) + ": " + confidence) }
-        let evidence = area.writers + area.readers
-        if !evidence.isEmpty { notes.append(L("Code", in: language) + ": " + evidence.joined(separator: ", ")) }
         return UEFIDetailTable(title: title, symbol: isLog ? "list.number" : "square.grid.3x1.below.line.grid.1x2",
                                columns: columns, rows: rows, linkColumn: -1,
                                note: notes.isEmpty ? nil : notes.joined(separator: "\n"))
+    }
+
+    /// The code that writes and reads the area, the review's evidence: a
+    /// row per address, which opens the code there.
+    static func code(_ area: ECFlashDataDecoder.Area, image: NodeID?, in language: AppLanguage) -> [UEFIDetailTable] {
+        let places = area.writers.map { (L("Writes", in: language), $0) } + area.readers.map { (L("Reads", in: language), $0) }
+        guard !places.isEmpty else { return [] }
+        let rows = places.map { [UEFIDetailTable.Cell($0.0), UEFIDetailTable.Cell($0.1)] }
+        let targets: [UEFIDetailTable.Target?] = places.map { place in
+            guard let image, let address = CodeAddress(hex: place.1) else { return nil }
+            return .code(image: image, address: address.value)
+        }
+        return [UEFIDetailTable(title: String(format: L("Code of %1$@", in: language), hex(UInt64(area.address), width: 0)),
+                                symbol: "chevron.left.forwardslash.chevron.right",
+                                columns: [L("Access", in: language), L("Address", in: language)],
+                                rows: rows, rowTargets: targets, linkColumn: 1)]
     }
 }

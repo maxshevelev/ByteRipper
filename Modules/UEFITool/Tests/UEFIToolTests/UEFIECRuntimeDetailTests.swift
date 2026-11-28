@@ -1,6 +1,7 @@
 @testable import CodeAnalysis
 import Localization
 @testable import UEFITool
+import UEFIImage
 import XCTest
 
 /// The run-time data tables say only what the review says.
@@ -31,7 +32,9 @@ final class UEFIECRuntimeDetailTests: XCTestCase {
         XCTAssertTrue(note.contains("EvtPowerOn (0xFC): logged at power-on"), note)
         XCTAssertTrue(note.contains("EventCode: what happened"), note)
         XCTAssertTrue(note.contains("Free slots: 1."), note)
-        XCTAssertTrue(note.contains("0x144B0"), note)
+        let code = UEFIECRuntimeDetail.tables(.decoded([area]), image: NodeID([0, 1]), in: .english)[1]
+        XCTAssertEqual(code.rows.first?.map(\.text), ["Writes", "0x144B0"])
+        XCTAssertEqual(code.rowTargets.first, .code(image: NodeID([0, 1]), address: 0x144B0))
     }
 
     func testNoReviewIsSaid() {

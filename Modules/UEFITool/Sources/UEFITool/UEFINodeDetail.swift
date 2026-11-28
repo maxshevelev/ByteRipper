@@ -79,6 +79,9 @@ public struct UEFIDetailTable: Equatable, Sendable {
         /// can span several or lie inside one. The click outlines them in the
         /// dump under `name` and leaves the focus where it is.
         case range(Range<UInt64>, name: String)
+        /// A place in the code of the module the node `image` is: the click
+        /// opens its code there.
+        case code(image: NodeID, address: UInt64)
     }
 
     /// What each row stands for, where a row stands for something: a click on

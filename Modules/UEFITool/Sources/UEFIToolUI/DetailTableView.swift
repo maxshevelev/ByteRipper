@@ -719,6 +719,7 @@ extension DetailTableRow: NSViewToolTipOwner {
                 switch target {
                 case .node: return L("Show this copy")
                 case .range: return L("Show this region in the dump")
+                case .code: return L("Open this address in the code")
                 }
             }
             return cells.last?.text ?? ""

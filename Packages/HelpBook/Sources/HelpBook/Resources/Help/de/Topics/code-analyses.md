@@ -1,4 +1,4 @@
-@source-sha 3145ffc207d394dde219d8d8681828bb68101f04c31916635abb019218f8cb77
+@source-sha 5bd29ae871d97c59b9c4cbaaad07b633cd7ed1d20b4aa4343ba8e49620618857
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul oder in der Firmware eines Embedded Controllers (EC) gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -17,7 +17,7 @@ Auch die Firmware eines ITE-Embedded-Controllers mit NDS32-Kern, etwa `ITE8380-E
 
 Die Zeile eines EC-Abbilds trägt **(i)** unabhängig davon, ob eine Analyse vorliegt. Ein Klick darauf zeigt, was die Bytes des Abbilds angeben: die Controller-Familie, die ITE-Signatur (eine Kennung der Build-Werkzeuge, die jedes ITE-Abbild trägt, keine Firmware-Version), das Ende des Abbilds und wie es ermittelt wurde, den SHA-256 des Moduls und den SHA-256 der Bytes im Dump, wie viele Bytes ein BIOS-Update in den Controller schreibt, sowie das vom Controller überschriebene Byte mit seinem Wert im Dump. Liegt eine Analyse vor, steht darunter **Mit Code öffnen**.
 
-In einer Auslesung des Controller-Chips zeigt die Zeile **Laufzeitdaten des EC**, was der Controller dort geschrieben hat, entschlüsselt anhand der veröffentlichten Analyse seines Moduls: eine Tabelle je Bereich, den die Analyse aufführt, eine Zeile je geschriebenem Eintrag eines Protokolls und unter jeder Tabelle, was die Analyse über die gefundenen Werte aussagt – was ein Ereigniscode bedeutet, welcher Code ihn schreibt und wie gesichert das ist. Ein Wert, den die Analyse nicht beschreibt, wird als nicht in der Analyse enthalten gekennzeichnet. Ohne veröffentlichte Analyse des Moduls werden die Werte nicht entschlüsselt.
+In einer Auslesung des Controller-Chips zeigt die Zeile **Laufzeitdaten des EC**, was der Controller dort geschrieben hat, entschlüsselt anhand der veröffentlichten Analyse seines Moduls: eine Tabelle je Bereich, den die Analyse aufführt, eine Zeile je geschriebenem Eintrag eines Protokolls und unter jeder Tabelle, was die Analyse über die gefundenen Werte aussagt – was ein Ereigniscode bedeutet, welcher Code ihn schreibt und wie gesichert das ist. Darunter stehen die Adressen des Codes, der jeden Bereich schreibt und liest; ein Klick auf eine Adresse öffnet den Code an dieser Stelle. Ein Wert, den die Analyse nicht beschreibt, wird als nicht in der Analyse enthalten gekennzeichnet. Ohne veröffentlichte Analyse des Moduls werden die Werte nicht entschlüsselt.
 
 ## Wo die Analysen liegen
 

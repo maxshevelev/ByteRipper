@@ -2220,3 +2220,8 @@
 "Every byte is erased (FF)." = "Alle Bytes sind gelöscht (FF).";
 "The area lies past the end of the read." = "Der Bereich liegt hinter dem Ende der Auslesung.";
 "The review defines no type %1$@." = "Die Analyse definiert keinen Typ %1$@.";
+
+"Writes" = "Schreibt";
+"Reads" = "Liest";
+"Open this address in the code" = "Diese Adresse im Code öffnen";
+"Code of %1$@" = "Code des Bereichs %1$@";

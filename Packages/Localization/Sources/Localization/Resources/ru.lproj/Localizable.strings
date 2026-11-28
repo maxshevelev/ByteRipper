@@ -2220,3 +2220,8 @@
 "Every byte is erased (FF)." = "Все байты стёрты (FF).";
 "The area lies past the end of the read." = "Область лежит за концом считанных данных.";
 "The review defines no type %1$@." = "В разборе нет типа %1$@.";
+
+"Writes" = "Запись";
+"Reads" = "Чтение";
+"Open this address in the code" = "Открыть этот адрес в коде";
+"Code of %1$@" = "Код области %1$@";
