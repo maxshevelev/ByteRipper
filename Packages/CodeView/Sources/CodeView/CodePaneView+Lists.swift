@@ -239,6 +239,24 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         return cell
     }
 
+    // help: panel.code.lists
+    /// A click on the function already chosen marks its zone in the dump
+    /// again: the reader may have selected other bytes since.
+    @objc func functionRowClicked() {
+        defer { functionSelectionMoved = false }
+        guard !functionSelectionMoved, state.list == .functions,
+              NSApp.currentEvent?.modifierFlags.intersection([.command, .shift]).isEmpty ?? true,
+              functionTable.clickedRow >= 0
+        else { return }
+        clickedChosenFunction(row: functionTable.clickedRow)
+    }
+
+    /// The row clicked again: when it is the function on screen, its zone.
+    func clickedChosenFunction(row: Int) {
+        guard let index = state.function(atRow: row), index == state.function else { return }
+        focusSelectedFunction()
+    }
+
     public func tableViewSelectionDidChange(_ notification: Notification) {
         guard !syncingSelection, let table = notification.object as? NSTableView else { return }
         if table === functionTable {
@@ -246,6 +264,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             guard row >= 0 else { return }
             opensOnDescription = false
             leaveDescription()
+            functionSelectionMoved = true
             selectNavigatorRow(row)
         } else if table === self.table {
             let lines = state.lines

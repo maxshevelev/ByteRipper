@@ -64,6 +64,9 @@ import ToolModuleKit
     var recipes: [AnalysisManifest]
 
     private(set) var functionTable = NSTableView()
+    /// Set while a click moves the function list's selection: the click's
+    /// action that follows has nothing left to do.
+    var functionSelectionMoved = false
     var functionTableForTests: NSTableView { functionTable }
     private(set) var functionScroll = NSScrollView()
     /// The band under the list's switch: the review's groups as a strip, each
@@ -2996,6 +2999,8 @@ import ToolModuleKit
         functionTable.allowsMultipleSelection = true
         functionTable.rowHeight = Self.navigatorRowHeight
         functionTable.menu = rowMenu()
+        functionTable.target = self
+        functionTable.action = #selector(functionRowClicked)
         functionScroll.documentView = functionTable
         functionScroll.hasVerticalScroller = true
         functionScroll.drawsBackground = false

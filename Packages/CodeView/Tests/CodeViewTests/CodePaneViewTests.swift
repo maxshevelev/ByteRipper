@@ -5633,6 +5633,22 @@ final class CodePaneViewTests: XCTestCase {
                        "and choosing a function does not take the byte selection")
     }
 
+    /// A click on the function already chosen marks its zone again, after
+    /// the reader selected other bytes.
+    func testAClickOnTheChosenFunctionMarksItsZoneAgain() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+        var focused: [Range<UInt64>] = []
+        view.onFocusRange = { focused.append($0) }
+        view.selectFunction(at: 0)
+        let row = try XCTUnwrap(view.functionTableForTests.selectedRowIndexes.first)
+        focused.removeAll()
+        view.clickedChosenFunction(row: row)
+        XCTAssertEqual(focused, [0x68..<0x6A])
+    }
+
     /// The real CpuPei artifact, when the machine has one: 13 functions, 508
     /// instructions, and the status-code candidate at 0x535. The path is an
     /// environment variable so the suite does not depend on a store that is not
