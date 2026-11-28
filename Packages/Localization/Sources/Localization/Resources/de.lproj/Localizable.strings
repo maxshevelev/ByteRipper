@@ -2208,3 +2208,7 @@
 "Partial:" = "Unvollständig:";
 
 "What the record's rows cover and what the review has not checked" = "Was die Zeilen des Eintrags umfassen und was die Analyse noch nicht geprüft hat";
+"Stubs" = "Stubs";
+"unused" = "nicht verwendet";
+"stub" = "Stub";
+"stub, unused" = "Stub, nicht verwendet";

@@ -2208,3 +2208,7 @@
 "Partial:" = "Не полностью:";
 
 "What the record's rows cover and what the review has not checked" = "Что охватывают строки записи и что разбор ещё не проверил";
+"Stubs" = "Заглушки";
+"unused" = "не используется";
+"stub" = "заглушка";
+"stub, unused" = "заглушка, не используется";

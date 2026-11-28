@@ -329,7 +329,7 @@ extension CodePaneView {
         switch function.reviewLevel {
         case .partial: return CodeNavigatorIcon.partialFunction
         case .decompiled: return CodeNavigatorIcon.decompiledFunction
-        case .noBody: return CodeNavigatorIcon.bodylessFunction
+        case .noBody, .stub: return CodeNavigatorIcon.bodylessFunction
         case .library:
             let section: LibrarySection = switch function.libraryKind {
             case .edk2: .edk2

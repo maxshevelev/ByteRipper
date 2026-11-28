@@ -99,6 +99,7 @@ enum CodeNavigatorIcon {
         case .decompiled: (.symbol("gearshape"), .systemRed)
         case .library: (.symbol(libraryGroupSymbol), .systemBlue)
         case .noBody: (.symbol("minus"), .systemGray)
+        case .stub: (.symbol("circle.dashed"), .systemGray)
         case .unknown: (.symbol("questionmark"), .systemGray)
         }
     }

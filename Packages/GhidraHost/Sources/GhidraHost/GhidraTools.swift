@@ -1051,12 +1051,19 @@ public enum GhidraTools {
                   + "and the answer says which it matched (`matched: \"entry\"` or `\"containing\"`); an "
                   + "address that carries a label is refused — a label is named with `ghidra_label`, "
                   + "which is not this call. A name Ghidra would make unique (`Foo_1`) is refused: "
-                  + "choose another. `reason` says why, as the app shows it.",
+                  + "choose another. `reason` says why, as the app shows it. `stub` marks the function "
+                  + "a stub, or not one, over the exporter's rule (a body of only the prologue and the "
+                  + "epilogue, or one call of another stub): the app lists stubs in a group of their own, "
+                  + "and they do not count as left to review. With `stub` the name may be left out.",
                   ["address": AgentSchema.string("The function's entry address, or any address inside it."),
                    "name": AgentSchema.string("The new name."),
-                   "reason": AgentSchema.string("Why this name, in a few words.")],
-                  required: ["address", "name"]) { arguments in
-                var body = try optional(arguments, ["address", "name", "reason"])
+                   "reason": AgentSchema.string("Why this name, in a few words."),
+                   "stub": AgentSchema.string("`stub`, `not_stub`, or `auto` to leave it to the rule.")],
+                  required: ["address"]) { arguments in
+                guard arguments["name"] != nil || arguments["stub"] != nil else {
+                    throw AgentToolError("`name` or `stub` is required.")
+                }
+                var body = try optional(arguments, ["address", "name", "reason", "stub"])
                 body["by"] = "agent"
                 return body
             },

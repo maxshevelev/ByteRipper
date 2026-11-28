@@ -64,6 +64,9 @@ public enum ReviewLevel: String, Decodable, Sendable, CaseIterable {
     case library
     /// An external function or a thunk: the exporter writes no C for it.
     case noBody = "no_body"
+    /// A stub (v11): the body does nothing — only the prologue and the
+    /// epilogue, or one call of another stub — or a review marked it so.
+    case stub
 }
 
 /// Whose library a registry function is: the code a module links in rather than
@@ -127,7 +130,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// 10 adds a function's `body`, the key the library registry knows it by,
     /// so a reader finds the one description of a library function from the
     /// artifact alone. Optional: an older artifact finds it by `library_entry`.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -313,6 +316,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// `plate`, `comments`, `params`, `locals`. Empty for a library
         /// function, for a `no_body` one, and before v7.
         public internal(set) var reviewGaps: [String]
+        /// A stub no call, table slot or data reference reaches (v11).
+        public internal(set) var unused: Bool?
         /// The registry number a link stores; nil for a function of the module.
         public let registryNumber: String?
         /// Whose library the entry says it is. Set by `LibraryView`, never stored.
@@ -385,6 +390,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             let level = try isLink ? nil : container.decodeIfPresent(String.self, forKey: .reviewLevel)
             reviewLevel = level == ReviewLevel.library.rawValue ? nil : level.flatMap(ReviewLevel.init(rawValue:))
             reviewGaps = try isLink ? [] : container.decodeIfPresent([String].self, forKey: .reviewGaps) ?? []
+            unused = try isLink ? nil : container.decodeIfPresent(Bool.self, forKey: .unused)
             fingerprint = try container.decodeIfPresent(String.self, forKey: .fingerprint)
             body = try container.decodeIfPresent(String.self, forKey: .body)
             referenceBytes = try container.decodeIfPresent(String.self, forKey: .referenceBytes)
@@ -406,6 +412,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case customStorage = "custom_storage"
             case reviewLevel = "review_level"
             case reviewGaps = "review_gaps"
+            case unused
             case registryNumber = "registry"
             case targets
             case fingerprint, body, globals

@@ -32,6 +32,9 @@ public struct CodeReaderState: Sendable {
         case library
         /// An external function or a thunk: the exporter writes no C for it.
         case noBody
+        /// A body that does nothing: the prologue and the epilogue, or one
+        /// call of another stub.
+        case stub
         /// An artifact from before the level was recorded, or one whose level
         /// this reader does not know.
         case unknown
@@ -397,6 +400,7 @@ public struct CodeReaderState: Sendable {
         case .decompiled: .decompiled
         case .library: .library
         case .noBody: .noBody
+        case .stub: .stub
         case nil: .unknown
         }
     }

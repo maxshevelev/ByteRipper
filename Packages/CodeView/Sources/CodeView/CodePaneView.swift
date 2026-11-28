@@ -1505,7 +1505,7 @@ import ToolModuleKit
         switch group {
         case .partial: "function.partial"
         case .decompiled: "function.decompiled"
-        case .noBody: "function.noBody"
+        case .noBody, .stub: "function.noBody"
         case .library: "library.\(library ?? .unrecorded).entry"
         default: "function"
         }
@@ -1554,6 +1554,7 @@ import ToolModuleKit
         case .decompiled: L("Decompiler only")
         case .library: L("Library functions")
         case .noBody: L("No body")
+        case .stub: L("Stubs")
         case .unknown: L("Review level not recorded")
         }
     }
@@ -1578,6 +1579,7 @@ import ToolModuleKit
             }
             level = L("library function: %1$@", title(of: section))
         case .noBody: level = L("no body")
+        case .stub: level = function.unused == true ? L("stub, unused") : L("stub")
         case nil: level = L("review level not recorded")
         }
         let gaps = function.reviewGaps.compactMap { gap -> String? in

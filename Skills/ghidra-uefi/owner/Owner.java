@@ -6707,6 +6707,85 @@ public class Owner {
         return mark.has("dirty") || mark.has("written");
     }
 
+    /** An equate bound to a member of an enum, as it was before the enum was defined again. */
+    private record BoundEquate(String enumName, String member, long value, String equateName) {}
+
+    private java.util.List<BoundEquate> boundEquates(java.util.Map<String, DataType> previous, String c) {
+        java.util.Map<Long, ghidra.program.model.data.Enum> byId = new java.util.HashMap<>();
+        java.util.List<DataType> types = new java.util.ArrayList<>(previous.values());
+        for (String name : declaredNames(c)) {
+            DataType named = find(program.getDataTypeManager(), name);
+            if (named != null && named.getDataTypeManager() == program.getDataTypeManager()) types.add(named);
+        }
+        for (DataType type : types) {
+            DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
+            if (base instanceof ghidra.program.model.data.Enum e && e.getUniversalID() != null) {
+                byId.put(e.getUniversalID().getValue(), e);
+            }
+        }
+        java.util.List<BoundEquate> bound = new java.util.ArrayList<>();
+        if (byId.isEmpty()) return bound;
+        java.util.Iterator<ghidra.program.model.symbol.Equate> all = program.getEquateTable().getEquates();
+        while (all.hasNext()) {
+            ghidra.program.model.symbol.Equate equate = all.next();
+            if (!equate.isEnumBased() || !equate.isValidUUID() || equate.getEnumUUID() == null) continue;
+            ghidra.program.model.data.Enum e = byId.get(equate.getEnumUUID().getValue());
+            if (e == null) continue;
+            String member = e.getName(equate.getValue());
+            bound.add(new BoundEquate(e.getName(), member, equate.getValue(), equate.getName()));
+        }
+        return bound;
+    }
+
+    /**
+     * Each bound equate moved to the enum of the same name as it is now: its
+     * operands keep the member where the member keeps its name and value.
+     * The rest are listed in `orphaned`, by operand address.
+     */
+    private int rebindEquates(java.util.List<BoundEquate> bound, JsonArray orphaned) {
+        int kept = 0;
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        for (BoundEquate was : bound) {
+            ghidra.program.model.symbol.Equate old = table.getEquate(was.equateName());
+            if (old == null) continue;
+            DataType now = find(program.getDataTypeManager(), was.enumName());
+            if (now instanceof ghidra.program.model.data.TypeDef def) now = def.getBaseDataType();
+            ghidra.program.model.data.Enum e = now instanceof ghidra.program.model.data.Enum found ? found : null;
+            boolean same = e != null && was.member() != null && e.contains(was.member())
+                && e.getValue(was.member()) == was.value();
+            if (!same) {
+                for (ghidra.program.model.symbol.EquateReference reference : old.getReferences()) {
+                    JsonObject place = new JsonObject();
+                    place.addProperty("address", hex(reference.getAddress()));
+                    place.addProperty("value", "0x" + Long.toHexString(was.value()).toUpperCase());
+                    if (was.member() != null) place.addProperty("member", was.member());
+                    place.addProperty("enum", was.enumName());
+                    orphaned.add(place);
+                }
+                continue;
+            }
+            String formatted = ghidra.program.database.symbol.EquateManager
+                .formatNameForEquate(e.getUniversalID(), was.value());
+            if (formatted.equals(old.getName())) { kept += old.getReferenceCount(); continue; }
+            ghidra.program.model.symbol.Equate moved = table.getEquate(formatted);
+            try {
+                if (moved == null) moved = table.createEquate(formatted, was.value());
+            } catch (Exception error) {
+                continue;
+            }
+            for (ghidra.program.model.symbol.EquateReference reference : old.getReferences()) {
+                if (reference.getDynamicHashValue() != 0) {
+                    moved.addReference(reference.getDynamicHashValue(), reference.getAddress());
+                } else {
+                    moved.addReference(reference.getAddress(), reference.getOpIndex());
+                }
+                kept++;
+            }
+            table.removeEquate(old.getName());
+        }
+        return kept;
+    }
+
     private JsonObject renameFunction(JsonObject body) throws Exception {
         Address at = address(required(body, "address"));
         Function function = program.getFunctionManager().getFunctionAt(at);
@@ -6725,6 +6804,25 @@ public class Owner {
         if (function == null) {
             throw new Failure(404, "no function at " + hex(at) + (program.getListing().getInstructionAt(at) == null
                 ? ": a datum is named with `ghidra_set_data` and `name`" : ""));
+        }
+        // A review's word on whether the function is a stub, over the
+        // exporter's rule: `stub`, `not_stub`, or `auto` for the rule.
+        String stub = string(body, "stub", null);
+        if (stub != null) {
+            if (!stub.equals("stub") && !stub.equals("not_stub") && !stub.equals("auto")) {
+                throw new Failure(400, "stub is `stub`, `not_stub` or `auto`, not " + stub);
+            }
+            function.removeTag("stub");
+            function.removeTag("not_stub");
+            if (!stub.equals("auto")) function.addTag(stub);
+        }
+        if (stub != null && !body.has("name")) {
+            JsonObject answer = identity();
+            answer.addProperty("entry", hex(function.getEntryPoint()));
+            answer.addProperty("name", function.getName());
+            answer.addProperty("matched", function.getEntryPoint().equals(at) ? "entry" : "containing");
+            addTags(answer, function);
+            return answer;
         }
         String name = required(body, "name");
         // Ghidra takes `*Name` for a name; C, the panel and a reader do not.
@@ -6751,6 +6849,7 @@ public class Owner {
         // Where the address really pointed, when it was not the entry: a
         // client that meant a label sees it here without rereading the C.
         answer.addProperty("matched", function.getEntryPoint().equals(at) ? "entry" : "containing");
+        if (stub != null) addTags(answer, function);
         return answer;
     }
 
@@ -10269,6 +10368,9 @@ public class Owner {
         boolean tookShared = false;
         boolean unchanged = false;
         java.util.Map<String, DataType> parserFunctionsBefore = null;
+        java.util.List<BoundEquate> boundEquates = java.util.List.of();
+        JsonArray equatesOrphaned = new JsonArray();
+        int equatesKept = 0;
         if (c != null) {
             // Read before the parser touches the manager: CParser adds a type
             // as it parses it, so by the time it returns, the old fields'
@@ -10278,6 +10380,9 @@ public class Owner {
             java.util.Map<String, java.util.Map<String, String>> kept = keptComments(previous);
             java.util.Map<String, String> keptDescriptions = keptDescriptions(previous);
             java.util.Map<DataType, DataType> referenced = onlyReferenced(previous, c);
+            // The equates bound to an enum the text defines again: Ghidra
+            // binds an equate to the enum's id, and a redefinition is a new id.
+            boundEquates = boundEquates(previous, c);
             // The parser numbers its function types from `_func_1` in every
             // parse and writes them into the program as it goes: the
             // program's own `_func_N`, which another structure uses, would
@@ -10324,6 +10429,7 @@ public class Owner {
             unsignedEnumMembers(resolved, c);
             restoreReferenced(referenced);
             commentsKept = restoreComments(resolved, kept);
+            equatesKept = rebindEquates(boundEquates, equatesOrphaned);
             restoreDescriptions(resolved, keptDescriptions);
             // Ghidra's C parser drops comments: one written beside a member
             // in the C is that member's comment, as `comments` would give it.
@@ -10442,6 +10548,10 @@ public class Owner {
         // Always present, zero included: a reader must be able to tell "nothing
         // came back" from "this build has no such field".
         answer.addProperty("comments_kept", commentsKept);
+        if (equatesKept > 0) answer.addProperty("equates_kept", equatesKept);
+        // A member renamed or dropped leaves its operands with no name: listed,
+        // so the review puts them right with `ghidra_equate`.
+        if (equatesOrphaned.size() > 0) answer.add("equates_orphaned", equatesOrphaned);
         if (cComments > 0) answer.addProperty("comments_from_c", cComments);
         if (tookShared) answer.addProperty("taken_from_shared", true);
         if (!memberTypesReplaced.isEmpty()) {

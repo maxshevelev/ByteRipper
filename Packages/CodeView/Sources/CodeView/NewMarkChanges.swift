@@ -318,6 +318,7 @@ extension NewMarkChange {
         case .decompiled: L("decompiler only")
         case .library: L("library function")
         case .noBody: L("no body")
+        case .stub: L("stub")
         case nil: L("review level not recorded")
         }
     }

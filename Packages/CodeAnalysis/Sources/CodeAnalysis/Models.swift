@@ -706,7 +706,8 @@ public enum ReviewProgress: Int, Sendable, Comparable, CaseIterable {
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 
     /// The levels that leave nothing to review.
-    static let done: Set<String> = [ReviewLevel.full.rawValue, ReviewLevel.library.rawValue, ReviewLevel.noBody.rawValue]
+    static let done: Set<String> = [ReviewLevel.full.rawValue, ReviewLevel.library.rawValue, ReviewLevel.noBody.rawValue,
+                                     ReviewLevel.stub.rawValue]
 }
 
 extension AnalysisReading {

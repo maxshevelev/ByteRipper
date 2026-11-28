@@ -824,7 +824,8 @@
             "partial",
             "decompiled",
             "library",
-            "no_body"
+            "no_body",
+            "stub"
           ],
           "type" : "string"
         },
@@ -1854,7 +1855,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names the function at `address`. Any address inside a function names that function, and the answer says which it matched (`matched: \"entry\"` or `\"containing\"`); an address that carries a label is refused — a label is named with `ghidra_label`, which is not this call. A name Ghidra would make unique (`Foo_1`) is refused: choose another. `reason` says why, as the app shows it. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
+    "description" : "Names the function at `address`. Any address inside a function names that function, and the answer says which it matched (`matched: \"entry\"` or `\"containing\"`); an address that carries a label is refused — a label is named with `ghidra_label`, which is not this call. A name Ghidra would make unique (`Foo_1`) is refused: choose another. `reason` says why, as the app shows it. `stub` marks the function a stub, or not one, over the exporter's rule (a body of only the prologue and the epilogue, or one call of another stub): the app lists stubs in a group of their own, and they do not count as left to review. With `stub` the name may be left out. Without `verbose`, the answer leaves out the module's identity (module, project, program, language, image base).",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1874,6 +1875,10 @@
           "description" : "Why this name, in a few words.",
           "type" : "string"
         },
+        "stub" : {
+          "description" : "`stub`, `not_stub`, or `auto` to leave it to the rule.",
+          "type" : "string"
+        },
         "verbose" : {
           "description" : "The answer in full, as the server holds it: the identity of the module on every answer, and what the compact answer leaves out.",
           "type" : "boolean"
@@ -1881,8 +1886,7 @@
       },
       "required" : [
         "module",
-        "address",
-        "name"
+        "address"
       ],
       "type" : "object"
     },

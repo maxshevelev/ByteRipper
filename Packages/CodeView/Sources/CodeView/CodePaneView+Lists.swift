@@ -186,6 +186,17 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 reason = postCodeDetail(entry)
             }
             cell.textField?.textColor = color
+            // help: panel.code.stubs
+            // A stub nothing reaches says so after its name, in grey.
+            if state.list == .functions, let index = functionRow?.function,
+               case let function = model.functions[index], function.reviewLevel == .stub, function.unused == true, let field = cell.textField {
+                let text = NSMutableAttributedString(string: field.stringValue,
+                                                     attributes: [.font: Self.navigatorFont(), .foregroundColor: color])
+                text.append(NSAttributedString(string: "  " + L("unused"),
+                                               attributes: [.font: Self.navigatorFont(),
+                                                            .foregroundColor: NSColor.tertiaryLabelColor]))
+                field.attributedStringValue = text
+            }
             cell.toolTip = reason
             if state.list == .functions, let index = functionRow?.function,
                let notes = notesByFunction[index], !notes.isEmpty,

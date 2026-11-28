@@ -91,7 +91,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 10,\n");
+        json.append("  \"script_version\": 11,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         String languagePatch = languagePatch();
         if (languagePatch != null) json.append("  \"language_patch\": ").append(quote(languagePatch)).append(",\n");
@@ -215,6 +215,7 @@ public class ExportCode extends GhidraScript {
         opened.toggleSyntaxTree(true);
         opened.openProgram(currentProgram);
         Decompilers decompiler = new Decompilers(currentProgram, opened);
+        Stubs stubs = new Stubs();
 
         List<Function> functions = new ArrayList<>();
         FunctionIterator iterator = currentProgram.getFunctionManager().getFunctions(true);
@@ -331,7 +332,7 @@ public class ExportCode extends GhidraScript {
             }
             // How far the review has got with it: after the instructions for
             // their comments, and before the C, which is what it is about.
-            appendReview(json, function, decompiled, steps);
+            appendReview(json, function, decompiled, steps, stubs.isStub(function, decompiled, decompiler, 0));
             if (decompiled != null && decompiled.decompileCompleted()
                     && decompiled.getCCodeMarkup() != null) {
                 appendC(json, function, decompiled);
@@ -404,6 +405,65 @@ public class ExportCode extends GhidraScript {
      * taken when the only names it loses are those symbols; a function whose
      * C names nothing that way is decompiled once, as before.
      */
+    /**
+     * Which functions are stubs: a body that does nothing — the decompiler's
+     * C has no operation but the return, the prologue and the epilogue being
+     * gone — or one that only calls another stub, with no argument and its
+     * result unused. A review's tag decides over the rule: `stub` makes a
+     * function one, `not_stub` keeps it from being one.
+     */
+    static final class Stubs {
+        static final String TAG = "stub";
+        static final String NOT_TAG = "not_stub";
+        private final java.util.Map<Address, Boolean> known = new java.util.HashMap<>();
+
+        boolean isStub(Function function, DecompileResults given, Decompilers decompiler, int depth) {
+            if (function.isExternal() || function.isThunk()) return false;
+            for (FunctionTag tag : function.getTags()) {
+                if (tag == null) continue;
+                if (tag.getName().equals(TAG)) return true;
+                if (tag.getName().equals(NOT_TAG)) return false;
+            }
+            Boolean seen = known.get(function.getEntryPoint());
+            if (seen != null) return seen;
+            known.put(function.getEntryPoint(), false);  // a cycle is no stub
+            boolean result = decide(function, given, decompiler, depth);
+            known.put(function.getEntryPoint(), result);
+            return result;
+        }
+
+        private boolean decide(Function function, DecompileResults given, Decompilers decompiler, int depth) {
+            DecompileResults results = given;
+            if (results == null) {
+                if (decompiler == null || depth > 4) return false;
+                results = decompiler.decompile(function, 60, ghidra.util.task.TaskMonitor.DUMMY);
+            }
+            if (results == null || !results.decompileCompleted() || results.getHighFunction() == null) return false;
+            Function callee = null;
+            int calls = 0;
+            java.util.Iterator<ghidra.program.model.pcode.PcodeOpAST> ops = results.getHighFunction().getPcodeOps();
+            while (ops.hasNext()) {
+                ghidra.program.model.pcode.PcodeOpAST op = ops.next();
+                switch (op.getOpcode()) {
+                    case ghidra.program.model.pcode.PcodeOp.RETURN:
+                        if (op.getNumInputs() > 1) return false;  // returns a value
+                        break;
+                    case ghidra.program.model.pcode.PcodeOp.INDIRECT:
+                        break;  // a call's effect on memory, not an operation
+                    case ghidra.program.model.pcode.PcodeOp.CALL:
+                        calls++;
+                        if (calls > 1 || op.getNumInputs() > 1 || op.getOutput() != null) return false;
+                        callee = function.getProgram().getFunctionManager().getFunctionAt(op.getInput(0).getAddress());
+                        if (callee == null) return false;
+                        break;
+                    default:
+                        return false;
+                }
+            }
+            return callee == null || isStub(callee, null, decompiler, depth + 1);
+        }
+    }
+
     static final class Decompilers {
         private final ghidra.program.model.listing.Program program;
         final DecompInterface main;
@@ -1214,11 +1274,17 @@ public class ExportCode extends GhidraScript {
     // after the name and before the C, so the verdict meets a reader before
     // the code it is about.
     private static void appendReview(StringBuilder json, Function function,
-            DecompileResults decompiled, int steps) {
+            DecompileResults decompiled, int steps, boolean stub) {
         String level;
         List<String> gaps = new ArrayList<>();
         if (function.isExternal() || function.isThunk()) {
             level = "no_body";
+        } else if (stub) {
+            level = "stub";
+            // Nothing reaches it: no call, no table slot, no datum points at it.
+            if (!function.getProgram().getReferenceManager().hasReferencesTo(function.getEntryPoint())) {
+                json.append("      \"unused\": true,\n");
+            }
         } else {
             Assessment assessment = assess(function, decompiled, steps);
             gaps.addAll(assessment.gaps);
