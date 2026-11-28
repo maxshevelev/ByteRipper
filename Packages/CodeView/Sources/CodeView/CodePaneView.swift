@@ -1797,9 +1797,12 @@ import ToolModuleKit
             searchToOrder.isActive = false
             searchToEdge.isActive = true
         }
-        var counts: [CodeReaderState.FunctionGroup: Int] = [:]
-        for index in model.functions.indices { counts[state.group(of: index), default: 0] += 1 }
-        readinessBar.show(counts)
+        // The readiness strip is the function list's: no other list counts.
+        if showsOrder {
+            var counts: [CodeReaderState.FunctionGroup: Int] = [:]
+            for index in model.functions.indices { counts[state.group(of: index), default: 0] += 1 }
+            readinessBar.show(counts)
+        }
         readinessBar.isHidden = !showsOrder || showsNavigatorTab
         readinessHeight.constant = showsOrder ? CodeReviewReadinessBar.height : 0
         markChosenOrder(state.functionOrder)
@@ -3087,7 +3090,7 @@ import ToolModuleKit
         // still answers the pointer with its tooltip, and a function's showed
         // over a record's rows.
         functionScroll.isHidden = showsTab || state.rowCount == 0
-        readinessBar.isHidden = showsTab || readinessHeight.constant == 0
+        readinessBar.isHidden = showsTab || state.list != .functions
         emptyListLabel.isHidden = showsTab || state.rowCount > 0
     }
 

@@ -537,6 +537,18 @@ final class CodeRecordSectionViewTests: XCTestCase {
         panel.setFilter("0x1900")
         XCTAssertEqual(panel.shownRows.count, 0, "a handler is a detail, not the line")
         XCTAssertFalse(panel.shownEmptyText.isEmpty)
+        XCTAssertTrue(panel.splitter.isHidden, "no row to choose: no details pane")
+        panel.setFilter("")
+        XCTAssertFalse(panel.splitter.isHidden)
+    }
+
+    func testAChosenRowTheFilterStillShowsStaysChosen() throws {
+        let panel = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")
+        try select(panel, "0x80  read EC RAM")
+        panel.setFilter("0x8")
+        XCTAssertEqual(panel.shownDetailTitle, "0x80", "the filter still shows it")
+        panel.setFilter("full speed")
+        XCTAssertTrue(panel.shownDetails.isEmpty, "filtered out: nothing chosen")
     }
 
     func testItFitsTheNarrowestNavigatorWithNoSidewaysScroll() throws {

@@ -985,13 +985,22 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             items = rows.map(RecordRowItem.init)
             shownRows = rows
         }
+        // The row chosen before stays chosen while the filter still shows it.
+        let chosen = table.selectedRowIndexes.count == 1
+            ? values(atRow: table.selectedRowIndexes.first!).map(keyText) : nil
         table.reloadData()
         for case let group as RecordGroupItem in items where !collapsedGroups.contains(group.value) {
             table.expandItem(group)
         }
+        if let chosen, let row = tableRow(key: chosen) {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        } else {
+            table.deselectAll(nil)
+        }
         let empty = allRows.isEmpty
         tableScroll.isHidden = shownRows.isEmpty
-        splitter.isHidden = empty
+        // No row shown, no details pane: nothing is there to choose.
+        splitter.isHidden = shownRows.isEmpty
         filterBar.isHidden = empty
         emptyLabel.isHidden = !shownRows.isEmpty || (empty && records[recordID ?? ""]?.status == AnalysisProfile.RecordStatus.none)
         emptyLabel.stringValue = empty ? Self.emptyText : L("Nothing matches the search.")
