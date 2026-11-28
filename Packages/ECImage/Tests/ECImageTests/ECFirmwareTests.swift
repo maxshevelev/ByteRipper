@@ -215,3 +215,30 @@ final class ECFirmwareTests: XCTestCase {
         XCTAssertTrue(ECFirmware.isEC(Data(bytes)))
     }
 }
+
+/// A jump whose offset reaches below zero is no target, not a crash.
+final class NDS32JumpBelowZeroTests: XCTestCase {
+    func testAJumpBelowZeroIsNotATarget() {
+        // j with offset -0x800000 halfwords at address 0x10.
+        let word: [UInt8] = [0x48, 0x80, 0x00, 0x00]
+        let op = NDS32.decode(Data(word), at: 0, base: 0x10)
+        XCTAssertEqual("\(String(describing: op?.op))", "Optional(ECImage.NDS32.Op.other)")
+    }
+}
+
+/// Real images named by the environment (`EC_D711_SPI`, `EC_D711_CHIP`): the
+/// Intel copy at 0x8A0000 and the chip read are one module, and reading them
+/// does not stop the process.
+final class ECRealImageTests: XCTestCase {
+    func testTheBiosCopyAndTheChipReadOfNMD711AreOneModule() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let spi = env["EC_D711_SPI"], let chip = env["EC_D711_CHIP"] else { throw XCTSkip("no NM-D711 images") }
+        let whole = try Data(contentsOf: URL(fileURLWithPath: spi))
+        let copy = try ECFirmware(slice: whole.subdata(in: 0x8A0000..<0x8D0000))
+        let read = try ECFirmware(slice: try Data(contentsOf: URL(fileURLWithPath: chip)))
+        _ = copy.referencesPastExtent
+        _ = read.referencesPastExtent
+        XCTAssertEqual(copy.sha256, read.sha256)
+        print("D711", copy.sha256, copy.moduleName, copy.extent, read.rawSHA256)
+    }
+}

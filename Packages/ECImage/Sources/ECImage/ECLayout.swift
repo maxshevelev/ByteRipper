@@ -136,13 +136,13 @@ public struct ECLayout: Codable, Equatable, Sendable {
                 for inner in walk(callee, 40) {
                     switch inner.op {
                     case let .load(_, ra, imm, 1):
-                        if let base = constants[ra], UInt64(Int64(base) + Int64(imm)) == family.ivctRegister {
+                        if let base = constants[ra], UInt64(truncatingIfNeeded: Int64(base) + Int64(imm)) == family.ivctRegister {
                             readsIVCT = true
                         }
                     case let .constant(_, value) where readsIVCT && UInt64(value) < size:
                         lastConstant = value
                     case let .load(_, _, imm, 4) where readsIVCT && lastConstant != nil:
-                        table = UInt64(Int64(lastConstant!) + Int64(imm)) + UInt64(family.ivctBias * 4)
+                        table = UInt64(truncatingIfNeeded: Int64(lastConstant!) + Int64(imm)) &+ UInt64(family.ivctBias * 4)
                     default:
                         break
                     }

@@ -253,7 +253,7 @@ public struct ECFirmware: Equatable, Sendable {
             switch instruction.op {
             case let .store(_, ra, imm, _):
                 if let value = constants[ra],
-                   family.flashAddressRegisters.contains(UInt64(Int64(value) + Int64(imm))) { return true }
+                   family.flashAddressRegisters.contains(UInt64(truncatingIfNeeded: Int64(value) + Int64(imm))) { return true }
             case let .call(callee):
                 if depth > 0, callee != entry, storesFlashAddress(at: callee, depth: depth - 1) { return true }
                 constants = NDS32.Constants()
@@ -312,7 +312,7 @@ public struct ECStartup: Codable, Equatable, Sendable {
                 // the vectors: the copy's source, its length the register the
                 // copy was guarded by.
                 if let base = constants[ra] {
-                    let at = UInt64(Int64(base) + Int64(imm))
+                    let at = UInt64(truncatingIfNeeded: Int64(base) + Int64(imm))
                     if at >= 0x100, at < UInt64(data.count), let tested, let count = constants[tested], count > 0 {
                         source = at
                         length = UInt64(count)
@@ -320,7 +320,7 @@ public struct ECStartup: Codable, Equatable, Sendable {
                 }
             case let .store(_, ra, imm, _) where source != nil && target == nil:
                 if let base = constants[ra] {
-                    let at = UInt64(Int64(base) + Int64(imm))
+                    let at = UInt64(truncatingIfNeeded: Int64(base) + Int64(imm))
                     if family.ram.contains(at) { target = at }
                 }
             case let .call(callee):

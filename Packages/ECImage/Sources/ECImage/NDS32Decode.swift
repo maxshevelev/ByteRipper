@@ -73,7 +73,11 @@ enum NDS32 {
         case 0x1C where w & 0xFF == 0x02:                                                      // lw (indexed)
             return .loadIndexed(rt: rt, ra: ra, rb: Int((w >> 10) & 0x1F), shift: Int((w >> 8) & 0x3))
         case 0x24:                                                                             // j / jal
-            let target = UInt64(Int64(address) + Int64(signed(w & 0xFFFFFF, bits: 24)) * 2)
+            // A word that only looks like a jump — data in the code, or
+            // another chip's image — may point below zero: not a target.
+            let reach = Int64(address) + Int64(signed(w & 0xFFFFFF, bits: 24)) * 2
+            guard reach >= 0 else { return .other }
+            let target = UInt64(reach)
             return w & 0x0100_0000 != 0 ? .call(target: target) : .jump(target: target)
         case 0x25 where w & 0x1F == 0x01:                                                      // jral
             return .callRegister(rb: Int((w >> 10) & 0x1F))
@@ -107,7 +111,7 @@ enum NDS32 {
         if (w >> 11) & 0xF == 0x9 { return .branchZero(rt: Int((w >> 8) & 0x7), ifZero: false) }   // bnez38
         if w >> 5 == 0x6E9 { return .callRegister(rb: Int(w & 0x1F)) }        // jral5
         if (w >> 8) & 0x7F == 0x55 {                                           // j8
-            return .jump(target: UInt64(Int64(address) + Int64(signed(w & 0xFF, bits: 8)) * 2))
+            return .jump(target: UInt64(truncatingIfNeeded: Int64(address) + Int64(signed(w & 0xFF, bits: 8)) * 2))
         }
         return .other
     }
