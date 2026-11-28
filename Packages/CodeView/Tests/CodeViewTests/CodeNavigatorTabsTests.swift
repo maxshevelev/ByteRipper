@@ -43,9 +43,9 @@ final class CodeNavigatorTabsTests: XCTestCase {
     /// own; an id it does not know keeps the profile's English.
     func testRecordTitlesAreTheAppsAndAnUnknownIdFallsBack() {
         for record in AnalysisProfile.catalogue.flatMap(\.addedPanelRecords) {
-            XCTAssertEqual(CodeRecordSectionView.title(of: record.id, fallback: "-"), record.title, record.id)
+            XCTAssertEqual(CodeRecordSection.title(of: record.id, fallback: "-"), record.title, record.id)
         }
-        XCTAssertEqual(CodeRecordSectionView.title(of: "future_kind", fallback: "Future kind"), "Future kind")
+        XCTAssertEqual(CodeRecordSection.title(of: "future_kind", fallback: "Future kind"), "Future kind")
     }
 
     // MARK: - The pane

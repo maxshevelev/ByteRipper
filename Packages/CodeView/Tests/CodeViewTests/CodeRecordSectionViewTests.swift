@@ -108,14 +108,14 @@ final class CodeRecordSectionViewTests: XCTestCase {
                                      "0x10  set mode", "0x10  enter flash", "0x59  fan control", "0x59/0x02  Fan full speed"],
                        "by command, then subcommand, flash after normal; never a command merged across ports")
         let flashRow = try XCTUnwrap(host.cell(row: try row(host, "0x10  enter flash")))
-        XCTAssertTrue(flashRow.textField?.stringValue.contains(CodeRecordSectionView.valueTitle("flash")) ?? false)
+        XCTAssertTrue(flashRow.textField?.stringValue.contains(CodeRecordSection.valueTitle("flash")) ?? false)
 
         let irq = try panel(["irq_map": ["status": "complete", "rows": [
             ["irq": 24, "handler": "0x1200", "source": "kbc", "source_status": "firmware", "enabled_by_firmware": false,
              "purpose": "keyboard input", "confidence": "established"],
             ["irq": "4", "handler": "0x1300", "source": "timer", "source_status": "firmware", "enabled_by_firmware": true,
              "purpose": "tick", "confidence": "established"]]]], show: "irq_map")
-        XCTAssertEqual(irq.shownGroups.map(\.title), ["Enabled", "Not enabled"].map(CodeRecordSectionView.valueTitle))
+        XCTAssertEqual(irq.shownGroups.map(\.title), ["Enabled", "Not enabled"].map(CodeRecordSection.valueTitle))
         XCTAssertEqual(lines(irq), ["", "IRQ 4  tick", "", "IRQ 24  keyboard input"])
         let off = try XCTUnwrap(irq.cell(row: 3)?.textField)
         XCTAssertEqual(off.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
@@ -126,7 +126,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
             ["channel": "B", "address": "mailbox", "device": "host", "commands": [], "confidence": "established",
              "note": "through the mailbox"]]]], show: "smbus_peers")
         XCTAssertEqual(smbus.shownGroups.map(\.title), ["Channel A", "Channel B"].map {
-            $0.replacingOccurrences(of: "Channel", with: CodeRecordSectionView.columnTitle("Channel"))
+            $0.replacingOccurrences(of: "Channel", with: CodeRecordSection.columnTitle("Channel"))
         })
         XCTAssertEqual(lines(smbus), ["", "0x0B  battery", "", "mailbox  host"])
         XCTAssertTrue(smbus.cell(row: 1)?.textField?.stringValue.contains("PEC") ?? false)
@@ -159,11 +159,10 @@ final class CodeRecordSectionViewTests: XCTestCase {
     }
 
     func testALabelIsTheWholeFirstSentenceAndTheListCutsIt() {
-        XCTAssertEqual(CodeRecordSectionView.firstSentence("Reads one byte. Then more."), "Reads one byte")
+        XCTAssertEqual(CodeRecordSection.firstSentence("Reads one byte. Then more."), "Reads one byte")
         let long = String(repeating: "word ", count: 20).trimmingCharacters(in: .whitespaces)
-        let section = CodeRecordSectionView(frame: .zero)
-        section.setRecords(ModuleRecords(), statuses: nil, profile: .ecIteNds32)
-        section.show(id: "gpio", fallbackTitle: "GPIO", font: .systemFont(ofSize: 11))
+        let profile = AnalysisProfile.ecIteNds32
+        let section = CodeRecordSection(profile: profile, record: profile.records.first { $0.id == "gpio" })
         XCTAssertEqual(section.label(["function": .string(long)]), long, "no cut in the text: the cell cuts")
     }
 
@@ -227,19 +226,19 @@ final class CodeRecordSectionViewTests: XCTestCase {
             if let tip { XCTAssertFalse(line.contains(tip), tip) }
         }
         let flashCell = try XCTUnwrap(panel.cell(row: try row(panel, "0x10  Enter flash mode")))
-        XCTAssertTrue(flashCell.textField?.stringValue.contains(CodeRecordSectionView.valueTitle("flash")) ?? false)
+        XCTAssertTrue(flashCell.textField?.stringValue.contains(CodeRecordSection.valueTitle("flash")) ?? false)
         let flash = flashCell
         XCTAssertEqual(flash.toolTip, "seen in the update tool", "a note the line does not show")
         let inferred = try XCTUnwrap(panel.cell(row: try row(panel, "0x80  Shipping mode flag of the battery pack")) as? RecordRowCell)
         XCTAssertNil(inferred.textField?.toolTip)
-        XCTAssertEqual(inferred.toolTip, CodeRecordSectionView.inferenceToolTip(note: "from the ACPI spec"))
+        XCTAssertEqual(inferred.toolTip, CodeRecordSection.inferenceToolTip(note: "from the ACPI spec"))
     }
 
     /// The branch a row stands in is not a field of its details.
     func testTheDetailsLeaveOutTheBranch() throws {
         let panel = try self.panel(["host_commands": commands], show: "host_commands")
         try select(panel, "0x80  read EC RAM")
-        XCTAssertFalse(panel.shownDetails.map(\.name).contains(CodeRecordSectionView.columnTitle("Ports")))
+        XCTAssertFalse(panel.shownDetails.map(\.name).contains(CodeRecordSection.columnTitle("Ports")))
         XCTAssertFalse(panel.shownDetails.contains { $0.value == "62/66" })
         let irq = try self.panel(["irq_map": ["status": "complete", "rows": [
             ["irq": 4, "handler": "0x1300", "source": "timer", "enabled_by_firmware": true, "purpose": "tick",
@@ -247,7 +246,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
         try select(irq, "IRQ 4  tick")
         let groupBy = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "irq_map" }?.groupBy)
         let title = try XCTUnwrap(AnalysisProfile.ecIteNds32.records.first { $0.id == "irq_map" }?.column(groupBy)?.title)
-        XCTAssertFalse(irq.shownDetails.map(\.name).contains(CodeRecordSectionView.columnTitle(title)))
+        XCTAssertFalse(irq.shownDetails.map(\.name).contains(CodeRecordSection.columnTitle(title)))
     }
 
     /// No text twice in the details: no two blocks equal, none the start of
@@ -360,7 +359,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
         let panel = try self.panel(["ec_ram": ram], show: "ec_ram")
         let inferred = try XCTUnwrap(panel.table.view(atColumn: 0, row: 2, makeIfNecessary: true) as? RecordRowCell)
         inferred.layoutSubtreeIfNeeded()
-        XCTAssertEqual(inferred.shownMark, CodeRecordSectionView.inferenceToolTip(note: "named by its use"))
+        XCTAssertEqual(inferred.shownMark, CodeRecordSection.inferenceToolTip(note: "named by its use"))
         XCTAssertTrue(inferred.textField?.attributedStringValue.containsAttachments ?? false, "the mark stands after the key")
         XCTAssertTrue(inferred.textField?.font.map { _ in
             (inferred.textField?.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?
@@ -379,7 +378,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
         let group = try XCTUnwrap(panel.table.view(atColumn: 0, row: 1, makeIfNecessary: true) as? RecordGroupCell)
         group.info.performClick(nil)
         XCTAssertEqual(panel.shownPopoverText,
-                       CodeRecordSectionView.valueSummary(AnalysisProfile.acpiPortsSummary) + "\n\n0x45/0x47 not reviewed")
+                       CodeRecordSection.valueSummary(AnalysisProfile.acpiPortsSummary) + "\n\n0x45/0x47 not reviewed")
     }
 
     /// On the selection's fill the tag and the mark take its colour too.
@@ -404,14 +403,14 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertEqual(panel.shownGroups.map(\.value), ["60/64", "62/66", "68/6C"])
         XCTAssertEqual(panel.shownGroups.map(\.rows), [0, 2, 4])
         XCTAssertEqual(panel.shownGroups.map(\.title), [
-            "60/64  " + CodeRecordSectionView.valueTitle("Keyboard controller"),
-            "62/66  " + CodeRecordSectionView.valueTitle("ACPI EC"),
-            "68/6C  " + CodeRecordSectionView.valueTitle("OEM channel")])
+            "60/64  " + CodeRecordSection.valueTitle("Keyboard controller"),
+            "62/66  " + CodeRecordSection.valueTitle("ACPI EC"),
+            "68/6C  " + CodeRecordSection.valueTitle("OEM channel")])
         let group = try XCTUnwrap(panel.table.view(atColumn: 0, row: 1, makeIfNecessary: true) as? RecordGroupCell)
         XCTAssertTrue(group.label.stringValue.hasSuffix(" (2)"))
         XCTAssertFalse(group.info.isHidden)
         group.info.performClick(nil)
-        XCTAssertEqual(panel.shownPopoverText, CodeRecordSectionView.valueSummary(AnalysisProfile.acpiPortsSummary))
+        XCTAssertEqual(panel.shownPopoverText, CodeRecordSection.valueSummary(AnalysisProfile.acpiPortsSummary))
     }
 
     func testAFontStaysAsABranchClosesAndOpens() throws {
@@ -444,11 +443,11 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertEqual(panel.shownDetailSentence, "read EC RAM")
         let names = panel.shownDetails.map(\.name)
         XCTAssertEqual(Set(names).count, names.count)
-        XCTAssertFalse(names.contains(CodeRecordSectionView.columnTitle("Label")))
+        XCTAssertFalse(names.contains(CodeRecordSection.columnTitle("Label")))
         let details = Dictionary(uniqueKeysWithValues: panel.shownDetails.map { ($0.name, $0.value) })
-        XCTAssertEqual(details[CodeRecordSectionView.columnTitle("Handler")], "0x1500")
-        XCTAssertEqual(details[CodeRecordSectionView.columnTitle("Data in")], "1 byte: offset")
-        XCTAssertEqual(details[CodeRecordSectionView.columnTitle("EC RAM")], "0x2A")
+        XCTAssertEqual(details[CodeRecordSection.columnTitle("Handler")], "0x1500")
+        XCTAssertEqual(details[CodeRecordSection.columnTitle("Data in")], "1 byte: offset")
+        XCTAssertEqual(details[CodeRecordSection.columnTitle("EC RAM")], "0x2A")
         XCTAssertEqual(details[CodeRecordSectionView.confidenceTitle], CodeRecordSectionView.inferenceTitle)
         XCTAssertEqual(details[CodeRecordSectionView.noteTitle], "from the ACPI spec")
 
@@ -487,7 +486,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
         XCTAssertEqual(grid.numberOfRows, 2)
         XCTAssertEqual(grid.numberOfColumns, 4)
         XCTAssertEqual((grid.cell(atColumnIndex: 0, rowIndex: 1).contentView as? NSTextField)?.stringValue, "0x16")
-        XCTAssertEqual(panel.shownDetails.first { $0.name == CodeRecordSectionView.columnTitle("Bus address") }?.value,
+        XCTAssertEqual(panel.shownDetails.first { $0.name == CodeRecordSection.columnTitle("Bus address") }?.value,
                        "0x16")
     }
 
@@ -496,12 +495,12 @@ final class CodeRecordSectionViewTests: XCTestCase {
     /// The status's (i) says what the rows cover and, apart, what is not
     /// checked yet — from the field, or from a note that holds both.
     func testTheStatusNoteIsReadInItsTwoParts() {
-        XCTAssertTrue(CodeRecordSectionView.noteParts(note: "All rows. Not checked: IRQ 107.", notChecked: nil)
+        XCTAssertTrue(CodeRecordSection.noteParts(note: "All rows. Not checked: IRQ 107.", notChecked: nil)
             == ("All rows.", "IRQ 107."))
-        XCTAssertTrue(CodeRecordSectionView.noteParts(note: "All rows.", notChecked: "IRQ 107.") == ("All rows.", "IRQ 107."))
-        XCTAssertTrue(CodeRecordSectionView.noteParts(note: "Only this.", notChecked: nil) == ("Only this.", nil))
-        XCTAssertTrue(CodeRecordSectionView.noteParts(note: nil, notChecked: " ") == (nil, nil))
-        let partial = CodeRecordSectionView.notedParts(note: "Partial: each pair's note says what is left.", notChecked: nil)
+        XCTAssertTrue(CodeRecordSection.noteParts(note: "All rows.", notChecked: "IRQ 107.") == ("All rows.", "IRQ 107."))
+        XCTAssertTrue(CodeRecordSection.noteParts(note: "Only this.", notChecked: nil) == ("Only this.", nil))
+        XCTAssertTrue(CodeRecordSection.noteParts(note: nil, notChecked: " ") == (nil, nil))
+        let partial = CodeRecordSection.notedParts(note: "Partial: each pair's note says what is left.", notChecked: nil)
         XCTAssertTrue(partial == (nil, "Partial:", "each pair's note says what is left."))
     }
 
@@ -510,8 +509,8 @@ final class CodeRecordSectionViewTests: XCTestCase {
     /// rows cover, then what is not checked — and nothing else.
     func testTheStatusLineCarriesTheReviewsWordsInItsPopover() throws {
         let panel = try self.panel(["host_commands": commands, "ec_ram": ram], show: "host_commands")
-        XCTAssertEqual(panel.shownLegendLine, CodeRecordSectionView.title(of: "host_commands", fallback: "")
-            + " · " + String(CodeRecordSectionView.statusText(.partial, note: nil).dropLast()))
+        XCTAssertEqual(panel.shownLegendLine, CodeRecordSection.title(of: "host_commands", fallback: "")
+            + " · " + String(CodeRecordSection.statusText(.partial, note: nil).dropLast()))
         panel.legendTitle.performClick(nil)
         XCTAssertEqual(panel.shownPopoverText, commands["note"] as? String, "the note alone, no words of the profile")
 
@@ -563,7 +562,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
 
     func testTheStatusHasFourStates() throws {
         let unanswered = try panel([:], show: "gpio")
-        XCTAssertEqual(unanswered.shownStatus, CodeRecordSectionView.statusText(.unanswered, note: nil))
+        XCTAssertEqual(unanswered.shownStatus, CodeRecordSection.statusText(.unanswered, note: nil))
         XCTAssertEqual(unanswered.shownEmptyText, CodeRecordSectionView.emptyText)
         let none = try panel(["gpio": ["status": "none", "note": "the firmware drives no GPIO", "rows": []]], show: "gpio")
         XCTAssertTrue(none.shownStatus.contains("the firmware drives no GPIO"))
@@ -571,7 +570,7 @@ final class CodeRecordSectionViewTests: XCTestCase {
         let early = CodeRecordSectionView(frame: .zero)
         early.setRecords(nil, statuses: ["gpio": "complete"], profile: .ecIteNds32)
         early.show(id: "gpio", fallbackTitle: "GPIO", font: .systemFont(ofSize: 11))
-        XCTAssertEqual(early.shownStatus, CodeRecordSectionView.statusText(.complete, note: nil))
+        XCTAssertEqual(early.shownStatus, CodeRecordSection.statusText(.complete, note: nil))
     }
 
     func testCopyRowCopiesEveryField() throws {

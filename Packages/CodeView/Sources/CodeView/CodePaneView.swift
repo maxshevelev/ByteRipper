@@ -2772,7 +2772,7 @@ import ToolModuleKit
             case .list(.strings): L("Strings")
             case .list(.postCodes): L("POST")
             case .list(.statusCodes): L("Status")
-            case let .record(id, _, _): CodeRecordSectionView.tabWord(of: id) ?? ""
+            case let .record(id, _, _): CodeRecordSection.tabWord(of: id) ?? ""
             case .interfaces, .search: ""
             }
         }
@@ -2813,7 +2813,7 @@ import ToolModuleKit
                                          forSegment: segment)
                 }
                 ControlHelp.describe(listControl, segment: segment,
-                                     CodeRecordSectionView.title(of: id, fallback: title))
+                                     CodeRecordSection.title(of: id, fallback: title))
             }
         }
         listControl.selectedSegment = shownSegment

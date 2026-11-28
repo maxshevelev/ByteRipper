@@ -89,7 +89,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     private func rememberPlace() {
         guard let recordID, record != nil else { return }
         let selected = table.selectedRowIndexes
-        let key = selected.count == 1 ? values(atRow: selected.first!).map(keyText) : nil
+        let key = selected.count == 1 ? values(atRow: selected.first!).map(section.keyText) : nil
         places[recordID] = (key, tableScroll.contentView.bounds.origin)
     }
 
@@ -196,7 +196,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         recordID = id
         self.fallbackTitle = fallbackTitle
         record = profile?.records.first { $0.id == id }
-        titleText = Self.title(of: id, fallback: fallbackTitle)
+        titleText = CodeRecordSection.title(of: id, fallback: fallbackTitle)
         emptyLabel.font = font
         table.rowHeight = CodePaneView.navigatorRowHeight
         if changed {
@@ -207,10 +207,10 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         let stored = records[id]
         let status = stored?.status
             ?? statuses[id].flatMap(AnalysisProfile.RecordStatus.init) ?? .unanswered
-        let statusText = Self.statusText(status, note: stored?.note)
+        let statusText = CodeRecordSection.statusText(status, note: stored?.note)
         let note = status == .none ? nil : stored?.note
         storedNote = note
-        let parts = Self.notedParts(note: note, notChecked: status == .none ? nil : stored?.notChecked)
+        let parts = CodeRecordSection.notedParts(note: note, notChecked: status == .none ? nil : stored?.notChecked)
         storedScope = parts.scope
         storedNotChecked = parts.open
         storedOpenHead = parts.head
@@ -224,7 +224,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         ]))
         legendTitle.attributedTitle = line
         statusInfo.isHidden = parts.scope == nil && parts.open == nil
-        allRows = (stored?.rows ?? []).sorted(by: keyOrder)
+        allRows = (stored?.rows ?? []).sorted(by: section.keyOrder)
         measureKeys()
         applyFilter()
         if let key = pendingSelection {
@@ -238,16 +238,6 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
             table.scroll(place.scroll)
         }
         showDetails()
-    }
-
-    /// The status line: what the review has done with the record.
-    static func statusText(_ status: AnalysisProfile.RecordStatus, note: String?) -> String {
-        switch status {
-        case .unanswered: L("Not answered yet.")
-        case .partial: L("Review continues.")
-        case .complete: L("Complete.")
-        case .none: L("None: %1$@", note ?? "")
-        }
     }
 
     /// What a section with no rows says.
@@ -282,7 +272,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     func tableRow(key: String) -> Int? {
         for item in items {
             let rows: [AnyObject] = (item as? RecordGroupItem)?.children ?? [item]
-            for case let row as RecordRowItem in rows where keyText(row.values) == key {
+            for case let row as RecordRowItem in rows where section.keyText(row.values) == key {
                 let index = table.row(forItem: row)
                 return index >= 0 ? index : nil
             }
@@ -297,13 +287,13 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     /// The text of `column` id of the data row at `row`, as the details write
     /// it; empty on a branch.
     func cellText(row: Int, column id: String) -> String {
-        guard let column = columns.first(where: { $0.id == id }), let values = values(atRow: row) else { return "" }
-        return text(of: values, column)
+        guard let column = section.columns.first(where: { $0.id == id }), let values = values(atRow: row) else { return "" }
+        return section.text(of: values, column)
     }
     /// The list's line of the data row at `row`: its key and its label.
     func listText(row: Int) -> String {
         guard let values = values(atRow: row) else { return "" }
-        return Self.line(key: keyDisplay(values), label: label(values))
+        return CodeRecordSection.line(key: section.keyDisplay(values), label: section.label(values))
     }
     /// The row view's cell at `row`, as the outline makes it.
     func cell(row: Int) -> NSTableCellView? {
@@ -313,14 +303,14 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     /// Follows the value of column `id` of the row at `row`, as a click on
     /// it in the details does: the first place it names.
     func click(row: Int, column id: String) {
-        guard let values = values(atRow: row), let column = columns.first(where: { $0.id == id }) else { return }
+        guard let values = values(atRow: row), let column = section.columns.first(where: { $0.id == id }) else { return }
         places(values, column).first?.1()
     }
     /// The selected rows' TSV, as Copy Row puts it on the pasteboard; a
     /// branch's own row adds nothing, its rows carry its value.
     func tsv(rows: IndexSet) -> String {
         rows.compactMap { values(atRow: $0) }.map { values in
-            columns.map { text(of: values, $0) }.joined(separator: "\t")
+            section.columns.map { section.text(of: values, $0) }.joined(separator: "\t")
         }.joined(separator: "\n")
     }
     /// The details shown: each field's name and value, in order.
@@ -337,167 +327,8 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
 
     // MARK: - Words of a row
 
-    private var columns: [AnalysisProfile.Column] { record?.columns ?? [] }
-
-    /// The column that says what a row does, by record: its first sentence
-    /// is the label a row without one shows, and the details' sentence.
-    private var mainColumn: AnalysisProfile.Column? {
-        for id in ["effect", "purpose", "meaning", "function", "device"] {
-            if let column = record?.column(id) { return column }
-        }
-        return nil
-    }
-
-    /// The first sentence of `text`.
-    static func firstSentence(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        for separator in [". ", "; ", "\n"] {
-            if let range = trimmed.range(of: separator) {
-                return String(trimmed[..<range.lowerBound])
-            }
-        }
-        return trimmed.hasSuffix(".") ? String(trimmed.dropLast()) : trimmed
-    }
-
-    /// The row's short label: the review's `label`, or the first sentence of
-    /// its main text, whole — the line cuts it at the list's width, not here.
-    func label(_ row: [String: RecordValue]) -> String {
-        // A pin reads as the board names its signal, then what it is.
-        if record?.id == "gpio", let net = row["net"]?.string, !net.isEmpty {
-            let short = row["label"]?.string ?? ""
-            return short.isEmpty ? net : net + ": " + short
-        }
-        if let label = row["label"]?.string, !label.isEmpty { return label }
-        guard let main = mainColumn else { return "" }
-        return Self.firstSentence(text(of: row, main))
-    }
-
-    /// The row's key as the list writes it: `IRQ 24`, `0x59/0x02`, the range
-    /// `0x2A–0x2B` of a wider EC RAM field, `0x0B`, `GPJ5`, `0x2A600`.
-    func keyDisplay(_ row: [String: RecordValue]) -> String {
-        func hex(_ id: String) -> String? { row[id].flatMap(Self.number).map { String(format: "0x%02X", $0) } }
-        switch record?.id {
-        case "irq_map":
-            return row["irq"].flatMap(Self.number).map { "IRQ \($0)" } ?? ""
-        case "host_commands":
-            let cmd = hex("cmd") ?? ""
-            return hex("sub").map { "\(cmd)/\($0)" } ?? cmd
-        case "ec_ram":
-            guard let offset = row["offset"].flatMap(Self.number) else { return row["offset"]?.text ?? "" }
-            let width = row["width"].flatMap(Self.number) ?? 1
-            let first = String(format: "0x%02X", offset)
-            return width > 1 ? "\(first)–" + String(format: "0x%02X", offset + width - 1) : first
-        default:
-            return (record?.key ?? []).filter { $0 != record?.groupBy }.compactMap { id -> String? in
-                guard let column = record?.column(id) else { return nil }
-                let part = text(of: row, column)
-                return part.isEmpty ? nil : part
-            }.joined(separator: " ")
-        }
-    }
-
-    static func line(key: String, label: String) -> String {
-        label.isEmpty ? key : "\(key)  \(label)"
-    }
-
-    /// A value as the column writes it: hex where the column is, enum words
-    /// raw, a list joined, a nested table as a count.
-    private func text(of row: [String: RecordValue], _ column: AnalysisProfile.Column) -> String {
-        if column.kind == .computed { return computed(row, column) ?? "" }
-        guard let value = row[column.id], value != .null else { return "" }
-        return Self.text(value, kind: column.kind, column: column, profile: profile)
-    }
-
-    /// The number an `int` or `byte` value holds: a JSON number, or the
-    /// `0x…` or decimal text the review's store writes.
-    static func number(_ value: RecordValue) -> Int? {
-        if case .double(let double) = value, double.rounded() == double { return Int(double) }
-        return value.int
-    }
-
-    static func text(_ value: RecordValue, kind: AnalysisProfile.ColumnKind, column: AnalysisProfile.Column,
-                     profile: AnalysisProfile?) -> String {
-        switch kind {
-        case .byte:
-            guard let number = number(value) else { return value.text }
-            return String(format: "0x%02X", number)
-        case .int:
-            // A word the column takes instead of a number (runtime, mailbox)
-            // stays a word.
-            if let word = value.string, column.values?.contains(word) == true { return word }
-            guard let number = number(value) else { return value.text }
-            return column.hex == true ? String(format: "0x%02X", number) : String(number)
-        case .code, .data:
-            guard let number = number(value) else { return value.text }
-            return CodeAddress(UInt64(number)).description
-        case .bool:
-            if case .bool(let on) = value { return on ? L("Yes") : L("No") }
-            return value.text
-        case .list:
-            let element = column.of ?? .text
-            return (value.array ?? [value]).map { text($0, kind: element, column: column, profile: profile) }
-                .joined(separator: ", ")
-        case .rows:
-            let count = value.array?.count ?? 0
-            return L("%1$@ entries", String(count))
-        case .ref:
-            return refText(value, column: column, profile: profile)
-        default:
-            return value.text
-        }
-    }
-
-    /// A ref as the row it names: its key values, written as their columns are.
-    private static func refText(_ value: RecordValue, column: AnalysisProfile.Column,
-                                profile: AnalysisProfile?) -> String {
-        guard let target = profile?.records.first(where: { $0.id == column.ref }) else { return value.text }
-        if target.key.count == 1, let keyColumn = target.column(target.key[0]) {
-            return text(value, kind: keyColumn.kind, column: keyColumn, profile: profile)
-        }
-        let object = value.object ?? [:]
-        return target.key.compactMap { id in
-            guard let part = object[id], let keyColumn = target.column(id) else { return nil }
-            return text(part, kind: keyColumn.kind, column: keyColumn, profile: profile)
-        }.joined(separator: " ")
-    }
-
-    /// A computed column: EC RAM's address in the EC, an SMBus peer's 8-bit
-    /// bus address. Nothing where the row has no number to compute from (a
-    /// runtime or mailbox address).
-    private func computed(_ row: [String: RecordValue], _ column: AnalysisProfile.Column) -> String? {
-        switch column.compute {
-        case "ec_ram_address":
-            guard let offset = row["offset"].flatMap(Self.number),
-                  let base = record?.parameters["ec_ram_base"].flatMap(RecordValue.integer) else { return nil }
-            return CodeAddress(UInt64(base + offset)).description
-        case "smbus_address_8bit":
-            guard let address = row["address"], address.string.map({ RecordValue.integer($0) != nil }) ?? true,
-                  let seven = Self.number(address) else { return nil }
-            return String(format: "0x%02X", seven * 2)
-        default:
-            return nil
-        }
-    }
-
-    /// The row's key text, as `ModuleRecords.rowKey` writes it.
-    private func keyText(_ row: [String: RecordValue]) -> String {
-        ModuleRecords.rowKey(row, key: record?.key ?? [])
-    }
-
-    private static func isInference(_ row: [String: RecordValue]) -> Bool {
-        row["confidence"]?.string == AnalysisProfile.RowConfidence.inference.rawValue
-    }
-
-    /// The `?` beside an inferred row, and what it says.
-    static func inferenceToolTip(note: String?) -> String {
-        guard let note, !note.isEmpty else { return L("Inference") }
-        return L("Inference: %1$@", note)
-    }
-
-    private static func isLink(_ column: AnalysisProfile.Column) -> Bool {
-        [.code, .data, .ref].contains(column.kind)
-            || (column.kind == .list && [.code, .data, .ref].contains(column.of ?? .text))
-    }
+    /// The record's words and order, apart from the drawing.
+    private var section: CodeRecordSection { CodeRecordSection(profile: profile, record: record) }
 
     // MARK: - The list
 
@@ -513,8 +344,8 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     /// The row's one mark, in the cell's marker slot: the `?` of an inferred
     /// row; otherwise a pin's direction — up for out, down for in.
     private func mark(_ row: [String: RecordValue]) -> (symbol: String, tip: String)? {
-        guard Self.isInference(row) else { return nil }
-        return ("circle.dashed", Self.inferenceToolTip(note: row["note"]?.string))
+        guard CodeRecordSection.isInference(row) else { return nil }
+        return ("circle.dashed", CodeRecordSection.inferenceToolTip(note: row["note"]?.string))
     }
 
     /// Whether the rows stand under branches.
@@ -527,28 +358,11 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         let mono = CodePaneView.navigatorCodeFont()
         let tagFont = NSFont.systemFont(ofSize: max(CodePaneView.navigatorSize - 2, 9), weight: .bold)
         keyColumnWidth = allRows.map { row -> CGFloat in
-            var width = (keyDisplay(row) as NSString).size(withAttributes: [.font: mono]).width
-            if let tag = tag(row) { width += (" " + tag as NSString).size(withAttributes: [.font: tagFont]).width }
+            var width = (section.keyDisplay(row) as NSString).size(withAttributes: [.font: mono]).width
+            if let tag = section.tag(row) { width += (" " + tag as NSString).size(withAttributes: [.font: tagFont]).width }
             if mark(row) != nil { width += CodePaneView.navigatorSize + 4 }
             return width
         }.max().map { ($0 + 8).rounded(.up) } ?? 0
-    }
-
-    /// A short word after the key: `flash` for a command taken in flash mode,
-    /// `PEC` for an SMBus device whose transfers carry one.
-    private func tag(_ row: [String: RecordValue]) -> String? {
-        switch record?.id {
-        case "host_commands" where row["mode"]?.string == "flash": Self.valueTitle("flash")
-        case "smbus_peers" where row["pec"] == .bool(true): "PEC"
-        // A pin's direction in words, not an arrow: IN, OUT, I/O.
-        case "gpio": switch row["direction"]?.string {
-            case "in": "IN"
-            case "out": "OUT"
-            case "bidir": "I/O"
-            default: nil
-            }
-        default: nil
-        }
     }
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
@@ -557,7 +371,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         let identifier = NSUserInterfaceItemIdentifier("record.row")
         let cell = outlineView.makeView(withIdentifier: identifier, owner: self) as? RecordRowCell
             ?? RecordRowCell(identifier: identifier)
-        let inference = Self.isInference(values)
+        let inference = CodeRecordSection.isInference(values)
         // An interrupt the firmware leaves off reads in grey.
         let off = record?.id == "irq_map" && values["enabled_by_firmware"] == .bool(false)
         let ink: NSColor = off ? .secondaryLabelColor : .labelColor
@@ -566,7 +380,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         }
         let body = styled(CodePaneView.navigatorFont())
         let mark = mark(values)
-        let key = keyDisplay(values), tag = tag(values), label = label(values), tabStop = keyColumnWidth
+        let key = section.keyDisplay(values), tag = section.tag(values), label = section.label(values), tabStop = keyColumnWidth
         let net = record?.id == "gpio" ? values["net"]?.string.flatMap { $0.isEmpty ? nil : $0 } : nil
         // The line for a row on the selection's fill (`on`) or off it: on it
         // every colour — the tag's orange, the mark's grey — takes the
@@ -677,31 +491,6 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
 
     @objc private func statusInfoClicked() { showStatusInfo() }
 
-    /// The review's note on a record in its two parts: what the rows cover,
-    /// and what is not checked yet. A review that wrote both into `note`, as
-    /// `… Not checked: …`, is read apart at those words.
-    static func noteParts(note: String?, notChecked: String?) -> (scope: String?, notChecked: String?) {
-        let parts = notedParts(note: note, notChecked: notChecked)
-        return (parts.scope, parts.open)
-    }
-
-    /// The words a review opens what is still open with, in its note: the
-    /// part after them is drawn under a warning with these words as its head.
-    static let openMarkers = ["Not checked:", "Partial:"]
-
-    static func notedParts(note: String?, notChecked: String?) -> (scope: String?, head: String?, open: String?) {
-        func clean(_ text: String?) -> String? {
-            let text = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return text.isEmpty ? nil : text
-        }
-        if let notChecked = clean(notChecked) { return (clean(note), "Not checked:", notChecked) }
-        guard let note = clean(note) else { return (nil, nil, nil) }
-        let found = openMarkers.compactMap { marker in note.range(of: marker).map { (marker, $0) } }
-            .min { $0.1.lowerBound < $1.1.lowerBound }
-        guard let (marker, range) = found else { return (note, nil, nil) }
-        return (clean(String(note[..<range.lowerBound])), marker, clean(String(note[range.upperBound...])))
-    }
-
     /// Shows the review's note on the record from the (i) after its status:
     /// what the rows cover, then — under a warning — what is not checked yet.
     /// The status is on the line the (i) stands in, and is not said again.
@@ -810,17 +599,17 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         }
 
         let label = values["label"]?.string ?? ""
-        shownDetailTitle = label.isEmpty ? keyDisplay(values) : "\(keyDisplay(values)) · \(label)"
+        shownDetailTitle = label.isEmpty ? section.keyDisplay(values) : "\(section.keyDisplay(values)) · \(label)"
         let titled = Set((record?.key ?? []).filter { $0 != record?.groupBy && $0 != "mode" })
-        let shown = columns.filter { column in
+        let shown = section.columns.filter { column in
             // The branch the row stands in says its value already.
             !(column.id == "label" || column.id == record?.groupBy || titled.contains(column.id))
         }
-        for column in shown where !Self.isLink(column) {
-            let text = text(of: values, column).trimmingCharacters(in: .whitespacesAndNewlines)
+        for column in shown where !CodeRecordSection.isLink(column) {
+            let text = section.text(of: values, column).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty, text != label else { continue }
-            let name = Self.columnTitle(column.title)
-            if column.id == mainColumn?.id { shownDetailSentence = text }
+            let name = CodeRecordSection.columnTitle(column.title)
+            if column.id == section.mainColumn?.id { shownDetailSentence = text }
             if column.kind == .rows {
                 // A small table of its own, under the rows, as a panel adds
                 // what is its own after the list.
@@ -830,22 +619,22 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
                 heading.textColor = .secondaryLabelColor
                 extras += [heading, commandsGrid(values[column.id], column: column)]
             } else {
-                add(name, plain(column.kind == .enum ? Self.valueTitle(text) : text))
+                add(name, plain(column.kind == .enum ? CodeRecordSection.valueTitle(text) : text))
             }
         }
-        for column in shown where Self.isLink(column) {
+        for column in shown where CodeRecordSection.isLink(column) {
             let places = places(values, column)
             guard !places.isEmpty else { continue }
-            add(Self.columnTitle(column.title), linked(places, separator: ", "))
+            add(CodeRecordSection.columnTitle(column.title), linked(places, separator: ", "))
         }
         for (name, places) in backReferences(values) where !places.isEmpty {
             add(name, linked(places, separator: "\n"))
         }
-        let inference = Self.isInference(values)
+        let inference = CodeRecordSection.isInference(values)
         add(Self.confidenceTitle, plain(inference ? Self.inferenceTitle : Self.establishedTitle))
         if let note = values["note"]?.string, !note.isEmpty { add(Self.noteTitle, plain(note)) }
 
-        let list = details.showRows(subject: keyText(values), title: shownDetailTitle, fields: fields)
+        let list = details.showRows(subject: section.keyText(values), title: shownDetailTitle, fields: fields)
         list.onLink = { [weak self] target in
             guard let self, let index = target as? Int, self.linkActions.indices.contains(index) else { return }
             self.linkActions[index]()
@@ -860,7 +649,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     /// touch an EC RAM field, the flash areas a host command reaches.
     private func backReferences(_ row: [String: RecordValue]) -> [(String, [(String, () -> Void)])] {
         guard let profile, let id = record?.id else { return [] }
-        let key = keyText(row)
+        let key = section.keyText(row)
         var found: [(String, [(String, () -> Void)])] = []
         for other in profile.records where other.id != id {
             for column in other.columns where column.ref == id {
@@ -874,15 +663,12 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
                     }
                 }
                 guard !rows.isEmpty else { continue }
-                let saved = record
-                record = other
-                let ordered = rows.sorted(by: keyOrder)
-                record = saved
+                let ordered = rows.sorted(by: section.of(other).keyOrder)
                 let name = other.id == "host_commands" ? Self.usedByCommandsTitle
                     : other.id == "eflash_area" ? Self.flashAreasTitle
-                    : Self.title(of: other.id, fallback: other.title)
+                    : CodeRecordSection.title(of: other.id, fallback: other.title)
                 let places: [(String, () -> Void)] = ordered.map { target in
-                    let words = otherLine(target, in: other)
+                    let words = section.of(other).line(target)
                     let targetKey = ModuleRecords.rowKey(target, key: other.key)
                     return (words, { [weak self] in self?.showRef(other.id, key: targetKey) })
                 }
@@ -892,14 +678,6 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         return found
     }
 
-    /// A row of another record as a back-reference writes it: its key and label.
-    private func otherLine(_ row: [String: RecordValue], in other: AnalysisProfile.Record) -> String {
-        let saved = record
-        record = other
-        defer { record = saved }
-        return Self.line(key: keyDisplay(row), label: label(row))
-    }
-
     /// An SMBus device's commands: a small table of command, R/W, size and
     /// meaning.
     private func commandsGrid(_ value: RecordValue?, column: AnalysisProfile.Column) -> NSView {
@@ -907,7 +685,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         let rows: [[NSView]] = (value?.array ?? []).map { item in
             let object = item.object ?? [:]
             return inner.map { part in
-                let text = object[part.id].map { Self.text($0, kind: part.kind, column: part, profile: profile) } ?? ""
+                let text = object[part.id].map { CodeRecordSection.text($0, kind: part.kind, column: part, profile: profile) } ?? ""
                 let field = NSTextField(wrappingLabelWithString: text)
                 field.font = part.kind == .byte ? ToolPanelFont.monospaced(size: ToolPanelFont.size) : ToolPanelFont.body()
                 field.isSelectable = true
@@ -928,25 +706,19 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
 
     private func applyFilter() {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
-        var rows = allRows
-        if !query.isEmpty {
-            rows = rows.filter { row in
-                keyDisplay(row).localizedCaseInsensitiveContains(query)
-                    || label(row).localizedCaseInsensitiveContains(query)
-            }
-        }
+        let rows = section.filtered(allRows, by: query)
         if let groupBy = record?.groupBy, let groupColumn = record?.column(groupBy) {
-            let groups = Self.groups(of: rows, by: groupColumn, keepEmpty: query.isEmpty,
+            let groups = CodeRecordSection.groups(of: rows, by: groupColumn, keepEmpty: query.isEmpty,
                                      notes: records[recordID ?? ""]?.branchNotes ?? [:])
-            items = groups
-            shownRows = groups.flatMap { $0.children.map(\.values) }
+            items = groups.map(RecordGroupItem.init)
+            shownRows = groups.flatMap(\.rows)
         } else {
             items = rows.map(RecordRowItem.init)
             shownRows = rows
         }
         // The row chosen before stays chosen while the filter still shows it.
         let chosen = table.selectedRowIndexes.count == 1
-            ? values(atRow: table.selectedRowIndexes.first!).map(keyText) : nil
+            ? values(atRow: table.selectedRowIndexes.first!).map(section.keyText) : nil
         table.reloadData()
         for case let group as RecordGroupItem in items where !collapsedGroups.contains(group.value) {
             table.expandItem(group)
@@ -966,71 +738,6 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         showDetails()
     }
 
-    /// The value a row stands under: its own, `other` for a row with none
-    /// when the column has that value, a bool as `true` or `false`.
-    private static func groupValue(_ row: [String: RecordValue], _ column: AnalysisProfile.Column) -> String {
-        if case .bool(let on)? = row[column.id] { return on ? "true" : "false" }
-        let value = row[column.id]?.text ?? ""
-        if value.isEmpty, column.values?.contains("other") == true { return "other" }
-        return value
-    }
-
-    /// The branches of a grouped record: one per value of `column` in the
-    /// order it declares them (a bool: true, then false), then any other
-    /// value the rows hold. A value with words of its own is a branch with no
-    /// rows too, unless a filter is on.
-    private static func groups(of rows: [[String: RecordValue]], by column: AnalysisProfile.Column,
-                               keepEmpty: Bool, notes: [String: String]) -> [RecordGroupItem] {
-        let declared = column.values ?? (column.kind == .bool ? ["true", "false"] : [])
-        let found = Set(rows.map { groupValue($0, column) })
-        let others = found.subtracting(declared).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-        return (declared + others).compactMap { name in
-            let children = rows.filter { groupValue($0, column) == name }.map(RecordRowItem.init)
-            let english = column.valueSummaries?[name]
-            guard !children.isEmpty || (keepEmpty && english != nil) else { return nil }
-            let title = column.valueTitles?[name].map(valueTitle) ?? ""
-            // A port pair is read by its numbers and its purpose; a branch
-            // with a name of its own by the name; a bare value by its column.
-            let label = title.isEmpty ? "\(columnTitle(column.title)) \(name)"
-                : english != nil ? "\(name)  \(title)" : title
-            return RecordGroupItem(value: name, title: title, label: label,
-                                   summary: english.map(valueSummary), note: notes[name], children: children)
-        }
-    }
-
-    /// Rows in key order, the grouping column aside: a number as a number, a
-    /// row without a part (a command with no subcommand) before one with it,
-    /// an enum by the order its values are declared (normal before flash).
-    private func keyOrder(_ left: [String: RecordValue], _ right: [String: RecordValue]) -> Bool {
-        for id in record?.key ?? [] where id != record?.groupBy {
-            guard let column = record?.column(id) else { continue }
-            let a = keyRank(left, column), b = keyRank(right, column)
-            if let x = a.number, let y = b.number {
-                if x != y { return x < y }
-                continue
-            }
-            if a.number != nil || b.number != nil {
-                // A missing part first; a number before a word.
-                if a.text.isEmpty != b.text.isEmpty { return a.text.isEmpty }
-                return a.number != nil
-            }
-            let order = a.text.localizedStandardCompare(b.text)
-            if order != .orderedSame { return order == .orderedAscending }
-        }
-        return false
-    }
-
-    private func keyRank(_ row: [String: RecordValue], _ column: AnalysisProfile.Column) -> (number: Int?, text: String) {
-        if column.kind == .enum, let value = row[column.id]?.text, let index = column.values?.firstIndex(of: value) {
-            return (index, value)
-        }
-        let number: Int? = switch column.kind {
-        case .int, .byte, .code, .data: row[column.id].flatMap(Self.number)
-        default: nil
-        }
-        return (number, text(of: row, column))
-    }
-
     // MARK: - Places
 
     /// Where a value leads: an address, or a row of another record.
@@ -1040,7 +747,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
         let values = column.kind == .list ? (value.array ?? []) : [value]
         switch kind {
         case .code, .data:
-            let addresses = values.compactMap { Self.number($0).map { CodeAddress(UInt64($0)) } }
+            let addresses = values.compactMap { CodeRecordSection.number($0).map { CodeAddress(UInt64($0)) } }
             return addresses.map { address in (address.description, { [weak self] in self?.onOpenAddress?(address) }) }
         case .ref:
             guard let target = column.ref,
@@ -1052,7 +759,7 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
                 } else {
                     key = ModuleRecords.rowKey(item.object ?? [:], key: referenced.key)
                 }
-                return (Self.refText(item, column: column, profile: profile), { [weak self] in self?.showRef(target, key: key) })
+                return (CodeRecordSection.refText(item, column: column, profile: profile), { [weak self] in self?.showRef(target, key: key) })
             }
         default:
             return []
@@ -1071,12 +778,12 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
     /// Selects the row whose key text is `key`, clearing a filter that hides
     /// it and opening the branch it stands in.
     func select(key: String) {
-        if !shownRows.contains(where: { keyText($0) == key }), !searchField.stringValue.isEmpty {
+        if !shownRows.contains(where: { section.keyText($0) == key }), !searchField.stringValue.isEmpty {
             searchField.stringValue = ""
             applyFilter()
         }
         for case let group as RecordGroupItem in items
-        where group.children.contains(where: { keyText($0.values) == key }) && !table.isItemExpanded(group) {
+        where group.children.contains(where: { section.keyText($0.values) == key }) && !table.isItemExpanded(group) {
             table.expandItem(group)
         }
         guard let row = tableRow(key: key) else { return }
@@ -1097,119 +804,6 @@ final class CodeRecordSectionView: CodeNavigatorTreePanel {
 
     /// A column's header in the reader's language: the profiles carry
     /// English, and a title not listed here stays the profile's.
-    /// A record's word on the navigator's switch: short, the trade's term —
-    /// nil for a record the app has none for, which keeps its glyph.
-    static func tabWord(of id: String) -> String? {
-        switch id {
-        case "irq_map": L("Int")
-        case "host_commands": L("Host")
-        case "ec_ram": L("RAM")
-        case "smbus_peers": L("SMBus")
-        case "gpio": L("GPIO")
-        case "eflash_area": L("Data")
-        default: nil
-        }
-    }
-
-    static func columnTitle(_ english: String) -> String {
-        switch english {
-        case "Access": L("Access")
-        case "Accessed by": L("Accessed by")
-        case "Active level": L("Active level")
-        case "Address": L("Address")
-        case "Body": L("Body")
-        case "Bus address": L("Bus address")
-        case "Callers": L("Callers")
-        case "Channel": L("Channel")
-        case "Command": L("Command")
-        case "Commands": L("Commands")
-        case "Data in": L("Data in")
-        case "Data out": L("Data out")
-        case "Device": L("Device")
-        case "Direction": L("Direction")
-        case "EC RAM": L("EC RAM")
-        case "Effect": L("Effect")
-        case "Enabled": L("Enabled")
-        case "Format": L("Format")
-        case "Function": L("Function")
-        case "Group": L("Group")
-        case "Handler": L("Handler")
-        case "Host commands": L("Host commands")
-        case "In the image": L("In the image")
-        case "Initial state": L("Initial state")
-        case "IRQ": L("IRQ")
-        case "Label": L("Label")
-        case "Meaning": L("Meaning")
-        case "Mode": L("Mode")
-        case "Name": L("Name")
-        case "Offset": L("Offset")
-        case "PEC": L("PEC")
-        case "Pin": L("Pin")
-        case "Ports": L("Ports")
-        case "Purpose": L("Purpose")
-        case "Raises": L("Raises")
-        case "Readers": L("Readers")
-        case "Size": L("Size")
-        case "Source known from": L("Source known from")
-        case "Source": L("Source")
-        case "Subcommand": L("Subcommand")
-        case "Task slot": L("Task slot")
-        case "Values": L("Values")
-        case "Width": L("Width")
-        case "Writer": L("Writer")
-        case "Writers": L("Writers")
-        default: english
-        }
-    }
-
-    /// The section's title in the reader's language: the profiles carry
-    /// English, and an id not listed here keeps the profile's word.
-    static func title(of id: String, fallback: String) -> String {
-        switch id {
-        case "irq_map": L("Interrupts")
-        case "host_commands": L("Host commands")
-        case "ec_ram": L("EC RAM")
-        case "smbus_peers": L("SMBus and I2C")
-        case "gpio": L("GPIO")
-        case "eflash_area": L("Flash data area")
-        default: fallback
-        }
-    }
-}
-
-extension CodeRecordSectionView {
-
-    /// What a branch's value stands for, in the reader's language.
-    static func valueSummary(_ english: String) -> String {
-        switch english {
-        case AnalysisProfile.kbcPortsSummary:
-            L("Ports 0x60 (data) and 0x64 (command): the keyboard controller interface (KBC, i8042) — keyboard, touchpad and the legacy commands. In the EC the KBC block takes them.")
-        case AnalysisProfile.acpiPortsSummary:
-            L("Ports 0x62 (data) and 0x66 (command): the standard ACPI embedded controller interface — EC RAM read and write (0x80/0x81), query 0x84 and the SCI. In the EC the first PMC channel (PMC1) takes them.")
-        case AnalysisProfile.oemPortsSummary:
-            L("Ports 0x68 (data) and 0x6C (command): the second PMC channel (PMC2), usually the manufacturer's (OEM) commands — modes, flash mode, service functions.")
-        default: english
-        }
-    }
-
-    /// A value's short name, in the reader's language.
-    static func valueTitle(_ english: String) -> String {
-        switch english {
-        case "Keyboard controller": L("Keyboard controller")
-        case "ACPI EC": L("ACPI EC")
-        case "OEM channel": L("OEM channel")
-        case "flash": L("flash")
-        case "Enabled": L("Enabled")
-        case "Not enabled": L("Not enabled")
-        case "Power": L("Power")
-        case "Chipset": L("Chipset")
-        case "Input": L("Input")
-        case "Indicators": L("Indicators")
-        case "USB": L("USB")
-        case "Other": L("Other")
-        default: english
-        }
-    }
 }
 
 /// A branch of a grouped record: a value of its `groupBy` column.
@@ -1235,6 +829,11 @@ final class RecordGroupItem: CodeNavigatorTreeNode {
         self.children = children
     }
     var treeChildren: [AnyObject] { children }
+
+    convenience init(_ group: CodeRecordSection.Group) {
+        self.init(value: group.value, title: group.title, label: group.label, summary: group.summary,
+                  note: group.note, children: group.rows.map(RecordRowItem.init))
+    }
 }
 
 /// A row of a record, as the outline holds it.
