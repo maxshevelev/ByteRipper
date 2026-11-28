@@ -136,6 +136,19 @@ public extension ContentStore {
         guard let digest = manifest.reading?.review else { return nil }
         return ModuleRecords.of(reviewDocument: try object(digest))
     }
+
+    /// The C of every type the review defined, by name — the review
+    /// document's `types` — or nil when the manifest names no review.
+    public func reviewTypes(for manifest: AnalysisManifest) throws -> [String: String]? {
+        guard let digest = manifest.reading?.review,
+              let document = try JSONSerialization.jsonObject(with: object(digest)) as? [String: Any]
+        else { return nil }
+        var types: [String: String] = [:]
+        for item in document["types"] as? [[String: Any]] ?? [] {
+            if let name = item["name"] as? String, let c = item["c"] as? String { types[name] = c }
+        }
+        return types
+    }
 }
 
 /// One value of a record's row, as JSON has it.
