@@ -4582,6 +4582,7 @@ import ToolModuleKit
         syncingSelection = false
         searchPanel.zoomChanged()
         interfacesPanel.zoomChanged()
+        recordPanel.zoomChanged()
         drawnC = nil
         drawnDiff = nil
         updateC(keepingPlace: true)

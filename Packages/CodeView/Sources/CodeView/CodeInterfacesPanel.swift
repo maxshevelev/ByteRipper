@@ -14,10 +14,10 @@ import ToolModuleKit
 ///
 /// It shows what it is given; the pane goes to an address it asks for.
 // help: panel.code.interfaces
-final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
+final class CodeInterfacesPanel: CodeNavigatorTreePanel {
     /// One of the record's three lists, or the dependency expression: a
     /// row of the first level.
-    final class GroupItem {
+    final class GroupItem: CodeNavigatorTreeNode {
         let title: String
         let symbol: String
         let help: HelpLink
@@ -37,12 +37,13 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
         /// Rows under it.
         var children: [Any] { conditions ?? entries ?? [] }
+        var treeChildren: [AnyObject] { conditions ?? entries ?? [] }
     }
 
     /// A row of the dependency expression: one condition — an interface by
     /// its name and GUID — or a group of them, a choice (`One of`) or what
     /// must all hold inside one, with its conditions a level under it.
-    final class ConditionItem {
+    final class ConditionItem: CodeNavigatorTreeNode {
         let text: NSAttributedString
         let children: [ConditionItem]
         /// The GUID of a condition that names an interface: its row is one
@@ -59,10 +60,12 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             self.details = details
         }
         var isGroup: Bool { !children.isEmpty }
+        /// A group's conditions, or what an interface's row opens to.
+        var treeChildren: [AnyObject] { isGroup ? children : details }
     }
 
     /// One interface: a row of the second level.
-    final class EntryItem {
+    final class EntryItem: CodeNavigatorTreeNode {
         let interface: ModuleInterfaces.Interface
         /// Grey after the name: reinstalls, handed over, required, optional.
         let marks: [String]
@@ -72,6 +75,7 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
             self.marks = marks
             self.details = details
         }
+        var treeChildren: [AnyObject] { details }
     }
 
     /// What the review says of an interface: a row of the third level. A
@@ -86,9 +90,9 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     let summaryLabel = NSTextField(labelWithString: "")
-    let outline = SearchOutlineView()
-    private let scroll = NSScrollView()
-    private(set) var groups: [GroupItem] = []
+    private(set) var groups: [GroupItem] = [] {
+        didSet { roots = groups }
+    }
 
     /// A row with an address was chosen.
     var onChoose: ((CodeAddress) -> Void)?
@@ -101,13 +105,6 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The navigator has no fill of its own; the panel takes the window's, so
-    /// the list it stands over does not show through.
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
-        bounds.intersection(dirtyRect).fill()
-    }
-
     private func build() {
         summaryLabel.translatesAutoresizingMaskIntoConstraints = false
         summaryLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -116,19 +113,8 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         summaryLabel.lineBreakMode = .byTruncatingTail
         summaryLabel.setContentCompressionResistancePriority(.init(240), for: .horizontal)
 
-        let column = NSTableColumn(identifier: .init("interface"))
-        column.resizingMask = .autoresizingMask
-        outline.addTableColumn(column)
-        outline.outlineTableColumn = column
-        CodeNavigatorCell.dress(outline)
-        outline.dataSource = self
-        outline.delegate = self
-        outline.target = self
-        outline.action = #selector(rowClicked)
-        scroll.documentView = outline
-        scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        setUpOutline(column: "interface")
+        let scroll = outlineScroll
 
         let below = NSBox()
         below.boxType = .separator
@@ -376,26 +362,13 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
     // MARK: - The tree
 
-    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        if item == nil { return groups.count }
-        if let group = item as? GroupItem { return group.children.count }
-        if let condition = item as? ConditionItem { return condition.isGroup ? condition.children.count : condition.details.count }
-        return (item as? EntryItem)?.details.count ?? 0
-    }
+    /// A found line, a detail, wraps to the lines it needs.
+    override var rowsWrap: Bool { true }
 
-    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        if item == nil { return groups[index] }
-        if let group = item as? GroupItem { return group.children[index] }
-        if let condition = item as? ConditionItem {
-            return condition.isGroup ? condition.children[index] : condition.details[index]
-        }
-        return (item as! EntryItem).details[index]
-    }
-
-    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        if let group = item as? GroupItem { return !group.children.isEmpty }
-        if let condition = item as? ConditionItem { return condition.isGroup || !condition.details.isEmpty }
-        return item is EntryItem
+    /// An interface always opens: to what the review says of it, even when
+    /// that is nothing yet.
+    override func isExpandable(_ item: AnyObject) -> Bool {
+        item is EntryItem || super.isExpandable(item)
     }
 
     /// Where a detail's text starts: under the interface's name.
@@ -567,35 +540,6 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         InterfacesRowView()
     }
 
-    /// A width the rows have not been measured at: the lines wrap anew.
-    private var measuredWidth: CGFloat = 0
-
-    override func layout() {
-        super.layout()
-        let width = outline.bounds.width
-        guard width != measuredWidth, outline.numberOfRows > 0 else { return }
-        measuredWidth = width
-        outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
-    }
-
-    /// Opens or closes a row, as the Search tab's groups do.
-    func toggle(_ item: Any) {
-        CodeNavigatorCell.toggle(item, in: outline)
-    }
-
-    /// The zoom changed: the rows are made again in the new size, what the
-    /// reader opened staying open.
-    func zoomChanged() {
-        let open = (0..<outline.numberOfRows).compactMap { outline.item(atRow: $0) }
-            .filter { outline.isItemExpanded($0) } as [AnyObject]
-        outline.reloadData()
-        for item in open { outline.expandItem(item) }
-        measuredWidth = 0
-        if outline.numberOfRows > 0 {
-            outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
-        }
-    }
-
     /// Opens the choices and sets of conditions at any depth, leaving each
     /// interface in them closed.
     private func openChoices(_ conditions: [ConditionItem]) {
@@ -605,39 +549,17 @@ final class CodeInterfacesPanel: NSView, NSOutlineViewDataSource, NSOutlineViewD
         }
     }
 
-    func outlineViewItemDidExpand(_ notification: Notification) {
-        redrawChevron(notification)
-        // The expression opens whole: a choice is part of the condition, not
-        // a detail behind a second click.
-        if let group = notification.userInfo?["NSObject"] as? GroupItem, let conditions = group.conditions {
+    /// The expression opens whole: a choice is part of the condition, not a
+    /// detail behind a second click.
+    override func didOpen(_ item: AnyObject) {
+        if let group = item as? GroupItem, let conditions = group.conditions {
             openChoices(conditions)
         }
-    }
-    func outlineViewItemDidCollapse(_ notification: Notification) { redrawChevron(notification) }
-
-    private func redrawChevron(_ notification: Notification) {
-        guard let item = notification.userInfo?["NSObject"] else { return }
-        let row = outline.row(forItem: item)
-        guard row >= 0,
-              let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? CodeNavigatorCell
-        else { return }
-        cell.showsCalls(expandable: true, expanded: outline.isItemExpanded(item))
-    }
-
-    @objc private func rowClicked() {
-        guard outline.clickedRow >= 0 else { return }
-        choose(row: outline.clickedRow)
-    }
-
-    func outlineViewSelectionDidChange(_ notification: Notification) {
-        guard NSApp.currentEvent?.type == .keyDown else { return }
-        choose(row: outline.selectedRow)
     }
 
     /// A row chosen: an interface opens the code where the module supplies
     /// it, a detail with an address opens that place.
-    func choose(row: Int) {
-        guard row >= 0, let item = outline.item(atRow: row) else { return }
+    override func choose(_ item: AnyObject) {
         if let entry = item as? EntryItem, let address = entry.details.lazy.compactMap(\.address).first {
             onChoose?(address)
         } else if let condition = item as? ConditionItem, let address = condition.details.lazy.compactMap(\.address).first {

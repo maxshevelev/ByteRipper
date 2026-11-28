@@ -24,7 +24,7 @@ import ToolModuleKit
 /// its own (`valueSummaries`), an (i) for them; such a value is a branch even
 /// with no rows. A filter hides a branch none of whose rows match.
 // help: panel.code.record-sections
-final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
+final class CodeRecordSectionView: CodeNavigatorTreePanel {
     /// The record id the section shows, nil before the first `show`.
     private(set) var recordID: String?
     /// The line over the list: the record's name and its status, and an
@@ -38,8 +38,8 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     let filterBar = NSView()
     /// The rows, a tree for a grouped record and a flat list otherwise. The
     /// outline draws no triangle of its own: a branch carries its chevron.
-    let table = SearchOutlineView()
-    let tableScroll = NSScrollView()
+    var table: CodeNavigatorOutlineView { outline }
+    var tableScroll: NSScrollView { outlineScroll }
     /// The selected row's fields, in the pane the firmware panels' details
     /// stand in: under the list in a splitter, Space or the corner button
     /// opening it large (`ToolDetailPane`).
@@ -73,7 +73,9 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The rows shown: filtered, branch after branch for a grouped record.
     private(set) var shownRows: [[String: RecordValue]] = []
     /// The outline's items: branches for a grouped record, rows otherwise.
-    private var items: [AnyObject] = []
+    private var items: [AnyObject] = [] {
+        didSet { roots = items }
+    }
     /// The branches the reader closed, by value; every other one is open.
     private var collapsedGroups: Set<String> = []
     /// The key text of a row to select once the record is shown.
@@ -115,20 +117,12 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
         searchField.action = #selector(filterChanged)
 
         // One column and no header, as the Functions list.
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("row"))
-        column.resizingMask = .autoresizingMask
-        table.addTableColumn(column)
-        table.outlineTableColumn = column
-        table.dataSource = self
-        table.delegate = self
-        CodeNavigatorCell.dress(table)
+        setUpOutline(column: "row")
         table.allowsMultipleSelection = true
         let menu = NSMenu()
         // help: panel.code.record-sections
         menu.addItem(withTitle: L("Copy Row as TSV"), action: #selector(copyRows), keyEquivalent: "").target = self
         table.menu = menu
-        tableScroll.documentView = table
-        tableScroll.hasVerticalScroller = true
         tableScroll.hasHorizontalScroller = false
         tableScroll.autohidesScrollers = true
         tableScroll.drawsBackground = false
@@ -178,13 +172,6 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
             emptyLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             emptyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
         ])
-    }
-
-    /// As the Interfaces and Search tabs: the window's fill, so the list the
-    /// section stands over does not show through.
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
-        bounds.intersection(dirtyRect).fill()
     }
 
     @available(*, unavailable)
@@ -514,39 +501,13 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     // MARK: - The list
 
-    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        guard let item else { return items.count }
-        return (item as? RecordGroupItem)?.children.count ?? 0
+    /// The branches the reader closes stay closed as the rows are shown anew.
+    override func didClose(_ item: AnyObject) {
+        if let group = item as? RecordGroupItem { collapsedGroups.insert(group.value) }
     }
 
-    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        guard let group = item as? RecordGroupItem else { return items[index] }
-        return group.children[index]
-    }
-
-    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        !((item as? RecordGroupItem)?.children.isEmpty ?? true)
-    }
-
-    /// Only the chevron is drawn again: a branch's row is not made anew, so
-    /// nothing in it can change as it opens and closes.
-    func outlineViewItemDidCollapse(_ notification: Notification) {
-        guard let group = notification.userInfo?["NSObject"] as? RecordGroupItem else { return }
-        collapsedGroups.insert(group.value)
-        redrawChevron(group)
-    }
-
-    func outlineViewItemDidExpand(_ notification: Notification) {
-        guard let group = notification.userInfo?["NSObject"] as? RecordGroupItem else { return }
-        collapsedGroups.remove(group.value)
-        redrawChevron(group)
-    }
-
-    private func redrawChevron(_ group: RecordGroupItem) {
-        let row = table.row(forItem: group)
-        guard row >= 0, let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? RecordGroupCell
-        else { return }
-        cell.showsCalls(expandable: !group.children.isEmpty, expanded: table.isItemExpanded(group))
+    override func didOpen(_ item: AnyObject) {
+        if let group = item as? RecordGroupItem { collapsedGroups.remove(group.value) }
     }
 
     /// The row's one mark, in the cell's marker slot: the `?` of an inferred
@@ -708,9 +669,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
     }
 
     /// Opens or closes a branch, as the Interfaces tab's kinds do.
-    private func toggle(_ group: RecordGroupItem) {
-        CodeNavigatorCell.toggle(group, in: table)
-    }
+
 
     // MARK: - The (i) popovers
 
@@ -813,7 +772,7 @@ final class CodeRecordSectionView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     // MARK: - Details
 
-    func outlineViewSelectionDidChange(_ notification: Notification) { showDetails() }
+    override func selectionChanged() { showDetails() }
 
     /// The selected row, in the rows every firmware panel's details are
     /// drawn with (`ToolDetailScroll.showRows`): its key and the review's
@@ -1254,7 +1213,7 @@ extension CodeRecordSectionView {
 }
 
 /// A branch of a grouped record: a value of its `groupBy` column.
-final class RecordGroupItem {
+final class RecordGroupItem: CodeNavigatorTreeNode {
     let value: String
     /// The value's short name, empty when the profile gives none.
     let title: String
@@ -1275,6 +1234,7 @@ final class RecordGroupItem {
         self.summary = summary
         self.children = children
     }
+    var treeChildren: [AnyObject] { children }
 }
 
 /// A row of a record, as the outline holds it.

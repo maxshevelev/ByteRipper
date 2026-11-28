@@ -11,7 +11,7 @@ import ToolModuleKit
 ///
 /// It shows what it is given and says what is chosen; the search itself is
 /// the pane's.
-final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
+final class CodeSearchPanel: CodeNavigatorTreePanel {
     /// What a group of occurrences is in.
     enum Target: Hashable, Sendable {
         /// A function's C, by its place in the artifact.
@@ -34,7 +34,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 
     /// A function or the description with matches: a row of the first level.
-    final class GroupItem {
+    final class GroupItem: CodeNavigatorTreeNode {
         let target: Target
         let name: String
         /// Grey after the name: "Description" after the module's name; a
@@ -56,6 +56,7 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
             self.nameMark = nameMark
             children = hits.map { HitItem(target: target, hit: $0) }
         }
+        var treeChildren: [AnyObject] { children }
     }
 
     /// One occurrence: a row of the second level.
@@ -72,9 +73,9 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     let querySlot = NSView()
     let scopePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     let summaryLabel = NSTextField(labelWithString: "")
-    let outline = SearchOutlineView()
-    private let scroll = NSScrollView()
-    private(set) var items: [GroupItem] = []
+    private(set) var items: [GroupItem] = [] {
+        didSet { roots = items }
+    }
 
     /// A row was chosen: what it is in, and the occurrence when it is one.
     var onChoose: ((_ target: Target, _ hit: TextSearchHit?) -> Void)?
@@ -93,15 +94,6 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    /// The navigator has no fill of its own; the panel takes the window's, so
-    /// the list it stands over does not show through.
-    override func draw(_ dirtyRect: NSRect) {
-        // Inside the panel only: a view does not clip to its bounds (macOS
-        // 14), and the rect asked for can reach over the header above it.
-        NSColor.windowBackgroundColor.setFill()
-        bounds.intersection(dirtyRect).fill()
-    }
 
     private func rule() -> NSBox {
         let box = NSBox()
@@ -132,19 +124,8 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         summaryLabel.lineBreakMode = .byTruncatingTail
         summaryLabel.setContentCompressionResistancePriority(.init(240), for: .horizontal)
 
-        let column = NSTableColumn(identifier: .init("occurrence"))
-        column.resizingMask = .autoresizingMask
-        outline.addTableColumn(column)
-        outline.outlineTableColumn = column
-        CodeNavigatorCell.dress(outline)
-        outline.dataSource = self
-        outline.delegate = self
-        outline.target = self
-        outline.action = #selector(rowClicked)
-        scroll.documentView = outline
-        scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        setUpOutline(column: "occurrence")
+        let scroll = outlineScroll
 
         let above = rule()
         let below = rule()
@@ -243,20 +224,6 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     }
 
     // MARK: - The tree
-
-    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        if item == nil { return items.count }
-        return (item as? GroupItem)?.children.count ?? 0
-    }
-
-    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        if item == nil { return items[index] }
-        return (item as! GroupItem).children[index]
-    }
-
-    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        item is GroupItem
-    }
 
     /// An occurrence's line shows no more than this many lines, the last
     /// cut short — as Xcode's does.
@@ -365,60 +332,6 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
     static let hitTrailing: CGFloat = 4
     static let hitPadding: CGFloat = 3
 
-    /// A width the rows have not been measured at: the lines wrap anew.
-    private var measuredWidth: CGFloat = 0
-
-    override func layout() {
-        super.layout()
-        let width = outline.bounds.width
-        guard width != measuredWidth, outline.numberOfRows > 0 else { return }
-        measuredWidth = width
-        outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
-    }
-
-    /// Opens or closes a group, its rows sliding in or out as the Functions
-    /// list's do; the chevron has already turned. Only the outline animates:
-    /// with implicit animation on, the cells it makes for the rows that come
-    /// into view are laid out under the animation too: an opened group's
-    /// rows fly down from the table's origin, and a closed one's can be left
-    /// at their first frame — no indent, no text. The Functions list had the
-    /// same fault (8b99226f).
-    func toggle(_ group: GroupItem) {
-        CodeNavigatorCell.toggle(group, in: outline)
-    }
-
-    /// The zoom changed: the rows are made again in the new size and
-    /// measured again, the groups the reader closed staying closed.
-    func zoomChanged() {
-        let closed = items.filter { !outline.isItemExpanded($0) }
-        let top = outline.row(at: NSPoint(x: 0, y: scroll.contentView.bounds.minY))
-        let topItem = top >= 0 ? outline.item(atRow: top) as AnyObject? : nil
-        outline.reloadData()
-        for item in items where !closed.contains(where: { $0 === item }) {
-            outline.expandItem(item)
-        }
-        measuredWidth = 0
-        if outline.numberOfRows > 0 {
-            outline.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<outline.numberOfRows))
-        }
-        if let topItem {
-            let row = outline.row(forItem: topItem)
-            if row >= 0 { outline.scroll(outline.rect(ofRow: row).origin) }
-        }
-    }
-
-    func outlineViewItemDidExpand(_ notification: Notification) { redrawChevron(notification) }
-    func outlineViewItemDidCollapse(_ notification: Notification) { redrawChevron(notification) }
-
-    private func redrawChevron(_ notification: Notification) {
-        guard let item = notification.userInfo?["NSObject"] as? GroupItem else { return }
-        let row = outline.row(forItem: item)
-        guard row >= 0,
-              let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? CodeNavigatorCell
-        else { return }
-        cell.showsCalls(expandable: true, expanded: outline.isItemExpanded(item))
-    }
-
     /// How much of a line before the match stays when the match stands far
     /// into it: the rest gives way to an ellipsis, so the match is in the
     /// three lines shown.
@@ -463,30 +376,15 @@ final class CodeSearchPanel: NSView, NSOutlineViewDataSource, NSOutlineViewDeleg
         return text
     }
 
-    @objc private func rowClicked() {
-        guard outline.clickedRow >= 0 else { return }
-        choose(row: outline.clickedRow)
-    }
+    /// A found line, a detail, wraps to the lines it needs.
+    override var rowsWrap: Bool { true }
 
-    /// The arrow keys walk the occurrences as clicks would.
-    func outlineViewSelectionDidChange(_ notification: Notification) {
-        guard NSApp.currentEvent?.type == .keyDown else { return }
-        choose(row: outline.selectedRow)
-    }
-
-    /// The row at `row` chosen, as a click chooses it.
-    func choose(row: Int) {
-        guard row >= 0, let item = outline.item(atRow: row) else { return }
+    /// A row chosen: a group opens its target, an occurrence its place.
+    override func choose(_ item: AnyObject) {
         if let hit = item as? HitItem {
             onChoose?(hit.target, hit.hit)
         } else if let group = item as? GroupItem {
             onChoose?(group.target, nil)
         }
     }
-}
-
-/// The Search tab's tree: the rows draw their own chevron, so the outline's
-/// triangle takes no room and is never drawn.
-final class SearchOutlineView: NSOutlineView {
-    override func frameOfOutlineCell(atRow row: Int) -> NSRect { .zero }
 }

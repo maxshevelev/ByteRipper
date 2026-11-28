@@ -157,8 +157,15 @@ a cut's offset and description.
     after the words (`showsAccessory`), never at the trailing edge;
   - a branch opens and closes animated, through
     `CodeNavigatorCell.toggle(_:in:)`, from the chevron and from the row;
-  - the filter is at the bottom, `CodePaneView.dressFilter`.
-  A new tab adds no table settings, fonts or toggles of its own.
+  - the filter is at the bottom, `CodePaneView.dressFilter`;
+  - a tab is a `CodeNavigatorTreePanel`: its outline, the data source over
+    the tab's nodes (`CodeNavigatorTreeNode`), the chevron redrawn as a branch
+    opens and closes, a row chosen by a click or the arrow keys (`choose`),
+    the window's fill under the list, and the zoom remaking the rows with
+    what was open still open and the top row at the top. A tab gives its
+    roots, its cells and what choosing a row does.
+  A new tab adds no table settings, fonts, toggles or tree mechanics of its
+  own.
 - **A record tab in the navigator** is a list and details, as Functions:
   one column, a line of key in monospace and a short label (the `label`
   column, else the first sentence of the main text), labels aligned past the
