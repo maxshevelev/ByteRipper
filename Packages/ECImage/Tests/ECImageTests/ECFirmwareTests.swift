@@ -204,4 +204,14 @@ final class ECFirmwareTests: XCTestCase {
         XCTAssertEqual(read.parts.map(\.kind), [.vectors, .signature, .code, .free, .runtimeData])
         XCTAssertEqual(read.parts.suffix(2).map(\.range), [0x200..<0x2A000, 0x2A000..<0x2C000])
     }
+
+    /// An IT8380 image carries A4 in the seventh signature byte (NM-D711).
+    func testAnImageWithA4InTheSignatureIsEC() {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x30000)
+        bytes[0...3] = [0x48, 0x00, 0x1C, 0x00]
+        bytes[0x80..<0x90] = [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA4, 0x94, 0x85, 0x12, 0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55]
+        let version = Array("ITE8380-EC-V0.00".utf8)
+        bytes[0x90..<(0x90 + version.count)] = ArraySlice(version)
+        XCTAssertTrue(ECFirmware.isEC(Data(bytes)))
+    }
 }

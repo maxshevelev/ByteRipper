@@ -59,7 +59,9 @@ public struct ECChipFamily: Equatable, Sendable {
         title: "ITE IT83xx (Andes NDS32 N801)",
         language: "NDS32:LE:32:default",
         signatureOffset: 0x80,
-        signature: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, nil, nil, nil, 0x5A, 0x5A, 0xAA, nil, 0x55, 0x55],
+        // The seventh byte is A5 in the IT8227E images and A4 in an IT8380
+        // image (Legion 5 Pro NM-D711): a configuration byte, not the mark.
+        signature: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, nil, nil, nil, nil, 0x5A, 0x5A, 0xAA, nil, 0x55, 0x55],
         textSignatureOffset: 0x50,
         textSignature: Array("ITE EC-V".utf8),
         // The BIOS's EC flash routine writes 0x2C000 bytes from SPI 0x21000.
