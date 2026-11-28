@@ -17,7 +17,7 @@ import ToolModuleKit
 /// table's do, and Page Up, Page Down, Home and End move it too — a page, or
 /// to the first or the last — as they move the C's current line.
 final class CodeListingTableView: NSTableView {
-    private func select(_ row: Int) {
+    func select(_ row: Int) {
         guard numberOfRows > 0 else { return }
         let row = min(max(row, 0), numberOfRows - 1)
         selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)

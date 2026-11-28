@@ -30,7 +30,7 @@ import ToolModuleKit
 
     /// A place in the code Back and Forward return to: the function, the
     /// instruction, and how the reader had it on screen when they left.
-    private struct Place {
+    struct Place {
         var function: Int
         var line: Int?
         var view = CodeViewPosition()
@@ -61,7 +61,7 @@ import ToolModuleKit
                                        otherwise: (@MainActor () -> Void)?)] = []
     /// The readable analyses of the same module, the chosen one first. One
     /// entry is the ordinary case; more makes the header offer the others.
-    private var recipes: [AnalysisManifest]
+    var recipes: [AnalysisManifest]
 
     private(set) var functionTable = NSTableView()
     var functionTableForTests: NSTableView { functionTable }
@@ -72,21 +72,21 @@ import ToolModuleKit
     /// Its height, which is nothing while another list is in front.
     private var readinessHeight: NSLayoutConstraint!
     private let listControl: NSSegmentedControl
-    private let searchField = NSSearchField()
+    let searchField = NSSearchField()
     /// The header over the POST and Strings columns: one view, put back
     /// whenever a list with columns comes to the front.
-    private let navigatorHeader = CodeNavigatorHeader()
+    let navigatorHeader = CodeNavigatorHeader()
     /// What an empty list says in place of its rows.
     private let emptyListLabel = NSTextField(wrappingLabelWithString: "")
     /// The places the reader went to, oldest first, and which one is current:
     /// Back and Forward walk it as in an IDE. A jump — a click on a call, a
     /// caller, a function in the list — adds a place; moving inside one
     /// function only moves the current one.
-    private var history: [Place] = []
-    private var historyIndex = -1
+    var history: [Place] = []
+    var historyIndex = -1
     /// The annotations on this module's code, by the function and by the
     /// instruction they are on.
-    public private(set) var notes: [CodeNote] = []
+    public internal(set) var notes: [CodeNote] = []
     var notesByFunction: [Int: [CodeNote]] = [:]
     var notesByLine: [Int: [CodeNote]] = [:]
     /// Which link each `code:N` in the C text is.
@@ -95,50 +95,50 @@ import ToolModuleKit
     /// annotations heading it.
     var shownCTokens: [CodeToken] = []
     /// What each of `shownCTokens` names, once a highlight has asked.
-    private var shownCSymbols: [CodeSymbol?]?
+    var shownCSymbols: [CodeSymbol?]?
     /// The symbol the reader clicked, every occurrence of which is drawn
     /// highlighted in the C and the listing.
-    public private(set) var highlightedSymbol: CodeSymbol?
+    public internal(set) var highlightedSymbol: CodeSymbol?
     /// The function a highlighted variable belongs to.
-    private var highlightedIn: Int?
+    var highlightedIn: Int?
     /// Which of the highlighted name's occurrences the reader is at, in the
     /// side on screen — the one clicked, or the last one stepped to. Nil when
     /// the reader has not been at one yet: a step then starts from the caret.
-    private var currentOccurrence: Int?
-    private let occurrenceLabel = NSTextField(labelWithString: "")
-    private let previousOccurrenceButton = NSButton()
-    private let nextOccurrenceButton = NSButton()
-    private var occurrenceBar: NSStackView?
-    private var drawnC: Int?
+    var currentOccurrence: Int?
+    let occurrenceLabel = NSTextField(labelWithString: "")
+    let previousOccurrenceButton = NSButton()
+    let nextOccurrenceButton = NSButton()
+    var occurrenceBar: NSStackView?
+    var drawnC: Int?
     /// How far the function's own C starts into the text shown: the
     /// annotations' comments head it.
     var cShift = 0
     /// The line each function was left at, by its entry's address as text —
     /// see `topLinePositions`.
-    private var topLines: [String: Int] = [:]
+    var topLines: [String: Int] = [:]
     /// The explanation open over the code, if one is.
-    private var explanationPopover: CodeExplanationPopover?
-    private(set) var functionPopover: CodeFunctionPopover?
+    var explanationPopover: CodeExplanationPopover?
+    var functionPopover: CodeFunctionPopover?
     /// A plain click's popover, waiting to see that no second click follows:
     /// a double click goes to the function and shows nothing on the way.
-    private var pendingFunctionPopover: DispatchWorkItem?
-    private var clicksInCode = 0
-    private var callersPopover: CodeCallersPopover?
+    var pendingFunctionPopover: DispatchWorkItem?
+    var clicksInCode = 0
+    var callersPopover: CodeCallersPopover?
     let table = CodeListingTableView()
-    private let tableScroll = NSScrollView()
+    let tableScroll = NSScrollView()
     let cTextView = CodeTextView()
-    private let cScroll = NSScrollView()
+    let cScroll = NSScrollView()
     /// ASM, C or the description: which is on screen.
-    private var mode = 1 { didSet { drawModeControls() } }
+    var mode = 1 { didSet { drawModeControls() } }
     private let modeControl: NSSegmentedControl
     /// Shows and hides the description, at the head of the navigator.
-    private let descriptionButton = CodeOrderButton()
+    let descriptionButton = CodeOrderButton()
     /// New, on the book's corner, while the description reads otherwise than
     /// when the reader last had it open.
     private let descriptionBadge = PartBadgeView(text: "")
-    private let descriptionBadgeHolder = CodeClickThroughView()
+    let descriptionBadgeHolder = CodeClickThroughView()
     /// The module line's end before the New badge, active while it shows.
-    private var moduleBeforeBadge: NSLayoutConstraint?
+    var moduleBeforeBadge: NSLayoutConstraint?
     /// The panel's page in the book: whoever holds the pane sets it in its title
     /// bar, over the whole panel.
     public let titleBarHelp: NSView = HelpButton.greyCircle(for: .topic(.codePanel))
@@ -152,14 +152,14 @@ import ToolModuleKit
     }
 
     let descriptionView = CodeDescriptionView()
-    private let diffView = CodeDiffView()
+    let diffView = CodeDiffView()
     /// The artifact this pane showed before a later revision of its reading
     /// replaced it: what Diff compares the code against, nil while the pane
     /// has seen no revision — beside another recipe, say, or after a restart.
     private var revisionBaseline: CodeArtifact?
     /// The function `revisionBaseline` holds the code of, when it was read for
     /// one; nil when it holds them all.
-    private var baselineReadFor: CodeAddress?
+    var baselineReadFor: CodeAddress?
     /// What the diff on screen was drawn from, so a redraw is made only when
     /// the function or the revision changed.
     private var drawnDiff: (function: Int, revision: Int)?
@@ -171,21 +171,21 @@ import ToolModuleKit
     /// Raised with every revision the pane is given.
     private var revisionCount = 0
     /// The revision's model, for the tokens and explanations of removed lines.
-    private var diffBaselineModel: CodeModel?
+    var diffBaselineModel: CodeModel?
     private var diffBaselineIndex: Int?
     /// Whether the two revisions' C differs for the function on screen: the
     /// diff is shown only when it does.
     private(set) var revisionHasChanges = false
     /// The code side the description returns to: the C, or the listing.
-    private var codeShowsC = true
+    var codeShowsC = true
     /// Where the description is to be scrolled once its text arrives: a
     /// place adopted before the store answered.
-    private var pendingDescriptionScroll: NSPoint?
+    var pendingDescriptionScroll: NSPoint?
     /// The link in the description the reader just followed.
-    private var leavingDescriptionMark: NSRange?
-    private let recipeLine = CodeMenuLine(frame: .zero)
+    var leavingDescriptionMark: NSRange?
+    let recipeLine = CodeMenuLine(frame: .zero)
     /// Turns while the app reads another analysis the reader chose.
-    private let recipeSpinner = NSProgressIndicator()
+    let recipeSpinner = NSProgressIndicator()
     private let codeContent = NSView()
     private var codeStack: NSView?
     /// Where the surface's Find bar stands over the code or the description
@@ -233,9 +233,9 @@ import ToolModuleKit
     /// changes, while a search stands is searched too.
     var searchedDescription: String?
     private var descriptionLeading: NSLayoutConstraint?
-    private let rightSplit = ALSplitView()
-    private let hexDumpBar = CodeDumpBar()
-    private let hexDumpButton = NSButton()
+    let rightSplit = ALSplitView()
+    let hexDumpBar = CodeDumpBar()
+    let hexDumpButton = NSButton()
     /// The dump bar's revision comparison, as Xcode puts one there: the
     /// current revision, the two arrows, the revision the code is compared
     /// against and Reset.
@@ -258,7 +258,7 @@ import ToolModuleKit
     /// picked in the bar for it. A function not listed here is compared only
     /// by a mark it still wears. The panel's, as its marks are, and gone with
     /// the session: nothing writes it to a workspace.
-    private var functionComparisons: [CodeAddress: FunctionComparison] = [:]
+    var functionComparisons: [CodeAddress: FunctionComparison] = [:]
     /// The revision before the one on screen, and its code: what opening a
     /// function the revision changed compares against by itself.
     private var previousRevision: (revision: Int, artifact: CodeArtifact)?
@@ -284,7 +284,7 @@ import ToolModuleKit
     private var problemLabelClearsComparison: NSLayoutConstraint?
     private var barProblems: [CodeAddress?: String] = [:]
     /// The same for an analysis chosen in the header, which is about no function.
-    private var analysisProblem: String?
+    var analysisProblem: String?
     /// What is under way, the last begun last: that one is what the bar names.
     private var worksUnderWay: [(id: Int, words: String, revision: Int?)] = []
     /// The revisions whose code is coming from the server now, and how many
@@ -292,13 +292,13 @@ import ToolModuleKit
     private var revisionDownloads: [Int: Int] = [:]
     private var worksBegun = 0
     private var workReveal: DispatchWorkItem?
-    private var recipeWork: Int?
+    var recipeWork: Int?
     /// A read that ends sooner shows nothing: a bar that flashes explains no
     /// delay.
     var workShownAfter: TimeInterval = 0.3
-    private let moduleHexView: NSView
-    private var hexDumpVisible = true
-    private static let hexDumpHeight: CGFloat = 220
+    let moduleHexView: NSView
+    var hexDumpVisible = true
+    static let hexDumpHeight: CGFloat = 220
 
     /// Where the navigator's width is kept. The app points it at its own
     /// store; a package cannot see that a test run reads a suite of its own.
@@ -332,12 +332,12 @@ import ToolModuleKit
     private static let orderButtonWidth: CGFloat = 24
     private static let orderButtonHeight: CGFloat = 22
     private static let orderButtonGap: CGFloat = 2
-    private static let navigatorIndent: CGFloat = 14
+    static let navigatorIndent: CGFloat = 14
     /// How far a review group's function starts past the group's mark.
-    private static let groupMemberIndent: CGFloat = 13
+    static let groupMemberIndent: CGFloat = 13
     /// How deep a call tree's row is drawn: deeper levels keep the last one's
     /// inset rather than running the names off the pane.
-    private static let navigatorLevels: Int = 10
+    static let navigatorLevels: Int = 10
     /// Where the Functions list's order is kept, like the navigator's width.
     static let navigatorOrderKey = "CodeNavigatorFunctionOrder"
     /// Whether the call tree keeps to the open way, kept the same way.
@@ -356,7 +356,7 @@ import ToolModuleKit
     /// The filter runs to the bar's edge where the buttons are not there.
     private var searchToOrder: NSLayoutConstraint!
     private var searchToEdge: NSLayoutConstraint!
-    private let staleLabel = NSTextField(labelWithString: "")
+    let staleLabel = NSTextField(labelWithString: "")
     /// Over the code, when the function on screen wears New: what the mark is
     /// about besides the code (`updateNewMarkBanner`).
     private let newMarkBanner = CodeNewMarkBanner()
@@ -398,7 +398,7 @@ import ToolModuleKit
     private var readinessObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
-    private var syncingSelection = false
+    var syncingSelection = false
 
     /// An instruction's bytes from a listing click. The app selects them in
     /// the hex view.
@@ -626,6 +626,66 @@ import ToolModuleKit
         super.viewDidChangeEffectiveAppearance()
         applyCodeBackground()
     }
+
+    var descriptionChoice: DescriptionChoice?
+
+    /// The revision the description is new against: it reads otherwise than
+    /// when the reader last had it open. Taken when they leave it, as a
+    /// function's mark is.
+    var descriptionMark: Int?
+
+    /// The revision the description is compared with now, and its text then
+    /// ("" when it had none).
+    var descriptionBaseline: (revision: Int, text: String)?
+
+    var descriptionReads: [Int: String] = [:]
+
+    var descriptionBeingRead: Int?
+
+    var descriptionChangedByCurrentRevision: Bool?
+
+    /// The read a comparison waits on, for a test.
+    var descriptionRead: Task<Void, Never>?
+
+    /// Reads the module's description at a revision: "" when it had none,
+    /// nil when the store could not give it. The app's half of the seam.
+    public var onReadDescription: ((Int) async -> String?)?
+
+    /// Reads a revision's code from the store for one function, for the
+    /// comparison a mark puts up; nil when the store has none. It may hold the
+    /// other functions without their code. The app's half of the seam.
+    public var onReadRevision: ((Int, CodeAddress) async -> CodeArtifact?)?
+
+    var readRevisions: [RevisionRead: CodeArtifact] = [:]
+
+    var readOrder: [RevisionRead] = []
+
+    var revisionsBeingRead: Set<RevisionRead> = []
+
+    /// How many revisions were read for marks, for a test.
+    var revisionReads = 0
+
+    /// Set while the pane selects bytes of its own — a link to a global — so
+    /// the hex view's report of that selection does not move the code.
+    var selectingBytes = false
+
+    /// The name in the C the open popover explains; nil for one opened on
+    /// the listing.
+    var explainedInC: NSRange?
+
+    /// The C the reader acted on last — the call they ⌘-clicked — which the
+    /// place they leave keeps as its mark.
+    var leavingCMark: NSRange?
+
+    var lastFlash: Flash?
+
+    var flashView: NSView?
+
+    /// The width the navigator's columns were last fitted to. A pane is built
+    /// before it has its size, so the columns are fitted again once it does —
+    /// and the table's own last-column sizing does not know that a column in
+    /// front of it was resized.
+    var fittedNavigatorWidth: CGFloat = 0
 
     // MARK: - What the reader sees
 
@@ -875,7 +935,7 @@ import ToolModuleKit
 
     /// The function the last `onRevisionUnreadable` was about: the reader may
     /// have moved on since asking.
-    private var unreadableFunction: CodeAddress?
+    var unreadableFunction: CodeAddress?
 
     /// Says in the dump bar, until the reader picks again, why the revision
     /// `onRevisionUnreadable` just reported did not come.
@@ -906,18 +966,18 @@ import ToolModuleKit
         updateWorkLine()
     }
 
-    private func beginRevisionWork(_ revision: Int) -> Int {
+    func beginRevisionWork(_ revision: Int) -> Int {
         beginWork(L("Reading revision r%1$@…", String(revision)), revision: revision)
     }
 
-    private func beginWork(_ words: String, revision: Int? = nil) -> Int {
+    func beginWork(_ words: String, revision: Int? = nil) -> Int {
         worksBegun += 1
         worksUnderWay.append((worksBegun, words, revision))
         updateWorkLine()
         return worksBegun
     }
 
-    private func endWork(_ id: Int) {
+    func endWork(_ id: Int) {
         worksUnderWay.removeAll { $0.id == id }
         updateWorkLine()
     }
@@ -955,7 +1015,7 @@ import ToolModuleKit
     }
 
     /// The problem of the function on screen, unless the strip has the place.
-    private func updateProblemLine() {
+    func updateProblemLine() {
         let words = workBar.isHidden ? barProblems[openFunctionEntry] ?? analysisProblem : nil
         problemLabel.stringValue = words ?? ""
         ControlHelp.describe(problemLabel, words)
@@ -972,7 +1032,7 @@ import ToolModuleKit
 
     /// `readFor`: the one function `artifact` holds the code of, when it was
     /// read for that function alone.
-    private func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?, pinned: Bool,
+    func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?, pinned: Bool,
                                        function: CodeAddress?, readFor: CodeAddress?) {
         if pinned, let pick = picksBeingRead.removeValue(forKey: function ?? openFunctionEntry) { endWork(pick) }
         if pinned, let entry = function ?? openFunctionEntry {
@@ -1079,7 +1139,7 @@ import ToolModuleKit
     }
 
     /// A revision the store has no code for is listed greyed.
-    private func rebuildRevisionMenu() {
+    func rebuildRevisionMenu() {
         var choices = [CodeMenuLine.Choice(title: L("No comparison"), tag: Self.noComparisonTag)]
         let offered = showsDescription ? offeredDescriptionChoices() : offeredRevisionChoices()
         for (index, choice) in offered.enumerated() {
@@ -1093,7 +1153,7 @@ import ToolModuleKit
 
     /// A revision compared with reads plainly: it is what the diff is against.
     /// "No comparison" keeps the bar's grey, as Reset does then.
-    private func selectRevisionItem(_ revision: Int?) {
+    func selectRevisionItem(_ revision: Int?) {
         // The bar speaks of what is on screen: the description has its own.
         let revision = showsDescription ? descriptionBaseline?.revision : revision
         revisionLine.select(revision ?? Self.noComparisonTag)
@@ -1124,7 +1184,7 @@ import ToolModuleKit
 
     /// Reset is blue while it can act and grey while it cannot: a borderless
     /// button keeps its tint through a disabled state unless it is told.
-    private func updateResetButton() {
+    func updateResetButton() {
         let enabled = barRevision != nil
         resetComparisonButton.isEnabled = enabled
         resetComparisonButton.contentTintColor = enabled ? .controlAccentColor : .secondaryLabelColor
@@ -1222,488 +1282,12 @@ import ToolModuleKit
         applyMode()
     }
 
-    // MARK: - The description against a revision
-
-    /// What the description is compared with once the reader has chosen:
-    /// nothing, or a revision. Nil until they choose; a New mark's revision
-    /// stands for it then.
-    private enum DescriptionChoice: Equatable {
-        case noComparison
-        case against(Int)
-    }
-    private var descriptionChoice: DescriptionChoice?
-    /// The revision the description is new against: it reads otherwise than
-    /// when the reader last had it open. Taken when they leave it, as a
-    /// function's mark is.
-    private var descriptionMark: Int?
-    /// The revision the description is compared with now, and its text then
-    /// ("" when it had none).
-    private var descriptionBaseline: (revision: Int, text: String)?
-    private var descriptionReads: [Int: String] = [:]
-    private var descriptionBeingRead: Int?
-    private var descriptionChangedByCurrentRevision: Bool?
-    /// The read a comparison waits on, for a test.
-    private(set) var descriptionRead: Task<Void, Never>?
-
-    /// Reads the module's description at a revision: "" when it had none,
-    /// nil when the store could not give it. The app's half of the seam.
-    public var onReadDescription: ((Int) async -> String?)?
-
-    /// The revision the bar shows as compared with: the description's while
-    /// it is on screen, the function's otherwise.
-    private var barRevision: Int? { showsDescription ? descriptionBaseline?.revision : comparisonRevision }
-
-    static let descriptionSeenKey = "description"
-    private var descriptionFingerprint: String { manifest.reading?.description?.hex ?? "" }
-
-    private func allSeenRecords(revision: Int) -> [String: SeenRecord] {
-        var records = Self.seenRecords(of: artifact, revision: revision)
-        records[Self.descriptionSeenKey] = SeenRecord(revision: revision, fingerprint: descriptionFingerprint)
-        return records
-    }
-
-    /// The reader has the description in front of them: the next launch must
-    /// not put it up as New for what they have just read.
-    private func noteDescriptionSeen() {
-        guard let revision = manifest.reading?.rev else { return }
-        seen[Self.descriptionSeenKey] = SeenRecord(revision: revision, fingerprint: descriptionFingerprint)
-        if seenLoaded { onSeenChanged?(seen) }
-    }
-
-    /// Leaving the description takes its mark; what the mark compared it with
-    /// stays, unless the reader has chosen since.
-    private func leaveDescriptionMark() {
-        guard let mark = descriptionMark else { return }
-        if descriptionChoice == nil { descriptionChoice = .against(mark) }
-        descriptionMark = nil
-        noteDescriptionSeen()
-        marksChanged()
-    }
-
-    /// The reader's pick in the bar while the description is on screen.
-    // help: panel.code.diff
-    private func chooseDescriptionRevision(_ revision: Int?) {
-        descriptionChoice = revision.map { .against($0) } ?? .noComparison
-        compareDescription(with: revision)
-    }
-
-    /// The comparison the description stands for: what the reader chose, or
-    /// the revision its New mark is against, or none.
-    private func applyDescriptionComparison() {
-        let wanted: Int?
-        switch descriptionChoice {
-        case .noComparison: wanted = nil
-        case .against(let revision): wanted = revision
-        case nil: wanted = descriptionMark
-        }
-        guard wanted != descriptionBaseline?.revision || (wanted != nil && descriptionBaseline == nil) else { return }
-        compareDescription(with: wanted)
-    }
-
-    private func compareDescription(with revision: Int?) {
-        guard let revision else {
-            descriptionBeingRead = nil
-            setDescriptionBaseline(nil)
-            return
-        }
-        if let held = descriptionReads[revision] {
-            descriptionBeingRead = nil
-            setDescriptionBaseline((revision, held))
-            return
-        }
-        guard let onReadDescription else { return }
-        descriptionBeingRead = revision
-        let work = beginRevisionWork(revision)
-        let generation = readingGeneration
-        descriptionRead = Task { @MainActor [weak self] in
-            let text = await onReadDescription(revision)
-            guard let self, self.readingGeneration == generation else { return }
-            self.endWork(work)
-            guard self.descriptionBeingRead == revision else { return }
-            self.descriptionBeingRead = nil
-            if let text {
-                self.descriptionReads[revision] = text
-                self.setDescriptionBaseline((revision, text))
-            } else {
-                self.selectRevisionItem(nil)
-                self.unreadableFunction = self.openFunctionEntry
-                self.onRevisionUnreadable?(revision)
-            }
-        }
-    }
-
-    private func setDescriptionBaseline(_ baseline: (revision: Int, text: String)?) {
-        descriptionBaseline = baseline
-        descriptionView.compare(with: baseline?.text)
-        rebuildRevisionMenu()
-        updateResetButton()
-        updateHeaderForMode()
-    }
-
-    /// For a test: what the description is compared with, the diff it shows,
-    /// and whether it carries a New mark.
-    var descriptionComparisonRevision: Int? { descriptionBaseline?.revision }
-    var descriptionDiffCounts: (added: Int, removed: Int)? {
-        descriptionView.shownDiff.map { ($0.added, $0.removed) }
-    }
-    var descriptionTints: [DescriptionTextView.Tint] { descriptionView.tints }
-    public var descriptionIsNew: Bool { descriptionMark != nil }
-    var descriptionBadgeIsShown: Bool { !descriptionBadgeHolder.isHidden }
-    var descriptionBadgeFrame: NSRect { convert(descriptionBadgeHolder.bounds, from: descriptionBadgeHolder) }
-    var descriptionButtonFrame: NSRect { convert(descriptionButton.bounds, from: descriptionButton) }
-
-    private func drawDescriptionBadge() {
-        descriptionBadgeHolder.isHidden = descriptionMark == nil
-        moduleBeforeBadge?.isActive = descriptionMark != nil
-    }
-
-    /// The book's trailing margin: the pane's padding, badge or none.
-    static let bookTrailing: CGFloat = -8
-
-    /// The room between the New badge and the book on its right.
-    static let badgeToBook: CGFloat = 4
-
-    /// Back to the code from the description, on the side it was left on.
-    private func leaveDescription() {
-        guard showsDescription else { return }
-        mode = codeShowsC ? 1 : 0
-        applyMode()
-    }
-    /// The analyses the header can offer, the chosen one first.
-    public var offeredRecipes: [AnalysisManifest] { recipes }
-
-    /// Chooses one of `offeredRecipes`; the app loads its artifact and rebuilds
-    /// the screen.
-    public func chooseRecipe(at index: Int) {
-        guard recipes.indices.contains(index),
-              recipes[index].recipe.id != manifest.recipe.id, !isLoadingRecipe else { return }
-        // A large module's artifact takes a moment to read: the dropdown
-        // waits, with a spinner beside it, until the app replaces this pane
-        // with the chosen analysis — or calls `recipeLoadFailed`.
-        recipeLine.isEnabled = false
-        recipeSpinner.isHidden = false
-        recipeSpinner.startAnimation(nil)
-        analysisProblem = nil
-        recipeWork = beginWork(L("Reading the analysis…"))
-        onChooseRecipe?(recipes[index])
-    }
-
-    /// Whether an analysis the reader chose is being read.
-    public var isLoadingRecipe: Bool { !recipeSpinner.isHidden }
-
-    /// The chosen analysis could not be read: the pane keeps the one it has,
-    /// the dropdown says so again, and `problem` — nil for a connection that
-    /// failed, which the app shows elsewhere — stays in the dump bar until
-    /// another is chosen.
-    public func recipeLoadFailed(problem: String? = nil) {
-        analysisProblem = problem
-        recipeSpinner.stopAnimation(nil)
-        recipeSpinner.isHidden = true
-        recipeLine.isEnabled = true
-        if let recipeWork { endWork(recipeWork) }
-        recipeWork = nil
-        updateProblemLine()
-    }
-
-    /// Switches the navigator: Functions, Strings, POST writes, Status codes.
-    public func selectList(_ list: List) {
-        guard state.show(list) else { return }
-        drawNavigator()
-        if list != .functions, state.rowCount > 0 {
-            selectNavigatorRow(0)
-        }
-    }
-
-    /// Filters the list in front. Functions match their name, signature,
-    /// address or instruction text; strings and the two call lists match what
-    /// they say.
-    public func filter(by text: String) {
-        searchField.stringValue = text
-        state.search(text)
-        drawNavigator()
-    }
-
-    /// Puts the listing back where a screen that moved container left it:
-    /// the function, the instruction and the ASM/C choice.
-    /// Puts the reader back where it was: at `location` when this artifact
-    /// still has it, otherwise at the indices — what a workspace written
-    /// before places were kept by address holds.
-    public func restore(at location: CodeLocation? = nil, function: Int?, instruction: Int?,
-                        showsC: Bool) {
-        var function = function
-        var instruction = instruction
-        if let location, !location.isEmpty {
-            let found = model.indices(of: location)
-            if found.function != nil || found.line != nil {
-                function = found.function
-                instruction = found.line
-            }
-            // The instruction comes with its function's code, when that does.
-            if location.address != nil, let held = found.function, found.line == nil, model.isPending(held) {
-                whenRead([held]) { [weak self] in
-                    guard let self, self.state.function == held,
-                          let line = self.model.indices(of: location).line else { return }
-                    self.select(line: line)
-                }
-            }
-        }
-        if let function {
-            selectFunction(at: function, notify: false)
-        }
-        if let instruction, model.lines.indices.contains(instruction) {
-            select(line: instruction)
-        }
-        mode = showsC ? 1 : 0
-        applyMode()
-        resetHistory()
-    }
-
-    /// Shows the decompiled C instead of the assembly, or the other way round,
-    /// without moving the reader's place: what a Code panel opened with the
-    /// listing already showing asks for.
-    public func showDecompiledC(_ showsC: Bool) {
-        guard showsDecompiledC != showsC || showsDescription else { return }
-        mode = showsC ? 1 : 0
-        applyMode()
-    }
-
-    /// Shows the stale banner. The app calls this when the module's current
-    /// bytes no longer match the manifest.
-    public func setStale(_ stale: Bool, reason: String? = nil) {
-        staleLabel.stringValue = stale
-            ? (reason ?? L("The module changed after this analysis."))
-            : ""
-        staleLabel.isHidden = !stale
-    }
-
-    /// Selects a function and its first instruction. A reader's choice also
-    /// marks the function's whole stored range as the dump's main zone; it
-    /// does not take the selection, which belongs to the reader.
-    public func selectFunction(at index: Int, notify: Bool = true) {
-        guard model.functions.indices.contains(index) else { return }
-        let previous = state.function
-        // The function being left keeps the line it was read at; the one
-        // arrived at is read from its own, in `updateC` and `updateDiff`.
-        if let previous, previous != index, model.functions.indices.contains(previous),
-           !model.isPending(previous), let line = currentTopLine() {
-            topLines[model.functions[previous].entry.description] = line
-        }
-        // A caller can point at a function the current search or list hides:
-        // show Functions, with the filter cleared, before selecting it.
-        revealInNavigator(index)
-        state.selectFunction(index)
-        redrawCallTree(leaving: previous)
-        noteSeen(index)
-        // Arriving at a function a revision changed does not take its New
-        // mark: the reader sees which function changed while reading it, and
-        // the mark goes when they move on to another one. Leaving it is
-        // having seen it, and the next launch is told so.
-        if let previous, previous != index {
-            noteSeen(previous)
-            if let taken = unopenedChanges.removeValue(forKey: previous) {
-                keepComparison(of: previous, from: taken)
-                syncingSelection = true
-                functionTable.reloadData()
-                syncingSelection = false
-                marksChanged()
-            }
-        }
-        // The function's mark says which revision it is new against: opening
-        // it compares with that revision, so the reader sees the change the
-        // mark is about even after further revisions have arrived.
-        applyOpenComparison(for: index)
-        updateProblemLine()
-        drawSelection()
-        if notify, let range = model.moduleRange(ofFunction: index) {
-            onFocusRange?(range)
-        }
-    }
-
-    /// The function on screen, by the entry that outlives a revision.
-    public var openFunctionEntry: CodeAddress? {
-        guard let index = state.function, model.functions.indices.contains(index) else { return nil }
-        return model.functions[index].entry
-    }
-
-    /// The comparison each function was left with, for the pane drawn next.
-    public var keptComparisons: [CodeAddress: FunctionComparison] { functionComparisons }
-
-    /// Takes the comparisons of the pane before this one. `marks` are the marks
-    /// that pane carried: a function wearing a mark it did not is new against a
-    /// revision that came since, and that mark is what opening it shows.
-    public func restoreComparisons(_ kept: [CodeAddress: FunctionComparison], marks: [NewMark]) {
-        let carried = Set(marks.map(\.entry))
-        var marked: Set<CodeAddress> = []
-        for index in unopenedChanges.keys where model.functions.indices.contains(index) {
-            marked.insert(model.functions[index].entry)
-        }
-        for (entry, comparison) in kept where !marked.contains(entry) || carried.contains(entry) {
-            functionComparisons[entry] = comparison
-        }
-        if let index = state.function { applyOpenComparison(for: index) }
-    }
-
-    /// A function that loses its mark having been open keeps what the mark
-    /// compared it with, unless the reader has chosen for it since.
-    private func keepComparison(of index: Int, from mark: NewMark.Baseline) {
-        guard mark.revision != nil, model.functions.indices.contains(index) else { return }
-        let entry = model.functions[index].entry
-        if functionComparisons[entry] == nil { functionComparisons[entry] = .against(mark) }
-    }
-
-    /// The comparison an open function stands for: what it was left with, or
-    /// the revision its New mark was made against, or none. A function the
-    /// earlier revision did not have reads as all added, as the diff of a
-    /// function it lacks is.
-    private func applyOpenComparison(for index: Int) {
-        guard model.functions.indices.contains(index) else { return }
-        let kept = functionComparisons[model.functions[index].entry]
-        let wanted: NewMark.Baseline?
-        switch kept {
-        case .noComparison: wanted = nil
-        case .against(let baseline): wanted = baseline
-        case nil: wanted = unopenedChanges[index]
-        }
-        guard let mark = wanted, let revision = mark.revision else {
-            if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
-            return
-        }
-        let entry = model.functions[index].entry
-        // The same revision still has to be read again for another function.
-        guard comparisonRevision != revision || (baselineReadFor != nil && baselineReadFor != entry) else { return }
-        let read = mark.artifact == nil ? readRevisions[RevisionRead(revision: revision, function: entry)] : nil
-        guard let held = mark.artifact ?? read else {
-            // The code of that revision is read now, the first time something
-            // needs it. Until it comes the function reads as it is: another
-            // function's comparison would be with the wrong revision.
-            if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
-            readRevision(revision, function: entry)
-            return
-        }
-        // Told apart only now that the code is here: a record made against
-        // another copy of that revision. Nothing changed, so a mark would be
-        // about the bookkeeping and not about the function.
-        if kept == nil, mark.artifact == nil, Self.holdsTheSame(artifact.functions[index], in: held, now: artifact) {
-            takeMark(of: index)
-            return
-        }
-        setComparisonRevision(revision, artifact: held, pinned: false, function: nil,
-                              readFor: mark.artifact == nil ? entry : mark.readFor)
-    }
-
-    /// Reads a revision's code for the comparison of `function`, and goes on
-    /// with the function on screen when it comes.
-    private func readRevision(_ revision: Int, function: CodeAddress) {
-        let wanted = RevisionRead(revision: revision, function: function)
-        guard let onReadRevision, revisionsBeingRead.insert(wanted).inserted else { return }
-        revisionReads += 1
-        let generation = readingGeneration
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let read = await self.whileReadingRevision(revision) {
-                await onReadRevision(revision, function)
-            }
-            guard self.readingGeneration == generation else { return }
-            self.revisionsBeingRead.remove(wanted)
-            guard let read else { return }
-            self.keepRead(read, wanted)
-            if let index = self.state.function { self.applyOpenComparison(for: index) }
-            self.updateNewMarkBanner()
-        }
-    }
-
-    /// Keeps the reads made last. Each holds one function's code and the tables
-    /// of its revision, so they are not all held for the marks that may ask.
-    private func keepRead(_ read: CodeArtifact, _ wanted: RevisionRead) {
-        readRevisions[wanted] = read
-        readOrder.removeAll { $0 == wanted }
-        readOrder.append(wanted)
-        while readOrder.count > Self.readsKept {
-            readRevisions[readOrder.removeFirst()] = nil
-        }
-    }
-
-    /// Takes a mark that turned out to be about nothing: the reader is as far
-    /// along as the code.
-    private func takeMark(of index: Int) {
-        unopenedChanges[index] = nil
-        if let revision = manifest.reading?.rev {
-            let function = artifact.functions[index]
-            seen[function.entry.description] = SeenRecord(revision: revision,
-                                                          fingerprint: Self.fingerprint(of: function))
-            if seenLoaded { onSeenChanged?(seen) }
-        }
-        syncingSelection = true
-        functionTable.reloadData()
-        syncingSelection = false
-        marksChanged()
-        applyOpenComparison(for: index)
-        updateNewMarkBanner()
-    }
-
-    /// Reads a revision's code from the store for one function, for the
-    /// comparison a mark puts up; nil when the store has none. It may hold the
-    /// other functions without their code. The app's half of the seam.
-    public var onReadRevision: ((Int, CodeAddress) async -> CodeArtifact?)?
-    private struct RevisionRead: Hashable {
-        let revision: Int
-        let function: CodeAddress
-    }
-    private var readRevisions: [RevisionRead: CodeArtifact] = [:]
-    private var readOrder: [RevisionRead] = []
-    private var revisionsBeingRead: Set<RevisionRead> = []
-    private static let readsKept = 8
-    /// How many revisions were read for marks, for a test.
-    private(set) var revisionReads = 0
-
-    /// Marks the selected function's range as the main zone without a click —
-    /// what the screen does when it opens on a function.
-    public func focusSelectedFunction() {
-        guard let function = state.function,
-              let range = model.moduleRange(ofFunction: function)
-        else { return }
-        onFocusRange?(range)
-    }
-
-    /// Selects an instruction by its index in the artifact, as a click would.
-    public func selectInstruction(at index: Int) {
-        guard model.lines.indices.contains(index) else { return }
-        select(line: index)
-        notifyInstruction()
-    }
-
-    /// Selects the instruction covering `range` of the module without moving
-    /// the hex view back: the selection came from there.
-    public func selectModuleRange(_ range: Range<UInt64>) {
-        // The selection the pane asked for itself, for a link to data, says
-        // nothing about the code: data is no instruction, and the nearest line
-        // before it — a line of some other function — is not where the reader
-        // is. Only a selection made in the hex view steers the code.
-        guard state.list == .functions, !syncingSelection, !selectingBytes else { return }
-        if let pending = model.pendingFunction(forModuleRange: range) {
-            whenRead([pending]) { [weak self] in self?.selectModuleRange(range) }
-            return
-        }
-        guard let line = model.line(forModuleRange: range) else { return }
-        select(line: line)
-    }
-
-    /// Set while the pane selects bytes of its own — a link to a global — so
-    /// the hex view's report of that selection does not move the code.
-    private var selectingBytes = false
-
-
-    /// The whole stored range of a function, for the hex view and for tests.
-    public func moduleRange(forFunction index: Int) -> Range<UInt64>? {
-        model.moduleRange(ofFunction: index)
-    }
-
     // MARK: - Drawing the state
 
     /// Goes to the place a POST code or a status code is sent from, keeping
     /// the list it was chosen in: the instruction in the listing, the call in
     /// the C, its bytes in the hex view. A place Back returns from.
-    private func showSite(_ address: CodeAddress) {
+    func showSite(_ address: CodeAddress) {
         if model.line(at: address) == nil, let pending = model.pendingFunction(holding: address) {
             whenRead([pending]) { [weak self] in self?.showSite(address) }
             return
@@ -1734,7 +1318,7 @@ import ToolModuleKit
     }
 
     /// Shows the function holding `line` and selects that instruction.
-    private func select(line: Int) {
+    func select(line: Int) {
         revealInNavigator(model.lines[line].function)
         let previous = state.function
         state.selectLine(line)
@@ -1744,7 +1328,7 @@ import ToolModuleKit
 
     /// The call tree stands around the selected function, so another selection
     /// redraws it.
-    private func redrawCallTree(leaving previous: Int?) {
+    func redrawCallTree(leaving previous: Int?) {
         guard state.function != previous, state.functionOrder == .calls,
               state.list == .functions, state.searchText.isEmpty else { return }
         // A table with no empty selection chooses its first row as it takes its
@@ -1755,7 +1339,7 @@ import ToolModuleKit
 
     /// Keeps the row chosen where it is on screen while `change` moves the rows
     /// around it, so a click does not move the row under the pointer.
-    private func keepingChosenRow(_ change: () -> Void) {
+    func keepingChosenRow(_ change: () -> Void) {
         let clip = functionTable.enclosingScrollView?.contentView
         let chosen = functionTable.selectedRow
         let offset = chosen >= 0 ? clip.map { functionTable.rect(ofRow: chosen).minY - $0.bounds.minY } : nil
@@ -1770,7 +1354,7 @@ import ToolModuleKit
 
     /// Brings a function into the navigator, redrawing the list when the
     /// state had to switch to Functions or clear the search for it.
-    private func revealInNavigator(_ function: Int) {
+    func revealInNavigator(_ function: Int) {
         guard state.reveal(function: function) else { return }
         listControl.selectedSegment = segment(of: .list(.functions)) ?? -1
         searchField.stringValue = state.searchText
@@ -1779,7 +1363,7 @@ import ToolModuleKit
 
     /// The navigator's title and rows for the list in front, with the selected
     /// function's row chosen when Functions is showing.
-    private func drawNavigator() {
+    func drawNavigator() {
         listControl.selectedSegment = shownSegment
         // The switch speaks about the functions only: with another list in
         // front the filter takes its room.
@@ -2059,7 +1643,7 @@ import ToolModuleKit
     }
 
     /// Opens or closes one place's calls in the tree.
-    private func toggleCalls(at path: [Int]) {
+    func toggleCalls(at path: [Int]) {
         foldRows { $0.toggleExpanded(path: path) }
         if let row = state.row(ofCallPath: path) {
             describeDisclosure(at: row, state.isExpanded(path: path) ? L("Hide calls") : L("Show calls"))
@@ -2082,7 +1666,7 @@ import ToolModuleKit
     /// go slide up into it, and every other row keeps its cell — the chevron
     /// clicked is turning still. A change the rows cannot follow one by one
     /// draws the list again.
-    private func foldRows(_ change: (inout CodeReaderState) -> Void) {
+    func foldRows(_ change: (inout CodeReaderState) -> Void) {
         // A function has a row at each of its places, so a row is told from
         // another by its place: the rows that come and go are those of the
         // place clicked, not the first that look the same.
@@ -2132,7 +1716,7 @@ import ToolModuleKit
 
     /// The words of the chevron on `row` after it turned: it is not drawn
     /// again, so it does not take them from the row.
-    private func describeDisclosure(at row: Int, _ phrase: String) {
+    func describeDisclosure(at row: Int, _ phrase: String) {
         guard row < functionTable.numberOfRows,
               let cell = functionTable.view(atColumn: 0, row: row, makeIfNecessary: false)
                 as? CodeNavigatorCell else { return }
@@ -2228,7 +1812,7 @@ import ToolModuleKit
 
     /// The marks changed: the button that takes them follows, and the app keeps
     /// them for the next launch.
-    private func marksChanged() {
+    func marksChanged() {
         clearNewMarksButton.isEnabled = !unopenedChanges.isEmpty || descriptionMark != nil
         drawDescriptionBadge()
         onNewMarksChanged?(newMarks)
@@ -2296,12 +1880,12 @@ import ToolModuleKit
     /// with the change the mark is about, not with whatever came after; a later
     /// revision adds marks and never takes one, so changes the reader has not
     /// looked at yet do not go unnoticed.
-    private var unopenedChanges: [Int: NewMark.Baseline] = [:]
+    var unopenedChanges: [Int: NewMark.Baseline] = [:]
 
     /// For every function, the revision the reader last saw it at and the code
     /// it had then — kept between launches, so a revision that arrived while
     /// the app was closed still puts the functions it changed up as New.
-    private var seen: [String: SeenRecord] = [:]
+    var seen: [String: SeenRecord] = [:]
 
     /// What the panel keeps between launches, through the app: the records as
     /// they change — a function opened, a module first read, unchanged
@@ -2312,7 +1896,7 @@ import ToolModuleKit
     /// A note taken before that is not written over the store: the pane's
     /// own opening is noted while the records are still on their way, and
     /// saving then would erase the launch before it — the New marks with it.
-    private var seenLoaded = false
+    var seenLoaded = false
 
     /// The records as they stand, for a test.
     public var seenRecords: [String: SeenRecord] { seen }
@@ -2460,7 +2044,7 @@ import ToolModuleKit
     /// signature and the C the New mark is about, and nothing the C does not
     /// show changed either. A mark against such a revision would have nothing
     /// to compare and nothing to explain. `now` is the artifact `function` is of.
-    private static func holdsTheSame(_ function: CodeArtifact.Function, in revision: CodeArtifact,
+    static func holdsTheSame(_ function: CodeArtifact.Function, in revision: CodeArtifact,
                                      now: CodeArtifact) -> Bool {
         guard let old = revision.functions.first(where: { $0.entry == function.entry }) else { return false }
         return old.readingFingerprint == function.readingFingerprint
@@ -2479,7 +2063,7 @@ import ToolModuleKit
             .contains(where: \.marksNew)
     }
 
-    private static func seenRecords(of artifact: CodeArtifact, revision: Int) -> [String: SeenRecord] {
+    static func seenRecords(of artifact: CodeArtifact, revision: Int) -> [String: SeenRecord] {
         var records: [String: SeenRecord] = [:]
         for function in artifact.functions {
             records[function.entry.description] = SeenRecord(
@@ -2488,13 +2072,13 @@ import ToolModuleKit
         return records
     }
 
-    private static func fingerprint(of function: CodeArtifact.Function) -> String {
+    static func fingerprint(of function: CodeArtifact.Function) -> String {
         function.readingFingerprint
     }
 
     /// Notes that the reader has the function in front of them now: the next
     /// launch must not put it up as New for what they have just read.
-    private func noteSeen(_ index: Int) {
+    func noteSeen(_ index: Int) {
         guard artifact.functions.indices.contains(index),
               let revision = manifest.reading?.rev else { return }
         let function = artifact.functions[index]
@@ -2508,7 +2092,7 @@ import ToolModuleKit
     /// changed; a new instruction in the same function only moves the row.
     private var drawnFunction: Int?
 
-    private func drawSelection() {
+    func drawSelection() {
         syncingSelection = true
         if state.list == .functions, let function = state.function,
            let row = state.row(ofFunction: function),
@@ -2628,7 +2212,7 @@ import ToolModuleKit
     /// reading the same in both revisions, that the comparison has nothing to
     /// draw. A change the C shows — a rename, a type in a declaration — is
     /// the comparison's: a function with only such changes needs no plate.
-    private func updateNewMarkBanner() {
+    func updateNewMarkBanner() {
         guard mode != Self.descriptionSegment,
               let index = state.function, model.functions.indices.contains(index),
               let mark = unopenedChanges[index] else {
@@ -3280,594 +2864,6 @@ import ToolModuleKit
         let range = ranges[min(ordinal, ranges.count - 1)]
         cTextView.setSelectedRange(range)
         flashArrival(cMark: range)
-    }
-
-    // MARK: - Following links, and the way back
-
-    /// A click on a call, a jump's label or a global — in the C or the
-    /// listing — goes where it names, as in an IDE: a function opens with its
-    /// range as the dump's main zone, an instruction is selected with its
-    /// bytes, data selects its bytes in the hex view. The first two are
-    /// places Back returns from.
-    /// `even`: a move Back returns from even when the function and the
-    /// instruction stay what they were.
-    func follow(_ link: CodeLink, even: Bool = false) {
-        // The code the reader just moved in has the keyboard: ⌘[ goes back
-        // here, and the arrows move in the listing.
-        takeKeyboard()
-        switch link {
-        case .function(let index):
-            jump { selectFunction(at: index) }
-            flashArrival()
-        case .line(let line):
-            jump(even: even) {
-                select(line: line)
-                notifyInstruction()
-            }
-            flashArrival()
-        case .bytes(let address):
-            // An address inside a function not read yet is an instruction, not data.
-            if let pending = model.pendingFunction(holding: address) {
-                whenRead([pending]) { [weak self] in
-                    guard let self, let link = self.model.link(to: address) else { return }
-                    self.follow(link, even: even)
-                }
-                return
-            }
-            if let range = dataRange(at: address) {
-                selectingBytes = true
-                if let onPointBytes { onPointBytes(range) } else { onSelectRange?(range) }
-                selectingBytes = false
-            }
-        case .label(let name):
-            // In the same function's C: to the line that defines the label,
-            // and to its instruction when the name still spells its address.
-            guard let range = labelDefinition(named: name) else { NSSound.beep(); return }
-            jump(even: true) {
-                if let address = Self.labelAddress(name), let line = model.line(at: address) {
-                    select(line: line)
-                    notifyInstruction()
-                }
-                cTextView.setSelectedRange(range)
-            }
-            flashArrival(cMark: range)
-        }
-    }
-
-    /// Where `NAME:` stands in the C on screen.
-    private func labelDefinition(named name: String) -> NSRange? {
-        let text = cTextView.string as NSString
-        return shownCTokens.first { token in
-            token.kind == .label && token.link == nil && token.start + token.length <= text.length
-                && text.substring(with: NSRange(location: token.start, length: token.length)) == name
-        }.map { NSRange(location: $0.start, length: $0.length) }
-    }
-
-    /// The address a label of Ghidra's own spelling names, `LAB_09dff047`.
-    static func labelAddress(_ name: String) -> CodeAddress? {
-        guard name.hasPrefix("LAB_") else { return nil }
-        return CodeAddress(hex: String(name.dropFirst(4).prefix { $0.isHexDigit }))
-    }
-
-    /// The bytes a click on a global selects: a GUID's 16, an integer's or a
-    /// pointer's width, or the one byte at the address when the type does
-    /// not say.
-    private func dataRange(at address: CodeAddress) -> Range<UInt64>? {
-        // As wide as its type: a UINT64 is eight bytes, not its first.
-        let symbol = artifact.symbols.first { $0.address == address }
-        let count = symbol?.type.flatMap(model.width(ofType:)) ?? 1
-        return model.moduleRange(of: address, count: count) ?? model.moduleRange(of: address, count: 1)
-    }
-
-    private var currentPlace: Place? {
-        state.function.map { Place(function: $0, line: state.line) }
-    }
-
-    /// The C the reader acted on last — the call they ⌘-clicked — which the
-    /// place they leave keeps as its mark.
-    private var leavingCMark: NSRange?
-
-    /// How the reader has the code on screen now: both scroll positions, and
-    /// in the C the call they followed or the name they asked about. What
-    /// they selected by hand is not kept: a function arrived at — Back and
-    /// Forward too — starts with no text selected.
-    private var currentView: CodeViewPosition {
-        CodeViewPosition(listing: tableScroll.contentView.bounds.origin,
-                         c: cScroll.contentView.bounds.origin,
-                         cMark: leavingCMark,
-                         cText: state.function.flatMap { model.functions[$0].c },
-                         description: showsDescription ? descriptionView.scrollOrigin : nil,
-                         descriptionMark: showsDescription ? leavingDescriptionMark : nil)
-    }
-
-    /// Keeps the current place as the reader has it now, before they leave it.
-    private func recordCurrentPlace() {
-        guard historyIndex >= 0, var place = currentPlace else { return }
-        place.view = currentView
-        history[historyIndex] = place
-    }
-
-    /// Moves somewhere new: the place left is kept, what was ahead of it is
-    /// dropped, and the new place becomes the current one.
-    /// `even`: a new place even when the function and the instruction stay —
-    /// a jump to a label in the same function, whose instruction may be
-    /// unknown, is still a move Back returns from.
-    private func jump(even: Bool = false, _ move: () -> Void) {
-        recordCurrentPlace()
-        leavingCMark = nil
-        leavingDescriptionMark = nil
-        move()
-        guard let place = currentPlace else { return }
-        // Leaving the description for the function on screen is still a
-        // move: Back returns to the description.
-        if !even, historyIndex >= 0, history[historyIndex].function == place.function,
-           history[historyIndex].line == place.line, history[historyIndex].view.description == nil { return }
-        history = Array(history.prefix(historyIndex + 1)) + [place]
-        historyIndex = history.count - 1
-        historyChanged()
-    }
-
-    private func resetHistory() {
-        history = currentPlace.map { [$0] } ?? []
-        historyIndex = history.count - 1
-        historyChanged()
-    }
-
-    /// Back and forward by address, where in it the reader is, and how each
-    /// place was on screen: what a pane drawing another artifact of the same
-    /// module — a republished review, another recipe — takes over with
-    /// `adoptHistory`.
-    public var carriedHistory: CodeHistory {
-        recordCurrentPlace()
-        let places = history.map { place in
-            CodeLocation(function: artifact.functions.indices.contains(place.function)
-                            ? artifact.functions[place.function].entry : nil,
-                         address: place.line.flatMap { model.lines.indices.contains($0)
-                            ? model.lines[$0].instruction.address : nil })
-        }
-        return CodeHistory(places: places, index: historyIndex, views: history.map(\.view))
-    }
-
-    /// Takes over another pane's history, place by place, through this
-    /// artifact's own numbering; a place this artifact no longer has drops
-    /// out. The current place stays where `restore` put it. A place keeps its
-    /// scroll positions; its mark in the C only while the function's C is the
-    /// same text, since a renamed local moves every offset after it.
-    public func adoptHistory(_ carried: CodeHistory) {
-        var adopted: [Place] = []
-        var current = -1
-        for (position, location) in carried.places.enumerated() {
-            let found = model.indices(of: location)
-            guard let function = found.function else { continue }
-            if position == carried.index { current = adopted.count }
-            var view = carried.views.indices.contains(position) ? carried.views[position] : CodeViewPosition()
-            let c = model.functions[function].c
-            if view.cText != c {
-                view.cMark = nil
-                view.cText = c
-            }
-            adopted.append(Place(function: function, line: found.line, view: view))
-        }
-        guard current >= 0, var here = currentPlace else { return }
-        // The place on screen stays scrolled as it was in the other pane.
-        if here.function == adopted[current].function {
-            here.view = adopted[current].view
-            show(here.view)
-            if let origin = here.view.description {
-                showDescription(true)
-                if descriptionView.hasDescription {
-                    descriptionView.scroll(to: origin)
-                } else {
-                    pendingDescriptionScroll = origin
-                }
-            }
-        }
-        adopted[current] = here
-        history = adopted
-        historyIndex = current
-        historyChanged()
-    }
-
-    /// Shows the annotations on this module's code: a mark beside each
-    /// annotated function in the list, the title at the end of an annotated
-    /// instruction's row, and a comment over the function's C.
-    public func setNotes(_ notes: [CodeNote]) {
-        guard notes != self.notes else { return }
-        self.notes = notes
-        indexNotes()
-        drawNavigator()
-        let selected = table.selectedRow
-        syncingSelection = true
-        table.reloadData()
-        if selected >= 0, selected < table.numberOfRows {
-            table.selectRowIndexes(IndexSet(integer: selected), byExtendingSelection: false)
-        }
-        syncingSelection = false
-        drawnC = nil
-        updateC()
-    }
-
-    /// Places the notes in the functions and the lines read so far.
-    private func indexNotes() {
-        notesByFunction = [:]
-        notesByLine = [:]
-        for note in notes {
-            let place = model.indices(of: note.location)
-            if let function = place.function { notesByFunction[function, default: []].append(note) }
-            if let line = place.line { notesByLine[line, default: []].append(note) }
-        }
-    }
-
-    /// Goes to a function, or to an instruction and the function holding it,
-    /// as a click on a link would: a place Back returns from. What an
-    /// annotation on code and an agent's `open_code` open at.
-    public func go(to location: CodeLocation) {
-        opensOnDescription = false
-        let place = model.indices(of: location)
-        if let line = place.line {
-            follow(.line(line))
-        } else if let function = place.function {
-            if location.address != nil, model.isPending(function) {
-                whenRead([function]) { [weak self] in self?.go(to: location) }
-                return
-            }
-            follow(.function(function))
-        }
-    }
-
-    /// Makes the listing — or the C, when that is showing — the first
-    /// responder, unless something in this pane already is.
-    private func takeKeyboard() {
-        guard let window else { return }
-        if let responder = window.firstResponder as? NSView, responder.isDescendant(of: self) { return }
-        if showsRevisionDiff {
-            diffView.focus()
-            return
-        }
-        window.makeFirstResponder(showsDecompiledC ? cTextView : table)
-    }
-
-    /// Back: the place before the last jump. View ▸ Back (⌘[) calls this
-    /// while the code pane has the keyboard.
-    public func goBack() {
-        guard canGoBack else { return }
-        recordCurrentPlace()
-        leavingCMark = nil
-        leavingDescriptionMark = nil
-        historyIndex -= 1
-        go(to: history[historyIndex])
-    }
-
-    public func goForward() {
-        guard canGoForward else { return }
-        recordCurrentPlace()
-        leavingCMark = nil
-        leavingDescriptionMark = nil
-        historyIndex += 1
-        go(to: history[historyIndex])
-    }
-
-    /// Returns to a place as the reader left it: the same function and
-    /// instruction, both scrolled where they were, and the place itself — the
-    /// call followed in the C, the instruction in the listing — flashed.
-    private func go(to place: Place) {
-        selectFunction(at: place.function)
-        if let line = place.line, model.lines.indices.contains(line) {
-            select(line: line)
-            notifyInstruction()
-        }
-        if let origin = place.view.description {
-            showDescription(true)
-            descriptionView.scroll(to: origin)
-            historyChanged()
-            if let mark = place.view.descriptionMark { descriptionView.flash(mark) }
-            return
-        }
-        leaveDescription()
-        show(place.view)
-        historyChanged()
-        flashArrival(cMark: cMarkHere(place.view))
-    }
-
-    /// A place's mark, if it is a place in the C on screen: a mark is a range
-    /// of the C it was taken from, and in any other text — the function's
-    /// code read since, or changed — it would select whatever came to stand
-    /// there.
-    private func cMarkHere(_ view: CodeViewPosition) -> NSRange? {
-        guard let mark = view.cMark, let index = state.function, model.functions.indices.contains(index),
-              let c = model.functions[index].c, view.cText == c,
-              NSMaxRange(mark) <= (cTextView.string as NSString).length else { return nil }
-        return mark
-    }
-
-    /// A link in the description: the function it names opens in the code,
-    /// or the instruction with its function, as a click on a call would. The
-    /// description is the place Back returns to.
-    private func followFromDescription(_ address: CodeAddress, link: NSRange) {
-        let function = model.function(at: address)
-        let line = function == nil ? model.line(at: address) : nil
-        if function == nil, line == nil, let pending = model.pendingFunction(holding: address) {
-            whenRead([pending]) { [weak self] in self?.followFromDescription(address, link: link) }
-            return
-        }
-        guard function != nil || line != nil else {
-            NSSound.beep()
-            return
-        }
-        // The jump keeps it with the place it leaves.
-        leavingDescriptionMark = link
-        jump {
-            leaveDescription()
-            if let function {
-                selectFunction(at: function)
-            } else if let line {
-                select(line: line)
-                notifyInstruction()
-            }
-        }
-        takeKeyboard()
-        flashArrival()
-    }
-
-    /// Scrolls the listing and the C as a place had them, and selects its
-    /// mark in the C.
-    private func show(_ view: CodeViewPosition) {
-        if let origin = view.listing {
-            table.layoutSubtreeIfNeeded()
-            scroll(tableScroll, to: origin)
-        }
-        if let mark = cMarkHere(view) {
-            cTextView.setSelectedRange(mark)
-        }
-        if let origin = view.c {
-            if let layout = cTextView.layoutManager, let container = cTextView.textContainer {
-                layout.ensureLayout(for: container)
-            }
-            scroll(cScroll, to: origin)
-        }
-    }
-
-    /// The row at the top of `table`'s view, and how far into it the view
-    /// starts, as a fraction of the row. Read off the clip view, which a
-    /// table hidden behind the C still has: its own visible rect is then
-    /// empty. A header over the rows insets the clip view by its height
-    /// (measured: the origin is at −28 with the first row whole).
-    private func topRow(of table: NSTableView) -> (row: Int, into: CGFloat)? {
-        guard let clip = table.enclosingScrollView?.contentView else { return nil }
-        let top = clip.bounds.minY + clip.contentInsets.top
-        let row = table.row(at: NSPoint(x: 0, y: max(0, top)))
-        guard row >= 0 else { return nil }
-        let rect = table.rect(ofRow: row)
-        return (row, rect.height > 0 ? max(0, top - rect.minY) / rect.height : 0)
-    }
-
-    private func scroll(_ table: NSTableView, toTop top: (row: Int, into: CGFloat)) {
-        guard let scrollView = table.enclosingScrollView, top.row < table.numberOfRows else { return }
-        let rect = table.rect(ofRow: top.row)
-        let clip = scrollView.contentView
-        let inset = clip.contentInsets.top
-        // From the origin that shows the first row whole to the one that shows
-        // the last row at the bottom.
-        let highest = -inset
-        let lowest = max(highest, table.frame.height - clip.bounds.height)
-        let y = min(max(highest, rect.minY + top.into * rect.height - inset), lowest)
-        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: y))
-        scrollView.reflectScrolledClipView(clip)
-    }
-
-    /// The character at the top of the C's view, and how far into its line
-    /// the view starts, as a fraction of the line.
-    private func topOfC() -> (character: Int, into: CGFloat)? {
-        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer,
-              let storage = cTextView.textStorage, storage.length > 0 else { return nil }
-        let origin = cTextView.textContainerOrigin
-        let top = cScroll.contentView.bounds.minY - origin.y
-        let glyph = layout.glyphIndex(for: NSPoint(x: 0, y: max(0, top)), in: container)
-        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-        return (layout.characterIndexForGlyph(at: glyph),
-                line.height > 0 ? (top - line.minY) / line.height : 0)
-    }
-
-    private func scrollC(toTop place: (character: Int, into: CGFloat)) {
-        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer,
-              let storage = cTextView.textStorage, place.character < storage.length else { return }
-        layout.ensureLayout(for: container)
-        cTextView.sizeToFit()
-        let glyph = layout.glyphIndexForCharacter(at: place.character)
-        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-        scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
-                                    y: cTextView.textContainerOrigin.y + line.minY + place.into * line.height))
-    }
-
-    /// Puts `line` of the function's own C at the top — the notes header
-    /// above it is not one of its lines. A line the function no longer has,
-    /// because it came back shorter, shows its last part rather than an empty
-    /// view below the text.
-    private func scrollC(toLine line: Int) {
-        // The first line's top is the view's own top: the text's inset is not
-        // a place to scroll past.
-        guard line > 0 else { scroll(cScroll, to: .zero); return }
-        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer else { return }
-        layout.ensureLayout(for: container)
-        cTextView.sizeToFit()
-        let text = cTextView.string as NSString
-        guard let character = cLineStart(line, in: text) else {
-            scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
-                                        y: CGFloat.greatestFiniteMagnitude))
-            return
-        }
-        let glyph = layout.glyphIndexForCharacter(at: character)
-        let fragment = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-        scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
-                                    y: cTextView.textContainerOrigin.y + fragment.minY))
-    }
-
-    /// Where `line` of the C begins in the drawn text, the header excluded;
-    /// nil for a line past the text's end.
-    private func cLineStart(_ line: Int, in text: NSString) -> Int? {
-        guard line >= 0 else { return nil }
-        var index = min(max(cShift, 0), text.length)
-        guard index < text.length else { return nil }
-        var at = 0
-        while at < line {
-            let next = text.range(of: "\n", options: [],
-                                  range: NSRange(location: index, length: text.length - index))
-            guard next.location != NSNotFound else { return nil }
-            index = NSMaxRange(next)
-            guard index < text.length else { return nil }
-            at += 1
-        }
-        return index
-    }
-
-    /// The line at the top of the code area as it stands, in the space the
-    /// screen keeps: the C's own lines, or the new revision's line at the top
-    /// of a comparison. Nil while neither is on screen — the listing or the
-    /// description is — so a position read there does not overwrite the one
-    /// the code had.
-    private func currentTopLine() -> Int? {
-        guard mode == 1 else { return nil }
-        if showsRevisionDiff { return diffView.topNewLine }
-        guard let place = topOfC() else { return nil }
-        let text = cTextView.string as NSString
-        let start = min(max(cShift, 0), text.length)
-        let end = min(max(place.character, start), text.length)
-        return text.substring(with: NSRange(location: start, length: end - start))
-            .reduce(0) { $1 == "\n" ? $0 + 1 : $0 }
-    }
-
-    private func scroll(_ scrollView: NSScrollView, to origin: NSPoint) {
-        guard let document = scrollView.documentView else { return }
-        let visible = scrollView.contentView.bounds.size
-        let y = max(0, min(origin.y, document.frame.height - visible.height))
-        let x = max(0, min(origin.x, document.frame.width - visible.width))
-        scrollView.contentView.scroll(to: NSPoint(x: x, y: y))
-        scrollView.reflectScrolledClipView(scrollView.contentView)
-    }
-
-    // MARK: - Showing where the reader arrived
-
-    /// What the last arrival flashed, for tests: a row of the listing, or a
-    /// range of the C.
-    enum Flash: Equatable {
-        case row(Int)
-        case c(NSRange)
-    }
-    private(set) var lastFlash: Flash?
-    private var flashView: NSView?
-
-    /// Flashes the place the reader just arrived at, in whichever of the
-    /// listing and the C is showing: in the C `cMark` when there is one, else
-    /// the call made at the selected instruction, else — a function arrived at
-    /// from its start — its name in the signature; in the listing the
-    /// selected instruction's row.
-    private func flashArrival(cMark: NSRange? = nil) {
-        lastFlash = nil
-        if showsDecompiledC {
-            let length = (cTextView.string as NSString).length
-            var range = cMark
-            if range == nil, let line = state.line, let function = state.selectedFunction,
-               let site = function.cSites.first(where: { $0.address == model.lines[line].instruction.address }) {
-                range = NSRange(location: site.start + cShift, length: site.length)
-            }
-            if range == nil, let index = state.function,
-               let own = shownCTokens.first(where: { $0.link == .function(index) }) {
-                range = NSRange(location: own.start, length: own.length)
-            }
-            guard let range, range.length > 0, NSMaxRange(range) <= length else { return }
-            lastFlash = .c(range)
-            cTextView.scrollRangeToVisible(range)
-            if cTextView.window != nil { cTextView.showFindIndicator(for: range) }
-        } else {
-            guard let row = state.selectedRow, row < table.numberOfRows else { return }
-            lastFlash = .row(row)
-            flashRow(row)
-        }
-    }
-
-    /// A box over one row of the listing that fades out, as the find
-    /// indicator does in the C.
-    private func flashRow(_ row: Int) {
-        flashView?.removeFromSuperview()
-        let rect = table.rect(ofRow: row)
-        guard !rect.isEmpty else { return }
-        let box = NSView(frame: rect.insetBy(dx: 2, dy: 0))
-        box.wantsLayer = true
-        box.layer?.backgroundColor = NSColor.findHighlightColor.withAlphaComponent(0.55).cgColor
-        box.layer?.cornerRadius = CodeColors.symbolHighlightRadius
-        table.addSubview(box)
-        flashView = box
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.9
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            box.animator().alphaValue = 0
-        } completionHandler: { [weak self, weak box] in
-            MainActor.assumeIsolated {
-                box?.removeFromSuperview()
-                if self?.flashView === box { self?.flashView = nil }
-            }
-        }
-    }
-
-    /// The window's Back and Forward answer `canGoBack` and `canGoForward`
-    /// when they are validated, and a jump an agent makes comes with no event
-    /// that would validate them.
-    private func historyChanged() {
-        window?.toolbar?.validateVisibleItems()
-    }
-
-    /// The width the navigator's columns were last fitted to. A pane is built
-    /// before it has its size, so the columns are fitted again once it does —
-    /// and the table's own last-column sizing does not know that a column in
-    /// front of it was resized.
-    private var fittedNavigatorWidth: CGFloat = 0
-
-    override public func layout() {
-        super.layout()
-        let width = functionTable.bounds.width
-        guard width > 0, abs(width - fittedNavigatorWidth) > 0.5 else { return }
-        fittedNavigatorWidth = width
-        layOutNavigatorColumns()
-    }
-
-    /// What a navigator row means in the list that is showing. The table has
-    /// selected the row already; this puts its bytes or its function on screen.
-    private func selectNavigatorRow(_ row: Int) {
-        guard row >= 0, row < state.rowCount else { return }
-        syncingSelection = true
-        functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        functionTable.scrollRowToVisible(row)
-        syncingSelection = false
-        let range: Range<UInt64>?
-        switch state.list {
-        case .functions:
-            guard let index = state.function(atRow: row) else { return }
-            // Another place of the function in front: nothing to read anew and
-            // nowhere to go back from. Its calls move there, and that is all.
-            if state.function == index, state.functionOrder == .calls, state.searchText.isEmpty {
-                let wayBefore = (0..<state.rowCount).filter { state.isOnChosenWay(atRow: $0) }
-                    .compactMap { state.callPath(atRow: $0) }
-                keepingChosenRow { foldRows { $0.chooseCallPlace(atRow: row) } }
-                // A row kept its cell, and the bold has moved with the way.
-                var changed = IndexSet(wayBefore.compactMap { state.row(ofCallPath: $0) })
-                changed.formUnion(IndexSet((0..<state.rowCount).filter { state.isOnChosenWay(atRow: $0) }))
-                functionTable.reloadData(forRowIndexes: changed,
-                                         columnIndexes: IndexSet(functionTable.tableColumns.indices))
-                return
-            }
-            state.chooseCallPlace(atRow: row)
-            jump { selectFunction(at: index) }
-            return
-        case .strings:
-            range = model.moduleRange(of: artifact.strings[state.listedStrings[row]])
-        case .postCodes:
-            showSite(artifact.postCodes[state.listedPostCodes[row]].address)
-            return
-        case .statusCodes:
-            showSite(artifact.statusCodeCalls[state.listedStatusCodes[row]].address)
-            return
-        }
-        if let range { onSelectRange?(range) }
     }
 
     // MARK: - Building
@@ -4545,7 +3541,7 @@ import ToolModuleKit
     }
 
     /// The grey line under the module's name: two points under the body.
-    private static func recipeFont() -> NSFont {
+    static func recipeFont() -> NSFont {
         .systemFont(ofSize: max(9, ToolPanelFont.size - 2))
     }
 
@@ -4685,334 +3681,6 @@ import ToolModuleKit
         }
     }
 
-    // MARK: - The hex dump
-
-    public var isHexDumpVisible: Bool { hexDumpVisible }
-    /// The bar over the module's bytes and how tall the bytes are, for a test.
-    var dumpBar: CodeDumpBar { hexDumpBar }
-    var hexDumpPaneHeight: CGFloat { moduleHexView.frame.height }
-
-    /// Folds the hex view away under its bar, or brings it back, growing the
-    /// code on the split's own animation.
-    public func setHexDumpVisible(_ visible: Bool, animated: Bool = true) {
-        guard hexDumpVisible != visible else { return }
-        hexDumpVisible = visible
-        updateHexDumpButton()
-        let size = visible ? Self.hexDumpHeight : 0
-        if animated {
-            rightSplit.animateTrailingPaneSize(to: size, duration: 0.2)
-        } else {
-            rightSplit.setPaneLayout(.fixed(size), at: 1)
-            rightSplit.layoutSubtreeIfNeeded()
-        }
-    }
-
-    @objc private func toggleHexDump() {
-        setHexDumpVisible(!hexDumpVisible)
-    }
-
-    private func updateHexDumpButton() {
-        let phrase = hexDumpVisible ? L("Hide hex dump") : L("Show hex dump")
-        hexDumpButton.state = hexDumpVisible ? .on : .off
-        hexDumpButton.contentTintColor = hexDumpVisible ? .controlAccentColor : .secondaryLabelColor
-        ControlHelp.describe(hexDumpButton, name: phrase, tooltip: phrase)
-    }
-
-    /// The POST list's columns, in order: the code, the function that sends
-    /// it, the routines it goes through, the address of the call.
-    enum PostColumn: String, CaseIterable {
-        case code = "post-code", function = "post-function", via = "post-via", address = "post-address"
-
-        var title: String {
-            switch self {
-            case .code: L("Code")
-            case .function: L("Function")
-            case .via: L("Through")
-            case .address: L("Call address")
-            }
-        }
-    }
-
-    /// The strings list's columns: where the string is, and what it says.
-    enum StringColumn: String, CaseIterable {
-        case address = "string-address", text = "string-text"
-
-        var title: String {
-            switch self {
-            case .address: L("Location")
-            case .text: L("Text")
-            }
-        }
-    }
-
-    /// The functions list's columns. The by-address order is a table: the
-    /// address, then the name. The call tree and the groups lay the name out
-    /// as one column, because a row's place there is what a table cannot say.
-    enum FunctionColumn: String, CaseIterable {
-        case address = "function-address", name = "function"
-
-        var title: String {
-            switch self {
-            case .address: L("Address")
-            case .name: L("Function")
-            }
-        }
-    }
-
-    /// The columns of the list in front, by identifier and header; none for
-    /// a one-column list.
-    private var navigatorColumns: [(id: String, title: String)] {
-        switch state.list {
-        case .postCodes: PostColumn.allCases.map { ($0.rawValue, $0.title) }
-        case .strings: StringColumn.allCases.map { ($0.rawValue, $0.title) }
-        case .functions:
-            state.functionOrder == .address
-                ? FunctionColumn.allCases.map { ($0.rawValue, $0.title) }
-                : []
-        case .statusCodes: []
-        }
-    }
-
-    /// The navigator is one column for Functions and Status, and a table for
-    /// POST and Strings: aligned columns under headers. POST is wider than the
-    /// pane when it must and scrolls sideways; a string's text takes the
-    /// pane's remaining width and is cut there.
-    private func layOutNavigatorColumns() {
-        let wanted = navigatorColumns
-        let wantsColumns = !wanted.isEmpty
-        let shown = functionTable.tableColumns.map(\.identifier.rawValue)
-        if shown != (wantsColumns ? wanted.map(\.id) : ["function"]) {
-            for column in functionTable.tableColumns { functionTable.removeTableColumn(column) }
-            if wantsColumns {
-                for (id, title) in wanted {
-                    let column = NSTableColumn(identifier: .init(id))
-                    column.title = title
-                    column.resizingMask = .userResizingMask
-                    functionTable.addTableColumn(column)
-                }
-                // A string's text, and a function's name, take what the pane
-                // has left after the columns before them.
-                if state.list == .strings
-                    || (state.list == .functions && state.functionOrder == .address) {
-                    functionTable.tableColumns.last?.resizingMask = [.userResizingMask, .autoresizingMask]
-                }
-                functionTable.headerView = navigatorHeader
-                functionTable.allowsColumnReordering = false
-                functionTable.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-                functionTable.intercellSpacing = NSSize(width: 6, height: 0)
-                functionScroll.hasHorizontalScroller = state.list == .postCodes
-            } else {
-                let column = NSTableColumn(identifier: .init("function"))
-                column.resizingMask = .autoresizingMask
-                functionTable.addTableColumn(column)
-                functionTable.headerView = nil
-                functionTable.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
-                functionTable.intercellSpacing = NSSize(width: 0, height: 0)
-                functionScroll.hasHorizontalScroller = false
-                functionTable.sizeLastColumnToFit()
-            }
-        }
-        (functionTable.headerView as? CodeNavigatorHeader)?.zoomChanged()
-        let headerFont = Self.navigatorFont()
-        // A column's width is its cell's; the gap between columns is extra.
-        let padding = 2 * CodeNavigatorHeader.cellTextInset + 4
-        func fit(_ id: String, _ widths: [CGFloat], title: String, limit: CGFloat = .greatestFiniteMagnitude) {
-            let header = (title as NSString).size(withAttributes: [.font: headerFont]).width
-            functionTable.tableColumn(withIdentifier: .init(id))?.width =
-                min(limit, ceil(max(header, widths.max() ?? 0)) + padding)
-        }
-        switch state.list {
-        case .postCodes:
-            // Each column as wide as what it holds, so the codes line up and
-            // nothing is cut; a long chain of routines is cut at a limit.
-            let limit = Self.navigatorSize * 18
-            for kind in PostColumn.allCases {
-                let widths = state.listedPostCodes.map { index -> CGFloat in
-                    let entry = artifact.postCodes[index]
-                    return (postCodeCell(entry, kind) as NSString).size(withAttributes: [.font: postFont(entry, kind)]).width
-                }
-                fit(kind.rawValue, widths, title: kind.title, limit: limit)
-            }
-        case .strings:
-            // The addresses are in the code font, so the longest is the widest;
-            // the text takes the rest.
-            let longest = state.listedStrings.lazy
-                .map { self.model.displayAddress(self.artifact.strings[$0].address) }
-                .max { $0.count < $1.count } ?? ""
-            fit(StringColumn.address.rawValue,
-                [(longest as NSString).size(withAttributes: [.font: Self.navigatorCodeFont()]).width],
-                title: StringColumn.address.title)
-            functionTable.sizeLastColumnToFit()
-        case .functions:
-            // The address column is as wide as the module's widest address;
-            // the name takes the rest.
-            guard state.functionOrder == .address else { break }
-            let longest = state.listedFunctions.lazy
-                .map { self.model.displayAddress(self.model.functions[$0].entry) }
-                .max { $0.count < $1.count } ?? ""
-            fit(FunctionColumn.address.rawValue,
-                [(longest as NSString).size(withAttributes: [.font: Self.navigatorCodeFont()]).width],
-                title: FunctionColumn.address.title)
-            functionTable.sizeLastColumnToFit()
-        case .statusCodes:
-            break
-        }
-    }
-
-    /// Numbers in the code font, words in the panel's: a code and an address
-    /// line up digit under digit, "Value unknown" reads as a sentence.
-    private func postFont(_ entry: CodeArtifact.PostCode, _ column: PostColumn) -> NSFont {
-        switch column {
-        case .code where entry.value != nil, .address: Self.navigatorCodeFont()
-        default: Self.navigatorFont()
-        }
-    }
-
-    /// What a POST row says in one column.
-    func postCodeCell(_ entry: CodeArtifact.PostCode, _ column: PostColumn) -> String {
-        switch column {
-        case .code:
-            if let value = entry.value {
-                let digits = max(2, 2 * (entry.width ?? 1))
-                let port = entry.portNumber.map { $0 == 0x80 ? "" : String(format: " → 0x%llX", $0) } ?? ""
-                return String(format: "0x%0\(digits)llX", value) + port
-            }
-            switch entry.unresolved {
-            case .portParameter, .portComputed: return L("Port unknown")
-            case .valueParameter, .valueComputed: return L("Value unknown")
-            case nil: return entry.text
-            }
-        case .function:
-            return entry.function.flatMap(model.function(at:)).map { model.functions[$0].name } ?? ""
-        case .via:
-            return entry.via.map { $0.name ?? model.displayAddress($0.function) }.joined(separator: " → ")
-        case .address:
-            return model.displayAddress(entry.address)
-        }
-    }
-
-    private func configure(_ table: NSTableView, identifier: String) {
-        let column = NSTableColumn(identifier: .init(identifier))
-        column.resizingMask = .autoresizingMask
-        table.addTableColumn(column)
-        table.headerView = nil
-        table.style = .plain
-        table.rowSizeStyle = .custom
-        table.rowHeight = Self.codeLineHeight
-        table.intercellSpacing = NSSize(width: 0, height: 0)
-        table.backgroundColor = .clear
-        table.usesAlternatingRowBackgroundColors = false
-        table.allowsEmptySelection = false
-        table.delegate = self
-        table.dataSource = self
-    }
-
-    private func configureC() {
-        cTextView.onClick = { [weak self] character, event in self?.clickC(at: character, event: event) ?? false }
-        cTextView.onEscape = { [weak self] in self?.highlight(nil) }
-        cTextView.onMenu = { [weak self] character in self?.cMenu(at: character) }
-        cTextView.isEditable = false
-        cTextView.isSelectable = true
-        cTextView.isRichText = true
-        cTextView.delegate = self
-        // A link keeps the colour of what it is — a function, a global — and
-        // shows the hand; no underline over every call.
-        cTextView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
-        cTextView.drawsBackground = false
-        PlateLayoutManager.install(in: cTextView)
-        PlateLayoutManager.install(in: descriptionView.textView)
-        cTextView.font = Self.codeFont()
-        cTextView.textContainerInset = NSSize(width: 8, height: 8)
-        cTextView.isVerticallyResizable = true
-        cTextView.isHorizontallyResizable = false
-        cTextView.autoresizingMask = [.width]
-        cTextView.textContainer?.widthTracksTextView = true
-        cTextView.minSize = .zero
-    }
-
-    /// The plugin that produced the analysis and the Ghidra it ran in, as the
-    /// quiet parenthesis after the module's name. The recipe id carries both;
-    /// the exporter and Ghidra fields are what it was built from.
-    private func recipeSummary() -> String { Self.recipeSummary(of: manifest) }
-
-    private static func recipeSummary(of manifest: AnalysisManifest) -> String {
-        let plugin = manifest.recipe.id
-            .components(separatedBy: "-ghidra-").first ?? manifest.recipe.id
-        var parts = [plugin]
-        if let ghidra = manifest.recipe.ghidra, !ghidra.isEmpty {
-            parts.append("Ghidra \(ghidra)")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    /// The versions line as a menu: the analysis shown, named as the plain
-    /// line names it. The spinner turns beside it while the app reads the
-    /// chosen analysis.
-    private func recipeMenu() -> NSView {
-        drawRecipeIcon()
-        drawRecipeTitle()
-        recipeLine.setChoices(recipes.enumerated().map { .init(title: Self.recipeSummary(of: $1), tag: $0) },
-                              chosen: recipes.firstIndex { $0.recipe.id == manifest.recipe.id })
-        recipeLine.onChoose = { [weak self] index in self?.chooseRecipe(at: index) }
-        recipeLine.translatesAutoresizingMaskIntoConstraints = false
-        // Above the stacks' own hugging as the plain line was, so the text is
-        // shown whole while the row has room and gives way, truncated, first.
-        recipeLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
-        // help: panel.code.analysis
-        ControlHelp.describe(recipeLine, name: L("Analysis"),
-                             tooltip: L("Choose the stored analysis shown here"))
-
-        recipeSpinner.style = .spinning
-        recipeSpinner.controlSize = .small
-        recipeSpinner.isDisplayedWhenStopped = false
-        recipeSpinner.isHidden = true
-        recipeSpinner.translatesAutoresizingMaskIntoConstraints = false
-
-        let line = NSStackView(views: [recipeLine, recipeSpinner])
-        line.orientation = .horizontal
-        line.alignment = .centerY
-        line.spacing = 6
-        return line
-    }
-
-    /// The line with one analysis: the icon and the summary, no menu.
-    private func recipeVersions() -> NSView {
-        drawRecipeIcon()
-        drawRecipeTitle()
-        recipeLine.translatesAutoresizingMaskIntoConstraints = false
-        // Above the stacks' own hugging as the plain line was, so the text is
-        // shown whole while the row has room and gives way, truncated, first.
-        recipeLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
-        return recipeLine
-    }
-
-    /// The tray before the versions: what the line is about, and the edge the
-    /// line is read from.
-    private func drawRecipeIcon() {
-        let size = max(Self.recipeFont().pointSize, 9)
-        recipeLine.setIcon(NSImage(systemSymbolName: "tray", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .regular)))
-    }
-
-    /// The line's text: the analysis and the Ghidra version in the quiet grey
-    /// of the versions line, whatever the pointer is doing.
-    private func drawRecipeTitle() {
-        recipeLine.title = Self.recipeSummary(of: manifest)
-        recipeLine.setFont(Self.recipeFont())
-    }
-
-    private func label(_ text: String, font: NSFont,
-                       color: NSColor = .labelColor) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = font
-        label.textColor = color
-        label.alignment = .left
-        label.lineBreakMode = .byTruncatingTail
-        label.maximumNumberOfLines = 1
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }
-
     // MARK: - Selection
 
     @objc private func modeChanged() {
@@ -5036,7 +3704,7 @@ import ToolModuleKit
     }
 
     // help: panel.code.description
-    private func applyMode() {
+    func applyMode() {
         let segment = mode
         let wasDescription = lastAppliedMode == Self.descriptionSegment
         lastAppliedMode = segment
@@ -5065,7 +3733,7 @@ import ToolModuleKit
 
     /// The header over the description: it is about the whole module, so no
     /// function stands there. The column of sections stands beside it.
-    private func updateHeaderForMode() {
+    func updateHeaderForMode() {
         let column = showsDescription && !descriptionView.sections.isEmpty
         descriptionView.sectionColumn.isHidden = !column
         codeStackLeading?.constant = column
@@ -5081,14 +3749,14 @@ import ToolModuleKit
         jump(even: true) { descriptionView.goToSection(index) }
     }
 
-    private func notifyInstruction() {
+    func notifyInstruction() {
         guard let line = state.line, let range = model.moduleRange(ofLine: line) else { return }
         onSelectRange?(range)
     }
 
     /// The selected function's C. Set only when it is another text: a new
     /// instruction in the same function does not lay the text out again.
-    private func updateC(keepingPlace: Bool = false) {
+    func updateC(keepingPlace: Bool = false) {
         guard drawnC != state.function || cTextView.string.isEmpty else { return }
         let place = keepingPlace ? topOfC() : nil
         let selection = cTextView.selectedRange()
@@ -5482,635 +4150,6 @@ import ToolModuleKit
         }
     }
 
-    // MARK: - Highlighting a symbol
-
-    /// The symbol a token is an occurrence of, or nil for one that is not a
-    /// name: a keyword, a type, a constant, an address.
-    func symbol(of token: CodeToken, in text: String) -> CodeSymbol? {
-        symbol(of: token, in: Array(text.utf16))
-    }
-
-    /// The same over the text's UTF-16 units, made once by a caller that
-    /// asks for many tokens: a copy of the whole text per token made a click
-    /// in a long function's C cost seconds.
-    private func symbol(of token: CodeToken, in units: [UTF16.CodeUnit]) -> CodeSymbol? {
-        func name() -> String {
-            guard token.start >= 0, token.start + token.length <= units.count else { return "" }
-            return String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
-        }
-        switch token.kind {
-        case .label:
-            // By name: a `goto` links to its label and the definition links
-            // nowhere, and a click on either highlights both.
-            return .named(.label, name())
-        case .function, .global, .pcode:
-            if let link = token.link { return .target(link) }
-            return .named(token.kind, name())
-        case .parameter, .local:
-            return .variable(name())
-        default:
-            return nil
-        }
-    }
-
-    private func highlightedRanges(in tokens: [CodeToken], of text: String) -> [NSRange] {
-        guard let highlightedSymbol else { return [] }
-        let units = Array(text.utf16)
-        return tokens.filter { symbol(of: $0, in: units) == highlightedSymbol }
-            .map { NSRange(location: $0.start, length: $0.length) }
-    }
-
-    /// The occurrences of the highlighted symbol in the C on screen. What
-    /// each token names is worked out once per text shown, so a click costs
-    /// a pass over the names, not a reading of the text.
-    private func highlightedRangesInC() -> [NSRange] {
-        guard let highlightedSymbol else { return [] }
-        if shownCSymbols == nil {
-            let units = Array(cTextView.string.utf16)
-            shownCSymbols = shownCTokens.map { symbol(of: $0, in: units) }
-        }
-        return zip(shownCTokens, shownCSymbols ?? []).compactMap { token, symbol in
-            symbol == highlightedSymbol ? NSRange(location: token.start, length: token.length) : nil
-        }
-    }
-
-    /// Highlights every occurrence of `symbol` — in the C on screen and in the
-    /// listing's rows — or clears the highlight.
-    public func highlight(_ symbol: CodeSymbol?) {
-        guard symbol != highlightedSymbol else { return }
-        highlightedSymbol = symbol
-        highlightedIn = state.function
-        currentOccurrence = nil
-        cTextView.highlight(highlightedRangesInC())
-        drawOccurrenceBar()
-        // Every row, not only the visible ones: the listing may be behind the
-        // C, and a row with no view yet costs nothing to reload.
-        guard table.numberOfRows > 0 else { return }
-        syncingSelection = true
-        table.reloadData(forRowIndexes: IndexSet(integersIn: 0..<table.numberOfRows),
-                         columnIndexes: IndexSet(integer: 0))
-        syncingSelection = false
-    }
-
-    // MARK: - Stepping through a name's occurrences
-
-    /// One place the highlighted name is at: a range of the C, or a row of
-    /// the listing and the range in it.
-    struct Occurrence: Equatable {
-        var row: Int?
-        var range: NSRange
-    }
-
-    /// The highlighted name's occurrences in the side on screen, in reading
-    /// order. None while the description shows: it is not code.
-    func occurrences() -> [Occurrence] {
-        guard highlightedSymbol != nil, !showsDescription else { return [] }
-        if showsDecompiledC { return highlightedRangesInC().map { Occurrence(row: nil, range: $0) } }
-        return listingOccurrences().map { Occurrence(row: $0.row, range: $0.range) }
-    }
-
-    /// The listing's rows that name the highlighted symbol, row by row. Read
-    /// when asked — a step or the counter — not while the rows are drawn.
-    private func listingOccurrences() -> [(row: Int, range: NSRange)] {
-        guard highlightedSymbol != nil else { return [] }
-        let lines = state.lines
-        var found: [(row: Int, range: NSRange)] = []
-        for row in 0..<lines.count {
-            let shown = model.listingRow(ofLine: lines[lines.startIndex + row].global)
-            for range in highlightedRanges(in: shown.tokens, of: shown.text) { found.append((row, range)) }
-        }
-        return found
-    }
-
-    /// Which occurrence the reader is at, counted from 0, and how many there
-    /// are — what the counter in the header says.
-    var occurrencePosition: (current: Int?, count: Int) {
-        (currentOccurrence, occurrences().count)
-    }
-
-    // help: panel.code.occurrences
-    /// Goes to the next (or the previous) occurrence of the highlighted name
-    /// in the C or the listing on screen: selects it, scrolls to it and
-    /// flashes it. From the last it goes round to the first, and the app
-    /// shows the plate a wrapped search shows. With none current yet, the
-    /// step starts from the caret in the C, or the selected row.
-    public func goToOccurrence(forward: Bool) {
-        let all = occurrences()
-        guard !all.isEmpty else { NSSound.beep(); return }
-        var target: Int
-        var wrapped = false
-        if let current = currentOccurrence, all.indices.contains(current) {
-            target = current + (forward ? 1 : -1)
-        } else if showsDecompiledC {
-            let caret = cTextView.selectedRange().location
-            target = forward ? (all.firstIndex { $0.range.location > caret } ?? all.count)
-                             : ((all.lastIndex { $0.range.location < caret }) ?? -1)
-        } else {
-            let selected = state.selectedRow ?? -1
-            target = forward ? (all.firstIndex { ($0.row ?? 0) > selected } ?? all.count)
-                             : ((all.lastIndex { ($0.row ?? 0) < selected }) ?? -1)
-        }
-        if target >= all.count { target = 0; wrapped = true }
-        if target < 0 { target = all.count - 1; wrapped = true }
-        currentOccurrence = target
-        show(all[target])
-        drawOccurrenceBar()
-        if wrapped, all.count > 1 { onWrapOccurrences?(forward) }
-    }
-
-    private func show(_ occurrence: Occurrence) {
-        if let row = occurrence.row {
-            let lines = state.lines
-            guard row < lines.count else { return }
-            select(line: lines[lines.startIndex + row].global)
-            notifyInstruction()
-            lastFlash = .row(row)
-            flashRow(row)
-        } else {
-            cTextView.setSelectedRange(occurrence.range)
-            cTextView.scrollRangeToVisible(occurrence.range)
-            lastFlash = .c(occurrence.range)
-            if cTextView.window != nil { cTextView.showFindIndicator(for: occurrence.range) }
-        }
-    }
-
-    /// Edit ▸ Find Next (⌘G) and Find Previous (⇧⌘G) in the code panel while
-    /// a name is highlighted: they step through its occurrences. With nothing
-    /// highlighted the pane does not answer them, and they go on to the
-    /// window's find in the dump.
-    @objc func findNextMatch() { goToOccurrence(forward: true) }
-    @objc func findPreviousMatch() { goToOccurrence(forward: false) }
-
-    override public func responds(to aSelector: Selector!) -> Bool {
-        if aSelector == #selector(findNextMatch) || aSelector == #selector(findPreviousMatch) {
-            // While the Find bar is open here, ⌘G is the bar's (#41).
-            return highlightedSymbol != nil && !showsDescription && !isFindBarShown
-                && super.responds(to: aSelector)
-        }
-        return super.responds(to: aSelector)
-    }
-
-    private func makeOccurrenceBar() -> NSStackView {
-        occurrenceLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-        occurrenceLabel.textColor = .secondaryLabelColor
-        for (button, symbol, action) in [
-            (previousOccurrenceButton, "chevron.up", #selector(previousOccurrenceClicked)),
-            (nextOccurrenceButton, "chevron.down", #selector(nextOccurrenceClicked))
-        ] {
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            button.imagePosition = .imageOnly
-            button.isBordered = false
-            button.bezelStyle = .inline
-            button.target = self
-            button.action = action
-            button.setContentHuggingPriority(.required, for: .horizontal)
-        }
-        ControlHelp.describe(previousOccurrenceButton, name: L("Previous Use"),
-                             tooltip: L("Go to the previous use of the highlighted name (⇧⌘G)"))
-        ControlHelp.describe(nextOccurrenceButton, name: L("Next Use"),
-                             tooltip: L("Go to the next use of the highlighted name (⌘G)"))
-        let bar = NSStackView(views: [occurrenceLabel, previousOccurrenceButton, nextOccurrenceButton])
-        bar.orientation = .horizontal
-        bar.alignment = .centerY
-        bar.spacing = 2
-        bar.setCustomSpacing(6, after: occurrenceLabel)
-        bar.setContentHuggingPriority(.required, for: .horizontal)
-        bar.setContentCompressionResistancePriority(.required, for: .horizontal)
-        bar.isHidden = true
-        return bar
-    }
-
-    @objc private func previousOccurrenceClicked() { goToOccurrence(forward: false) }
-    @objc private func nextOccurrenceClicked() { goToOccurrence(forward: true) }
-
-    /// The counter beside the ASM/C switch: "3 of 12" and the two arrows,
-    /// while a name is highlighted in the side on screen; "12" until the
-    /// reader is at one of them.
-    private func drawOccurrenceBar() {
-        guard let occurrenceBar else { return }
-        let count = highlightedSymbol == nil || showsDescription || showsRevisionDiff ? 0 : occurrences().count
-        occurrenceBar.isHidden = count == 0
-        guard count > 0 else { return }
-        if let current = currentOccurrence, current < count {
-            occurrenceLabel.stringValue = String(format: L("%1$@ of %2$@"), "\(current + 1)", "\(count)")
-        } else {
-            occurrenceLabel.stringValue = "\(count)"
-        }
-    }
-
-    /// What the counter says, for tests; nil while it is hidden.
-    var occurrenceCounterText: String? {
-        occurrenceBar?.isHidden == false ? occurrenceLabel.stringValue : nil
-    }
-
-    /// Whether a click jumps to what it is on: ⌘-click, or a double click.
-    /// A plain click highlights, as in Xcode.
-    static func isJump(_ event: NSEvent) -> Bool {
-        event.modifierFlags.contains(.command) || event.clickCount >= 2
-    }
-
-    // help: panel.code.highlight
-    /// A click in the C: on a name, it highlights the name's every
-    /// occurrence; ⌘-click or a double click on a call goes there, and on the
-    /// function's own name in its signature shows its callers. A name the
-    /// question-mark pointer marks explains itself: a double click asks it,
-    /// where ⌘-click still goes to its bytes.
-    func clickC(at character: Int?, event: NSEvent) -> Bool {
-        pendingFunctionPopover?.cancel()
-        clicksInCode += 1
-        let token = character.flatMap { index in
-            shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
-                .min { $0.length < $1.length }
-        }
-        // A name the pointer marks with a question mark explains itself on any
-        // plain click, a double click included: that is the mark's promise, and
-        // a double click that went to the name's bytes instead left the reader
-        // somewhere they never asked to be. ⌘ is how those bytes are reached.
-        let explained = token.map { token in
-            cTextView.explainable.contains(NSRange(location: token.start, length: token.length))
-        } ?? false
-        let question = explained && event.clickCount >= 2 && !event.modifierFlags.contains(.command)
-        if let token, let link = token.link, Self.isJump(event), !question {
-            let range = NSRange(location: token.start, length: token.length)
-            if case .function(let index) = link {
-                // ⌘-click on the function's own name in its signature asks
-                // who calls it; on a call it goes to the function.
-                if range == signatureName()?.range {
-                    highlight(.target(link))
-                    if callers(of: index).isEmpty { NSSound.beep() } else { showCallers(of: index, at: range) }
-                } else {
-                    jumpToDefinition(of: index, from: range)
-                }
-                return true
-            }
-            // A link to data selects its bytes in the hex view and moves the
-            // code nowhere: no place is recorded and no mark is left on the
-            // place the reader stays on, so Back and Forward walk the code
-            // alone. The mark belongs to a move the code made.
-            if case .bytes = link {
-                follow(link)
-                return true
-            }
-            leavingCMark = range
-            follow(link)
-            return true
-        }
-        let clicked = token.flatMap { symbol(of: $0, in: cTextView.string) }
-        highlight(clicked)
-        if let token, clicked != nil {
-            currentOccurrence = highlightedRangesInC().firstIndex { $0.location == token.start }
-            drawOccurrenceBar()
-        }
-        if let clicked, case .variable = clicked, Self.isJump(event) {
-            selectDefinition(of: clicked)
-            return true
-        }
-        // A plain click on the function's own name in its signature asks
-        // who calls it, as a click on an explained name asks what it is.
-        if !Self.isJump(event), let token, case .function(let index)? = token.link,
-           let own = signatureName(), own.function == index,
-           own.range == NSRange(location: token.start, length: token.length), !callers(of: index).isEmpty {
-            afterClick(inC: true) { [weak self] in
-                self?.showCallers(of: index, at: own.range)
-            }
-            return false
-        }
-        if !Self.isJump(event), let token, case .function(let index)? = token.link {
-            let range = NSRange(location: token.start, length: token.length)
-            let thisClick = clicksInCode
-            afterClick(inC: true) { [weak self] in
-                // A later click has already said what this one was half of.
-                guard self?.clicksInCode == thisClick else { return }
-                self?.offerFunctionPopover(index) { [weak self] in
-                    guard let self, let rect = self.cRect(range) else { return nil }
-                    return (rect, self.cTextView)
-                } go: { [weak self] in
-                    self?.jumpToDefinition(of: index, from: range)
-                }
-            }
-            return false
-        }
-        if let character, question || !Self.isJump(event) { explainC(at: character, token: token) }
-        return false
-    }
-
-    // help: panel.code.function-popover
-    /// Opens what a called function is, once the time for a second click has
-    /// passed. The place is asked for then: the code may have moved.
-    private func offerFunctionPopover(_ index: Int, at place: @escaping () -> (NSRect, NSView)?,
-                                      go: @escaping () -> Void) {
-        guard model.functions.indices.contains(index) else { return }
-        pendingFunctionPopover?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            // The popover quotes the plate, which lies in the function's code.
-            self.whenRead([index]) { [weak self] in
-                guard let self, let (rect, view) = place(), view.window != nil else { return }
-                self.explanationPopover?.close()
-                self.callersPopover?.close()
-                self.functionPopover?.close()
-                let popover = CodeFunctionPopover(function: self.artifact.functions[index],
-                                                  mark: self.reviewMark(of: index),
-                                                  signatureTokens: self.model.signatureTokens(ofFunction: index),
-                                                  onGo: go)
-                popover.show(relativeTo: rect, of: view)
-                self.functionPopover = popover
-            }
-        }
-        pendingFunctionPopover = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.functionPopoverDelay, execute: work)
-    }
-
-    /// A function's mark as the list draws it.
-    private func reviewMark(of index: Int) -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor) {
-        let function = artifact.functions[index]
-        switch function.reviewLevel {
-        case .partial: return CodeNavigatorIcon.partialFunction
-        case .decompiled: return CodeNavigatorIcon.decompiledFunction
-        case .noBody: return CodeNavigatorIcon.bodylessFunction
-        case .library:
-            let section: LibrarySection = switch function.libraryKind {
-            case .edk2: .edk2
-            case .amd: .amd
-            case .intel: .intel
-            case .ite: .ite
-            case .toolchain: .toolchain
-            case nil: .unrecorded
-            }
-            return CodeNavigatorIcon.library(Self.badge(of: section))
-        default: return CodeNavigatorIcon.function
-        }
-    }
-
-    /// How long a click waits to be sure it is not half of a double click.
-    static var functionPopoverDelay: TimeInterval { NSEvent.doubleClickInterval }
-
-    // MARK: - What a name stands for
-
-    // help: panel.code.explain
-    /// A click on a name the review explained — a constant's name, a type, a
-    /// field, the line for the blocks the decompiler removed — opens what it stands for beside it. After the click is done:
-    /// the text view's own tracking of it would otherwise close the popover.
-    private func explainC(at character: Int, token: CodeToken?) {
-        guard let index = state.function else { return }
-        let local = character - cShift
-        var found: (CodeExplanation, NSRange)?
-        if let token, Self.explainedInC.contains(token.kind),
-           let explained = model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
-                                                            kind: token.kind, link: token.link), inFunction: index) {
-            found = (explained, NSRange(location: token.start, length: token.length))
-        } else if let field = model.field(atC: local, inFunction: index),
-                  let explained = model.explanation(ofField: field, inFunction: index) {
-            found = (explained, NSRange(location: field.start + cShift, length: field.length))
-        }
-        guard let (explained, range) = found, let rect = cRect(range) else { return }
-        afterClick(inC: true) { [weak self] in
-            guard let self else { return }
-            self.showExplanation(explained, relativeTo: rect, of: self.cTextView)
-            self.explainedInC = range
-        }
-    }
-
-    /// Runs `show` once the press ends — after the text view's or the table's
-    /// own tracking of it — and only if it was a click. A press that became a
-    /// drag to select text is not a question about the name it started on:
-    /// the popover then stays shut (it opened at the end of every selection
-    /// that started on an explained name). A drag is the pointer let go more
-    /// than a few points from where it went down, or, in the C, a selection
-    /// this press made — a selection the reader left there before it is not a
-    /// reason to swallow the click.
-    private func afterClick(inC: Bool, _ show: @escaping () -> Void) {
-        let down = NSApp.currentEvent.flatMap { $0.type == .leftMouseDown ? $0.locationInWindow : nil }
-        let selectedBefore = inC ? cTextView.selectedRange() : NSRange()
-        RunLoop.main.perform(inModes: [.default]) { [weak self] in
-            guard let self else { return }
-            let selected = self.cTextView.selectedRange()
-            if inC, selected.length > 0, selected != selectedBefore { return }
-            if let down, let up = NSApp.currentEvent, up.type == .leftMouseUp,
-               hypot(up.locationInWindow.x - down.x, up.locationInWindow.y - down.y) > Self.clickSlop {
-                return
-            }
-            show()
-        }
-    }
-
-    /// How far the pointer may move between press and release for the two to
-    /// still be a click.
-    nonisolated static let clickSlop: CGFloat = 3
-
-    /// A click on a number of the listing that the review named: the same
-    /// explanation as the name in the C.
-    private func explainListing(line: Int, token: CodeToken, text: String, rect: NSRect, in view: NSView) {
-        guard token.kind == .constant, let value = Self.listingNumber(text),
-              let explained = model.explanation(ofConstant: value, onLine: line) else { return }
-        let inTable = table.convert(rect, from: view)
-        afterClick(inC: false) { [weak self] in
-            guard let self else { return }
-            self.showExplanation(explained, relativeTo: inTable, of: self.table)
-        }
-    }
-
-    /// The kinds of C token a click explains: the names the artifact holds
-    /// something about — a constant's name, a type, the removed blocks' line,
-    /// a named global, and a p-code operation the processor model named for an
-    /// instruction (SIDT written as `InterruptDescriptorTableRegister`).
-    /// A field of a structure is found by its place in the C, not by its kind.
-    static let explainedInC: Set<CodeToken.Kind> = [.constant, .type, .comment, .global, .pcode]
-
-    /// The names in the C on screen that a click explains: the named
-    /// constants and the types the artifact holds, and the fields of those.
-    private func explainableInC() -> [NSRange] {
-        guard let index = state.function else { return [] }
-        var ranges = shownCTokens.compactMap { token -> NSRange? in
-            guard Self.explainedInC.contains(token.kind),
-                  model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
-                                                   kind: token.kind, link: token.link), inFunction: index) != nil
-            else { return nil }
-            return NSRange(location: token.start, length: token.length)
-        }
-        for field in model.functions[index].cFields
-        where model.explanation(ofField: field, inFunction: index) != nil {
-            ranges.append(NSRange(location: field.start + cShift, length: field.length))
-        }
-        return ranges
-    }
-
-    /// The numbers of a listing row that the review named.
-    func explainableInListing(_ row: (text: String, tokens: [CodeToken]), line: Int) -> [NSRange] {
-        let units = Array(row.text.utf16)
-        return row.tokens.compactMap { token in
-            guard token.kind == .constant, token.start + token.length <= units.count,
-                  let value = Self.listingNumber(String(decoding: units[token.start..<token.start + token.length],
-                                                        as: UTF16.self)),
-                  model.explanation(ofConstant: value, onLine: line) != nil else { return nil }
-            return NSRange(location: token.start, length: token.length)
-        }
-    }
-
-    /// A number as the listing writes it: `0xcf8`, `-0x1`, `12`.
-    static func listingNumber(_ text: String) -> UInt64? {
-        var digits = Substring(text.trimmingCharacters(in: .whitespaces))
-        let negative = digits.hasPrefix("-")
-        if negative { digits = digits.dropFirst() }
-        let value: UInt64?
-        if digits.hasPrefix("0x") || digits.hasPrefix("0X") {
-            value = UInt64(digits.dropFirst(2), radix: 16)
-        } else {
-            value = UInt64(digits)
-        }
-        guard let value else { return nil }
-        return negative ? UInt64(bitPattern: -Int64(bitPattern: value)) : value
-    }
-
-    /// `in` is the model the explanation was read from — the earlier
-    /// revision's for a line of the diff that revision holds — and `onUse`
-    /// where a use it names is followed there.
-    private func showExplanation(_ explained: CodeExplanation, relativeTo rect: NSRect, of view: NSView,
-                                 in read: CodeModel? = nil, onUse: ((Int) -> Void)? = nil) {
-        guard view.window != nil else { return }
-        // Its list of uses covers the whole module, so it waits for all the code.
-        if read == nil, explained.listsUsesAcrossModule, !model.pendingFunctions.isEmpty, onLoadFunctions != nil {
-            whenRead(nil) { [weak self] in
-                guard let self else { return }
-                let clicked = self.explainedInC
-                self.showExplanation(self.model.explanationAgain(explained) ?? explained,
-                                     relativeTo: rect, of: view, onUse: onUse)
-                self.explainedInC = clicked
-            }
-            return
-        }
-        explanationPopover?.close()
-        explainedInC = nil
-        let popover = CodeExplanationPopover(explanation: explained, model: read ?? model)
-        popover.onUse = onUse ?? { [weak self] line in self?.goToUse(line) }
-        popover.show(relativeTo: rect, of: view)
-        explanationPopover = popover
-    }
-
-    /// A place under the popover's "Used at": a move Back returns from, even
-    /// to the instruction already selected — a click in the C selects the
-    /// instruction under it, and the use is often that one.
-    public func goToUse(_ line: Int) {
-        // The name the popover was opened on is the place left: Back selects
-        // and flashes it, as it does the call a jump was made from — without
-        // it, Back flashed the function's name and scrolled up to it.
-        leavingCMark = explainedInC
-        follow(.line(line), even: true)
-    }
-
-    /// The name in the C the open popover explains; nil for one opened on
-    /// the listing.
-    private var explainedInC: NSRange?
-
-    /// What the popover open over the code explains, if one is open.
-    var shownExplanation: CodeExplanation? {
-        guard let explanationPopover, explanationPopover.isShown else { return nil }
-        return explanationPopover.explanationShown
-    }
-
-    /// Where the popover was put, in the coordinates of the view it was
-    /// shown against — for a test.
-    var shownExplanationRect: NSRect? { explanationPopover?.shownRect }
-
-    /// The diff's visible area, for a test of where a popover is put.
-    var diffBounds: NSRect { diffView.bounds }
-
-    /// The popover's rect in the diff's coordinates, and whether it is
-    /// anchored to the diff's scrolling text — for a test.
-    var shownExplanationInDiff: (rect: NSRect, followsText: Bool)? {
-        guard let popover = explanationPopover, let rect = popover.shownRect, let shown = popover.shownView
-        else { return nil }
-        return (diffView.convert(rect, from: shown), shown.enclosingScrollView?.documentView === shown)
-    }
-
-
-    /// Where a range of the diff is drawn, in this pane's coordinates — for a
-    /// test of what is painted there.
-    func diffRectInPane(of range: NSRange) -> NSRect? {
-        guard let box = diffView.rect(of: range) else { return nil }
-        return convert(box, from: diffView)
-    }
-
-    /// The model the open popover reads, and the two the diff holds — for a
-    /// test of which revision's model a line was explained from.
-    var shownExplanationModel: CodeModel? { explanationPopover?.modelShown }
-    var diffBaselineModelForTest: CodeModel? { diffBaselineModel }
-    var currentModelForTest: CodeModel { model }
-
-    func shownExplanationClose() {
-        explanationPopover?.close()
-        explanationPopover = nil
-    }
-
-    /// Where characters of the C are drawn, in the text view's coordinates.
-    private func cRect(_ range: NSRange) -> NSRect? {
-        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer,
-              range.location + range.length <= (cTextView.string as NSString).length else { return nil }
-        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-        var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
-        rect.origin.x += cTextView.textContainerOrigin.x
-        rect.origin.y += cTextView.textContainerOrigin.y
-        return rect
-    }
-
-    /// The function on screen's own name in its signature: the first token
-    /// that names it.
-    func signatureName() -> (function: Int, range: NSRange)? {
-        guard let index = state.function,
-              let own = shownCTokens.first(where: { $0.link == .function(index) }) else { return nil }
-        return (index, NSRange(location: own.start, length: own.length))
-    }
-
-    /// Jump to Definition on a call in the C at `call`: opens the function
-    /// called, a place Back returns from. A recursive call's definition is
-    /// the signature above it, selected and flashed without a jump.
-    func jumpToDefinition(of index: Int, from call: NSRange) {
-        guard index != state.function else {
-            guard let own = signatureName()?.range else { return }
-            cTextView.setSelectedRange(own)
-            flashArrival(cMark: own)
-            return
-        }
-        leavingCMark = call
-        follow(.function(index))
-    }
-
-    /// ⌘-click or a double click on a parameter or a local selects where it
-    /// is defined: its first occurrence, since Ghidra writes the parameters in
-    /// the signature and declares every local at the top of the body.
-    private func selectDefinition(of symbol: CodeSymbol) {
-        let text = cTextView.string
-        let first: CodeToken? = shownCTokens.first { token in self.symbol(of: token, in: text) == symbol }
-        guard let definition = first else { return }
-        let range = NSRange(location: definition.start, length: definition.length)
-        cTextView.window?.makeFirstResponder(cTextView)
-        cTextView.setSelectedRange(range)
-        cTextView.scrollRangeToVisible(range)
-    }
-
-    /// A click in the listing: on a reference, it highlights the instructions
-    /// that refer to the same place; ⌘-click or a double click goes there.
-    /// Anywhere else it clears the highlight. The row is selected either way.
-    func clickListing(on link: CodeLink?, event: NSEvent, line: Int? = nil) -> Bool {
-        if let link, Self.isJump(event) {
-            // The row clicked is the place Back returns to, though the jump
-            // leaves before the table selects it.
-            if let line, model.lines.indices.contains(line), line != state.line { select(line: line) }
-            follow(link)
-            return true
-        }
-        highlight(link.map(CodeSymbol.target))
-        if link != nil, let line, let row = state.lines.firstIndex(where: { $0.global == line }) {
-            currentOccurrence = listingOccurrences().firstIndex { $0.row == row - state.lines.startIndex }
-            drawOccurrenceBar()
-        }
-        return false
-    }
-
-    /// Escape clears the highlight.
-    public override func cancelOperation(_ sender: Any?) {
-        highlight(nil)
-    }
 }
 
 /// What a click highlights the occurrences of. A function, a global or a
@@ -6124,405 +4163,6 @@ public enum CodeSymbol: Hashable, Sendable {
     case variable(String)
 }
 
-extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
-    public func numberOfRows(in tableView: NSTableView) -> Int {
-        tableView === functionTable ? state.rowCount : state.lines.count
-    }
-
-    /// A group's node, and a library kind's, is not a function: it opens and
-    /// closes its rows and is not selected.
-    public func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        !(tableView === functionTable && state.list == .functions
-            && state.functionRow(at: row)?.isHeading == true)
-    }
-
-    /// The list selects every place of the function in the call tree, which only
-    /// the pane does: the reader's click, key or drag still chooses one row, and
-    /// a heading none. With this answered the table asks nothing about one row.
-    public func tableView(_ tableView: NSTableView,
-                          selectionIndexesForProposedSelection proposed: IndexSet) -> IndexSet {
-        guard tableView === functionTable else { return proposed }
-        let rows = proposed.filteredIndexSet { self.tableView(tableView, shouldSelectRow: $0) }
-        return rows.count == 1 ? rows : tableView.selectedRowIndexes
-    }
-
-    public func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        if tableView === table {
-            let reused = tableView.makeView(withIdentifier: CodeListingRowView.identifier, owner: nil)
-            return reused as? CodeListingRowView ?? CodeListingRowView()
-        }
-        guard tableView === functionTable else { return nil }
-        let reused = tableView.makeView(withIdentifier: CodeNavigatorRowView.identifier, owner: nil)
-        let rowView = reused as? CodeNavigatorRowView ?? CodeNavigatorRowView()
-        rowView.marksNode = state.list == .functions && state.functionOrder == .calls && state.searchText.isEmpty
-        rowView.isOpenPlace = state.isOpenPlace(atRow: row)
-        return rowView
-    }
-
-    public func tableView(_ tableView: NSTableView,
-                          viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        if tableView === functionTable {
-            guard row >= 0, row < state.rowCount else { return nil }
-            let functionRow = state.list == .functions ? state.functionRow(at: row) : nil
-            if let group = functionRow?.group {
-                return groupCell(in: tableView, group: group, row: row)
-            }
-            if let section = functionRow?.section {
-                return sectionCell(in: tableView, section: section, row: row)
-            }
-            if functionRow == .callsCut {
-                let cell = cell(in: tableView, identifier: .init("code-calls-cut"), monospaced: false)
-                cell.textField?.font = Self.navigatorFont()
-                cell.textField?.textColor = .secondaryLabelColor
-                cell.textField?.stringValue = L("Too many ways lead here: the list stops at this point")
-                cell.showsDisclosure(false)
-                cell.showsIcon(nil)
-                cell.showsBadge(false)
-                cell.onToggle = nil
-                cell.indent = 0
-                cell.toolTip = nil
-                return cell
-            }
-            // The by-address table's first column: where the function is.
-            if state.list == .functions, tableColumn?.identifier.rawValue == FunctionColumn.address.rawValue,
-               let index = functionRow?.function {
-                let cell = cell(in: tableView, identifier: .init("code-function-address"), monospaced: true)
-                cell.showsDisclosure(false)
-                cell.showsIcon(nil)
-                cell.showsBadge(false)
-                cell.onToggle = nil
-                cell.textField?.font = Self.navigatorCodeFont()
-                cell.textField?.stringValue = model.displayAddress(model.functions[index].entry)
-                cell.textField?.textColor = .secondaryLabelColor
-                cell.toolTip = nil
-                return cell
-            }
-            if state.list == .postCodes, let id = tableColumn?.identifier.rawValue,
-               let column = PostColumn(rawValue: id) {
-                let entry = artifact.postCodes[state.listedPostCodes[row]]
-                let cell = cell(in: tableView, identifier: .init("code-post"), monospaced: false)
-                cell.textField?.font = postFont(entry, column)
-                cell.textField?.stringValue = postCodeCell(entry, column)
-                let unknown = entry.value == nil && entry.unresolved != nil
-                cell.textField?.textColor = unknown || column == .via || column == .address
-                    ? .secondaryLabelColor : .labelColor
-                cell.toolTip = postCodeDetail(entry)
-                return cell
-            }
-            if state.list == .strings, let id = tableColumn?.identifier.rawValue,
-               let column = StringColumn(rawValue: id) {
-                let entry = artifact.strings[state.listedStrings[row]]
-                let cell = cell(in: tableView, identifier: .init("code-string"), monospaced: false)
-                let text = stringCell(entry, column)
-                cell.textField?.font = column == .address ? Self.navigatorCodeFont() : Self.navigatorFont()
-                cell.textField?.stringValue = text
-                cell.textField?.textColor = column == .address ? .secondaryLabelColor : .labelColor
-                // The whole string, which the column may have cut.
-                cell.toolTip = column == .text && !text.isEmpty ? text : nil
-                return cell
-            }
-            let cell = cell(in: tableView, identifier: .init("code-navigator"), monospaced: false)
-            // A cell from the queue was made at the size before a zoom.
-            cell.textField?.font = Self.navigatorFont()
-            cell.textField?.stringValue = navigatorText(at: row)
-            // The triangle belongs to a function of the call tree; the badge
-            // to a function a revision changed. Both are set per row, and a
-            // reused cell must not keep either.
-            cell.showsDisclosure(false)
-            cell.showsIcon(nil)
-            cell.onToggle = nil
-            cell.showsBadge(false)
-            // A name the module's own evidence gave reads as a name; Ghidra's
-            // FUN_ placeholder reads quieter. The reason is one hover away.
-            var color = NSColor.labelColor
-            var reason: String?
-            if state.list == .functions, let functionRow, let index = functionRow.function {
-                let function = model.functions[index]
-                if function.hasPlaceholderName { color = .secondaryLabelColor }
-                reason = function.nameReason
-                // In the grouped order the hover also says where the review
-                // stands: its level, and what still keeps it from full.
-                if state.functionOrder == .review {
-                    reason = [reason, Self.reviewDetail(function)]
-                        .compactMap { $0 }.joined(separator: "\n")
-                }
-                // help: panel.code.registry
-                // A function the library registry matched says so wherever
-                // it is listed.
-                if let registry = Self.registryDetail(function) {
-                    reason = [reason, registry].compactMap { $0 }.joined(separator: "\n")
-                }
-                // A call tree's rows stand in as deep as they are; a deeper
-                // level keeps the last one's inset rather than running the
-                // name off the pane. A group's functions start under its
-                // name, past its chevron and a step beyond its mark, as a
-                // source list nests its items; a library kind's, a step
-                // further under the kind.
-                if state.functionOrder == .review, state.searchText.isEmpty {
-                    cell.indent = CodeNavigatorCell.disclosureRoom
-                        + Self.groupMemberIndent * CGFloat(functionRow.level)
-                } else {
-                    cell.indent = CGFloat(min(functionRow.level, Self.navigatorLevels)) * Self.navigatorIndent
-                }
-                // The mark says how far the review has got, in every order: a
-                // root of the tree and a call under it alike.
-                cell.showsIcon(Self.functionMark(state.group(of: index),
-                                                 library: state.librarySection(of: index)))
-                if unopenedChanges[index] != nil {
-                    cell.textField?.font = Self.navigatorBoldFont()
-                    cell.badge.text = L("New")
-                    cell.showsBadge(true)
-                }
-                // A search is one alphabetical list of what it found: the
-                // calls it would open say nothing about a find.
-                if state.functionOrder == .calls, state.searchText.isEmpty,
-                   let path = state.callPath(atRow: row) {
-                    // The place being read and the way down to it read bold; the
-                    // function's other places have only their mark.
-                    if state.isOnChosenWay(atRow: row) { cell.textField?.font = Self.navigatorBoldFont() }
-                    let expandable = state.hasCalls(path: path)
-                    let expanded = state.isExpanded(path: path)
-                    cell.showsDisclosure(true)
-                    cell.showsCalls(expandable: expandable, expanded: expanded)
-                    ControlHelp.describe(cell.disclosure,
-                                         expanded ? L("Hide calls") : L("Show calls"))
-                    cell.onToggle = { [weak self] in self?.toggleCalls(at: path) }
-                    if state.isRecursiveCall(path: path) {
-                        cell.textField?.stringValue += "  ↺"
-                        reason = [reason, L("Recursive call: this function is already on the way here")]
-                            .compactMap { $0 }.joined(separator: "\n")
-                    }
-                }
-            }
-            if state.list == .postCodes {
-                let entry = artifact.postCodes[state.listedPostCodes[row]]
-                if entry.value == nil, entry.unresolved != nil { color = .secondaryLabelColor }
-                reason = postCodeDetail(entry)
-            }
-            cell.textField?.textColor = color
-            cell.toolTip = reason
-            if state.list == .functions, let index = functionRow?.function,
-               let notes = notesByFunction[index], !notes.isEmpty,
-               let field = cell.textField {
-                let marked = NSMutableAttributedString(string: field.stringValue, attributes: [
-                    .foregroundColor: color, .font: field.font ?? Self.navigatorFont()
-                ])
-                marked.append(NSAttributedString(string: "  ◆", attributes: [
-                    .foregroundColor: CodeColors.color(for: notes[0].kind), .font: field.font ?? Self.navigatorFont()
-                ]))
-                field.attributedStringValue = marked
-                cell.toolTip = ([reason].compactMap { $0 } + notes.map(\.heading)).joined(separator: "\n")
-            }
-            return cell
-        }
-        let lines = state.lines
-        guard row >= 0, row < lines.count else { return nil }
-        let identifier = NSUserInterfaceItemIdentifier("code-line")
-        let cell = tableView.makeView(withIdentifier: identifier, owner: nil) as? CodeLineCell
-            ?? CodeLineCell(identifier: identifier)
-        let global = lines[lines.startIndex + row].global
-        var shown = model.listingRow(ofLine: global)
-        // An annotated instruction carries its note at the end of the row.
-        for note in notesByLine[global] ?? [] {
-            let mark = "    ◆ \(note.heading)"
-            shown.tokens.append(CodeToken(start: shown.text.utf16.count + 4,
-                                          length: mark.utf16.count - 4, kind: note.kind))
-            shown.text += mark
-        }
-        cell.line.show(shown.text, tokens: shown.tokens, font: Self.codeFont(),
-                       highlighted: highlightedRanges(in: shown.tokens, of: shown.text),
-                       explainable: explainableInListing((shown.text, shown.tokens), line: global))
-        cell.line.onClick = { [weak self] link, event in
-            self?.clickListing(on: link, event: event, line: global) ?? false
-        }
-        cell.line.onExplain = { [weak self, weak view = cell.line] token, text, rect in
-            guard let self, let view else { return }
-            self.explainListing(line: global, token: token, text: text, rect: rect, in: view)
-        }
-        return cell
-    }
-
-    public func tableViewSelectionDidChange(_ notification: Notification) {
-        guard !syncingSelection, let table = notification.object as? NSTableView else { return }
-        if table === functionTable {
-            let row = functionTable.selectedRow
-            guard row >= 0 else { return }
-            opensOnDescription = false
-            leaveDescription()
-            selectNavigatorRow(row)
-        } else if table === self.table {
-            let lines = state.lines
-            let row = table.selectedRow
-            guard row >= 0, row < lines.count else { return }
-            select(line: lines[lines.startIndex + row].global)
-            notifyInstruction()
-        }
-    }
-
-    private func navigatorText(at row: Int) -> String {
-        switch state.list {
-        case .functions:
-            guard let index = state.function(atRow: row) else { return "" }
-            let function = model.functions[index]
-            return function.name.isEmpty ? model.displayAddress(function.entry) : function.name
-        case .strings:
-            let entry = artifact.strings[state.listedStrings[row]]
-            return entry.value.isEmpty
-                ? stringCell(entry, .address)
-                : "\(stringCell(entry, .address))  \(stringCell(entry, .text))"
-        case .postCodes:
-            return postCodeText(artifact.postCodes[state.listedPostCodes[row]])
-        case .statusCodes:
-            let entry = artifact.statusCodeCalls[state.listedStatusCodes[row]]
-            return "\(model.displayAddress(entry.address))  \(entry.text)"
-        }
-    }
-
-    /// What a string's row says in one column. The text is one line: a line
-    /// break, a tab or another control character in it is written as C
-    /// writes it — the strings are mostly C's own format strings — so a row
-    /// never runs onto the next.
-    func stringCell(_ entry: CodeArtifact.StringEntry, _ column: StringColumn) -> String {
-        switch column {
-        case .address: return model.displayAddress(entry.address)
-        case .text: return Self.oneLine(entry.value)
-        }
-    }
-
-    static func oneLine(_ text: String) -> String {
-        var line = ""
-        for scalar in text.unicodeScalars {
-            switch scalar {
-            case "\n": line += "\\n"
-            case "\r": line += "\\r"
-            case "\t": line += "\\t"
-            case "\0"..<" ", "\u{7F}"..."\u{9F}":
-                line += String(format: "\\x%02X", scalar.value)
-            case "\u{2028}", "\u{2029}":
-                line += String(format: "\\u%04X", scalar.value)
-            default: line.unicodeScalars.append(scalar)
-            }
-        }
-        return line
-    }
-
-    // help: panel.code.post-codes
-    /// A POST code's row: the value, at the width it is written, and the
-    /// function that sends it. One the analysis could not tell says what it
-    /// lacks. An artifact before v5 lists its OUT instructions as they read.
-    private func postCodeText(_ entry: CodeArtifact.PostCode) -> String {
-        guard entry.value != nil || entry.unresolved != nil else {
-            return "\(model.displayAddress(entry.address))  \(entry.text)"
-        }
-        let place = postCodeCell(entry, .function)
-        return postCodeCell(entry, .code) + "  " + (place.isEmpty ? model.displayAddress(entry.address) : place)
-    }
-
-    /// What a POST code's row says on hover: where it is sent, through what,
-    /// and why a value is missing.
-    private func postCodeDetail(_ entry: CodeArtifact.PostCode) -> String? {
-        guard entry.value != nil || entry.unresolved != nil else { return nil }
-        var lines = [String(format: L("Sent at %1$@"), model.displayAddress(entry.address))]
-        if !entry.via.isEmpty {
-            lines.append(String(format: L("Through %1$@"),
-                                entry.via.map { $0.name ?? model.displayAddress($0.function) }.joined(separator: " → ")))
-        }
-        if let width = entry.width {
-            lines.append(String(format: L("%1$@-byte write to port %2$@"), "\(width)",
-                                entry.portNumber.map { String(format: "0x%llX", $0) } ?? "?"))
-        }
-        switch entry.unresolved {
-        case .portParameter: lines.append(L("The port comes from a caller this module does not show: a service other modules call."))
-        case .portComputed: lines.append(L("The port is worked out at run time."))
-        case .valueParameter: lines.append(L("The value comes from a caller this module does not show."))
-        case .valueComputed: lines.append(L("The value is worked out at run time: from a table, a loop or a read."))
-        case nil: break
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    /// A row's cell, reused from the table's queue when it has one: a listing
-    /// of a large function scrolls through thousands of rows.
-    private func cell(in tableView: NSTableView, identifier: NSUserInterfaceItemIdentifier,
-                      monospaced: Bool) -> CodeNavigatorCell {
-        if let reused = tableView.makeView(withIdentifier: identifier, owner: nil)
-            as? CodeNavigatorCell {
-            // A cell from the queue was inset by the row that used it before,
-            // and keeps the triangle and the badge of whatever list it was
-            // drawn in: both belong to a function row alone.
-            reused.indent = 0
-            reused.showsDisclosure(false)
-            reused.showsIcon(nil)
-            reused.showsBadge(false)
-            reused.onToggle = nil
-            return reused
-        }
-        let cell = CodeNavigatorCell(identifier: identifier)
-        cell.textField?.font = monospaced ? Self.navigatorCodeFont() : Self.navigatorFont()
-        return cell
-    }
-
-    /// A node of the grouped order: the group's name and how many functions it
-    /// holds, in the panel's grey and one weight up from the rows under it,
-    /// with the triangle that opens and closes those rows.
-    private func groupCell(in tableView: NSTableView, group: FunctionGroup, row: Int) -> NSView {
-        let cell = cell(in: tableView, identifier: .init("code-group"), monospaced: false)
-        cell.textField?.font = .systemFont(ofSize: Self.navigatorSize, weight: .semibold)
-        cell.textField?.textColor = .secondaryLabelColor
-        cell.textField?.stringValue = Self.title(of: group)
-            + " (\(state.groupCount(at: row) ?? 0))"
-        cell.showsIcon("group.\(group)")
-        cell.showsBadge(false)
-        cell.indent = 0
-        cell.showsDisclosure(true)
-        let expanded = state.isGroupExpanded(group)
-        cell.showsCalls(expandable: true, expanded: expanded)
-        ControlHelp.describe(cell.disclosure,
-                             expanded ? L("Hide functions") : L("Show functions"))
-        cell.toolTip = nil
-        cell.onToggle = { [weak self] in self?.toggleGroup(group) }
-        return cell
-    }
-
-    /// A library kind's node under Library functions: its name and how many
-    /// functions it holds, set in under the group with the kind's badge, and
-    /// the chevron that opens and closes them.
-    private func sectionCell(in tableView: NSTableView, section: LibrarySection, row: Int) -> NSView {
-        let cell = cell(in: tableView, identifier: .init("code-section"), monospaced: false)
-        cell.textField?.font = .systemFont(ofSize: Self.navigatorSize, weight: .semibold)
-        cell.textField?.textColor = .secondaryLabelColor
-        let count = state.groupCount(at: row) ?? 0
-        cell.textField?.stringValue = Self.title(of: section) + " (\(count))"
-        cell.showsIcon("library.\(section).entry")
-        cell.showsBadge(false)
-        cell.indent = Self.groupMemberIndent
-        cell.showsDisclosure(true)
-        let expanded = state.isSectionExpanded(section)
-        cell.showsCalls(expandable: true, expanded: expanded)
-        ControlHelp.describe(cell.disclosure,
-                             expanded ? L("Hide functions") : L("Show functions"))
-        cell.toolTip = nil
-        cell.onToggle = { [weak self] in self?.toggleSection(section) }
-        return cell
-    }
-
-    /// Opens or closes a library kind's functions.
-    private func toggleSection(_ section: LibrarySection) {
-        foldRows { $0.toggleSectionExpanded(section) }
-        if let row = (0..<state.rowCount).first(where: { state.functionRow(at: $0)?.section == section }) {
-            describeDisclosure(at: row, state.isSectionExpanded(section) ? L("Hide functions") : L("Show functions"))
-        }
-    }
-
-    /// Opens or closes a review group's functions.
-    private func toggleGroup(_ group: FunctionGroup) {
-        foldRows { $0.toggleGroupExpanded(group) }
-        if let row = (0..<state.rowCount).first(where: { state.functionRow(at: $0)?.group == group }) {
-            describeDisclosure(at: row, state.isGroupExpanded(group) ? L("Hide functions") : L("Show functions"))
-        }
-    }
-
-}
 
 extension CodePaneView: NSTextViewDelegate {
     /// A call or a global in the C pressed other than by the mouse — by

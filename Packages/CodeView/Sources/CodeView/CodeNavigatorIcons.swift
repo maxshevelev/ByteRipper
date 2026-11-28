@@ -83,7 +83,7 @@ enum CodeNavigatorIcon {
     }
 
     /// A badge's name as a line: semibold, half the square's height.
-    private static func label(_ name: String, color: NSColor, side: CGFloat) -> CTLine {
+    static func label(_ name: String, color: NSColor, side: CGFloat) -> CTLine {
         CTLineCreateWithAttributedString(NSAttributedString(string: name, attributes: [
             .font: NSFont.systemFont(ofSize: side * 0.5, weight: .semibold), .foregroundColor: color
         ]))
