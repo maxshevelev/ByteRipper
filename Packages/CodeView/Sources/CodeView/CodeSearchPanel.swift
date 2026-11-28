@@ -184,31 +184,10 @@ final class CodeSearchPanel: CodeNavigatorTreePanel {
     }
 
     static func summary(of items: [GroupItem], truncated: Bool) -> String {
-        summary(hits: items.reduce(0) { $0 + $1.children.count },
-                functions: items.filter { if case .function = $0.target { true } else { false } }.count,
-                inDescription: items.contains { $0.target == .description },
-                truncated: truncated)
-    }
-
-    /// The line over the tree for these counts. One result, or one function,
-    /// is said in the singular: each count has a key of its own for one.
-    static func summary(hits: Int, functions: Int, inDescription: Bool, truncated: Bool) -> String {
-        let count = String(hits), names = String(functions)
-        if hits == 0 { return L("No results") }
-        if truncated {
-            return functions == 1
-                ? L("The first %1$@ results in 1 function — refine the pattern", count)
-                : L("The first %1$@ results in %2$@ functions — refine the pattern", count, names)
-        }
-        switch (functions, inDescription) {
-        case (0, _):
-            return hits == 1 ? L("1 result in the description") : L("%1$@ results in the description", count)
-        case (1, true): return L("%1$@ results in 1 function and the description", count)
-        case (_, true): return L("%1$@ results in %2$@ functions and the description", count, names)
-        case (1, false):
-            return hits == 1 ? L("1 result in 1 function") : L("%1$@ results in 1 function", count)
-        default: return L("%1$@ results in %2$@ functions", count, names)
-        }
+        CodeSearchResult.summary(hits: items.reduce(0) { $0 + $1.children.count },
+                                 functions: items.filter { if case .function = $0.target { true } else { false } }.count,
+                                 inDescription: items.contains { $0.target == .description },
+                                 truncated: truncated)
     }
 
     /// Says what is happening instead of a result: reading, searching.
@@ -332,10 +311,6 @@ final class CodeSearchPanel: CodeNavigatorTreePanel {
     static let hitTrailing: CGFloat = 4
     static let hitPadding: CGFloat = 3
 
-    /// How much of a line before the match stays when the match stands far
-    /// into it: the rest gives way to an ellipsis, so the match is in the
-    /// three lines shown.
-    static let leadingContext = 32
     /// A result line's grey: darker than the secondary label's, which reads
     /// faint over a long list, and still apart from the bold match.
     static let hitText = NSColor(name: "CodeSearchHitText") { appearance in
@@ -348,24 +323,9 @@ final class CodeSearchPanel: CodeNavigatorTreePanel {
     /// match in bold and the text's colour: the eye finds it in the line. A match
     /// far into a long line is brought forward, the start cut to "…".
     static func line(of hit: TextSearchHit) -> NSAttributedString {
-        // A tab — after a list's bullet in the description — reads as a
-        // space here; one unit for one, so the match's range holds.
-        var shown = hit.lineText.replacingOccurrences(of: "\t", with: " ") as NSString
-        var start = min(hit.rangeInLine.lowerBound, shown.length)
-        var end = min(hit.rangeInLine.upperBound, shown.length)
-        if start > leadingContext + 8 {
-            var cut = start - leadingContext
-            // From a word's start, not its middle.
-            let separators = CharacterSet.whitespaces.union(.punctuationCharacters)
-            while cut < start, let scalar = Unicode.Scalar(shown.character(at: cut - 1)),
-                  !separators.contains(scalar) { cut += 1 }
-            let rest = shown.substring(from: cut)
-            shown = ("…" + rest) as NSString
-            let removed = cut - 1
-            start -= removed
-            end -= removed
-        }
-        let text = NSMutableAttributedString(string: shown as String, attributes: [
+        let shown = CodeSearchResult.shownLine(of: hit)
+        let start = shown.match.lowerBound, end = shown.match.upperBound
+        let text = NSMutableAttributedString(string: shown.text, attributes: [
             .font: CodePaneView.navigatorFont(), .foregroundColor: Self.hitText
         ])
         if end > start {

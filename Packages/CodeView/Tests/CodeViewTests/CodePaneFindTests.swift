@@ -425,7 +425,7 @@ final class CodePaneFindTests: XCTestCase {
     /// One result, or one function, is said in the singular.
     func testTheSummarySaysOneInTheSingular() {
         func line(_ hits: Int, _ functions: Int, description: Bool = false, truncated: Bool = false) -> String {
-            CodeSearchPanel.summary(hits: hits, functions: functions, inDescription: description, truncated: truncated)
+            CodeSearchResult.summary(hits: hits, functions: functions, inDescription: description, truncated: truncated)
         }
         XCTAssertEqual(line(0, 0), "No results")
         XCTAssertEqual(line(1, 1), "1 result in 1 function")
@@ -448,7 +448,7 @@ final class CodePaneFindTests: XCTestCase {
         let line = CodeSearchPanel.line(of: hit)
         XCTAssertTrue(line.string.hasPrefix("…"))
         let at = (line.string as NSString).range(of: "Status")
-        XCTAssertLessThan(at.location, CodeSearchPanel.leadingContext + 2)
+        XCTAssertLessThan(at.location, CodeSearchResult.leadingContext + 2)
         var effective = NSRange()
         let font = line.attribute(.font, at: at.location, effectiveRange: &effective) as? NSFont
         XCTAssertEqual(effective, at, "the match alone")
