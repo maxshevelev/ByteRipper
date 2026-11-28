@@ -1076,6 +1076,8 @@ private func functionItem(_ function: CodeArtifact.Function,
     if function.customStorage == true { item["custom_storage"] = .bool(true) }
     item["review_level"] = text(function.reviewLevel?.rawValue)
     item["review_gaps"] = .array(function.reviewGaps.map(JSONValue.string))
+    // A stub nothing reaches: no call, table slot or datum points at it.
+    if function.unused == true { item["unused"] = .bool(true) }
     item["temporaries"] = .array(LibraryEntryReview.temporaries(in: function).map(JSONValue.string))
     item["body"] = text(function.body)
     item["library_kind"] = text(function.libraryKind?.rawValue)
