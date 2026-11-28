@@ -345,6 +345,8 @@ intermediate state and is reported as one.
   Why: services and known PPI or protocol slots have types.
 - **X4.** Before reporting, after the last publish read `code_query` `level: "partial"` and `level: "decompiled"` (both empty) and the X1 sweep. A write after the last sweep needs another publish and another read.
   Why: `ghidra_functions {filter: "unfinished"}` checks names and plates only, and a late retype can drop a body to `partial` after the sweep.
+- **X4a.** `stub` counts as done, like `full`, `library` and `no_body`. Give a stub a name that callers can read (`Isr_Irq001_Stub`); it needs no plate or comments. If a stub has an effect the decompiler lost (a volatile register write it dropped, or an effect inside a call it cannot see), set `ghidra_rename stub: "not_stub"` and review it in full after the publish. `auto` removes the manual mark.
+  Why: the rule reads only the decompiled C, so it misses only the effects the decompiler lost.
 - **X5.** Report a body as done only when its row, read after the publish, says `full` with empty `review_gaps`; otherwise "read, not closed". Say how each body was read.
   Why: `full` shows fields filled, not right.
 - **X6.** While editing, judge progress from `ghidra_function`'s live `leftovers`; quote store numbers only after a publish.
