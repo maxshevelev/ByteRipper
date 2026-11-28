@@ -215,7 +215,7 @@ extension GhidraHost {
             family: family.id, extent: firmware.extent, extentSource: firmware.extentSource.rawValue,
             sliceSize: firmware.sliceSize, rawSHA256: firmware.rawSHA256,
             masked: firmware.masked.map { .init(offset: $0.offset, actual: Int($0.actual), normalised: Int($0.normalised)) },
-            chipRead: firmware.chipRead, hostUpdateSize: family.hostUpdateSize, version: firmware.version,
+            chipRead: firmware.chipRead, hostUpdateSize: family.hostUpdateSize, signature: firmware.version,
             refsPastExtent: ecCreatesAsBefore866 ? nil
                 : firmware.referencesPastExtent.map { .init(address: $0.address, from: $0.from) })
         let state = ProjectState(

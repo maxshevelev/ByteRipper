@@ -55,7 +55,7 @@ final class CodeNavigatorTabsTests: XCTestCase {
     private func pane(kind: String?, ecFamily: String? = nil) throws -> CodePaneView {
         let ec = ecFamily.map {
             ECModuleFacts(family: $0, extent: 16, extentSource: "crt0", sliceSize: 16, rawSHA256: "",
-                          masked: [], chipRead: false, hostUpdateSize: nil, version: nil)
+                          masked: [], chipRead: false, hostUpdateSize: nil, signature: nil)
         }
         let manifest = AnalysisManifest(
             module: ModuleIdentity(sha256: SHA256Digest(data: moduleBytes), size: moduleBytes.count,

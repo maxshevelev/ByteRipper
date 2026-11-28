@@ -277,7 +277,7 @@ final class UEFICodeScanTests: XCTestCase {
         XCTAssertTrue(marks.roles.contains(.codeAnalysis(.mechanical)))
 
         let rows = UEFIECFacts.rows(of: try ECFirmware(slice: Self.ecSlice()), in: .english)
-        XCTAssertEqual(rows.map(\.label), ["Family", "Version", "Image end", "Module SHA-256", "Dump SHA-256",
+        XCTAssertEqual(rows.map(\.label), ["Family", "ITE signature", "Image end", "Module SHA-256", "Dump SHA-256",
                                            "BIOS update writes", "Byte rewritten by the EC"])
         XCTAssertEqual(rows[1].value, "ITE8380-EC-V9.99")
         XCTAssertTrue(rows[2].value.contains("last written byte"))

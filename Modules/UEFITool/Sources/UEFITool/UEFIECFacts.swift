@@ -18,7 +18,7 @@ public enum UEFIECFacts {
     public static func rows(of firmware: ECFirmware, in language: AppLanguage) -> [Row] {
         var rows: [Row] = []
         rows.append(Row(label: L("Family", in: language), value: firmware.family.title))
-        rows.append(Row(label: L("Version", in: language),
+        rows.append(Row(label: L("ITE signature", in: language),
                         value: firmware.version ?? L("Not stated", in: language)))
         let source = firmware.extentSource == .crt0
             ? L("from the start-up code", in: language)

@@ -9,7 +9,7 @@ final class AnalysisProfileModuleTests: XCTestCase {
     private func ec(_ family: String) -> ECModuleFacts {
         ECModuleFacts(family: family, extent: 0x2497C, extentSource: "crt0", sliceSize: 0x30000,
                       rawSHA256: String(repeating: "0", count: 64), masked: [], chipRead: false,
-                      hostUpdateSize: nil, version: nil)
+                      hostUpdateSize: nil, signature: nil)
     }
 
     func testAPE32OrTEModuleIsUEFI() {
@@ -72,5 +72,18 @@ final class AnalysisProfileModuleTests: XCTestCase {
         // it carries its own reading's profile: none.
         XCTAssertNil(next.revisions.last?.profile)
         XCTAssertEqual(try store.reviewHistory(module: module)?.revisions.last?.review, second)
+    }
+}
+
+/// An EC module written before the signature had its name reads it from
+/// `version`, and is written with `signature`.
+final class ECModuleFactsSignatureTests: XCTestCase {
+    func testAnOldVersionFieldReadsAsTheSignature() throws {
+        let old = #"{"family":"ite-nds32","extent":16,"extent_source":"crt0","slice_size":32,"raw_sha256":"00","masked":[],"chip_read":false,"version":"ITE8380-EC-V0.00"}"#
+        let facts = try JSONDecoder().decode(ECModuleFacts.self, from: Data(old.utf8))
+        XCTAssertEqual(facts.signature, "ITE8380-EC-V0.00")
+        let written = String(decoding: try JSONEncoder().encode(facts), as: UTF8.self)
+        XCTAssertTrue(written.contains("\"signature\""), written)
+        XCTAssertFalse(written.contains("\"version\""), written)
     }
 }

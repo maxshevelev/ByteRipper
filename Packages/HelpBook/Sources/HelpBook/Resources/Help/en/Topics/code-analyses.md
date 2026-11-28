@@ -24,7 +24,7 @@ A module whose review wrote a description carries a third mark after the word: *
 
 The firmware of an ITE embedded controller with an NDS32 core, such as `ITE8380-EC-V0.00`, is a module as well. Its row in the UEFI tree carries the code badge as a PE32 or TE image does, and **Open with Code** opens its code. The module is the image itself, up to where its code ends, not the whole block: the erased bytes after it and the controller's run-time data are not part of it. One byte of the image, which the controller rewrites in its own flash memory, does not count towards the module's identity. A copy of the firmware in a BIOS update and a dump read from the controller's chip therefore open the same analysis.
 
-The row of an EC image carries **(i)** whether or not an analysis exists. Clicking it shows what the image's bytes state: the controller family, the version, where the image ends and how that was determined, the module's SHA-256 and the SHA-256 of the dump's bytes, how many bytes a BIOS update writes to the controller, and the byte the controller rewrites with its value in the dump. When an analysis exists, **Open with Code** is under the list.
+The row of an EC image carries **(i)** whether or not an analysis exists. Clicking it shows what the image's bytes state: the controller family, the ITE signature (a mark of the toolchain that every ITE image carries, not the firmware's version), where the image ends and how that was determined, the module's SHA-256 and the SHA-256 of the dump's bytes, how many bytes a BIOS update writes to the controller, and the byte the controller rewrites with its value in the dump. When an analysis exists, **Open with Code** is under the list.
 
 ## Where the analyses are kept
 

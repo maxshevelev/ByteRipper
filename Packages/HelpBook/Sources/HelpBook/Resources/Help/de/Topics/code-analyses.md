@@ -1,4 +1,4 @@
-@source-sha 577ba4783aeb05dcc706337afce2c6e767796ab8c203a5546905bb4df16f83e3
+@source-sha a1166515ca6b4c925b6e8be9745fecdac07337efa30afb93668a03ccd28aa3bd
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul oder in der Firmware eines Embedded Controllers (EC) gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -15,7 +15,7 @@ Hat die Analyse eine Beschreibung des Moduls geschrieben, folgt auf das Wort ein
 
 Auch die Firmware eines ITE-Embedded-Controllers mit NDS32-Kern, etwa `ITE8380-EC-V0.00`, ist ein Modul. Ihre Zeile im UEFI-Baum trägt das Code-Symbol wie ein PE32- oder TE-Image, und **Mit Code öffnen** öffnet ihren Code. Als Modul gilt das Abbild selbst bis zum Ende seines Codes, nicht der gesamte Block: Die gelöschten Bytes dahinter und die Laufzeitdaten des Controllers gehören nicht dazu. Ein Byte des Abbilds überschreibt der Controller in seinem eigenen Flash-Speicher; für die Identität des Moduls wird es nicht berücksichtigt. Eine Kopie der Firmware in einem BIOS-Update und eine Auslesung des Controller-Chips öffnen deshalb dieselbe Analyse.
 
-Die Zeile eines EC-Abbilds trägt **(i)** unabhängig davon, ob eine Analyse vorliegt. Ein Klick darauf zeigt, was die Bytes des Abbilds angeben: die Controller-Familie, die Version, das Ende des Abbilds und wie es ermittelt wurde, den SHA-256 des Moduls und den SHA-256 der Bytes im Dump, wie viele Bytes ein BIOS-Update in den Controller schreibt, sowie das vom Controller überschriebene Byte mit seinem Wert im Dump. Liegt eine Analyse vor, steht darunter **Mit Code öffnen**.
+Die Zeile eines EC-Abbilds trägt **(i)** unabhängig davon, ob eine Analyse vorliegt. Ein Klick darauf zeigt, was die Bytes des Abbilds angeben: die Controller-Familie, die ITE-Signatur (eine Kennung der Build-Werkzeuge, die jedes ITE-Abbild trägt, keine Firmware-Version), das Ende des Abbilds und wie es ermittelt wurde, den SHA-256 des Moduls und den SHA-256 der Bytes im Dump, wie viele Bytes ein BIOS-Update in den Controller schreibt, sowie das vom Controller überschriebene Byte mit seinem Wert im Dump. Liegt eine Analyse vor, steht darunter **Mit Code öffnen**.
 
 ## Wo die Analysen liegen
 

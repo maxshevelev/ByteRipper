@@ -162,7 +162,10 @@ public struct ECModuleFacts: Codable, Equatable, Sendable {
     public var chipRead: Bool
     /// How many bytes the BIOS's EC update writes — not the extent.
     public var hostUpdateSize: Int?
-    public var version: String?
+    /// The ITE signature text (`ITE8380-EC-V0.00`): a mark of the toolchain
+    /// every ITE image carries, not the firmware's version. Stored as
+    /// `signature`; a module written before reads it from `version`.
+    public var signature: String?
     /// The flash addresses past the extent the code refers to, each with the
     /// instruction that does (`FlashRef_<address>` in the program). Optional:
     /// a module created before it was recorded reads without it.
@@ -179,7 +182,7 @@ public struct ECModuleFacts: Codable, Equatable, Sendable {
     }
 
     public init(family: String, extent: Int, extentSource: String, sliceSize: Int, rawSHA256: String,
-                masked: [Masked], chipRead: Bool, hostUpdateSize: Int?, version: String?,
+                masked: [Masked], chipRead: Bool, hostUpdateSize: Int?, signature: String?,
                 refsPastExtent: [FlashRef]? = nil) {
         self.family = family
         self.extent = extent
@@ -189,12 +192,43 @@ public struct ECModuleFacts: Codable, Equatable, Sendable {
         self.masked = masked
         self.chipRead = chipRead
         self.hostUpdateSize = hostUpdateSize
-        self.version = version
+        self.signature = signature
         self.refsPastExtent = refsPastExtent
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        family = try container.decode(String.self, forKey: .family)
+        extent = try container.decode(Int.self, forKey: .extent)
+        extentSource = try container.decode(String.self, forKey: .extentSource)
+        sliceSize = try container.decode(Int.self, forKey: .sliceSize)
+        rawSHA256 = try container.decode(String.self, forKey: .rawSHA256)
+        masked = try container.decode([Masked].self, forKey: .masked)
+        chipRead = try container.decode(Bool.self, forKey: .chipRead)
+        hostUpdateSize = try container.decodeIfPresent(Int.self, forKey: .hostUpdateSize)
+        signature = try container.decodeIfPresent(String.self, forKey: .signature)
+            ?? container.decodeIfPresent(String.self, forKey: .version)
+        refsPastExtent = try container.decodeIfPresent([FlashRef].self, forKey: .refsPastExtent)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(family, forKey: .family)
+        try container.encode(extent, forKey: .extent)
+        try container.encode(extentSource, forKey: .extentSource)
+        try container.encode(sliceSize, forKey: .sliceSize)
+        try container.encode(rawSHA256, forKey: .rawSHA256)
+        try container.encode(masked, forKey: .masked)
+        try container.encode(chipRead, forKey: .chipRead)
+        try container.encodeIfPresent(hostUpdateSize, forKey: .hostUpdateSize)
+        try container.encodeIfPresent(signature, forKey: .signature)
+        try container.encodeIfPresent(refsPastExtent, forKey: .refsPastExtent)
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case family, extent, masked, version
+        case family, extent, masked, signature
+        /// The field's name before the signature was told from a version.
+        case version
         case refsPastExtent = "refs_past_extent"
         case extentSource = "extent_source"
         case sliceSize = "slice_size"
