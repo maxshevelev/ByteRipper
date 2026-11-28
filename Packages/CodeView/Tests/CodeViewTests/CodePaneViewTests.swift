@@ -5938,6 +5938,27 @@ final class CodePaneViewTests: XCTestCase {
         return view
     }
 
+    /// A new revision arriving while the description is compared shows the
+    /// new revision's text, still compared with the revision the reader chose.
+    func testANewRevisionShowsItsDescriptionInsteadOfTheOldDiff() async throws {
+        let view = try describedPane(revision: 5, description: sampleDescription)
+        view.onReadDescription = { $0 == 3 ? self.olderDescription : nil }
+        view.showDescription(true)
+        view.chooseDescriptionRevision(3)
+        await view.descriptionRead?.value
+        XCTAssertNotNil(view.descriptionDiffCounts, "compared with revision 3")
+
+        var next = view.manifest
+        next.reading = AnalysisReading(project: "p", rev: 6, description: SHA256Digest(data: Data("# New\n\nText.".utf8)))
+        view.adoptReading(manifest: next, model: CodeModel(artifact: view.artifact, moduleBytes: nil), recipes: [])
+        view.setModuleDescription("# New\n\nText.")
+        await view.descriptionRead?.value
+        XCTAssertEqual(view.descriptionComparisonRevision, 3, "the reader's comparison stays")
+        XCTAssertNotNil(view.descriptionDiffCounts)
+        XCTAssertTrue(view.descriptionTints.contains { _ in true }, "drawn as a diff of the new text")
+        XCTAssertTrue(view.descriptionText.contains("Text."), view.descriptionText)
+    }
+
     private let olderDescription = """
         # CpuPei
 

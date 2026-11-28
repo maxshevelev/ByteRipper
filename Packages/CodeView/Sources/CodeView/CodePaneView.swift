@@ -567,10 +567,14 @@ import ToolModuleKit
         readRevisions = [:]
         readOrder = []
         revisionsBeingRead = []
-        // The description's comparison and mark.
-        descriptionChoice = nil
+        // The description's mark. The reader's chosen comparison stays: it
+        // names a revision, which outlives the reading, and is drawn again
+        // over the new text when it arrives (`setModuleDescription`).
         descriptionMark = nil
         descriptionBaseline = nil
+        // The text drawn against it too: else the next revision's text is
+        // drawn as a diff against a comparison the bar no longer shows.
+        descriptionView.compare(with: nil)
         descriptionReads = [:]
         descriptionBeingRead = nil
         descriptionChangedByCurrentRevision = nil
@@ -1239,6 +1243,7 @@ import ToolModuleKit
     /// made, so the code is never kept waiting for it.
     public func setModuleDescription(_ markdown: String?) {
         descriptionView.show(markdown)
+        if descriptionChoice != nil { applyDescriptionComparison() }
         findTextMayHaveChanged()
         searchDescriptionAgainIfChanged(markdown)
         hasDescription = !(markdown ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
